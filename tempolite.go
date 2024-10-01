@@ -64,7 +64,7 @@ type Signal struct {
 	Direction string // "inbound" or "outbound"
 }
 
-// --- TaskRepository Interface ---
+// --- Repository Interfaces ---
 
 type TaskRepository interface {
 	CreateTask(ctx context.Context, task *Task) (int64, error)
@@ -75,14 +75,10 @@ type TaskRepository interface {
 	ResetInProgressTasks(ctx context.Context) error
 }
 
-// --- SideEffectRepository Interface ---
-
 type SideEffectRepository interface {
 	GetSideEffect(ctx context.Context, executionContextID, key string) (*SideEffect, error)
 	SaveSideEffect(ctx context.Context, sideEffect *SideEffect) error
 }
-
-// --- SignalRepository Interface ---
 
 type SignalRepository interface {
 	SaveSignal(ctx context.Context, signal *Signal) error
@@ -92,7 +88,6 @@ type SignalRepository interface {
 
 // --- SQLite Implementations ---
 
-// SQLiteTaskRepository implements TaskRepository using SQLite
 type SQLiteTaskRepository struct {
 	db *sql.DB
 }
@@ -303,8 +298,6 @@ func (r *SQLiteTaskRepository) ResetInProgressTasks(ctx context.Context) error {
 	return err
 }
 
-// --- SQLiteSideEffectRepository Implementation ---
-
 type SQLiteSideEffectRepository struct {
 	db *sql.DB
 }
@@ -368,8 +361,6 @@ func (r *SQLiteSideEffectRepository) SaveSideEffect(ctx context.Context, sideEff
 	)
 	return err
 }
-
-// --- SQLiteSignalRepository Implementation ---
 
 type SQLiteSignalRepository struct {
 	db *sql.DB
@@ -457,28 +448,54 @@ func (r *SQLiteSignalRepository) DeleteSignals(ctx context.Context, taskID int64
 
 // --- Handler Registration and Retrieval ---
 
-type HandlerFunc func(context.Context, []byte) ([]byte, error)
+type HandlerFunc interface{}
+
+type HandlerInfo struct {
+	Handler    HandlerFunc
+	ParamType  reflect.Type
+	ReturnType reflect.Type
+}
 
 var (
-	handlerRegistry      = make(map[string]HandlerFunc)
+	handlerRegistry      = make(map[string]HandlerInfo)
 	handlerRegistryMutex sync.RWMutex
 )
 
 func RegisterHandler(handler HandlerFunc) {
+	handlerType := reflect.TypeOf(handler)
+	if handlerType.Kind() != reflect.Func {
+		panic("Handler must be a function")
+	}
+	if handlerType.NumIn() != 2 || handlerType.NumOut() != 2 {
+		panic("Handler must have two input parameters and two return values")
+	}
+	if handlerType.In(0) != reflect.TypeOf((*context.Context)(nil)).Elem() {
+		panic("First parameter of handler must be context.Context")
+	}
+	if handlerType.Out(1) != reflect.TypeOf((*error)(nil)).Elem() {
+		panic("Second return value of handler must be error")
+	}
+
 	name := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+	handlerInfo := HandlerInfo{
+		Handler:    handler,
+		ParamType:  handlerType.In(1),
+		ReturnType: handlerType.Out(0),
+	}
+
 	handlerRegistryMutex.Lock()
-	handlerRegistry[name] = handler
+	handlerRegistry[name] = handlerInfo
 	handlerRegistryMutex.Unlock()
 }
 
-func GetHandler(name string) (HandlerFunc, bool) {
+func GetHandler(name string) (HandlerInfo, bool) {
 	handlerRegistryMutex.RLock()
-	handler, exists := handlerRegistry[name]
+	handlerInfo, exists := handlerRegistry[name]
 	handlerRegistryMutex.RUnlock()
-	return handler, exists
+	return handlerInfo, exists
 }
 
-// --- WorkflowBox Implementation ---
+// --- Tempolite Implementation ---
 
 type Tempolite struct {
 	taskRepo       TaskRepository
@@ -566,19 +583,31 @@ func EnqueueWithParent(parentID int64) enqueueOption {
 }
 
 func (wb *Tempolite) EnqueueTask(ctx context.Context, executionContextID string, handler HandlerFunc, params interface{}, options ...enqueueOption) (int64, error) {
+	// Get handler name
+	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+
+	// Get handler info
+	handlerInfo, exists := GetHandler(handlerName)
+	if !exists {
+		return 0, fmt.Errorf("no handler registered with name: %s", handlerName)
+	}
+
+	// Check if params match the expected type
+	paramsType := reflect.TypeOf(params)
+	if paramsType != handlerInfo.ParamType {
+		return 0, fmt.Errorf("params type mismatch: expected %v, got %v", handlerInfo.ParamType, paramsType)
+	}
+
 	// Serialize parameters
 	payload, err := json.Marshal(params)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to marshal task parameters: %v", err)
 	}
 
 	opts := enqueueOptions{}
 	for _, opt := range options {
 		opt(&opts)
 	}
-
-	// Get handler name
-	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
 
 	// Serialize options if needed (placeholder in this example)
 	var optionsData []byte
@@ -638,11 +667,15 @@ func (wb *Tempolite) dispatcher() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	log.Println("Dispatcher started")
+
 	for {
 		select {
 		case <-wb.ctx.Done():
+			log.Println("Dispatcher stopping due to context cancellation")
 			return
 		case <-ticker.C:
+			log.Println("Dispatcher tick: fetching pending tasks")
 			// Fetch pending tasks
 			tasks, err := wb.taskRepo.GetPendingTasks(wb.ctx, 100)
 			if err != nil {
@@ -650,7 +683,10 @@ func (wb *Tempolite) dispatcher() {
 				continue
 			}
 
+			log.Printf("Fetched %d pending tasks", len(tasks))
+
 			for _, task := range tasks {
+				log.Printf("Processing task ID: %d", task.ID)
 				// Update task status to in-progress
 				task.Status = TaskStatusInProgress
 				task.UpdatedAt = time.Now()
@@ -672,6 +708,7 @@ func (wb *Tempolite) dispatcher() {
 				}
 
 				// Dispatch task to retrypool with options
+				log.Printf("Dispatching task ID: %d to retrypool", task.ID)
 				wb.pool.Dispatch(task, cfg.poolOpts...)
 			}
 		}
@@ -829,15 +866,20 @@ type TaskWorker struct {
 }
 
 func (tw *TaskWorker) Run(ctx context.Context, task *Task) error {
+	log.Printf("TaskWorker %d: Starting task %d", tw.ID, task.ID)
+
 	// Check if the task was cancelled or terminated before starting
 	currentTask, err := tw.wb.taskRepo.GetTaskByID(context.Background(), task.ID)
 	if err != nil {
+		log.Printf("TaskWorker %d: Error getting task %d: %v", tw.ID, task.ID, err)
 		return err
 	}
 	if currentTask.Status == TaskStatusCancelled {
+		log.Printf("TaskWorker %d: Task %d was cancelled", tw.ID, task.ID)
 		return fmt.Errorf("task %d was cancelled", task.ID)
 	}
 	if currentTask.Status == TaskStatusTerminated {
+		log.Printf("TaskWorker %d: Task %d was terminated", tw.ID, task.ID)
 		return fmt.Errorf("task %d was terminated", task.ID)
 	}
 
@@ -852,12 +894,28 @@ func (tw *TaskWorker) Run(ctx context.Context, task *Task) error {
 	// Initialize side effect cache
 	tw.sideEffectCache = make(map[string][]byte)
 
-	handler, exists := GetHandler(task.HandlerName)
+	log.Printf("TaskWorker %d: Getting handler for task %d", tw.ID, task.ID)
+	handlerInfo, exists := GetHandler(task.HandlerName)
 	if !exists {
+		log.Printf("TaskWorker %d: No handler found for task %d", tw.ID, task.ID)
 		return fmt.Errorf("no handler registered with name: %s", task.HandlerName)
 	}
 
-	// Wrap the context to include side effect and signal handling
+	// Create a new instance of the parameter type
+	paramInstancePtr := reflect.New(handlerInfo.ParamType).Interface()
+
+	// Unmarshal the payload into the parameter instance
+	log.Printf("TaskWorker %d: Unmarshaling payload for task %d: %v", tw.ID, task.ID, task.Payload)
+	err = json.Unmarshal(task.Payload, paramInstancePtr)
+	if err != nil {
+		log.Printf("TaskWorker %d: Error unmarshaling payload for task %d: %v", tw.ID, task.ID, err)
+		return fmt.Errorf("failed to unmarshal task payload: %v", err)
+	}
+
+	// Get the actual parameter value (not a pointer)
+	paramValue := reflect.ValueOf(paramInstancePtr).Elem()
+
+	// Create the task context
 	taskCtx = &TaskContext{
 		Context:            taskCtx,
 		executionContextID: task.ExecutionContextID,
@@ -865,18 +923,36 @@ func (tw *TaskWorker) Run(ctx context.Context, task *Task) error {
 		wb:                 tw.wb,
 		sideEffectCache:    tw.sideEffectCache,
 		dbCtx:              tw.wb.ctx,
-		task:               task, // Pass the task to access RetryCount
+		task:               task,
 	}
 
-	// Call the handler with the task's payload
-	result, err := handler(taskCtx, task.Payload)
-	if err != nil {
+	// Call the handler using reflection
+	log.Printf("TaskWorker %d: Calling handler for task %d", tw.ID, task.ID)
+	handlerValue := reflect.ValueOf(handlerInfo.Handler)
+	results := handlerValue.Call([]reflect.Value{
+		reflect.ValueOf(taskCtx),
+		paramValue,
+	})
+
+	// Check for error
+	if !results[1].IsNil() {
+		err := results[1].Interface().(error)
+		log.Printf("TaskWorker %d: Handler returned error for task %d: %v", tw.ID, task.ID, err)
 		return err
+	}
+
+	// Marshal the result
+	log.Printf("TaskWorker %d: Marshaling result for task %d", tw.ID, task.ID)
+	result, err := json.Marshal(results[0].Interface())
+	if err != nil {
+		log.Printf("TaskWorker %d: Error marshaling result for task %d: %v", tw.ID, task.ID, err)
+		return fmt.Errorf("failed to marshal task result: %v", err)
 	}
 
 	// Store the result
 	task.Result = result
 
+	log.Printf("TaskWorker %d: Completed task %d", tw.ID, task.ID)
 	return nil
 }
 
@@ -1046,7 +1122,7 @@ func (tc *TaskContext) RetryCount() int {
 	return tc.task.RetryCount
 }
 
-// --- WorkflowBox Callback Implementations ---
+// --- Tempolite Callback Implementations ---
 
 func (wb *Tempolite) onTaskSuccess(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], taskWrapper *retrypool.TaskWrapper[*Task]) {
 	task := taskWrapper.Data()
@@ -1066,7 +1142,6 @@ func (wb *Tempolite) onTaskSuccess(controller retrypool.WorkerController[*Task],
 
 func (wb *Tempolite) onTaskFailure(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], taskWrapper *retrypool.TaskWrapper[*Task], err error) {
 	task := taskWrapper.Data()
-
 	// Update retry count (already updated in onRetry)
 	// task.RetryCount = taskWrapper.Retries()
 
@@ -1075,10 +1150,11 @@ func (wb *Tempolite) onTaskFailure(controller retrypool.WorkerController[*Task],
 	// 	task.Status = TaskStatusFailed
 	// } else {
 	task.Status = TaskStatusPending
+	// }
+
 	// Schedule next retry with exponential backoff
 	delay := time.Duration(task.RetryCount) * time.Second
 	task.ScheduledAt = time.Now().Add(delay)
-	// }
 
 	task.UpdatedAt = time.Now()
 	updateErr := wb.taskRepo.UpdateTask(wb.ctx, task)

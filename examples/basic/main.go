@@ -33,15 +33,8 @@ func EmailHandler(ctx context.Context, payload []byte) ([]byte, error) {
 	return []byte("Email sent"), nil
 }
 
-func ComplexHandler(ctx context.Context, payload []byte) ([]byte, error) {
+func ComplexHandler(ctx context.Context, payload map[string]interface{}) ([]byte, error) {
 	tc := ctx.(*tempolite.TaskContext)
-
-	// Deserialize parameters
-	var params map[string]interface{}
-	err := json.Unmarshal(payload, &params)
-	if err != nil {
-		return nil, err
-	}
 
 	// Record a side effect
 	result, err := tc.RecordSideEffect("compute_something", func() (interface{}, error) {
