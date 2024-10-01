@@ -166,7 +166,7 @@ func main() {
 
 	// Enqueue a complex task
 	executionContextID := "workflow-" + uuid.NewString()
-	taskID, err := wb.EnqueueTask(ctx, executionContextID, ComplexHandler, map[string]interface{}{}, 3, time.Now(), nil)
+	taskID, err := wb.EnqueueTask(ctx, executionContextID, ComplexHandler, map[string]interface{}{})
 	if err != nil {
 		log.Printf("Failed to enqueue complex task: %v", err)
 	}

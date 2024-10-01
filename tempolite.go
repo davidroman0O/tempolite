@@ -37,7 +37,6 @@ type Task struct {
 	Payload            []byte     // Serialized task parameters
 	Status             TaskStatus // Task status
 	RetryCount         int        // Number of retries attempted
-	MaxRetries         int        // Maximum allowed retries
 	ScheduledAt        time.Time  // When the task is scheduled to run
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -115,7 +114,6 @@ func (r *SQLiteTaskRepository) initDB() error {
 		payload BLOB NOT NULL,
 		status INTEGER NOT NULL,
 		retry_count INTEGER NOT NULL,
-		max_retries INTEGER NOT NULL,
 		scheduled_at INTEGER NOT NULL,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL,
@@ -131,8 +129,8 @@ func (r *SQLiteTaskRepository) initDB() error {
 
 func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) (int64, error) {
 	query := `
-	INSERT INTO tasks (execution_context_id, handler_name, payload, status, retry_count, max_retries, scheduled_at, created_at, updated_at, options, result, parent_task_id)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+	INSERT INTO tasks (execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, options, result, parent_task_id)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`
 	var parentTaskID interface{}
 	if task.ParentTaskID.Valid {
@@ -146,7 +144,6 @@ func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) (int6
 		task.Payload,
 		int(task.Status),
 		task.RetryCount,
-		task.MaxRetries,
 		task.ScheduledAt.Unix(),
 		task.CreatedAt.Unix(),
 		task.UpdatedAt.Unix(),
@@ -162,7 +159,7 @@ func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) (int6
 
 func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*Task, error) {
 	query := `
-	SELECT id, execution_context_id, handler_name, payload, status, retry_count, max_retries, scheduled_at, created_at, updated_at, options, result, parent_task_id
+	SELECT id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, options, result, parent_task_id
 	FROM tasks
 	WHERE status = ? AND scheduled_at <= ?
 	ORDER BY scheduled_at
@@ -188,7 +185,6 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 			&task.Payload,
 			&status,
 			&task.RetryCount,
-			&task.MaxRetries,
 			&scheduledAt,
 			&createdAt,
 			&updatedAt,
@@ -212,7 +208,7 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error {
 	query := `
 	UPDATE tasks
-	SET execution_context_id = ?, handler_name = ?, payload = ?, status = ?, retry_count = ?, max_retries = ?, scheduled_at = ?, created_at = ?, updated_at = ?, options = ?, result = ?, parent_task_id = ?
+	SET execution_context_id = ?, handler_name = ?, payload = ?, status = ?, retry_count = ?,  scheduled_at = ?, created_at = ?, updated_at = ?, options = ?, result = ?, parent_task_id = ?
 	WHERE id = ?;
 	`
 	var parentTaskID interface{}
@@ -227,7 +223,6 @@ func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error
 		task.Payload,
 		int(task.Status),
 		task.RetryCount,
-		task.MaxRetries,
 		task.ScheduledAt.Unix(),
 		task.CreatedAt.Unix(),
 		task.UpdatedAt.Unix(),
@@ -241,7 +236,7 @@ func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error
 
 func (r *SQLiteTaskRepository) GetTaskByID(ctx context.Context, id int64) (*Task, error) {
 	query := `
-	SELECT id, execution_context_id, handler_name, payload, status, retry_count, max_retries, scheduled_at, created_at, updated_at, options, result, parent_task_id
+	SELECT id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, options, result, parent_task_id
 	FROM tasks
 	WHERE id = ?;
 	`
@@ -257,7 +252,6 @@ func (r *SQLiteTaskRepository) GetTaskByID(ctx context.Context, id int64) (*Task
 		&task.Payload,
 		&status,
 		&task.RetryCount,
-		&task.MaxRetries,
 		&scheduledAt,
 		&createdAt,
 		&updatedAt,
@@ -518,9 +512,9 @@ func New(ctx context.Context, taskRepo TaskRepository, sideEffectRepo SideEffect
 	poolOptions := []retrypool.Option[*Task]{
 		retrypool.WithOnTaskSuccess[*Task](wb.onTaskSuccess),
 		retrypool.WithOnTaskFailure[*Task](wb.onTaskFailure),
-		retrypool.WithOnRetry[*Task](wb.onRetry),          // Update RetryCount on retry
-		retrypool.WithAttempts[*Task](3),                  // Set maximum retry attempts
-		retrypool.WithPanicHandler[*Task](wb.onTaskPanic), // Add panic handler
+		retrypool.WithOnRetry[*Task](wb.onRetry),                   // Update RetryCount on retry
+		retrypool.WithAttempts[*Task](retrypool.UnlimitedAttempts), // Set maximum retry attempts
+		retrypool.WithPanicHandler[*Task](wb.onTaskPanic),          // Add panic handler
 	}
 
 	wb.pool = retrypool.New(ctx, nil, poolOptions...)
@@ -540,11 +534,47 @@ func (wb *Tempolite) onRetry(attempt int, err error, task *retrypool.TaskWrapper
 	taskData.RetryCount = attempt
 }
 
-func (wb *Tempolite) EnqueueTask(ctx context.Context, executionContextID string, handler HandlerFunc, params interface{}, maxRetries int, scheduledAt time.Time, parentTaskID *int64, options ...retrypool.TaskOption[*Task]) (int64, error) {
+type enqueueOptions struct {
+	poolOpts []retrypool.TaskOption[*Task]
+	parentID *int64
+}
+
+type enqueueOption func(*enqueueOptions)
+
+func EnqueueWithMaxDuration(duration time.Duration) enqueueOption {
+	return func(opts *enqueueOptions) {
+		opts.poolOpts = append(opts.poolOpts, retrypool.WithMaxDuration[*Task](duration))
+	}
+}
+
+func EnqueueWithImmediateRetry() enqueueOption {
+	return func(opts *enqueueOptions) {
+		opts.poolOpts = append(opts.poolOpts, retrypool.WithImmediateRetry[*Task]())
+	}
+}
+
+func EnqueueWithPanicOnTimeout() enqueueOption {
+	return func(opts *enqueueOptions) {
+		opts.poolOpts = append(opts.poolOpts, retrypool.WithPanicOnTimeout[*Task]())
+	}
+}
+
+func EnqueueWithParent(parentID int64) enqueueOption {
+	return func(opts *enqueueOptions) {
+		opts.parentID = &parentID
+	}
+}
+
+func (wb *Tempolite) EnqueueTask(ctx context.Context, executionContextID string, handler HandlerFunc, params interface{}, options ...enqueueOption) (int64, error) {
 	// Serialize parameters
 	payload, err := json.Marshal(params)
 	if err != nil {
 		return 0, err
+	}
+
+	opts := enqueueOptions{}
+	for _, opt := range options {
+		opt(&opts)
 	}
 
 	// Get handler name
@@ -559,16 +589,15 @@ func (wb *Tempolite) EnqueueTask(ctx context.Context, executionContextID string,
 		Payload:            payload,
 		Status:             TaskStatusPending,
 		RetryCount:         0,
-		MaxRetries:         maxRetries,
-		ScheduledAt:        scheduledAt,
+		ScheduledAt:        time.Now(),
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
 		Options:            optionsData,
 	}
 
 	// Set ParentTaskID if provided
-	if parentTaskID != nil {
-		task.ParentTaskID = sql.NullInt64{Int64: *parentTaskID, Valid: true}
+	if opts.parentID != nil {
+		task.ParentTaskID = sql.NullInt64{Int64: *opts.parentID, Valid: true}
 	}
 
 	id, err := wb.taskRepo.CreateTask(ctx, task)
@@ -632,13 +661,18 @@ func (wb *Tempolite) dispatcher() {
 				}
 
 				// Retrieve task options
-				var options []retrypool.TaskOption[*Task]
+				var options []enqueueOption
 				if opts, ok := wb.taskOptions.Load(task.ID); ok {
-					options = opts.([]retrypool.TaskOption[*Task])
+					options = opts.([]enqueueOption)
+				}
+
+				cfg := enqueueOptions{}
+				for _, opt := range options {
+					opt(&cfg)
 				}
 
 				// Dispatch task to retrypool with options
-				wb.pool.Dispatch(task, options...)
+				wb.pool.Dispatch(task, cfg.poolOpts...)
 			}
 		}
 	}
@@ -992,12 +1026,15 @@ func (tc *TaskContext) SendSignal(name string, payload interface{}) error {
 	}
 }
 
-func (tc *TaskContext) EnqueueTask(handler HandlerFunc, params interface{}, options ...retrypool.TaskOption[*Task]) (int64, error) {
+func (tc *TaskContext) EnqueueTask(handler HandlerFunc, params interface{}, options ...enqueueOption) (int64, error) {
 	parentTaskID := tc.taskID
-	return tc.wb.EnqueueTask(tc, tc.executionContextID, handler, params, 3, time.Now(), &parentTaskID, options...)
+	opts := []enqueueOption{}
+	opts = append(opts, EnqueueWithParent(parentTaskID))
+	opts = append(opts, options...)
+	return tc.wb.EnqueueTask(tc, tc.executionContextID, handler, params, opts...)
 }
 
-func (tc *TaskContext) EnqueueTaskAndWait(handler HandlerFunc, params interface{}, options ...retrypool.TaskOption[*Task]) ([]byte, error) {
+func (tc *TaskContext) EnqueueTaskAndWait(handler HandlerFunc, params interface{}, options ...enqueueOption) ([]byte, error) {
 	taskID, err := tc.EnqueueTask(handler, params, options...)
 	if err != nil {
 		return nil, err
@@ -1034,14 +1071,14 @@ func (wb *Tempolite) onTaskFailure(controller retrypool.WorkerController[*Task],
 	// task.RetryCount = taskWrapper.Retries()
 
 	// Check if max retries reached
-	if task.RetryCount >= task.MaxRetries {
-		task.Status = TaskStatusFailed
-	} else {
-		task.Status = TaskStatusPending
-		// Schedule next retry with exponential backoff
-		delay := time.Duration(task.RetryCount) * time.Second
-		task.ScheduledAt = time.Now().Add(delay)
-	}
+	// if task.RetryCount >= task.MaxRetries {
+	// 	task.Status = TaskStatusFailed
+	// } else {
+	task.Status = TaskStatusPending
+	// Schedule next retry with exponential backoff
+	delay := time.Duration(task.RetryCount) * time.Second
+	task.ScheduledAt = time.Now().Add(delay)
+	// }
 
 	task.UpdatedAt = time.Now()
 	updateErr := wb.taskRepo.UpdateTask(wb.ctx, task)
