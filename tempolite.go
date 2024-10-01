@@ -500,7 +500,7 @@ type Tempolite struct {
 	signalChannels sync.Map // map[string]chan []byte
 }
 
-func NewWorkflowBox(ctx context.Context, taskRepo TaskRepository, sideEffectRepo SideEffectRepository, signalRepo SignalRepository) (*Tempolite, error) {
+func New(ctx context.Context, taskRepo TaskRepository, sideEffectRepo SideEffectRepository, signalRepo SignalRepository) (*Tempolite, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

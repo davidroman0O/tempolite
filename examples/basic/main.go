@@ -10,6 +10,7 @@ import (
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite"
 	"github.com/google/uuid"
+	// _ "github.com/mattn/go-sqlite3"
 )
 
 type EmailParams struct {
@@ -121,24 +122,33 @@ func init() {
 
 func main() {
 	comfy, err := comfylite3.New(comfylite3.WithMemory())
+	// comfy, err := comfylite3.New(comfylite3.WithPath("tempolite.db"))
 	if err != nil {
 		panic(err)
 	}
 
-	db := comfylite3.OpenDB(comfy)
+	db := comfylite3.OpenDB(comfy, comfylite3.WithForeignKeys())
 
 	defer db.Close()
 	defer comfy.Close()
+
+	// db, err := sql.Open("sqlite3", "tasks.db")
+	// if err != nil {
+	// 	log.Fatalf("Failed to open database: %v", err)
+	// }
+	// defer db.Close()
 
 	// Create repositories
 	taskRepo, err := tempolite.NewSQLiteTaskRepository(db)
 	if err != nil {
 		log.Fatalf("Failed to create task repository: %v", err)
 	}
+
 	sideEffectRepo, err := tempolite.NewSQLiteSideEffectRepository(db)
 	if err != nil {
 		log.Fatalf("Failed to create side effect repository: %v", err)
 	}
+
 	signalRepo, err := tempolite.NewSQLiteSignalRepository(db)
 	if err != nil {
 		log.Fatalf("Failed to create signal repository: %v", err)
@@ -146,7 +156,7 @@ func main() {
 
 	// Create WorkflowBox
 	ctx := context.Background()
-	wb, err := tempolite.NewWorkflowBox(ctx, taskRepo, sideEffectRepo, signalRepo)
+	wb, err := tempolite.New(ctx, taskRepo, sideEffectRepo, signalRepo)
 	if err != nil {
 		log.Fatalf("Failed to initialize WorkflowBox: %v", err)
 	}
