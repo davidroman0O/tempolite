@@ -19,15 +19,10 @@ type EmailParams struct {
 	Body      string
 }
 
-func EmailHandler(ctx context.Context, payload []byte) ([]byte, error) {
-	var params EmailParams
-	err := json.Unmarshal(payload, &params)
-	if err != nil {
-		return nil, err
-	}
+func EmailHandler(ctx context.Context, payload EmailParams) ([]byte, error) {
 
 	// Simulate sending email
-	log.Printf("Sending email to %s with subject %s\n", params.Recipient, params.Subject)
+	log.Printf("Sending email to %s with subject %s\n", payload.Recipient, payload.Subject)
 	// ... actual email sending logic
 
 	return []byte("Email sent"), nil
@@ -49,11 +44,13 @@ func ComplexHandler(ctx context.Context, payload map[string]interface{}) ([]byte
 	log.Printf("Result: %v\n", result)
 
 	// Enqueue another task and wait for its completion
-	emailResult, err := tc.EnqueueTaskAndWait(EmailHandler, EmailParams{
-		Recipient: "user@example.com",
-		Subject:   "Processing Complete",
-		Body:      fmt.Sprintf("Your result is: %v", result),
-	})
+	emailResult, err := tc.EnqueueTaskAndWait(
+		EmailHandler,
+		EmailParams{
+			Recipient: "user@example.com",
+			Subject:   "Processing Complete",
+			Body:      fmt.Sprintf("Your result is: %v", result),
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +111,8 @@ func init() {
 }
 
 func main() {
-	comfy, err := comfylite3.New(comfylite3.WithMemory())
-	// comfy, err := comfylite3.New(comfylite3.WithPath("tempolite.db"))
+	// comfy, err := comfylite3.New(comfylite3.WithMemory())
+	comfy, err := comfylite3.New(comfylite3.WithPath("tempolite.db"))
 	if err != nil {
 		panic(err)
 	}
