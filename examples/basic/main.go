@@ -57,10 +57,10 @@ func ComplexHandler(ctx context.Context, payload map[string]interface{}) ([]byte
 	log.Printf("Email task result: %s\n", string(emailResult))
 
 	// Simulate failure
-	if tc.GetID()%2 == 0 && tc.RetryCount() == 0 {
-		log.Println("Simulating failure...")
-		return nil, fmt.Errorf("simulated failure")
-	}
+	// if tc.GetID()%2 == 0 && tc.RetryCount() == 0 {
+	// 	log.Println("Simulating failure...")
+	// 	return nil, fmt.Errorf("simulated failure")
+	// }
 
 	// Wait for signals named "update" for up to 15 seconds or until "done" command is received
 	log.Println("Waiting for signals named 'update' for up to 15 seconds...")
@@ -117,42 +117,17 @@ func main() {
 		panic(err)
 	}
 
-	db := comfylite3.OpenDB(comfy, comfylite3.WithForeignKeys())
+	db := comfylite3.OpenDB(comfy)
 
 	defer db.Close()
 	defer comfy.Close()
 
-	// db, err := sql.Open("sqlite3", "tasks.db")
-	// if err != nil {
-	// 	log.Fatalf("Failed to open database: %v", err)
-	// }
-	// defer db.Close()
-
-	// Create repositories
-	taskRepo, err := tempolite.NewSQLiteTaskRepository(db)
-	if err != nil {
-		log.Fatalf("Failed to create task repository: %v", err)
-	}
-
-	sideEffectRepo, err := tempolite.NewSQLiteSideEffectRepository(db)
-	if err != nil {
-		log.Fatalf("Failed to create side effect repository: %v", err)
-	}
-
-	signalRepo, err := tempolite.NewSQLiteSignalRepository(db)
-	if err != nil {
-		log.Fatalf("Failed to create signal repository: %v", err)
-	}
-
 	// Create WorkflowBox
 	ctx := context.Background()
-	wb, err := tempolite.New(ctx, taskRepo, sideEffectRepo, signalRepo)
+	wb, err := tempolite.New(ctx, db, 3, 3, 3, 3)
 	if err != nil {
 		log.Fatalf("Failed to initialize WorkflowBox: %v", err)
 	}
-
-	// Start processing with 5 workers
-	wb.Start(5)
 
 	// Enqueue a complex task
 	executionContextID := "workflow-" + uuid.NewString()
