@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"time"
 
 	"github.com/davidroman0O/go-tempolite"
@@ -53,15 +54,15 @@ type SagaStep1 struct {
 	Message string
 }
 
-func (s SagaStep1) Transaction(ctx tempolite.TransactionContext) error {
+func (s SagaStep1) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Executing saga step 1: %s", s.Message)
 	time.Sleep(1 * time.Second)
-	return nil
+	return nil, nil
 }
 
-func (s SagaStep1) Compensation(ctx tempolite.CompensationContext) error {
+func (s SagaStep1) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating saga step 1: %s", s.Message)
-	return nil
+	return nil, nil
 }
 
 // SagaStep2 implements the SagaStep interface for step 2
@@ -69,16 +70,20 @@ type SagaStep2 struct {
 	Message string
 }
 
-func (s SagaStep2) Transaction(ctx tempolite.TransactionContext) error {
+func (s SagaStep2) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Executing saga step 2: %s", s.Message)
 	time.Sleep(1 * time.Second)
 	// Simulate a failure in step 2
-	return fmt.Errorf("simulated failure in step 2")
+	// 70% chance of failure
+	if rand.Float32() < 0.7 {
+		return nil, fmt.Errorf("simulated failure in step 2")
+	}
+	return nil, nil
 }
 
-func (s SagaStep2) Compensation(ctx tempolite.CompensationContext) error {
+func (s SagaStep2) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating saga step 2: %s", s.Message)
-	return nil
+	return nil, nil
 }
 
 // SagaHandler handles a saga with multiple steps
@@ -131,12 +136,12 @@ func main() {
 	}
 	log.Printf("Enqueued simple task with ID: %s", simpleTaskID)
 
-	// // Create a saga
-	// sagaTaskID, err := tp.EnqueueSaga(context.Background(), SagaHandler, SagaTask{StepMessage: "Saga steps"})
-	// if err != nil {
-	// 	log.Fatalf("Failed to enqueue saga: %v", err)
-	// }
-	// log.Printf("Enqueued saga with ID: %s", sagaTaskID)
+	// Create a saga
+	sagaTaskID, err := tp.EnqueueSaga(context.Background(), SagaHandler, SagaTask{StepMessage: "Saga steps"})
+	if err != nil {
+		log.Fatalf("Failed to enqueue saga: %v", err)
+	}
+	log.Printf("Enqueued saga with ID: %s", sagaTaskID)
 
 	value, err := tp.WaitForTaskCompletion(context.Background(), simpleTaskID, time.Second)
 	if err != nil {
@@ -146,7 +151,7 @@ func main() {
 
 	// Wait for tasks to complete
 	err = tp.Wait(func(info tempolite.TempoliteInfo) bool {
-		return info.Tasks == 0 && info.SagaTasks == 0
+		return info.IsCompleted()
 	}, 500*time.Millisecond)
 	if err != nil {
 		log.Fatalf("Error waiting for tasks to complete: %v", err)
@@ -159,11 +164,11 @@ func main() {
 	}
 	log.Printf("Simple task result: %+v", simpleTaskResult)
 
-	// sagaTaskResult, err := tp.GetInfo(context.Background(), sagaTaskID)
-	// if err != nil {
-	// 	log.Fatalf("Failed to get saga task result: %v", err)
-	// }
-	// log.Printf("Saga task result: %+v", sagaTaskResult)
+	sagaTaskResult, err := tp.GetInfo(context.Background(), sagaTaskID)
+	if err != nil {
+		log.Fatalf("Failed to get saga task result: %v", err)
+	}
+	log.Printf("Saga task result: %+v", sagaTaskResult)
 
 	// Print execution tree
 	executionTree, err := tp.GetExecutionTree(context.Background(), simpleTaskID)
@@ -172,9 +177,9 @@ func main() {
 	}
 	log.Printf("Execution tree for simple task:\n%s", executionTree.String())
 
-	// executionTree, err = tp.GetExecutionTree(context.Background(), sagaTaskID)
-	// if err != nil {
-	// 	log.Fatalf("Failed to get execution tree: %v", err)
-	// }
-	// log.Printf("Execution tree for saga task:\n%s", executionTree.String())
+	executionTree, err = tp.GetExecutionTree(context.Background(), sagaTaskID)
+	if err != nil {
+		log.Fatalf("Failed to get execution tree: %v", err)
+	}
+	log.Printf("Execution tree for saga task:\n%s", executionTree.String())
 }

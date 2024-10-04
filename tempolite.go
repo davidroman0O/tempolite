@@ -223,8 +223,8 @@ type SideEffectContext interface {
 }
 
 type SagaStep interface {
-	Transaction(ctx TransactionContext) error
-	Compensation(ctx CompensationContext) error
+	Transaction(ctx TransactionContext) (interface{}, error)
+	Compensation(ctx CompensationContext) (interface{}, error)
 }
 
 type SideEffect interface {
@@ -502,7 +502,6 @@ func (tp *Tempolite) getHandler(name string) (handlerInfo, bool) {
 	return handler, exists
 }
 
-// WaitForTaskCompletion waits for the task with the given ID to reach a terminal state (completed, failed, etc.)
 func (tp *Tempolite) WaitForTaskCompletion(ctx context.Context, taskID string, pollInterval time.Duration) (interface{}, error) {
 	log.Printf("Waiting for completion of task ID %s", taskID)
 	ticker := time.NewTicker(pollInterval)
@@ -522,35 +521,24 @@ func (tp *Tempolite) WaitForTaskCompletion(ctx context.Context, taskID string, p
 
 			switch task.Status {
 			case TaskStatusCompleted:
-				if len(task.Result) == 0 {
-					// Task completed with no result, return success
-					log.Printf("Task with ID %s completed successfully but has no result", taskID)
-					return nil, nil
-				}
-
-				// Handle the case where task has a result
 				var wrappedResult WrappedResult
+				log.Printf("Tempolite Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
 				if err := json.Unmarshal(task.Result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal wrapped task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal wrapped task result: %v", err)
 				}
 
-				log.Printf("Task with ID %s completed successfully with result", taskID)
+				log.Printf("Task with ID %s completed successfully", taskID)
 				return wrappedResult.Data, nil
-
 			case TaskStatusFailed:
 				log.Printf("Task with ID %s failed", taskID)
-				return nil, fmt.Errorf("task failed with ID %s", taskID)
-
+				return nil, fmt.Errorf("task failed")
 			case TaskStatusCancelled:
-				log.Printf("Task with ID %s was cancelled", taskID)
-				return nil, fmt.Errorf("task was cancelled")
-
+				log.Printf("Task with ID %s cancelled", taskID)
+				return nil, fmt.Errorf("task cancelled")
 			case TaskStatusTerminated:
-				log.Printf("Task with ID %s was terminated", taskID)
-				return nil, fmt.Errorf("task was terminated")
-
-				// You can add more cases if there are additional task states.
+				log.Printf("Task with ID %s terminated", taskID)
+				return nil, fmt.Errorf("task terminated")
 			}
 		}
 	}
@@ -919,19 +907,39 @@ func (tp *Tempolite) Wait(condition func(TempoliteInfo) bool, interval time.Dura
 }
 
 type TempoliteInfo struct {
-	Tasks             int
-	SagaTasks         int
-	CompensationTasks int
-	SideEffectTasks   int
+	Tasks                       int
+	SagaTasks                   int
+	CompensationTasks           int
+	SideEffectTasks             int
+	ProcessingTasks             int
+	ProcessingSagaTasks         int
+	ProcessingCompensationTasks int
+	ProcessingSideEffectTasks   int
+	DeadTasks                   int
+	DeadSagaTasks               int
+	DeadCompensationTasks       int
+	DeadSideEffectTasks         int
+}
+
+func (tp *TempoliteInfo) IsCompleted() bool {
+	return tp.Tasks == 0 && tp.SagaTasks == 0 && tp.CompensationTasks == 0 && tp.SideEffectTasks == 0 && tp.ProcessingTasks == 0 && tp.ProcessingSagaTasks == 0 && tp.ProcessingCompensationTasks == 0 && tp.ProcessingSideEffectTasks == 0
 }
 
 func (tp *Tempolite) getInfo() TempoliteInfo {
 	log.Printf("Getting pool stats")
 	return TempoliteInfo{
-		Tasks:             tp.handlerPool.QueueSize(),
-		SagaTasks:         tp.sagaHandlerPool.QueueSize(),
-		CompensationTasks: tp.compensationPool.QueueSize(),
-		SideEffectTasks:   tp.sideEffectPool.QueueSize(),
+		Tasks:                       tp.handlerPool.QueueSize(),
+		SagaTasks:                   tp.sagaHandlerPool.QueueSize(),
+		CompensationTasks:           tp.compensationPool.QueueSize(),
+		SideEffectTasks:             tp.sideEffectPool.QueueSize(),
+		DeadTasks:                   tp.handlerPool.DeadTaskCount(),
+		DeadSagaTasks:               tp.sagaHandlerPool.DeadTaskCount(),
+		DeadCompensationTasks:       tp.compensationPool.DeadTaskCount(),
+		DeadSideEffectTasks:         tp.sideEffectPool.DeadTaskCount(),
+		ProcessingTasks:             tp.handlerPool.ProcessingCount(),
+		ProcessingSagaTasks:         tp.sagaHandlerPool.ProcessingCount(),
+		ProcessingCompensationTasks: tp.compensationPool.ProcessingCount(),
+		ProcessingSideEffectTasks:   tp.sideEffectPool.ProcessingCount(),
 	}
 }
 
@@ -994,13 +1002,11 @@ func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
 		reflect.ValueOf(param).Elem(),
 	})
 
-	// Handle error if present in the last return value.
 	if len(results) > 0 && !results[len(results)-1].IsNil() {
 		return results[len(results)-1].Interface().(error)
 	}
 
-	// Handle result if present.
-	if len(results) > 1 && !results[0].IsNil() {
+	if len(results) > 1 {
 		wrappedResult := WrappedResult{
 			Metadata: map[string]interface{}{}, // Add any relevant metadata here
 			Data:     results[0].Interface(),
@@ -1056,20 +1062,22 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
 		reflect.ValueOf(param).Elem(),
 	})
 
-	// Handle error if present in the last return value.
 	if len(results) > 0 && !results[len(results)-1].IsNil() {
 		return results[len(results)-1].Interface().(error)
 	}
 
-	// Handle result if present.
-	if len(results) > 1 && !results[0].IsNil() {
-		result, err := json.Marshal(results[0].Interface())
-		if err != nil {
-			log.Printf("Failed to marshal task result: %v", err)
-			return fmt.Errorf("failed to marshal task result: %v", err)
+	if len(results) > 1 {
+		wrappedResult := WrappedResult{
+			Metadata: map[string]interface{}{}, // Add any relevant metadata here
+			Data:     results[0].Interface(),
 		}
-		task.Result = result
-		log.Printf("Task result marshaled successfully for saga task ID %s", task.ID)
+		resultBytes, err := json.Marshal(wrappedResult)
+		if err != nil {
+			log.Printf("Failed to marshal wrapped task result: %v", err)
+			return fmt.Errorf("failed to marshal wrapped task result: %v", err)
+		}
+		task.Result = resultBytes
+		log.Printf("Saga task result marshaled successfully for task ID %s", task.ID)
 	}
 
 	log.Printf("Saga task with ID %s completed successfully on worker %d", task.ID, w.ID)
@@ -1227,16 +1235,15 @@ func (c *handlerContext) SideEffect(key string, effect SideEffect) (interface{},
 	// Check if the side effect already exists
 	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.executionContextID, key)
 	if err == nil && len(result) > 0 {
-		var value interface{}
-		if err := json.Unmarshal(result, &value); err != nil {
+		var wrappedResult WrappedResult
+		if err := json.Unmarshal(result, &wrappedResult); err != nil {
 			log.Printf("Failed to unmarshal side effect result: %v", err)
 			return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
 		}
-		return value, nil
+		return wrappedResult.Data, nil
 	}
 
 	log.Printf("Dispatching side effect with key %s for task ID %s", key, c.taskID)
-	// c.tp.sideEffectPool.Dispatch(effect)
 	c.tp.sideEffectPool.Dispatch(&sideEffectTask{
 		sideEffect:         effect,
 		executionContextID: c.executionContextID,
@@ -1259,8 +1266,7 @@ func (c *handlerContext) SideEffect(key string, effect SideEffect) (interface{},
 				continue
 			}
 			if len(result) > 0 {
-				wrappedResult := WrappedResult{}
-				// var value interface{}
+				var wrappedResult WrappedResult
 				if err := json.Unmarshal(result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal side effect result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
@@ -1298,14 +1304,14 @@ func (c *handlerContext) WaitForCompletion(taskID string) (interface{}, error) {
 
 			switch task.Status {
 			case TaskStatusCompleted:
-				var result interface{}
+				var wrappedResult WrappedResult
 				log.Printf("HandlerContext Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
-				if err := json.Unmarshal(task.Result, &result); err != nil {
+				if err := json.Unmarshal(task.Result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
 				}
 				log.Printf("Task ID %s completed successfully", taskID)
-				return result, nil
+				return wrappedResult.Data, nil
 			case TaskStatusFailed:
 				log.Printf("Task ID %s failed", taskID)
 				return nil, fmt.Errorf("task failed")
@@ -1341,7 +1347,8 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 	}
 
 	log.Printf("Executing transaction for saga step")
-	if err := step.Transaction(transactionCtx); err != nil {
+	transactionResult, err := step.Transaction(transactionCtx)
+	if err != nil {
 		log.Printf("Transaction failed, executing compensation")
 		compensationCtx := &compensationContext{
 			Context: c.Context,
@@ -1350,14 +1357,17 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 			stepID:  transactionCtx.stepID,
 		}
 
-		if compErr := step.Compensation(compensationCtx); compErr != nil {
+		compensationResult, compErr := step.Compensation(compensationCtx)
+		if compErr != nil {
 			log.Printf("Compensation failed for saga step: %v", compErr)
 			return fmt.Errorf("transaction failed and compensation failed: %v, compensation error: %v", err, compErr)
 		}
 
-		log.Printf("Transaction failed, but compensation succeeded")
+		log.Printf("Transaction failed, but compensation succeeded. Compensation result: %v", compensationResult)
 		return fmt.Errorf("transaction failed, compensation succeeded: %v", err)
 	}
+
+	log.Printf("Transaction completed successfully. Result: %v", transactionResult)
 
 	log.Printf("Updating saga current step")
 	saga.CurrentStep++
@@ -1389,7 +1399,16 @@ func (c *transactionContext) GetID() string {
 
 func (c *transactionContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
 	log.Printf("Getting side effect with key %s for transaction context, saga ID %s", key, c.sagaID)
-	return c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
+	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
+	if err != nil {
+		return nil, err
+	}
+	var wrappedResult WrappedResult
+	if err := json.Unmarshal(result, &wrappedResult); err != nil {
+		log.Printf("Failed to unmarshal side effect result: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
+	}
+	return wrappedResult.Data, nil
 }
 
 func (c *transactionContext) SendSignal(name string, payload interface{}) error {
@@ -1415,7 +1434,16 @@ func (c *compensationContext) GetID() string {
 
 func (c *compensationContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
 	log.Printf("Getting side effect with key %s for compensation context, saga ID %s", key, c.sagaID)
-	return c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
+	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
+	if err != nil {
+		return nil, err
+	}
+	var wrappedResult WrappedResult
+	if err := json.Unmarshal(result, &wrappedResult); err != nil {
+		log.Printf("Failed to unmarshal side effect result: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
+	}
+	return wrappedResult.Data, nil
 }
 
 func (c *compensationContext) SendSignal(name string, payload interface{}) error {
@@ -1454,7 +1482,16 @@ func (c *sideEffectContext) EnqueueTaskAndWait(handler HandlerFunc, params inter
 
 func (c *sideEffectContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
 	log.Printf("Getting side effect with key %s from side effect context, side effect ID %s", key, c.id)
-	return c.tp.sideEffectRepo.GetSideEffect(c, c.id, key)
+	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.id, key)
+	if err != nil {
+		return nil, err
+	}
+	var wrappedResult WrappedResult
+	if err := json.Unmarshal(result, &wrappedResult); err != nil {
+		log.Printf("Failed to unmarshal side effect result: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
+	}
+	return wrappedResult.Data, nil
 }
 
 func (c *sideEffectContext) SendSignal(name string, payload interface{}) error {
@@ -1483,14 +1520,14 @@ func (c *sideEffectContext) WaitForCompletion(taskID string) (interface{}, error
 
 			switch task.Status {
 			case TaskStatusCompleted:
-				var result interface{}
+				var wrappedResult WrappedResult
 				log.Printf("SideEffectContext Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
-				if err := json.Unmarshal(task.Result, &result); err != nil {
+				if err := json.Unmarshal(task.Result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
 				}
 				log.Printf("Task ID %s completed successfully", taskID)
-				return result, nil
+				return wrappedResult.Data, nil
 			case TaskStatusFailed:
 				log.Printf("Task ID %s failed", taskID)
 				return nil, fmt.Errorf("task failed")
@@ -1505,48 +1542,12 @@ func (c *sideEffectContext) WaitForCompletion(taskID string) (interface{}, error
 	}
 }
 
-// Utility functions
-
-func IsUnrecoverable(err error) bool {
-	type unrecoverable interface {
-		Unrecoverable() bool
-	}
-
-	if u, ok := err.(unrecoverable); ok {
-		return u.Unrecoverable()
-	}
-
-	return false
-}
-
-func Unrecoverable(err error) error {
-	return unrecoverableError{err}
-}
-
-type unrecoverableError struct {
-	error
-}
-
 func (e unrecoverableError) Unrecoverable() bool {
 	return true
 }
 
 func (e unrecoverableError) Unwrap() error {
 	return e.error
-}
-
-func nullableTime(t *time.Time) interface{} {
-	if t == nil {
-		return nil
-	}
-	return t.Unix()
-}
-
-func nullableString(s *string) interface{} {
-	if s == nil {
-		return nil
-	}
-	return *s
 }
 
 // Callback implementations
@@ -1882,7 +1883,6 @@ func (tp *Tempolite) updateNodeInExecutionTree(ctx context.Context, node *Execut
 	return nil
 }
 
-/////////////////////////////////////////////////////
 // SQLite Repository Implementations
 
 type SQLiteTaskRepository struct {
@@ -1949,7 +1949,7 @@ func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) error
 		task.CreatedAt.Unix(),
 		task.UpdatedAt.Unix(),
 		nullableTime(task.CompletedAt),
-		nullableBytes(task.Result), // Properly handle nil results
+		task.Result,
 		nullableString(task.ParentTaskID),
 		nullableString(task.SagaID),
 	)
@@ -1971,7 +1971,7 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 	var task Task
 	var scheduledAt, createdAt, updatedAt int64
 	var completedAt sql.NullInt64
-	var result sql.NullString
+	var parentTaskID, sagaID sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&task.ID,
 		&task.ExecutionContextID,
@@ -1983,9 +1983,9 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 		&createdAt,
 		&updatedAt,
 		&completedAt,
-		&result,
-		&task.ParentTaskID,
-		&task.SagaID,
+		&task.Result,
+		&parentTaskID,
+		&sagaID,
 	)
 	if err != nil {
 		log.Printf("GetTask: error fetching task: %v", err)
@@ -1998,10 +1998,13 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 		completedTime := time.Unix(completedAt.Int64, 0)
 		task.CompletedAt = &completedTime
 	}
-	if result.Valid {
-		task.Result = []byte(result.String) // Store result as bytes if it's not null.
+	if parentTaskID.Valid {
+		task.ParentTaskID = &parentTaskID.String
 	}
-	log.Printf("GetTask: fetched task: %v - result: %v", task, task.Result)
+	if sagaID.Valid {
+		task.SagaID = &sagaID.String
+	}
+	log.Printf("GetTask: fetched task: %v", task)
 	return &task, nil
 }
 
@@ -2021,7 +2024,7 @@ func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error
 		task.ScheduledAt.Unix(),
 		task.UpdatedAt.Unix(),
 		nullableTime(task.CompletedAt),
-		nullableBytes(task.Result), // Properly handle nil results
+		task.Result,
 		nullableString(task.ParentTaskID),
 		nullableString(task.SagaID),
 		task.ID,
@@ -2053,7 +2056,9 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 	var tasks []*Task
 	for rows.Next() {
 		var task Task
-		var scheduledAt, createdAt, updatedAt, completedAt int64
+		var scheduledAt, createdAt, updatedAt int64
+		var completedAt sql.NullInt64
+		var parentTaskID, sagaID sql.NullString
 		err := rows.Scan(
 			&task.ID,
 			&task.ExecutionContextID,
@@ -2066,8 +2071,8 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 			&updatedAt,
 			&completedAt,
 			&task.Result,
-			&task.ParentTaskID,
-			&task.SagaID,
+			&parentTaskID,
+			&sagaID,
 		)
 		if err != nil {
 			log.Printf("GetPendingTasks: error scanning row: %v", err)
@@ -2076,9 +2081,15 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 		task.ScheduledAt = time.Unix(scheduledAt, 0)
 		task.CreatedAt = time.Unix(createdAt, 0)
 		task.UpdatedAt = time.Unix(updatedAt, 0)
-		if completedAt != 0 {
-			completedTime := time.Unix(completedAt, 0)
+		if completedAt.Valid {
+			completedTime := time.Unix(completedAt.Int64, 0)
 			task.CompletedAt = &completedTime
+		}
+		if parentTaskID.Valid {
+			task.ParentTaskID = &parentTaskID.String
+		}
+		if sagaID.Valid {
+			task.SagaID = &sagaID.String
 		}
 		tasks = append(tasks, &task)
 	}
@@ -2103,7 +2114,9 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 	var tasks []*Task
 	for rows.Next() {
 		var task Task
-		var scheduledAt, createdAt, updatedAt, completedAt int64
+		var scheduledAt, createdAt, updatedAt int64
+		var completedAt sql.NullInt64
+		var parentTaskID, sagaID sql.NullString
 		err := rows.Scan(
 			&task.ID,
 			&task.ExecutionContextID,
@@ -2116,8 +2129,8 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 			&updatedAt,
 			&completedAt,
 			&task.Result,
-			&task.ParentTaskID,
-			&task.SagaID,
+			&parentTaskID,
+			&sagaID,
 		)
 		if err != nil {
 			log.Printf("GetRunningTasksForSaga: error scanning row: %v", err)
@@ -2126,9 +2139,15 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 		task.ScheduledAt = time.Unix(scheduledAt, 0)
 		task.CreatedAt = time.Unix(createdAt, 0)
 		task.UpdatedAt = time.Unix(updatedAt, 0)
-		if completedAt != 0 {
-			completedTime := time.Unix(completedAt, 0)
+		if completedAt.Valid {
+			completedTime := time.Unix(completedAt.Int64, 0)
 			task.CompletedAt = &completedTime
+		}
+		if parentTaskID.Valid {
+			task.ParentTaskID = &parentTaskID.String
+		}
+		if sagaID.Valid {
+			task.SagaID = &sagaID.String
 		}
 		tasks = append(tasks, &task)
 	}
@@ -2189,7 +2208,7 @@ func (r *SQLiteSideEffectRepository) GetSideEffect(ctx context.Context, executio
 		log.Printf("GetSideEffect: error fetching side effect: %v", err)
 		return nil, err
 	}
-	log.Printf("GetSideEffect: fetched side effect for executionContextID: %s, key: %s result: [%v]", executionContextID, key, string(result))
+	log.Printf("GetSideEffect: fetched side effect for executionContextID: %s, key: %s", executionContextID, key)
 	return result, nil
 }
 
@@ -2205,11 +2224,6 @@ func (r *SQLiteSideEffectRepository) SaveSideEffect(ctx context.Context, executi
 	} else {
 		log.Printf("SaveSideEffect: side effect saved successfully for executionContextID: %s, key: %s", executionContextID, key)
 	}
-	// id, err := res.RowsAffected()
-	// if err != nil {
-	// 	log.Printf("SaveSideEffect: error getting last insert ID: %v", err)
-	// }
-	// log.Printf("SaveSideEffect: last insert ID: %d", id)
 	return err
 }
 
@@ -2527,9 +2541,10 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 	var node ExecutionNode
 	var createdAt, updatedAt int64
 	var completedAt sql.NullInt64
+	var parentID, errorMessage sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&node.ID,
-		&node.ParentID,
+		&parentID,
 		&node.Type,
 		&node.Status,
 		&createdAt,
@@ -2538,7 +2553,7 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 		&node.HandlerName,
 		&node.Payload,
 		&node.Result,
-		&node.ErrorMessage,
+		&errorMessage,
 	)
 	if err != nil {
 		log.Printf("GetNode: error fetching node: %v", err)
@@ -2549,6 +2564,12 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 	if completedAt.Valid {
 		completedTime := time.Unix(completedAt.Int64, 0)
 		node.CompletedAt = &completedTime
+	}
+	if parentID.Valid {
+		node.ParentID = &parentID.String
+	}
+	if errorMessage.Valid {
+		node.ErrorMessage = &errorMessage.String
 	}
 	log.Printf("GetNode: fetched node: %v", node)
 	return &node, nil
@@ -2598,10 +2619,12 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 	var nodes []*ExecutionNode
 	for rows.Next() {
 		var node ExecutionNode
-		var createdAt, updatedAt, completedAt int64
+		var createdAt, updatedAt int64
+		var completedAt sql.NullInt64
+		var parentID, errorMessage sql.NullString
 		err := rows.Scan(
 			&node.ID,
-			&node.ParentID,
+			&parentID,
 			&node.Type,
 			&node.Status,
 			&createdAt,
@@ -2610,7 +2633,7 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 			&node.HandlerName,
 			&node.Payload,
 			&node.Result,
-			&node.ErrorMessage,
+			&errorMessage,
 		)
 		if err != nil {
 			log.Printf("GetChildNodes: error scanning row: %v", err)
@@ -2618,9 +2641,15 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 		}
 		node.CreatedAt = time.Unix(createdAt, 0)
 		node.UpdatedAt = time.Unix(updatedAt, 0)
-		if completedAt != 0 {
-			completedTime := time.Unix(completedAt, 0)
+		if completedAt.Valid {
+			completedTime := time.Unix(completedAt.Int64, 0)
 			node.CompletedAt = &completedTime
+		}
+		if parentID.Valid {
+			node.ParentID = &parentID.String
+		}
+		if errorMessage.Valid {
+			node.ErrorMessage = &errorMessage.String
 		}
 		nodes = append(nodes, &node)
 	}
@@ -2848,9 +2877,40 @@ func (r *SQLiteSagaStepRepository) GetSagaStep(ctx context.Context, sagaID strin
 	return payload, nil
 }
 
-func nullableBytes(data []byte) interface{} {
-	if data == nil {
+// Helper functions
+
+func nullableTime(t *time.Time) interface{} {
+	if t == nil {
 		return nil
 	}
-	return data
+	return t.Unix()
+}
+
+func nullableString(s *string) interface{} {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+// Main package-level functions
+
+func IsUnrecoverable(err error) bool {
+	type unrecoverable interface {
+		Unrecoverable() bool
+	}
+
+	if u, ok := err.(unrecoverable); ok {
+		return u.Unrecoverable()
+	}
+
+	return false
+}
+
+func Unrecoverable(err error) error {
+	return unrecoverableError{err}
+}
+
+type unrecoverableError struct {
+	error
 }
