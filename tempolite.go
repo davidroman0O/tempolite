@@ -226,8 +226,15 @@ type SideEffect interface {
 	Run(ctx SideEffectContext) (interface{}, error)
 }
 
-// SQLite Repository Implementations
-// ... (SQLite repository implementations remain the same)
+type sideEffectTask struct {
+	sideEffect         SideEffect
+	executionContextID string
+	key                string
+}
+
+func (s *sideEffectTask) Run(ctx SideEffectContext) (interface{}, error) {
+	return s.sideEffect.Run(ctx)
+}
 
 // Tempolite struct and methods
 
@@ -242,7 +249,7 @@ type Tempolite struct {
 	handlerPool       *retrypool.Pool[*Task]
 	sagaHandlerPool   *retrypool.Pool[*Task]
 	compensationPool  *retrypool.Pool[*Compensation]
-	sideEffectPool    *retrypool.Pool[SideEffect]
+	sideEffectPool    *retrypool.Pool[*sideEffectTask]
 	db                *sql.DB
 	handlers          map[string]handlerInfo
 	handlersMutex     sync.RWMutex
@@ -264,85 +271,102 @@ type TempoliteOption func(*Tempolite)
 
 func WithHandlerWorkers(count int) TempoliteOption {
 	return func(tp *Tempolite) {
+		log.Printf("Initializing %d handler workers", count)
 		workers := make([]retrypool.Worker[*Task], count)
 		for i := 0; i < count; i++ {
 			workers[i] = &TaskWorker{ID: i, tp: tp}
+			log.Printf("Created handler worker %d", i)
 		}
 		tp.handlerPool = retrypool.New(tp.ctx, workers, tp.getHandlerPoolOptions()...)
+		log.Printf("Handler pool initialized")
 	}
 }
 
 func WithSagaWorkers(count int) TempoliteOption {
 	return func(tp *Tempolite) {
+		log.Printf("Initializing %d saga workers", count)
 		workers := make([]retrypool.Worker[*Task], count)
 		for i := 0; i < count; i++ {
 			workers[i] = &SagaTaskWorker{ID: i, tp: tp}
+			log.Printf("Created saga worker %d", i)
 		}
 		tp.sagaHandlerPool = retrypool.New(tp.ctx, workers, tp.getSagaHandlerPoolOptions()...)
+		log.Printf("Saga pool initialized")
 	}
 }
 
 func WithCompensationWorkers(count int) TempoliteOption {
 	return func(tp *Tempolite) {
+		log.Printf("Initializing %d compensation workers", count)
 		workers := make([]retrypool.Worker[*Compensation], count)
 		for i := 0; i < count; i++ {
 			workers[i] = &CompensationWorker{ID: i, tp: tp}
+			log.Printf("Created compensation worker %d", i)
 		}
 		tp.compensationPool = retrypool.New(tp.ctx, workers, tp.getCompensationPoolOptions()...)
+		log.Printf("Compensation pool initialized")
 	}
 }
 
 func WithSideEffectWorkers(count int) TempoliteOption {
 	return func(tp *Tempolite) {
-		workers := make([]retrypool.Worker[SideEffect], count)
+		log.Printf("Initializing %d side effect workers", count)
+		workers := make([]retrypool.Worker[*sideEffectTask], count)
 		for i := 0; i < count; i++ {
 			workers[i] = &SideEffectWorker{ID: i, tp: tp}
+			log.Printf("Created side effect worker %d", i)
 		}
 		tp.sideEffectPool = retrypool.New(tp.ctx, workers, tp.getSideEffectPoolOptions()...)
+		log.Printf("Side effect pool initialized")
 	}
 }
 
 func (tp *Tempolite) getHandlerPoolOptions() []retrypool.Option[*Task] {
+	log.Printf("Getting handler pool options")
 	return []retrypool.Option[*Task]{
 		retrypool.WithOnTaskSuccess[*Task](tp.onHandlerSuccess),
 		retrypool.WithOnTaskFailure[*Task](tp.onHandlerFailure),
 		retrypool.WithOnRetry[*Task](tp.onHandlerRetry),
-		retrypool.WithAttempts[*Task](3),
+		retrypool.WithAttempts[*Task](1),
 		retrypool.WithPanicHandler[*Task](tp.onHandlerPanic),
 	}
 }
 
 func (tp *Tempolite) getSagaHandlerPoolOptions() []retrypool.Option[*Task] {
+	log.Printf("Getting saga handler pool options")
 	return []retrypool.Option[*Task]{
 		retrypool.WithOnTaskSuccess[*Task](tp.onSagaHandlerSuccess),
 		retrypool.WithOnTaskFailure[*Task](tp.onSagaHandlerFailure),
 		retrypool.WithOnRetry[*Task](tp.onSagaHandlerRetry),
-		retrypool.WithAttempts[*Task](3),
+		retrypool.WithAttempts[*Task](1),
 		retrypool.WithPanicHandler[*Task](tp.onSagaHandlerPanic),
 	}
 }
 
 func (tp *Tempolite) getCompensationPoolOptions() []retrypool.Option[*Compensation] {
+	log.Printf("Getting compensation pool options")
 	return []retrypool.Option[*Compensation]{
 		retrypool.WithOnTaskSuccess[*Compensation](tp.onCompensationSuccess),
 		retrypool.WithOnTaskFailure[*Compensation](tp.onCompensationFailure),
 		retrypool.WithOnRetry[*Compensation](tp.onCompensationRetry),
-		retrypool.WithAttempts[*Compensation](3),
+		retrypool.WithAttempts[*Compensation](1),
 		retrypool.WithPanicHandler[*Compensation](tp.onCompensationPanic),
 	}
 }
 
-func (tp *Tempolite) getSideEffectPoolOptions() []retrypool.Option[SideEffect] {
-	return []retrypool.Option[SideEffect]{
-		retrypool.WithOnTaskSuccess[SideEffect](tp.onSideEffectSuccess),
-		retrypool.WithOnTaskFailure[SideEffect](tp.onSideEffectFailure),
-		retrypool.WithOnRetry[SideEffect](tp.onSideEffectRetry),
-		retrypool.WithAttempts[SideEffect](3),
-		retrypool.WithPanicHandler[SideEffect](tp.onSideEffectPanic),
+func (tp *Tempolite) getSideEffectPoolOptions() []retrypool.Option[*sideEffectTask] {
+	log.Printf("Getting side effect pool options")
+	return []retrypool.Option[*sideEffectTask]{
+		retrypool.WithOnTaskSuccess[*sideEffectTask](tp.onSideEffectSuccess),
+		retrypool.WithOnTaskFailure[*sideEffectTask](tp.onSideEffectFailure),
+		retrypool.WithOnRetry[*sideEffectTask](tp.onSideEffectRetry),
+		retrypool.WithAttempts[*sideEffectTask](1),
+		retrypool.WithPanicHandler[*sideEffectTask](tp.onSideEffectPanic),
 	}
 }
 
 func New(ctx context.Context, db *sql.DB, options ...TempoliteOption) (*Tempolite, error) {
+	log.Printf("Creating new Tempolite instance")
 	ctx, cancel := context.WithCancel(ctx)
 
 	tp := &Tempolite{
@@ -355,41 +379,43 @@ func New(ctx context.Context, db *sql.DB, options ...TempoliteOption) (*Tempolit
 
 	var err error
 
+	log.Printf("Initializing SQLite repositories")
 	tp.taskRepo, err = NewSQLiteTaskRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating task repository: %w", err)
 	}
 
 	tp.sideEffectRepo, err = NewSQLiteSideEffectRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating side effect repository: %w", err)
 	}
 
 	tp.signalRepo, err = NewSQLiteSignalRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating signal repository: %w", err)
 	}
 
 	tp.sagaRepo, err = NewSQLiteSagaRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating saga repository: %w", err)
 	}
 
 	tp.executionTreeRepo, err = NewSQLiteExecutionTreeRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating execution tree repository: %w", err)
 	}
 
 	tp.compensationRepo, err = NewSQLiteCompensationRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating compensation repository: %w", err)
 	}
 
 	tp.sagaStepRepo, err = NewSQLiteSagaStepRepository(db)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating saga step repository: %w", err)
 	}
 
+	log.Printf("Applying options")
 	// Apply options
 	for _, option := range options {
 		option(tp)
@@ -397,23 +423,30 @@ func New(ctx context.Context, db *sql.DB, options ...TempoliteOption) (*Tempolit
 
 	// Initialize pools if not set by options
 	if tp.handlerPool == nil {
+		log.Printf("No handler pool set, creating default handler pool with 1 worker")
 		WithHandlerWorkers(1)(tp)
 	}
 	if tp.sagaHandlerPool == nil {
+		log.Printf("No saga handler pool set, creating default saga handler pool with 1 worker")
 		WithSagaWorkers(1)(tp)
 	}
 	if tp.compensationPool == nil {
+		log.Printf("No compensation pool set, creating default compensation pool with 1 worker")
 		WithCompensationWorkers(1)(tp)
 	}
 	if tp.sideEffectPool == nil {
+		log.Printf("No side effect pool set, creating default side effect pool with 1 worker")
 		WithSideEffectWorkers(1)(tp)
 	}
 
+	log.Printf("Tempolite instance created successfully")
 	return tp, nil
 }
 
 func (tp *Tempolite) RegisterHandler(handler interface{}) {
 	handlerType := reflect.TypeOf(handler)
+	log.Printf("Registering handler of type %v", handlerType)
+
 	if handlerType.Kind() != reflect.Func {
 		panic("Handler must be a function")
 	}
@@ -443,6 +476,7 @@ func (tp *Tempolite) RegisterHandler(handler interface{}) {
 	}
 
 	name := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+	log.Printf("Handler registered with name %s", name)
 	tp.handlersMutex.Lock()
 	tp.handlers[name] = handlerInfo{
 		Handler:    handler,
@@ -454,43 +488,93 @@ func (tp *Tempolite) RegisterHandler(handler interface{}) {
 }
 
 func (tp *Tempolite) getHandler(name string) (handlerInfo, bool) {
+	log.Printf("Fetching handler with name %s", name)
 	tp.handlersMutex.RLock()
 	defer tp.handlersMutex.RUnlock()
 	handler, exists := tp.handlers[name]
 	return handler, exists
 }
 
+// WaitForTaskCompletion waits for the task with the given ID to reach a terminal state (completed, failed, etc.)
+func (tp *Tempolite) WaitForTaskCompletion(ctx context.Context, taskID string, pollInterval time.Duration) (interface{}, error) {
+	log.Printf("Waiting for completion of task ID %s", taskID)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Context done while waiting for task ID %s", taskID)
+			return nil, ctx.Err()
+		case <-ticker.C:
+			task, err := tp.taskRepo.GetTask(ctx, taskID)
+			if err != nil {
+				log.Printf("Error getting task with ID %s: %v", taskID, err)
+				return nil, err
+			}
+
+			switch task.Status {
+			case TaskStatusCompleted:
+				var result interface{}
+				if err := json.Unmarshal(task.Result, &result); err != nil {
+					log.Printf("Failed to unmarshal task result: %v", err)
+					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
+				}
+				log.Printf("Task with ID %s completed successfully", taskID)
+				return result, nil
+			case TaskStatusFailed:
+				log.Printf("Task with ID %s failed", taskID)
+				return nil, fmt.Errorf("task failed")
+			case TaskStatusCancelled:
+				log.Printf("Task with ID %s cancelled", taskID)
+				return nil, fmt.Errorf("task cancelled")
+			case TaskStatusTerminated:
+				log.Printf("Task with ID %s terminated", taskID)
+				return nil, fmt.Errorf("task terminated")
+			}
+		}
+	}
+}
+
 func (tp *Tempolite) GetInfo(ctx context.Context, id string) (interface{}, error) {
+	log.Printf("Getting info for id %s", id)
 	// Try to get task info
 	task, err := tp.taskRepo.GetTask(ctx, id)
 	if err == nil {
+		log.Printf("Found task with id %s", id)
 		return task, nil
 	}
 
 	// Try to get saga info
 	saga, err := tp.sagaRepo.GetSaga(ctx, id)
 	if err == nil {
+		log.Printf("Found saga with id %s", id)
 		return saga, nil
 	}
 
 	// Try to get side effect info
 	sideEffect, err := tp.sideEffectRepo.GetSideEffect(ctx, id, "")
 	if err == nil {
+		log.Printf("Found side effect with id %s", id)
 		return sideEffect, nil
 	}
 
+	log.Printf("No info found for id %s", id)
 	return nil, fmt.Errorf("no info found for id: %s", id)
 }
 
 func (tp *Tempolite) GetExecutionTree(ctx context.Context, rootID string) (*dag.AcyclicGraph, error) {
+	log.Printf("Getting execution tree for root ID %s", rootID)
 	tp.executionTreesMu.RLock()
 	tree, exists := tp.executionTrees[rootID]
 	tp.executionTreesMu.RUnlock()
 
 	if exists {
+		log.Printf("Execution tree found in memory for root ID %s", rootID)
 		return tree, nil
 	}
 
+	log.Printf("Execution tree not found in memory, reconstructing from database")
 	// If the tree doesn't exist in memory, reconstruct it from the database
 	node, err := tp.executionTreeRepo.GetNode(ctx, rootID)
 	if err != nil {
@@ -507,10 +591,12 @@ func (tp *Tempolite) GetExecutionTree(ctx context.Context, rootID string) (*dag.
 	tp.executionTrees[rootID] = tree
 	tp.executionTreesMu.Unlock()
 
+	log.Printf("Execution tree reconstructed and stored in memory for root ID %s", rootID)
 	return tree, nil
 }
 
 func (tp *Tempolite) reconstructExecutionTree(ctx context.Context, node *ExecutionNode, tree *dag.AcyclicGraph) error {
+	log.Printf("Adding node %s to execution tree", node.ID)
 	tree.Add(node)
 
 	children, err := tp.executionTreeRepo.GetChildNodes(ctx, node.ID)
@@ -518,11 +604,13 @@ func (tp *Tempolite) reconstructExecutionTree(ctx context.Context, node *Executi
 		return err
 	}
 
+	log.Printf("Found %d child nodes for node %s", len(children), node.ID)
 	for _, child := range children {
 		err = tp.reconstructExecutionTree(ctx, child, tree)
 		if err != nil {
 			return err
 		}
+		log.Printf("Connecting node %s to child node %s", node.ID, child.ID)
 		tree.Connect(dag.BasicEdge(node, child))
 	}
 
@@ -530,6 +618,7 @@ func (tp *Tempolite) reconstructExecutionTree(ctx context.Context, node *Executi
 }
 
 func (tp *Tempolite) SendSignal(ctx context.Context, taskID string, name string, payload interface{}) error {
+	log.Printf("Sending signal '%s' for task ID %s", name, taskID)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal signal payload: %v", err)
@@ -544,10 +633,18 @@ func (tp *Tempolite) SendSignal(ctx context.Context, taskID string, name string,
 		Direction: "inbound",
 	}
 
-	return tp.signalRepo.SaveSignal(ctx, signal)
+	err = tp.signalRepo.SaveSignal(ctx, signal)
+	if err != nil {
+		log.Printf("Failed to save signal: %v", err)
+		return err
+	}
+
+	log.Printf("Signal '%s' sent successfully for task ID %s", name, taskID)
+	return nil
 }
 
 func (tp *Tempolite) ReceiveSignal(ctx context.Context, taskID string, name string) (<-chan []byte, error) {
+	log.Printf("Receiving signal '%s' for task ID %s", name, taskID)
 	ch := make(chan []byte)
 
 	go func() {
@@ -556,6 +653,7 @@ func (tp *Tempolite) ReceiveSignal(ctx context.Context, taskID string, name stri
 		for {
 			select {
 			case <-ctx.Done():
+				log.Printf("Context done while receiving signal '%s' for task ID %s", name, taskID)
 				return
 			case <-time.After(time.Second):
 				signals, err := tp.signalRepo.GetSignals(ctx, taskID, name, "inbound")
@@ -567,6 +665,7 @@ func (tp *Tempolite) ReceiveSignal(ctx context.Context, taskID string, name stri
 				for _, signal := range signals {
 					select {
 					case ch <- signal.Payload:
+						log.Printf("Received signal '%s' for task ID %s", name, taskID)
 						if err := tp.signalRepo.DeleteSignals(ctx, taskID, name, "inbound"); err != nil {
 							log.Printf("Error deleting signal: %v", err)
 						}
@@ -582,38 +681,66 @@ func (tp *Tempolite) ReceiveSignal(ctx context.Context, taskID string, name stri
 }
 
 func (tp *Tempolite) Cancel(ctx context.Context, id string) error {
+	log.Printf("Cancelling task or saga with ID %s", id)
 	// Try to cancel task
 	task, err := tp.taskRepo.GetTask(ctx, id)
 	if err == nil {
 		task.Status = TaskStatusCancelled
-		return tp.taskRepo.UpdateTask(ctx, task)
+		err = tp.taskRepo.UpdateTask(ctx, task)
+		if err != nil {
+			log.Printf("Failed to cancel task with ID %s: %v", id, err)
+			return err
+		}
+		log.Printf("Task with ID %s cancelled successfully", id)
+		return nil
 	}
 
 	// Try to cancel saga
 	saga, err := tp.sagaRepo.GetSaga(ctx, id)
 	if err == nil {
 		saga.Status = SagaStatusCancelled
-		return tp.sagaRepo.UpdateSaga(ctx, saga)
+		err = tp.sagaRepo.UpdateSaga(ctx, saga)
+		if err != nil {
+			log.Printf("Failed to cancel saga with ID %s: %v", id, err)
+			return err
+		}
+		log.Printf("Saga with ID %s cancelled successfully", id)
+		return nil
 	}
 
+	log.Printf("No task or saga found with ID %s", id)
 	return fmt.Errorf("no task or saga found with id: %s", id)
 }
 
 func (tp *Tempolite) Terminate(ctx context.Context, id string) error {
+	log.Printf("Terminating task or saga with ID %s", id)
 	// Try to terminate task
 	task, err := tp.taskRepo.GetTask(ctx, id)
 	if err == nil {
 		task.Status = TaskStatusTerminated
-		return tp.taskRepo.UpdateTask(ctx, task)
+		err = tp.taskRepo.UpdateTask(ctx, task)
+		if err != nil {
+			log.Printf("Failed to terminate task with ID %s: %v", id, err)
+			return err
+		}
+		log.Printf("Task with ID %s terminated successfully", id)
+		return nil
 	}
 
 	// Try to terminate saga
 	saga, err := tp.sagaRepo.GetSaga(ctx, id)
 	if err == nil {
 		saga.Status = SagaStatusTerminated
-		return tp.sagaRepo.UpdateSaga(ctx, saga)
+		err = tp.sagaRepo.UpdateSaga(ctx, saga)
+		if err != nil {
+			log.Printf("Failed to terminate saga with ID %s: %v", id, err)
+			return err
+		}
+		log.Printf("Saga with ID %s terminated successfully", id)
+		return nil
 	}
 
+	log.Printf("No task or saga found with ID %s", id)
 	return fmt.Errorf("no task or saga found with id: %s", id)
 }
 
@@ -628,32 +755,38 @@ type enqueueOptions struct {
 
 func WithMaxDuration(duration time.Duration) EnqueueOption {
 	return func(o *enqueueOptions) {
+		log.Printf("Setting max duration for enqueue option: %v", duration)
 		o.maxDuration = duration
 	}
 }
 
 func WithTimeLimit(limit time.Duration) EnqueueOption {
 	return func(o *enqueueOptions) {
+		log.Printf("Setting time limit for enqueue option: %v", limit)
 		o.timeLimit = limit
 	}
 }
 
 func WithImmediateRetry() EnqueueOption {
 	return func(o *enqueueOptions) {
+		log.Printf("Enabling immediate retry for enqueue option")
 		o.immediate = true
 	}
 }
 
 func WithPanicOnTimeout() EnqueueOption {
 	return func(o *enqueueOptions) {
+		log.Printf("Enabling panic on timeout for enqueue option")
 		o.panicOnTimeout = true
 	}
 }
 
 func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params interface{}, options ...EnqueueOption) (string, error) {
 	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+	log.Printf("Enqueuing task with handler %s", handlerName)
 	handlerInfo, exists := tp.getHandler(handlerName)
 	if !exists {
+		log.Printf("No handler registered with name %s", handlerName)
 		return "", fmt.Errorf("no handler registered with name: %s", handlerName)
 	}
 
@@ -664,6 +797,7 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 
 	payload, err := json.Marshal(params)
 	if err != nil {
+		log.Printf("Failed to marshal task parameters for handler %s: %v", handlerName, err)
 		return "", fmt.Errorf("failed to marshal task parameters: %v", err)
 	}
 
@@ -680,6 +814,7 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	if handlerInfo.IsSaga {
+		log.Printf("Task is part of a saga, creating saga info")
 		saga := &SagaInfo{
 			ID:            task.ID,
 			Status:        SagaStatusPending,
@@ -688,15 +823,19 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 			HandlerName:   handlerName,
 		}
 		if err := tp.sagaRepo.CreateSaga(ctx, saga); err != nil {
+			log.Printf("Failed to create saga: %v", err)
 			return "", fmt.Errorf("failed to create saga: %v", err)
 		}
 		task.SagaID = &saga.ID
 	}
 
+	log.Printf("Creating task in repository")
 	if err := tp.taskRepo.CreateTask(ctx, task); err != nil {
+		log.Printf("Failed to create task: %v", err)
 		return "", fmt.Errorf("failed to create task: %v", err)
 	}
 
+	log.Printf("Creating execution node for task %s", task.ID)
 	executionNode := &ExecutionNode{
 		ID:          task.ID,
 		Type:        ExecutionNodeTypeHandler,
@@ -708,9 +847,11 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	if err := tp.executionTreeRepo.CreateNode(ctx, executionNode); err != nil {
+		log.Printf("Failed to create execution node: %v", err)
 		return "", fmt.Errorf("failed to create execution node: %v", err)
 	}
 
+	log.Printf("Dispatching task to pool")
 	poolOptions := []retrypool.TaskOption[*Task]{
 		retrypool.WithMaxDuration[*Task](opts.maxDuration),
 		retrypool.WithTimeLimit[*Task](opts.timeLimit),
@@ -728,24 +869,29 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 		tp.handlerPool.Dispatch(task, poolOptions...)
 	}
 
+	log.Printf("Task with ID %s enqueued successfully", task.ID)
 	return task.ID, nil
 }
 
 func (tp *Tempolite) EnqueueSaga(ctx context.Context, handler HandlerSagaFunc, params interface{}, options ...EnqueueOption) (string, error) {
+	log.Printf("Enqueuing saga task")
 	return tp.Enqueue(ctx, handler, params, options...)
 }
 
 func (tp *Tempolite) Wait(condition func(TempoliteInfo) bool, interval time.Duration) error {
+	log.Printf("Starting wait loop with interval %v", interval)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-tp.ctx.Done():
+			log.Printf("Context done during wait loop")
 			return tp.ctx.Err()
 		case <-ticker.C:
 			info := tp.getInfo()
 			if condition(info) {
+				log.Printf("Wait condition satisfied")
 				return nil
 			}
 		}
@@ -760,6 +906,7 @@ type TempoliteInfo struct {
 }
 
 func (tp *Tempolite) getInfo() TempoliteInfo {
+	log.Printf("Getting pool stats")
 	return TempoliteInfo{
 		Tasks:             tp.handlerPool.QueueSize(),
 		SagaTasks:         tp.sagaHandlerPool.QueueSize(),
@@ -769,6 +916,7 @@ func (tp *Tempolite) getInfo() TempoliteInfo {
 }
 
 func (tp *Tempolite) GetPoolStats() map[string]int {
+	log.Printf("Getting pool statistics")
 	return map[string]int{
 		"handler":      tp.handlerPool.QueueSize(),
 		"saga":         tp.sagaHandlerPool.QueueSize(),
@@ -778,12 +926,14 @@ func (tp *Tempolite) GetPoolStats() map[string]int {
 }
 
 func (tp *Tempolite) Close() error {
+	log.Printf("Closing Tempolite instance")
 	tp.cancel()
 	tp.handlerPool.Close()
 	tp.sagaHandlerPool.Close()
 	tp.compensationPool.Close()
 	tp.sideEffectPool.Close()
 	tp.workersWg.Wait()
+	log.Printf("Tempolite instance closed successfully")
 	return nil
 }
 
@@ -795,6 +945,7 @@ type TaskWorker struct {
 }
 
 func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
+	log.Printf("Running task with ID %s on worker %d", task.ID, w.ID)
 	handlerInfo, exists := w.tp.getHandler(task.HandlerName)
 	if !exists {
 		return fmt.Errorf("no handler registered with name: %s", task.HandlerName)
@@ -806,15 +957,18 @@ func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
 
 	err := json.Unmarshal(task.Payload, param)
 	if err != nil {
+		log.Printf("Failed to unmarshal task payload: %v", err)
 		return fmt.Errorf("failed to unmarshal task payload: %v", err)
 	}
 
 	handlerCtx := &handlerContext{
-		Context: ctx,
-		tp:      w.tp,
-		taskID:  task.ID,
+		Context:            ctx,
+		tp:                 w.tp,
+		taskID:             task.ID,
+		executionContextID: task.ExecutionContextID,
 	}
 
+	log.Printf("Calling handler for task ID %s", task.ID)
 	results := handlerValue.Call([]reflect.Value{
 		reflect.ValueOf(handlerCtx),
 		reflect.ValueOf(param).Elem(),
@@ -827,11 +981,14 @@ func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
 	if len(results) > 1 {
 		result, err := json.Marshal(results[0].Interface())
 		if err != nil {
+			log.Printf("Failed to marshal task result: %v", err)
 			return fmt.Errorf("failed to marshal task result: %v", err)
 		}
 		task.Result = result
+		log.Printf("Task result marshaled successfully for task ID %s", task.ID)
 	}
 
+	log.Printf("Task with ID %s completed successfully on worker %d", task.ID, w.ID)
 	return nil
 }
 
@@ -841,6 +998,7 @@ type SagaTaskWorker struct {
 }
 
 func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
+	log.Printf("Running saga task with ID %s on worker %d", task.ID, w.ID)
 	handlerInfo, exists := w.tp.getHandler(task.HandlerName)
 	if !exists {
 		return fmt.Errorf("no handler registered with name: %s", task.HandlerName)
@@ -852,18 +1010,21 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
 
 	err := json.Unmarshal(task.Payload, param)
 	if err != nil {
+		log.Printf("Failed to unmarshal task payload: %v", err)
 		return fmt.Errorf("failed to unmarshal task payload: %v", err)
 	}
 
 	handlerCtx := &handlerSagaContext{
 		handlerContext: handlerContext{
-			Context: ctx,
-			tp:      w.tp,
-			taskID:  task.ID,
+			Context:            ctx,
+			tp:                 w.tp,
+			taskID:             task.ID,
+			executionContextID: task.ExecutionContextID,
 		},
 		sagaID: *task.SagaID,
 	}
 
+	log.Printf("Calling saga handler for task ID %s", task.ID)
 	results := handlerValue.Call([]reflect.Value{
 		reflect.ValueOf(handlerCtx),
 		reflect.ValueOf(param).Elem(),
@@ -876,11 +1037,14 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
 	if len(results) > 1 {
 		result, err := json.Marshal(results[0].Interface())
 		if err != nil {
+			log.Printf("Failed to marshal task result: %v", err)
 			return fmt.Errorf("failed to marshal task result: %v", err)
 		}
 		task.Result = result
+		log.Printf("Task result marshaled successfully for saga task ID %s", task.ID)
 	}
 
+	log.Printf("Saga task with ID %s completed successfully on worker %d", task.ID, w.ID)
 	return nil
 }
 
@@ -890,8 +1054,10 @@ type CompensationWorker struct {
 }
 
 func (w *CompensationWorker) Run(ctx context.Context, compensation *Compensation) error {
+	log.Printf("Running compensation with ID %s on worker %d", compensation.ID, w.ID)
 	saga, err := w.tp.sagaRepo.GetSaga(ctx, compensation.SagaID)
 	if err != nil {
+		log.Printf("Failed to get saga: %v", err)
 		return fmt.Errorf("failed to get saga: %v", err)
 	}
 
@@ -906,6 +1072,7 @@ func (w *CompensationWorker) Run(ctx context.Context, compensation *Compensation
 
 	err = json.Unmarshal(compensation.Payload, param)
 	if err != nil {
+		log.Printf("Failed to unmarshal compensation payload: %v", err)
 		return fmt.Errorf("failed to unmarshal compensation payload: %v", err)
 	}
 
@@ -916,6 +1083,7 @@ func (w *CompensationWorker) Run(ctx context.Context, compensation *Compensation
 		stepID:  compensation.ID,
 	}
 
+	log.Printf("Calling compensation handler for compensation ID %s", compensation.ID)
 	results := handlerValue.Call([]reflect.Value{
 		reflect.ValueOf(compensationCtx),
 		reflect.ValueOf(param).Elem(),
@@ -925,6 +1093,7 @@ func (w *CompensationWorker) Run(ctx context.Context, compensation *Compensation
 		return results[len(results)-1].Interface().(error)
 	}
 
+	log.Printf("Compensation with ID %s completed successfully on worker %d", compensation.ID, w.ID)
 	return nil
 }
 
@@ -933,27 +1102,33 @@ type SideEffectWorker struct {
 	tp *Tempolite
 }
 
-func (w *SideEffectWorker) Run(ctx context.Context, sideEffect SideEffect) error {
+func (w *SideEffectWorker) Run(ctx context.Context, task *sideEffectTask) error {
+	log.Printf("Running side effect on worker %d", w.ID)
 	sideEffectCtx := &sideEffectContext{
 		Context: ctx,
 		tp:      w.tp,
+		id:      task.executionContextID,
 	}
 
-	result, err := sideEffect.Run(sideEffectCtx)
+	result, err := task.sideEffect.Run(sideEffectCtx)
 	if err != nil {
+		log.Printf("Side effect run failed: %v", err)
 		return err
 	}
 
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
+		log.Printf("Failed to marshal side effect result: %v", err)
 		return fmt.Errorf("failed to marshal side effect result: %v", err)
 	}
 
-	err = w.tp.sideEffectRepo.SaveSideEffect(ctx, sideEffectCtx.GetID(), "result", resultBytes)
+	err = w.tp.sideEffectRepo.SaveSideEffect(ctx, task.executionContextID, "result", resultBytes)
 	if err != nil {
+		log.Printf("Failed to save side effect result: %v", err)
 		return fmt.Errorf("failed to save side effect result: %v", err)
 	}
 
+	log.Printf("Side effect completed successfully on worker %d", w.ID)
 	return nil
 }
 
@@ -961,8 +1136,9 @@ func (w *SideEffectWorker) Run(ctx context.Context, sideEffect SideEffect) error
 
 type handlerContext struct {
 	context.Context
-	tp     *Tempolite
-	taskID string
+	tp                 *Tempolite
+	taskID             string
+	executionContextID string
 }
 
 func (c *handlerContext) GetID() string {
@@ -970,30 +1146,38 @@ func (c *handlerContext) GetID() string {
 }
 
 func (c *handlerContext) EnqueueTask(handler HandlerFunc, params interface{}, options ...EnqueueOption) (string, error) {
+	log.Printf("Enqueuing child task from handler context, parent task ID %s", c.taskID)
 	taskID, err := c.tp.Enqueue(c, handler, params, options...)
 	if err != nil {
+		log.Printf("Failed to enqueue child task: %v", err)
 		return "", err
 	}
 
+	log.Printf("Linking child task %s with parent task %s in execution tree", taskID, c.taskID)
 	parentNode, err := c.tp.executionTreeRepo.GetNode(c, c.taskID)
 	if err != nil {
+		log.Printf("Failed to get parent node: %v", err)
 		return "", fmt.Errorf("failed to get parent node: %v", err)
 	}
 
 	childNode, err := c.tp.executionTreeRepo.GetNode(c, taskID)
 	if err != nil {
+		log.Printf("Failed to get child node: %v", err)
 		return "", fmt.Errorf("failed to get child node: %v", err)
 	}
 
 	childNode.ParentID = &parentNode.ID
 	if err := c.tp.executionTreeRepo.UpdateNode(c, childNode); err != nil {
+		log.Printf("Failed to update child node: %v", err)
 		return "", fmt.Errorf("failed to update child node: %v", err)
 	}
 
+	log.Printf("Child task %s enqueued successfully from parent task %s", taskID, c.taskID)
 	return taskID, nil
 }
 
 func (c *handlerContext) EnqueueTaskAndWait(handler HandlerFunc, params interface{}, options ...EnqueueOption) (interface{}, error) {
+	log.Printf("Enqueuing and waiting for task from handler context, parent task ID %s", c.taskID)
 	taskID, err := c.EnqueueTask(handler, params, options...)
 	if err != nil {
 		return nil, err
@@ -1003,46 +1187,76 @@ func (c *handlerContext) EnqueueTaskAndWait(handler HandlerFunc, params interfac
 }
 
 func (c *handlerContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
-	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.taskID, key)
-	if err == nil {
+	log.Printf("Running side effect with key %s for task ID %s", key, c.executionContextID)
+
+	// Check if the side effect already exists
+	result, err := c.tp.sideEffectRepo.GetSideEffect(c, c.executionContextID, key)
+	if err == nil && len(result) > 0 {
 		var value interface{}
 		if err := json.Unmarshal(result, &value); err != nil {
+			log.Printf("Failed to unmarshal side effect result: %v", err)
 			return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
 		}
 		return value, nil
 	}
 
-	c.tp.sideEffectPool.Dispatch(effect)
+	log.Printf("Dispatching side effect with key %s for task ID %s", key, c.taskID)
+	// c.tp.sideEffectPool.Dispatch(effect)
+	c.tp.sideEffectPool.Dispatch(&sideEffectTask{
+		sideEffect:         effect,
+		executionContextID: c.executionContextID,
+		key:                key,
+	})
 
-	result, err = c.tp.sideEffectRepo.GetSideEffect(c, c.taskID, key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get side effect result: %v", err)
+	// Retry fetching the result with a timeout
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return nil, fmt.Errorf("timeout while waiting for side effect result with key %s", key)
+		case <-ticker.C:
+			result, err = c.tp.sideEffectRepo.GetSideEffect(c, c.executionContextID, key)
+			if err != nil {
+				log.Printf("Error fetching side effect result: %v", err)
+				continue
+			}
+			if len(result) > 0 {
+				var value interface{}
+				if err := json.Unmarshal(result, &value); err != nil {
+					log.Printf("Failed to unmarshal side effect result: %v", err)
+					return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
+				}
+				log.Printf("Side effect with key %s for task ID %s completed successfully", key, c.taskID)
+				return value, nil
+			}
+		}
 	}
-
-	var value interface{}
-	if err := json.Unmarshal(result, &value); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
-	}
-
-	return value, nil
 }
 
 func (c *handlerContext) SendSignal(name string, payload interface{}) error {
+	log.Printf("Sending signal '%s' from handler context, task ID %s", name, c.taskID)
 	return c.tp.SendSignal(c, c.taskID, name, payload)
 }
 
 func (c *handlerContext) ReceiveSignal(name string) (<-chan []byte, error) {
+	log.Printf("Receiving signal '%s' from handler context, task ID %s", name, c.taskID)
 	return c.tp.ReceiveSignal(c, c.taskID, name)
 }
 
 func (c *handlerContext) WaitForCompletion(taskID string) (interface{}, error) {
+	log.Printf("Waiting for completion of task ID %s", taskID)
 	for {
 		select {
 		case <-c.Done():
+			log.Printf("Context done while waiting for task ID %s", taskID)
 			return nil, c.Err()
 		case <-time.After(time.Second):
 			task, err := c.tp.taskRepo.GetTask(c, taskID)
 			if err != nil {
+				log.Printf("Failed to get task: %v", err)
 				return nil, err
 			}
 
@@ -1050,14 +1264,19 @@ func (c *handlerContext) WaitForCompletion(taskID string) (interface{}, error) {
 			case TaskStatusCompleted:
 				var result interface{}
 				if err := json.Unmarshal(task.Result, &result); err != nil {
+					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
 				}
+				log.Printf("Task ID %s completed successfully", taskID)
 				return result, nil
 			case TaskStatusFailed:
+				log.Printf("Task ID %s failed", taskID)
 				return nil, fmt.Errorf("task failed")
 			case TaskStatusCancelled:
+				log.Printf("Task ID %s cancelled", taskID)
 				return nil, fmt.Errorf("task cancelled")
 			case TaskStatusTerminated:
+				log.Printf("Task ID %s terminated", taskID)
 				return nil, fmt.Errorf("task terminated")
 			}
 		}
@@ -1070,8 +1289,10 @@ type handlerSagaContext struct {
 }
 
 func (c *handlerSagaContext) Step(step SagaStep) error {
+	log.Printf("Executing saga step for saga ID %s", c.sagaID)
 	saga, err := c.tp.sagaRepo.GetSaga(c, c.sagaID)
 	if err != nil {
+		log.Printf("Failed to get saga: %v", err)
 		return fmt.Errorf("failed to get saga: %v", err)
 	}
 
@@ -1082,7 +1303,9 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 		stepID:  uuid.New().String(),
 	}
 
+	log.Printf("Executing transaction for saga step")
 	if err := step.Transaction(transactionCtx); err != nil {
+		log.Printf("Transaction failed, executing compensation")
 		compensationCtx := &compensationContext{
 			Context: c.Context,
 			tp:      c.tp,
@@ -1091,22 +1314,28 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 		}
 
 		if compErr := step.Compensation(compensationCtx); compErr != nil {
+			log.Printf("Compensation failed for saga step: %v", compErr)
 			return fmt.Errorf("transaction failed and compensation failed: %v, compensation error: %v", err, compErr)
 		}
 
+		log.Printf("Transaction failed, but compensation succeeded")
 		return fmt.Errorf("transaction failed, compensation succeeded: %v", err)
 	}
 
+	log.Printf("Updating saga current step")
 	saga.CurrentStep++
 	saga.LastUpdatedAt = time.Now()
 	if err := c.tp.sagaRepo.UpdateSaga(c, saga); err != nil {
+		log.Printf("Failed to update saga: %v", err)
 		return fmt.Errorf("failed to update saga: %v", err)
 	}
 
+	log.Printf("Saga step completed successfully for saga ID %s", c.sagaID)
 	return nil
 }
 
 func (c *handlerSagaContext) EnqueueSaga(handler HandlerSagaFunc, params interface{}, options ...EnqueueOption) (string, error) {
+	log.Printf("Enqueuing saga task from handler saga context, saga ID %s", c.sagaID)
 	return c.tp.EnqueueSaga(c, handler, params, options...)
 }
 
@@ -1122,14 +1351,17 @@ func (c *transactionContext) GetID() string {
 }
 
 func (c *transactionContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
+	log.Printf("Getting side effect with key %s for transaction context, saga ID %s", key, c.sagaID)
 	return c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
 }
 
 func (c *transactionContext) SendSignal(name string, payload interface{}) error {
+	log.Printf("Sending signal '%s' from transaction context, step ID %s", name, c.stepID)
 	return c.tp.SendSignal(c, c.stepID, name, payload)
 }
 
 func (c *transactionContext) ReceiveSignal(name string) (<-chan []byte, error) {
+	log.Printf("Receiving signal '%s' from transaction context, step ID %s", name, c.stepID)
 	return c.tp.ReceiveSignal(c, c.stepID, name)
 }
 
@@ -1145,14 +1377,17 @@ func (c *compensationContext) GetID() string {
 }
 
 func (c *compensationContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
+	log.Printf("Getting side effect with key %s for compensation context, saga ID %s", key, c.sagaID)
 	return c.tp.sideEffectRepo.GetSideEffect(c, c.sagaID, key)
 }
 
 func (c *compensationContext) SendSignal(name string, payload interface{}) error {
+	log.Printf("Sending signal '%s' from compensation context, step ID %s", name, c.stepID)
 	return c.tp.SendSignal(c, c.stepID, name, payload)
 }
 
 func (c *compensationContext) ReceiveSignal(name string) (<-chan []byte, error) {
+	log.Printf("Receiving signal '%s' from compensation context, step ID %s", name, c.stepID)
 	return c.tp.ReceiveSignal(c, c.stepID, name)
 }
 
@@ -1167,10 +1402,12 @@ func (c *sideEffectContext) GetID() string {
 }
 
 func (c *sideEffectContext) EnqueueTask(handler HandlerFunc, params interface{}, options ...EnqueueOption) (string, error) {
+	log.Printf("Enqueuing task from side effect context, side effect ID %s", c.id)
 	return c.tp.Enqueue(c, handler, params, options...)
 }
 
 func (c *sideEffectContext) EnqueueTaskAndWait(handler HandlerFunc, params interface{}, options ...EnqueueOption) (interface{}, error) {
+	log.Printf("Enqueuing and waiting for task from side effect context, side effect ID %s", c.id)
 	taskID, err := c.EnqueueTask(handler, params, options...)
 	if err != nil {
 		return nil, err
@@ -1179,25 +1416,31 @@ func (c *sideEffectContext) EnqueueTaskAndWait(handler HandlerFunc, params inter
 }
 
 func (c *sideEffectContext) SideEffect(key string, effect SideEffect) (interface{}, error) {
+	log.Printf("Getting side effect with key %s from side effect context, side effect ID %s", key, c.id)
 	return c.tp.sideEffectRepo.GetSideEffect(c, c.id, key)
 }
 
 func (c *sideEffectContext) SendSignal(name string, payload interface{}) error {
+	log.Printf("Sending signal '%s' from side effect context, side effect ID %s", name, c.id)
 	return c.tp.SendSignal(c, c.id, name, payload)
 }
 
 func (c *sideEffectContext) ReceiveSignal(name string) (<-chan []byte, error) {
+	log.Printf("Receiving signal '%s' from side effect context, side effect ID %s", name, c.id)
 	return c.tp.ReceiveSignal(c, c.id, name)
 }
 
 func (c *sideEffectContext) WaitForCompletion(taskID string) (interface{}, error) {
+	log.Printf("Waiting for completion of task ID %s from side effect context", taskID)
 	for {
 		select {
 		case <-c.Done():
+			log.Printf("Context done while waiting for task ID %s", taskID)
 			return nil, c.Err()
 		case <-time.After(time.Second):
 			task, err := c.tp.taskRepo.GetTask(c, taskID)
 			if err != nil {
+				log.Printf("Failed to get task: %v", err)
 				return nil, err
 			}
 
@@ -1205,14 +1448,19 @@ func (c *sideEffectContext) WaitForCompletion(taskID string) (interface{}, error
 			case TaskStatusCompleted:
 				var result interface{}
 				if err := json.Unmarshal(task.Result, &result); err != nil {
+					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
 				}
+				log.Printf("Task ID %s completed successfully", taskID)
 				return result, nil
 			case TaskStatusFailed:
+				log.Printf("Task ID %s failed", taskID)
 				return nil, fmt.Errorf("task failed")
 			case TaskStatusCancelled:
+				log.Printf("Task ID %s cancelled", taskID)
 				return nil, fmt.Errorf("task cancelled")
 			case TaskStatusTerminated:
+				log.Printf("Task ID %s terminated", taskID)
 				return nil, fmt.Errorf("task terminated")
 			}
 		}
@@ -1266,6 +1514,7 @@ func nullableString(s *string) interface{} {
 // Callback implementations
 
 func (tp *Tempolite) onHandlerSuccess(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task]) {
+	log.Printf("Handler task with ID %s succeeded", task.Data().ID)
 	taskData := task.Data()
 	taskData.Status = TaskStatusCompleted
 	now := time.Now()
@@ -1289,6 +1538,7 @@ func (tp *Tempolite) onHandlerSuccess(controller retrypool.WorkerController[*Tas
 }
 
 func (tp *Tempolite) onHandlerFailure(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task], err error) retrypool.DeadTaskAction {
+	log.Printf("Handler task with ID %s failed: %v", task.Data().ID, err)
 	taskData := task.Data()
 	taskData.Status = TaskStatusFailed
 	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
@@ -1315,6 +1565,7 @@ func (tp *Tempolite) onHandlerFailure(controller retrypool.WorkerController[*Tas
 }
 
 func (tp *Tempolite) onHandlerRetry(attempt int, err error, task *retrypool.TaskWrapper[*Task]) {
+	log.Printf("Retrying handler task with ID %s, attempt %d, error: %v", task.Data().ID, attempt, err)
 	taskData := task.Data()
 	taskData.RetryCount = attempt
 	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
@@ -1323,7 +1574,7 @@ func (tp *Tempolite) onHandlerRetry(attempt int, err error, task *retrypool.Task
 }
 
 func (tp *Tempolite) onHandlerPanic(task *Task, v interface{}) {
-	log.Printf("Handler panicked: %v", v)
+	log.Printf("Handler panicked for task ID %s: %v", task.ID, v)
 	task.Status = TaskStatusFailed
 	errorMsg := fmt.Sprintf("Handler panicked: %v", v)
 	if err := tp.taskRepo.UpdateTask(tp.ctx, task); err != nil {
@@ -1343,6 +1594,7 @@ func (tp *Tempolite) onHandlerPanic(task *Task, v interface{}) {
 }
 
 func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task]) {
+	log.Printf("Saga handler task with ID %s succeeded", task.Data().ID)
 	taskData := task.Data()
 	taskData.Status = TaskStatusCompleted
 	now := time.Now()
@@ -1378,6 +1630,7 @@ func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[
 }
 
 func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task], err error) retrypool.DeadTaskAction {
+	log.Printf("Saga handler task with ID %s failed: %v", task.Data().ID, err)
 	taskData := task.Data()
 	taskData.Status = TaskStatusFailed
 	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
@@ -1417,6 +1670,7 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 	}
 
 	for _, compensation := range compensations {
+		log.Printf("Dispatching compensation task ID %s for saga ID %s", compensation.ID, *taskData.SagaID)
 		tp.compensationPool.Dispatch(compensation)
 	}
 
@@ -1424,6 +1678,7 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 }
 
 func (tp *Tempolite) onSagaHandlerRetry(attempt int, err error, task *retrypool.TaskWrapper[*Task]) {
+	log.Printf("Retrying saga handler task with ID %s, attempt %d, error: %v", task.Data().ID, attempt, err)
 	taskData := task.Data()
 	taskData.RetryCount = attempt
 	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
@@ -1432,7 +1687,7 @@ func (tp *Tempolite) onSagaHandlerRetry(attempt int, err error, task *retrypool.
 }
 
 func (tp *Tempolite) onSagaHandlerPanic(task *Task, v interface{}) {
-	log.Printf("Saga handler panicked: %v", v)
+	log.Printf("Saga handler panicked for task ID %s: %v", task.ID, v)
 	task.Status = TaskStatusFailed
 	errorMsg := fmt.Sprintf("Saga handler panicked: %v", v)
 	if err := tp.taskRepo.UpdateTask(tp.ctx, task); err != nil {
@@ -1462,6 +1717,7 @@ func (tp *Tempolite) onSagaHandlerPanic(task *Task, v interface{}) {
 }
 
 func (tp *Tempolite) onCompensationSuccess(controller retrypool.WorkerController[*Compensation], workerID int, worker retrypool.Worker[*Compensation], task *retrypool.TaskWrapper[*Compensation]) {
+	log.Printf("Compensation task with ID %s succeeded", task.Data().ID)
 	compensationData := task.Data()
 	compensationData.Status = ExecutionStatusCompleted
 	if err := tp.compensationRepo.UpdateCompensation(tp.ctx, compensationData); err != nil {
@@ -1470,6 +1726,7 @@ func (tp *Tempolite) onCompensationSuccess(controller retrypool.WorkerController
 }
 
 func (tp *Tempolite) onCompensationFailure(controller retrypool.WorkerController[*Compensation], workerID int, worker retrypool.Worker[*Compensation], task *retrypool.TaskWrapper[*Compensation], err error) retrypool.DeadTaskAction {
+	log.Printf("Compensation task with ID %s failed: %v", task.Data().ID, err)
 	compensationData := task.Data()
 	compensationData.Status = ExecutionStatusFailed
 	if err := tp.compensationRepo.UpdateCompensation(tp.ctx, compensationData); err != nil {
@@ -1494,6 +1751,7 @@ func (tp *Tempolite) onCompensationFailure(controller retrypool.WorkerController
 }
 
 func (tp *Tempolite) onCompensationRetry(attempt int, err error, task *retrypool.TaskWrapper[*Compensation]) {
+	log.Printf("Retrying compensation task with ID %s, attempt %d, error: %v", task.Data().ID, attempt, err)
 	compensationData := task.Data()
 	if err := tp.compensationRepo.UpdateCompensation(tp.ctx, compensationData); err != nil {
 		log.Printf("Failed to update compensation retry count: %v", err)
@@ -1501,7 +1759,7 @@ func (tp *Tempolite) onCompensationRetry(attempt int, err error, task *retrypool
 }
 
 func (tp *Tempolite) onCompensationPanic(compensation *Compensation, v interface{}) {
-	log.Printf("Compensation panicked: %v", v)
+	log.Printf("Compensation panicked for ID %s: %v", compensation.ID, v)
 	compensation.Status = ExecutionStatusFailed
 	if err := tp.compensationRepo.UpdateCompensation(tp.ctx, compensation); err != nil {
 		log.Printf("Failed to update compensation status after panic: %v", err)
@@ -1518,11 +1776,11 @@ func (tp *Tempolite) onCompensationPanic(compensation *Compensation, v interface
 	}
 }
 
-func (tp *Tempolite) onSideEffectSuccess(controller retrypool.WorkerController[SideEffect], workerID int, worker retrypool.Worker[SideEffect], task *retrypool.TaskWrapper[SideEffect]) {
+func (tp *Tempolite) onSideEffectSuccess(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask]) {
 	log.Printf("Side effect completed successfully")
 }
 
-func (tp *Tempolite) onSideEffectFailure(controller retrypool.WorkerController[SideEffect], workerID int, worker retrypool.Worker[SideEffect], task *retrypool.TaskWrapper[SideEffect], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) onSideEffectFailure(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask], err error) retrypool.DeadTaskAction {
 	log.Printf("Side effect failed: %v", err)
 
 	if IsUnrecoverable(err) {
@@ -1532,17 +1790,18 @@ func (tp *Tempolite) onSideEffectFailure(controller retrypool.WorkerController[S
 	return retrypool.DeadTaskActionForceRetry
 }
 
-func (tp *Tempolite) onSideEffectRetry(attempt int, err error, task *retrypool.TaskWrapper[SideEffect]) {
+func (tp *Tempolite) onSideEffectRetry(attempt int, err error, task *retrypool.TaskWrapper[*sideEffectTask]) {
 	log.Printf("Retrying side effect, attempt %d: %v", attempt, err)
 }
 
-func (tp *Tempolite) onSideEffectPanic(sideEffect SideEffect, v interface{}) {
+func (tp *Tempolite) onSideEffectPanic(sideEffect *sideEffectTask, v interface{}) {
 	log.Printf("Side effect panicked: %v", v)
 }
 
 // Helper functions for execution tree management
 
 func (tp *Tempolite) addNodeToExecutionTree(ctx context.Context, node *ExecutionNode) error {
+	log.Printf("Adding node %s to execution tree", node.ID)
 	tp.executionTreesMu.Lock()
 	defer tp.executionTreesMu.Unlock()
 
@@ -1557,15 +1816,18 @@ func (tp *Tempolite) addNodeToExecutionTree(ctx context.Context, node *Execution
 	if node.ParentID != nil {
 		parentNode, err := tp.executionTreeRepo.GetNode(ctx, *node.ParentID)
 		if err != nil {
+			log.Printf("Failed to get parent node: %v", err)
 			return fmt.Errorf("failed to get parent node: %v", err)
 		}
 		tree.Connect(dag.BasicEdge(parentNode, node))
 	}
 
+	log.Printf("Node %s added to execution tree successfully", node.ID)
 	return nil
 }
 
 func (tp *Tempolite) updateNodeInExecutionTree(ctx context.Context, node *ExecutionNode) error {
+	log.Printf("Updating node %s in execution tree", node.ID)
 	tp.executionTreesMu.Lock()
 	defer tp.executionTreesMu.Unlock()
 
@@ -1578,11 +1840,11 @@ func (tp *Tempolite) updateNodeInExecutionTree(ctx context.Context, node *Execut
 	tree.Remove(node)
 	tree.Add(node)
 
+	log.Printf("Node %s updated in execution tree successfully", node.ID)
 	return nil
 }
 
 /////////////////////////////////////////////////////
-
 // SQLite Repository Implementations
 
 type SQLiteTaskRepository struct {
@@ -1590,14 +1852,18 @@ type SQLiteTaskRepository struct {
 }
 
 func NewSQLiteTaskRepository(db *sql.DB) (*SQLiteTaskRepository, error) {
+	log.Printf("NewSQLiteTaskRepository: initializing with db: %v", db)
 	repo := &SQLiteTaskRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteTaskRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteTaskRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteTaskRepository) initDB() error {
+	log.Printf("initDB: creating tasks table")
 	query := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
@@ -1620,10 +1886,16 @@ func (r *SQLiteTaskRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_tasks_saga_id ON tasks(saga_id);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating tasks table: %v", err)
+	} else {
+		log.Printf("initDB: tasks table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) error {
+	log.Printf("CreateTask: inserting task: %v", task)
 	query := `
 	INSERT INTO tasks (id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, completed_at, result, parent_task_id, saga_id)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -1643,10 +1915,16 @@ func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) error
 		nullableString(task.ParentTaskID),
 		nullableString(task.SagaID),
 	)
+	if err != nil {
+		log.Printf("CreateTask: error inserting task: %v", err)
+	} else {
+		log.Printf("CreateTask: task inserted successfully")
+	}
 	return err
 }
 
 func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, error) {
+	log.Printf("GetTask: fetching task with id: %s", id)
 	query := `
     SELECT id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, completed_at, result, parent_task_id, saga_id
     FROM tasks
@@ -1672,6 +1950,7 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 		&task.SagaID,
 	)
 	if err != nil {
+		log.Printf("GetTask: error fetching task: %v", err)
 		return nil, err
 	}
 	task.ScheduledAt = time.Unix(scheduledAt, 0)
@@ -1684,10 +1963,12 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 	if result.Valid {
 		task.Result = []byte(result.String)
 	}
+	log.Printf("GetTask: fetched task: %v", task)
 	return &task, nil
 }
 
 func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error {
+	log.Printf("UpdateTask: updating task: %v", task)
 	query := `
 	UPDATE tasks
 	SET execution_context_id = ?, handler_name = ?, payload = ?, status = ?, retry_count = ?, scheduled_at = ?, updated_at = ?, completed_at = ?, result = ?, parent_task_id = ?, saga_id = ?
@@ -1707,10 +1988,16 @@ func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error
 		nullableString(task.SagaID),
 		task.ID,
 	)
+	if err != nil {
+		log.Printf("UpdateTask: error updating task: %v", err)
+	} else {
+		log.Printf("UpdateTask: task updated successfully")
+	}
 	return err
 }
 
 func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*Task, error) {
+	log.Printf("GetPendingTasks: fetching up to %d pending tasks", limit)
 	query := `
 	SELECT id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, completed_at, result, parent_task_id, saga_id
 	FROM tasks
@@ -1720,6 +2007,7 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 	`
 	rows, err := r.db.QueryContext(ctx, query, TaskStatusPending, time.Now().Unix(), limit)
 	if err != nil {
+		log.Printf("GetPendingTasks: error fetching tasks: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -1744,6 +2032,7 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 			&task.SagaID,
 		)
 		if err != nil {
+			log.Printf("GetPendingTasks: error scanning row: %v", err)
 			return nil, err
 		}
 		task.ScheduledAt = time.Unix(scheduledAt, 0)
@@ -1755,10 +2044,12 @@ func (r *SQLiteTaskRepository) GetPendingTasks(ctx context.Context, limit int) (
 		}
 		tasks = append(tasks, &task)
 	}
+	log.Printf("GetPendingTasks: fetched %d tasks", len(tasks))
 	return tasks, nil
 }
 
 func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaID string) ([]*Task, error) {
+	log.Printf("GetRunningTasksForSaga: fetching running tasks for sagaID: %s", sagaID)
 	query := `
 	SELECT id, execution_context_id, handler_name, payload, status, retry_count, scheduled_at, created_at, updated_at, completed_at, result, parent_task_id, saga_id
 	FROM tasks
@@ -1766,6 +2057,7 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 	`
 	rows, err := r.db.QueryContext(ctx, query, sagaID, TaskStatusInProgress)
 	if err != nil {
+		log.Printf("GetRunningTasksForSaga: error fetching tasks: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -1790,6 +2082,7 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 			&task.SagaID,
 		)
 		if err != nil {
+			log.Printf("GetRunningTasksForSaga: error scanning row: %v", err)
 			return nil, err
 		}
 		task.ScheduledAt = time.Unix(scheduledAt, 0)
@@ -1801,6 +2094,7 @@ func (r *SQLiteTaskRepository) GetRunningTasksForSaga(ctx context.Context, sagaI
 		}
 		tasks = append(tasks, &task)
 	}
+	log.Printf("GetRunningTasksForSaga: fetched %d tasks", len(tasks))
 	return tasks, nil
 }
 
@@ -1809,14 +2103,18 @@ type SQLiteSideEffectRepository struct {
 }
 
 func NewSQLiteSideEffectRepository(db *sql.DB) (*SQLiteSideEffectRepository, error) {
+	log.Printf("NewSQLiteSideEffectRepository: initializing with db: %v", db)
 	repo := &SQLiteSideEffectRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteSideEffectRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteSideEffectRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteSideEffectRepository) initDB() error {
+	log.Printf("initDB: creating side_effects table")
 	query := `
 	CREATE TABLE IF NOT EXISTS side_effects (
 		execution_context_id TEXT NOT NULL,
@@ -1828,10 +2126,16 @@ func (r *SQLiteSideEffectRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_side_effects_execution_context_id ON side_effects(execution_context_id);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating side_effects table: %v", err)
+	} else {
+		log.Printf("initDB: side_effects table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteSideEffectRepository) GetSideEffect(ctx context.Context, executionContextID, key string) ([]byte, error) {
+	log.Printf("GetSideEffect: fetching side effect for executionContextID: %s, key: %s", executionContextID, key)
 	query := `
 	SELECT result
 	FROM side_effects
@@ -1841,19 +2145,28 @@ func (r *SQLiteSideEffectRepository) GetSideEffect(ctx context.Context, executio
 	err := r.db.QueryRowContext(ctx, query, executionContextID, key).Scan(&result)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Printf("GetSideEffect: no rows found for executionContextID: %s, key: %s", executionContextID, key)
 			return nil, nil
 		}
+		log.Printf("GetSideEffect: error fetching side effect: %v", err)
 		return nil, err
 	}
+	log.Printf("GetSideEffect: fetched side effect for executionContextID: %s, key: %s", executionContextID, key)
 	return result, nil
 }
 
 func (r *SQLiteSideEffectRepository) SaveSideEffect(ctx context.Context, executionContextID, key string, result []byte) error {
+	log.Printf("SaveSideEffect: saving side effect for executionContextID: %s, key: %s", executionContextID, key)
 	query := `
 	INSERT OR REPLACE INTO side_effects (execution_context_id, key, result, created_at)
 	VALUES (?, ?, ?, ?);
 	`
 	_, err := r.db.ExecContext(ctx, query, executionContextID, key, result, time.Now().Unix())
+	if err != nil {
+		log.Printf("SaveSideEffect: error saving side effect: %v", err)
+	} else {
+		log.Printf("SaveSideEffect: side effect saved successfully for executionContextID: %s, key: %s", executionContextID, key)
+	}
 	return err
 }
 
@@ -1862,14 +2175,18 @@ type SQLiteSignalRepository struct {
 }
 
 func NewSQLiteSignalRepository(db *sql.DB) (*SQLiteSignalRepository, error) {
+	log.Printf("NewSQLiteSignalRepository: initializing with db: %v", db)
 	repo := &SQLiteSignalRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteSignalRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteSignalRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteSignalRepository) initDB() error {
+	log.Printf("initDB: creating signals table")
 	query := `
 	CREATE TABLE IF NOT EXISTS signals (
 		id TEXT PRIMARY KEY,
@@ -1884,10 +2201,16 @@ func (r *SQLiteSignalRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_signals_name ON signals(name);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating signals table: %v", err)
+	} else {
+		log.Printf("initDB: signals table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteSignalRepository) SaveSignal(ctx context.Context, signal *Signal) error {
+	log.Printf("SaveSignal: saving signal: %v", signal)
 	query := `
 	INSERT INTO signals (id, task_id, name, payload, created_at, direction)
 	VALUES (?, ?, ?, ?, ?, ?);
@@ -1900,10 +2223,16 @@ func (r *SQLiteSignalRepository) SaveSignal(ctx context.Context, signal *Signal)
 		signal.CreatedAt.Unix(),
 		signal.Direction,
 	)
+	if err != nil {
+		log.Printf("SaveSignal: error saving signal: %v", err)
+	} else {
+		log.Printf("SaveSignal: signal saved successfully")
+	}
 	return err
 }
 
 func (r *SQLiteSignalRepository) GetSignals(ctx context.Context, taskID string, name string, direction string) ([]*Signal, error) {
+	log.Printf("GetSignals: fetching signals for taskID: %s, name: %s, direction: %s", taskID, name, direction)
 	query := `
 	SELECT id, task_id, name, payload, created_at, direction
 	FROM signals
@@ -1911,6 +2240,7 @@ func (r *SQLiteSignalRepository) GetSignals(ctx context.Context, taskID string, 
 	`
 	rows, err := r.db.QueryContext(ctx, query, taskID, name, direction)
 	if err != nil {
+		log.Printf("GetSignals: error fetching signals: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -1928,20 +2258,28 @@ func (r *SQLiteSignalRepository) GetSignals(ctx context.Context, taskID string, 
 			&signal.Direction,
 		)
 		if err != nil {
+			log.Printf("GetSignals: error scanning row: %v", err)
 			return nil, err
 		}
 		signal.CreatedAt = time.Unix(createdAt, 0)
 		signals = append(signals, &signal)
 	}
+	log.Printf("GetSignals: fetched %d signals", len(signals))
 	return signals, nil
 }
 
 func (r *SQLiteSignalRepository) DeleteSignals(ctx context.Context, taskID string, name string, direction string) error {
+	log.Printf("DeleteSignals: deleting signals for taskID: %s, name: %s, direction: %s", taskID, name, direction)
 	query := `
 	DELETE FROM signals
 	WHERE task_id = ? AND name = ? AND direction = ?;
 	`
 	_, err := r.db.ExecContext(ctx, query, taskID, name, direction)
+	if err != nil {
+		log.Printf("DeleteSignals: error deleting signals: %v", err)
+	} else {
+		log.Printf("DeleteSignals: signals deleted successfully")
+	}
 	return err
 }
 
@@ -1950,14 +2288,18 @@ type SQLiteSagaRepository struct {
 }
 
 func NewSQLiteSagaRepository(db *sql.DB) (*SQLiteSagaRepository, error) {
+	log.Printf("NewSQLiteSagaRepository: initializing with db: %v", db)
 	repo := &SQLiteSagaRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteSagaRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteSagaRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteSagaRepository) initDB() error {
+	log.Printf("initDB: creating sagas table")
 	query := `
 	CREATE TABLE IF NOT EXISTS sagas (
 		id TEXT PRIMARY KEY,
@@ -1972,10 +2314,16 @@ func (r *SQLiteSagaRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_sagas_status ON sagas(status);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating sagas table: %v", err)
+	} else {
+		log.Printf("initDB: sagas table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteSagaRepository) CreateSaga(ctx context.Context, saga *SagaInfo) error {
+	log.Printf("CreateSaga: creating saga: %v", saga)
 	query := `
 	INSERT INTO sagas (id, status, current_step, created_at, last_updated_at, completed_at, handler_name, cancel_requested)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?);
@@ -1990,10 +2338,16 @@ func (r *SQLiteSagaRepository) CreateSaga(ctx context.Context, saga *SagaInfo) e
 		saga.HandlerName,
 		saga.CancelRequested,
 	)
+	if err != nil {
+		log.Printf("CreateSaga: error creating saga: %v", err)
+	} else {
+		log.Printf("CreateSaga: saga created successfully")
+	}
 	return err
 }
 
 func (r *SQLiteSagaRepository) GetSaga(ctx context.Context, id string) (*SagaInfo, error) {
+	log.Printf("GetSaga: fetching saga with id: %s", id)
 	query := `
     SELECT id, status, current_step, created_at, last_updated_at, completed_at, handler_name, cancel_requested
     FROM sagas
@@ -2013,6 +2367,7 @@ func (r *SQLiteSagaRepository) GetSaga(ctx context.Context, id string) (*SagaInf
 		&saga.CancelRequested,
 	)
 	if err != nil {
+		log.Printf("GetSaga: error fetching saga: %v", err)
 		return nil, err
 	}
 	saga.CreatedAt = time.Unix(createdAt, 0)
@@ -2021,10 +2376,12 @@ func (r *SQLiteSagaRepository) GetSaga(ctx context.Context, id string) (*SagaInf
 		completedTime := time.Unix(completedAt.Int64, 0)
 		saga.CompletedAt = &completedTime
 	}
+	log.Printf("GetSaga: fetched saga: %v", saga)
 	return &saga, nil
 }
 
 func (r *SQLiteSagaRepository) UpdateSaga(ctx context.Context, saga *SagaInfo) error {
+	log.Printf("UpdateSaga: updating saga: %v", saga)
 	query := `
 	UPDATE sagas
 	SET status = ?, current_step = ?, last_updated_at = ?, completed_at = ?, cancel_requested = ?
@@ -2038,6 +2395,11 @@ func (r *SQLiteSagaRepository) UpdateSaga(ctx context.Context, saga *SagaInfo) e
 		saga.CancelRequested,
 		saga.ID,
 	)
+	if err != nil {
+		log.Printf("UpdateSaga: error updating saga: %v", err)
+	} else {
+		log.Printf("UpdateSaga: saga updated successfully")
+	}
 	return err
 }
 
@@ -2046,14 +2408,18 @@ type SQLiteExecutionTreeRepository struct {
 }
 
 func NewSQLiteExecutionTreeRepository(db *sql.DB) (*SQLiteExecutionTreeRepository, error) {
+	log.Printf("NewSQLiteExecutionTreeRepository: initializing with db: %v", db)
 	repo := &SQLiteExecutionTreeRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteExecutionTreeRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteExecutionTreeRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteExecutionTreeRepository) initDB() error {
+	log.Printf("initDB: creating execution_nodes table")
 	query := `
 	CREATE TABLE IF NOT EXISTS execution_nodes (
 		id TEXT PRIMARY KEY,
@@ -2073,10 +2439,16 @@ func (r *SQLiteExecutionTreeRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_execution_nodes_status ON execution_nodes(status);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating execution_nodes table: %v", err)
+	} else {
+		log.Printf("initDB: execution_nodes table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteExecutionTreeRepository) CreateNode(ctx context.Context, node *ExecutionNode) error {
+	log.Printf("CreateNode: creating node: %v", node)
 	query := `
 	INSERT INTO execution_nodes (id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -2094,10 +2466,16 @@ func (r *SQLiteExecutionTreeRepository) CreateNode(ctx context.Context, node *Ex
 		node.Result,
 		nullableString(node.ErrorMessage),
 	)
+	if err != nil {
+		log.Printf("CreateNode: error creating node: %v", err)
+	} else {
+		log.Printf("CreateNode: node created successfully")
+	}
 	return err
 }
 
 func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) (*ExecutionNode, error) {
+	log.Printf("GetNode: fetching node with id: %s", id)
 	query := `
     SELECT id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message
     FROM execution_nodes
@@ -2120,6 +2498,7 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 		&node.ErrorMessage,
 	)
 	if err != nil {
+		log.Printf("GetNode: error fetching node: %v", err)
 		return nil, err
 	}
 	node.CreatedAt = time.Unix(createdAt, 0)
@@ -2128,10 +2507,12 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 		completedTime := time.Unix(completedAt.Int64, 0)
 		node.CompletedAt = &completedTime
 	}
+	log.Printf("GetNode: fetched node: %v", node)
 	return &node, nil
 }
 
 func (r *SQLiteExecutionTreeRepository) UpdateNode(ctx context.Context, node *ExecutionNode) error {
+	log.Printf("UpdateNode: updating node: %v", node)
 	query := `
 	UPDATE execution_nodes
 	SET parent_id = ?, type = ?, status = ?, updated_at = ?, completed_at = ?, handler_name = ?, payload = ?, result = ?, error_message = ?
@@ -2149,10 +2530,16 @@ func (r *SQLiteExecutionTreeRepository) UpdateNode(ctx context.Context, node *Ex
 		nullableString(node.ErrorMessage),
 		node.ID,
 	)
+	if err != nil {
+		log.Printf("UpdateNode: error updating node: %v", err)
+	} else {
+		log.Printf("UpdateNode: node updated successfully")
+	}
 	return err
 }
 
 func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, parentID string) ([]*ExecutionNode, error) {
+	log.Printf("GetChildNodes: fetching child nodes for parentID: %s", parentID)
 	query := `
 	SELECT id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message
 	FROM execution_nodes
@@ -2160,6 +2547,7 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 	`
 	rows, err := r.db.QueryContext(ctx, query, parentID)
 	if err != nil {
+		log.Printf("GetChildNodes: error fetching child nodes: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -2182,6 +2570,7 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 			&node.ErrorMessage,
 		)
 		if err != nil {
+			log.Printf("GetChildNodes: error scanning row: %v", err)
 			return nil, err
 		}
 		node.CreatedAt = time.Unix(createdAt, 0)
@@ -2192,6 +2581,7 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 		}
 		nodes = append(nodes, &node)
 	}
+	log.Printf("GetChildNodes: fetched %d child nodes", len(nodes))
 	return nodes, nil
 }
 
@@ -2200,14 +2590,18 @@ type SQLiteCompensationRepository struct {
 }
 
 func NewSQLiteCompensationRepository(db *sql.DB) (*SQLiteCompensationRepository, error) {
+	log.Printf("NewSQLiteCompensationRepository: initializing with db: %v", db)
 	repo := &SQLiteCompensationRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteCompensationRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteCompensationRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteCompensationRepository) initDB() error {
+	log.Printf("initDB: creating compensations table")
 	query := `
 	CREATE TABLE IF NOT EXISTS compensations (
 		id TEXT PRIMARY KEY,
@@ -2222,10 +2616,16 @@ func (r *SQLiteCompensationRepository) initDB() error {
 	CREATE INDEX IF NOT EXISTS idx_compensations_saga_id ON compensations(saga_id);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating compensations table: %v", err)
+	} else {
+		log.Printf("initDB: compensations table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteCompensationRepository) CreateCompensation(ctx context.Context, compensation *Compensation) error {
+	log.Printf("CreateCompensation: creating compensation: %v", compensation)
 	query := `
 	INSERT INTO compensations (id, saga_id, step_index, payload, status, created_at, updated_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?);
@@ -2239,10 +2639,16 @@ func (r *SQLiteCompensationRepository) CreateCompensation(ctx context.Context, c
 		compensation.CreatedAt.Unix(),
 		compensation.UpdatedAt.Unix(),
 	)
+	if err != nil {
+		log.Printf("CreateCompensation: error creating compensation: %v", err)
+	} else {
+		log.Printf("CreateCompensation: compensation created successfully")
+	}
 	return err
 }
 
 func (r *SQLiteCompensationRepository) GetCompensation(ctx context.Context, id string) (*Compensation, error) {
+	log.Printf("GetCompensation: fetching compensation with id: %s", id)
 	query := `
 	SELECT id, saga_id, step_index, payload, status, created_at, updated_at
 	FROM compensations
@@ -2260,14 +2666,17 @@ func (r *SQLiteCompensationRepository) GetCompensation(ctx context.Context, id s
 		&updatedAt,
 	)
 	if err != nil {
+		log.Printf("GetCompensation: error fetching compensation: %v", err)
 		return nil, err
 	}
 	compensation.CreatedAt = time.Unix(createdAt, 0)
 	compensation.UpdatedAt = time.Unix(updatedAt, 0)
+	log.Printf("GetCompensation: fetched compensation: %v", compensation)
 	return &compensation, nil
 }
 
 func (r *SQLiteCompensationRepository) UpdateCompensation(ctx context.Context, compensation *Compensation) error {
+	log.Printf("UpdateCompensation: updating compensation: %v", compensation)
 	query := `
 	UPDATE compensations
 	SET saga_id = ?, step_index = ?, payload = ?, status = ?, updated_at = ?
@@ -2281,10 +2690,16 @@ func (r *SQLiteCompensationRepository) UpdateCompensation(ctx context.Context, c
 		compensation.UpdatedAt.Unix(),
 		compensation.ID,
 	)
+	if err != nil {
+		log.Printf("UpdateCompensation: error updating compensation: %v", err)
+	} else {
+		log.Printf("UpdateCompensation: compensation updated successfully")
+	}
 	return err
 }
 
 func (r *SQLiteCompensationRepository) GetCompensationsForSaga(ctx context.Context, sagaID string) ([]*Compensation, error) {
+	log.Printf("GetCompensationsForSaga: fetching compensations for sagaID: %s", sagaID)
 	query := `
 	SELECT id, saga_id, step_index, payload, status, created_at, updated_at
 	FROM compensations
@@ -2293,6 +2708,7 @@ func (r *SQLiteCompensationRepository) GetCompensationsForSaga(ctx context.Conte
 	`
 	rows, err := r.db.QueryContext(ctx, query, sagaID)
 	if err != nil {
+		log.Printf("GetCompensationsForSaga: error fetching compensations: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -2311,12 +2727,14 @@ func (r *SQLiteCompensationRepository) GetCompensationsForSaga(ctx context.Conte
 			&updatedAt,
 		)
 		if err != nil {
+			log.Printf("GetCompensationsForSaga: error scanning row: %v", err)
 			return nil, err
 		}
 		compensation.CreatedAt = time.Unix(createdAt, 0)
 		compensation.UpdatedAt = time.Unix(updatedAt, 0)
 		compensations = append(compensations, &compensation)
 	}
+	log.Printf("GetCompensationsForSaga: fetched %d compensations", len(compensations))
 	return compensations, nil
 }
 
@@ -2325,14 +2743,18 @@ type SQLiteSagaStepRepository struct {
 }
 
 func NewSQLiteSagaStepRepository(db *sql.DB) (*SQLiteSagaStepRepository, error) {
+	log.Printf("NewSQLiteSagaStepRepository: initializing with db: %v", db)
 	repo := &SQLiteSagaStepRepository{db: db}
 	if err := repo.initDB(); err != nil {
+		log.Printf("NewSQLiteSagaStepRepository: failed to initialize DB: %v", err)
 		return nil, err
 	}
+	log.Printf("NewSQLiteSagaStepRepository: successfully initialized")
 	return repo, nil
 }
 
 func (r *SQLiteSagaStepRepository) initDB() error {
+	log.Printf("initDB: creating saga_steps table")
 	query := `
 	CREATE TABLE IF NOT EXISTS saga_steps (
 		saga_id TEXT NOT NULL,
@@ -2343,19 +2765,31 @@ func (r *SQLiteSagaStepRepository) initDB() error {
 	);
 	`
 	_, err := r.db.Exec(query)
+	if err != nil {
+		log.Printf("initDB: error creating saga_steps table: %v", err)
+	} else {
+		log.Printf("initDB: saga_steps table created or already exists")
+	}
 	return err
 }
 
 func (r *SQLiteSagaStepRepository) CreateSagaStep(ctx context.Context, sagaID string, stepIndex int, payload []byte) error {
+	log.Printf("CreateSagaStep: creating saga step for sagaID: %s, stepIndex: %d", sagaID, stepIndex)
 	query := `
 	INSERT INTO saga_steps (saga_id, step_index, payload)
 	VALUES (?, ?, ?);
 	`
 	_, err := r.db.ExecContext(ctx, query, sagaID, stepIndex, payload)
+	if err != nil {
+		log.Printf("CreateSagaStep: error creating saga step: %v", err)
+	} else {
+		log.Printf("CreateSagaStep: saga step created successfully for sagaID: %s, stepIndex: %d", sagaID, stepIndex)
+	}
 	return err
 }
 
 func (r *SQLiteSagaStepRepository) GetSagaStep(ctx context.Context, sagaID string, stepIndex int) ([]byte, error) {
+	log.Printf("GetSagaStep: fetching saga step for sagaID: %s, stepIndex: %d", sagaID, stepIndex)
 	query := `
 	SELECT payload
 	FROM saga_steps
@@ -2364,7 +2798,9 @@ func (r *SQLiteSagaStepRepository) GetSagaStep(ctx context.Context, sagaID strin
 	var payload []byte
 	err := r.db.QueryRowContext(ctx, query, sagaID, stepIndex).Scan(&payload)
 	if err != nil {
+		log.Printf("GetSagaStep: error fetching saga step: %v", err)
 		return nil, err
 	}
+	log.Printf("GetSagaStep: fetched saga step for sagaID: %s, stepIndex: %d", sagaID, stepIndex)
 	return payload, nil
 }
