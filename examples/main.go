@@ -43,7 +43,7 @@ func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) error {
 		return fmt.Errorf("side effect failed: %v", err)
 	}
 
-	log.Printf("Side effect result: %v", result)
+	log.Printf("Side Effect Example: Side effect result: %v", result)
 
 	return nil
 }

@@ -125,6 +125,11 @@ type Signal struct {
 	Direction string
 }
 
+type WrappedResult struct {
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Data     interface{}            `json:"data"`
+}
+
 // Interfaces
 type HandlerFunc interface{}
 type HandlerSagaFunc interface{}
@@ -233,7 +238,9 @@ type sideEffectTask struct {
 }
 
 func (s *sideEffectTask) Run(ctx SideEffectContext) (interface{}, error) {
-	return s.sideEffect.Run(ctx)
+	effect, err := s.sideEffect.Run(ctx)
+	log.Printf("Side effect task completed for key %s value %v", s.key, effect)
+	return effect, err
 }
 
 // Tempolite struct and methods
@@ -515,13 +522,15 @@ func (tp *Tempolite) WaitForTaskCompletion(ctx context.Context, taskID string, p
 
 			switch task.Status {
 			case TaskStatusCompleted:
-				var result interface{}
-				if err := json.Unmarshal(task.Result, &result); err != nil {
-					log.Printf("Failed to unmarshal task result: %v", err)
-					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
+				var wrappedResult WrappedResult
+				log.Printf("Tempolite Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
+				if err := json.Unmarshal(task.Result, &wrappedResult); err != nil {
+					log.Printf("Failed to unmarshal wrapped task result: %v", err)
+					return nil, fmt.Errorf("failed to unmarshal wrapped task result: %v", err)
 				}
+
 				log.Printf("Task with ID %s completed successfully", taskID)
-				return result, nil
+				return wrappedResult.Data, nil
 			case TaskStatusFailed:
 				log.Printf("Task with ID %s failed", taskID)
 				return nil, fmt.Errorf("task failed")
@@ -979,12 +988,16 @@ func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
 	}
 
 	if len(results) > 1 {
-		result, err := json.Marshal(results[0].Interface())
-		if err != nil {
-			log.Printf("Failed to marshal task result: %v", err)
-			return fmt.Errorf("failed to marshal task result: %v", err)
+		wrappedResult := WrappedResult{
+			Metadata: map[string]interface{}{}, // Add any relevant metadata here
+			Data:     results[0].Interface(),
 		}
-		task.Result = result
+		resultBytes, err := json.Marshal(wrappedResult)
+		if err != nil {
+			log.Printf("Failed to marshal wrapped task result: %v", err)
+			return fmt.Errorf("failed to marshal wrapped task result: %v", err)
+		}
+		task.Result = resultBytes
 		log.Printf("Task result marshaled successfully for task ID %s", task.ID)
 	}
 
@@ -1103,7 +1116,7 @@ type SideEffectWorker struct {
 }
 
 func (w *SideEffectWorker) Run(ctx context.Context, task *sideEffectTask) error {
-	log.Printf("Running side effect on worker %d", w.ID)
+	log.Printf("Running side effect on worker %d %s %s", w.ID, task.key, task.executionContextID)
 	sideEffectCtx := &sideEffectContext{
 		Context: ctx,
 		tp:      w.tp,
@@ -1116,13 +1129,20 @@ func (w *SideEffectWorker) Run(ctx context.Context, task *sideEffectTask) error 
 		return err
 	}
 
-	resultBytes, err := json.Marshal(result)
+	log.Printf("Side effect completed successfully, saving result %v", result)
+
+	wrappedResult := WrappedResult{
+		Metadata: map[string]interface{}{}, // Add any relevant metadata if needed
+		Data:     result,
+	}
+
+	resultBytes, err := json.Marshal(wrappedResult)
 	if err != nil {
 		log.Printf("Failed to marshal side effect result: %v", err)
 		return fmt.Errorf("failed to marshal side effect result: %v", err)
 	}
 
-	err = w.tp.sideEffectRepo.SaveSideEffect(ctx, task.executionContextID, "result", resultBytes)
+	err = w.tp.sideEffectRepo.SaveSideEffect(ctx, task.executionContextID, task.key, resultBytes)
 	if err != nil {
 		log.Printf("Failed to save side effect result: %v", err)
 		return fmt.Errorf("failed to save side effect result: %v", err)
@@ -1224,13 +1244,14 @@ func (c *handlerContext) SideEffect(key string, effect SideEffect) (interface{},
 				continue
 			}
 			if len(result) > 0 {
-				var value interface{}
-				if err := json.Unmarshal(result, &value); err != nil {
+				wrappedResult := WrappedResult{}
+				// var value interface{}
+				if err := json.Unmarshal(result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal side effect result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
 				}
-				log.Printf("Side effect with key %s for task ID %s completed successfully", key, c.taskID)
-				return value, nil
+				log.Printf("Side effect with key %s for task ID %s completed successfully: %v", key, c.taskID, wrappedResult.Data)
+				return wrappedResult.Data, nil
 			}
 		}
 	}
@@ -1263,6 +1284,7 @@ func (c *handlerContext) WaitForCompletion(taskID string) (interface{}, error) {
 			switch task.Status {
 			case TaskStatusCompleted:
 				var result interface{}
+				log.Printf("HandlerContext Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
 				if err := json.Unmarshal(task.Result, &result); err != nil {
 					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
@@ -1447,6 +1469,7 @@ func (c *sideEffectContext) WaitForCompletion(taskID string) (interface{}, error
 			switch task.Status {
 			case TaskStatusCompleted:
 				var result interface{}
+				log.Printf("SideEffectContext Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
 				if err := json.Unmarshal(task.Result, &result); err != nil {
 					log.Printf("Failed to unmarshal task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal task result: %v", err)
@@ -1963,7 +1986,7 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 	if result.Valid {
 		task.Result = []byte(result.String)
 	}
-	log.Printf("GetTask: fetched task: %v", task)
+	log.Printf("GetTask: fetched task: %v - result: %v", task, task.Result)
 	return &task, nil
 }
 
@@ -2151,7 +2174,7 @@ func (r *SQLiteSideEffectRepository) GetSideEffect(ctx context.Context, executio
 		log.Printf("GetSideEffect: error fetching side effect: %v", err)
 		return nil, err
 	}
-	log.Printf("GetSideEffect: fetched side effect for executionContextID: %s, key: %s", executionContextID, key)
+	log.Printf("GetSideEffect: fetched side effect for executionContextID: %s, key: %s result: [%v]", executionContextID, key, string(result))
 	return result, nil
 }
 
@@ -2167,6 +2190,11 @@ func (r *SQLiteSideEffectRepository) SaveSideEffect(ctx context.Context, executi
 	} else {
 		log.Printf("SaveSideEffect: side effect saved successfully for executionContextID: %s, key: %s", executionContextID, key)
 	}
+	// id, err := res.RowsAffected()
+	// if err != nil {
+	// 	log.Printf("SaveSideEffect: error getting last insert ID: %v", err)
+	// }
+	// log.Printf("SaveSideEffect: last insert ID: %d", id)
 	return err
 }
 
