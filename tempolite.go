@@ -522,24 +522,35 @@ func (tp *Tempolite) WaitForTaskCompletion(ctx context.Context, taskID string, p
 
 			switch task.Status {
 			case TaskStatusCompleted:
+				if len(task.Result) == 0 {
+					// Task completed with no result, return success
+					log.Printf("Task with ID %s completed successfully but has no result", taskID)
+					return nil, nil
+				}
+
+				// Handle the case where task has a result
 				var wrappedResult WrappedResult
-				log.Printf("Tempolite Task ID %s completed successfully - %s %s - %v", taskID, task.ID, task.ExecutionContextID, task.Result)
 				if err := json.Unmarshal(task.Result, &wrappedResult); err != nil {
 					log.Printf("Failed to unmarshal wrapped task result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal wrapped task result: %v", err)
 				}
 
-				log.Printf("Task with ID %s completed successfully", taskID)
+				log.Printf("Task with ID %s completed successfully with result", taskID)
 				return wrappedResult.Data, nil
+
 			case TaskStatusFailed:
 				log.Printf("Task with ID %s failed", taskID)
-				return nil, fmt.Errorf("task failed")
+				return nil, fmt.Errorf("task failed with ID %s", taskID)
+
 			case TaskStatusCancelled:
-				log.Printf("Task with ID %s cancelled", taskID)
-				return nil, fmt.Errorf("task cancelled")
+				log.Printf("Task with ID %s was cancelled", taskID)
+				return nil, fmt.Errorf("task was cancelled")
+
 			case TaskStatusTerminated:
-				log.Printf("Task with ID %s terminated", taskID)
-				return nil, fmt.Errorf("task terminated")
+				log.Printf("Task with ID %s was terminated", taskID)
+				return nil, fmt.Errorf("task was terminated")
+
+				// You can add more cases if there are additional task states.
 			}
 		}
 	}
@@ -983,11 +994,13 @@ func (w *TaskWorker) Run(ctx context.Context, task *Task) error {
 		reflect.ValueOf(param).Elem(),
 	})
 
+	// Handle error if present in the last return value.
 	if len(results) > 0 && !results[len(results)-1].IsNil() {
 		return results[len(results)-1].Interface().(error)
 	}
 
-	if len(results) > 1 {
+	// Handle result if present.
+	if len(results) > 1 && !results[0].IsNil() {
 		wrappedResult := WrappedResult{
 			Metadata: map[string]interface{}{}, // Add any relevant metadata here
 			Data:     results[0].Interface(),
@@ -1043,11 +1056,13 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
 		reflect.ValueOf(param).Elem(),
 	})
 
+	// Handle error if present in the last return value.
 	if len(results) > 0 && !results[len(results)-1].IsNil() {
 		return results[len(results)-1].Interface().(error)
 	}
 
-	if len(results) > 1 {
+	// Handle result if present.
+	if len(results) > 1 && !results[0].IsNil() {
 		result, err := json.Marshal(results[0].Interface())
 		if err != nil {
 			log.Printf("Failed to marshal task result: %v", err)
@@ -1934,7 +1949,7 @@ func (r *SQLiteTaskRepository) CreateTask(ctx context.Context, task *Task) error
 		task.CreatedAt.Unix(),
 		task.UpdatedAt.Unix(),
 		nullableTime(task.CompletedAt),
-		task.Result,
+		nullableBytes(task.Result), // Properly handle nil results
 		nullableString(task.ParentTaskID),
 		nullableString(task.SagaID),
 	)
@@ -1984,7 +1999,7 @@ func (r *SQLiteTaskRepository) GetTask(ctx context.Context, id string) (*Task, e
 		task.CompletedAt = &completedTime
 	}
 	if result.Valid {
-		task.Result = []byte(result.String)
+		task.Result = []byte(result.String) // Store result as bytes if it's not null.
 	}
 	log.Printf("GetTask: fetched task: %v - result: %v", task, task.Result)
 	return &task, nil
@@ -2006,7 +2021,7 @@ func (r *SQLiteTaskRepository) UpdateTask(ctx context.Context, task *Task) error
 		task.ScheduledAt.Unix(),
 		task.UpdatedAt.Unix(),
 		nullableTime(task.CompletedAt),
-		task.Result,
+		nullableBytes(task.Result), // Properly handle nil results
 		nullableString(task.ParentTaskID),
 		nullableString(task.SagaID),
 		task.ID,
@@ -2831,4 +2846,11 @@ func (r *SQLiteSagaStepRepository) GetSagaStep(ctx context.Context, sagaID strin
 	}
 	log.Printf("GetSagaStep: fetched saga step for sagaID: %s, stepIndex: %d", sagaID, stepIndex)
 	return payload, nil
+}
+
+func nullableBytes(data []byte) interface{} {
+	if data == nil {
+		return nil
+	}
+	return data
 }

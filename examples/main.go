@@ -31,7 +31,7 @@ func (s SimpleSideEffect) Run(ctx tempolite.SideEffectContext) (interface{}, err
 }
 
 // SimpleHandler handles SimpleTask
-func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) error {
+func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, error) {
 	log.Printf("Executing simple task: %s", task.Message)
 
 	// Simulate some work
@@ -40,12 +40,12 @@ func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) error {
 	// Use a side effect
 	result, err := ctx.SideEffect("simple-task-side-effect", SimpleSideEffect{Message: task.Message})
 	if err != nil {
-		return fmt.Errorf("side effect failed: %v", err)
+		return nil, fmt.Errorf("side effect failed: %v", err)
 	}
 
 	log.Printf("Side Effect Example: Side effect result: %v", result)
 
-	return nil
+	return result, nil
 }
 
 // SagaStep1 implements the SagaStep interface for step 1
