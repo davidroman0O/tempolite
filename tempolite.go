@@ -8,6 +8,7 @@ import (
 	"log"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -93,17 +94,20 @@ type SagaInfo struct {
 }
 
 type ExecutionNode struct {
-	ID           string
-	ParentID     *string
-	Type         ExecutionNodeType
-	Status       ExecutionStatus
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	CompletedAt  *time.Time
-	HandlerName  string
-	Payload      []byte
-	Result       []byte
-	ErrorMessage *string
+	ID             string
+	ParentID       *string
+	Type           ExecutionNodeType
+	Status         ExecutionStatus
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CompletedAt    *time.Time
+	HandlerName    string
+	Payload        []byte
+	Result         []byte
+	ErrorMessage   *string
+	RetryCount     int
+	StepIndex      int // For saga steps
+	IsCompensation bool
 }
 
 type Compensation struct {
@@ -123,6 +127,14 @@ type Signal struct {
 	Payload   []byte
 	CreatedAt time.Time
 	Direction string
+}
+
+type SideEffectResult struct {
+	ID        string
+	NodeID    string
+	Key       string
+	Result    []byte
+	CreatedAt time.Time
 }
 
 type WrappedResult struct {
@@ -145,6 +157,7 @@ type TaskRepository interface {
 type SideEffectRepository interface {
 	GetSideEffect(ctx context.Context, executionContextID, key string) ([]byte, error)
 	SaveSideEffect(ctx context.Context, executionContextID, key string, result []byte) error
+	GetSideEffectsForNode(ctx context.Context, nodeID string) ([]*SideEffectResult, error)
 }
 
 type SignalRepository interface {
@@ -164,6 +177,8 @@ type ExecutionTreeRepository interface {
 	GetNode(ctx context.Context, id string) (*ExecutionNode, error)
 	UpdateNode(ctx context.Context, node *ExecutionNode) error
 	GetChildNodes(ctx context.Context, parentID string) ([]*ExecutionNode, error)
+	GetNodeBySagaAndStep(ctx context.Context, sagaID string, stepIndex int) (*ExecutionNode, error)
+	GetCompensationNodeForStep(ctx context.Context, stepNodeID string) (*ExecutionNode, error)
 }
 
 type CompensationRepository interface {
@@ -171,6 +186,7 @@ type CompensationRepository interface {
 	GetCompensation(ctx context.Context, id string) (*Compensation, error)
 	UpdateCompensation(ctx context.Context, compensation *Compensation) error
 	GetCompensationsForSaga(ctx context.Context, sagaID string) ([]*Compensation, error)
+	GetCompensationsForSagaStep(ctx context.Context, sagaStepID string) ([]*Compensation, error)
 }
 
 type SagaStepRepository interface {
@@ -620,6 +636,51 @@ func (tp *Tempolite) reconstructExecutionTree(ctx context.Context, node *Executi
 		}
 		log.Printf("Connecting node %s to child node %s", node.ID, child.ID)
 		tree.Connect(dag.BasicEdge(node, child))
+	}
+
+	// Add side effects
+	sideEffects, err := tp.sideEffectRepo.GetSideEffectsForNode(ctx, node.ID)
+	if err != nil {
+		log.Printf("Failed to get side effects for node %s: %v", node.ID, err)
+	} else {
+		for _, se := range sideEffects {
+			seNode := &ExecutionNode{
+				ID:          se.ID,
+				ParentID:    &node.ID,
+				Type:        ExecutionNodeTypeSideEffect,
+				Status:      ExecutionStatusCompleted,
+				CreatedAt:   se.CreatedAt,
+				UpdatedAt:   se.CreatedAt,
+				CompletedAt: &se.CreatedAt,
+				HandlerName: se.Key,
+				Result:      se.Result,
+			}
+			tree.Add(seNode)
+			tree.Connect(dag.BasicEdge(node, seNode))
+		}
+	}
+
+	// Add compensations for saga steps
+	if node.Type == ExecutionNodeTypeSagaStep {
+		compensations, err := tp.compensationRepo.GetCompensationsForSagaStep(ctx, node.ID)
+		if err != nil {
+			log.Printf("Failed to get compensations for saga step %s: %v", node.ID, err)
+		} else {
+			for _, comp := range compensations {
+				compNode := &ExecutionNode{
+					ID:          comp.ID,
+					ParentID:    &node.ID,
+					Type:        ExecutionNodeTypeCompensation,
+					Status:      ExecutionStatus(comp.Status),
+					CreatedAt:   comp.CreatedAt,
+					UpdatedAt:   comp.UpdatedAt,
+					HandlerName: fmt.Sprintf("Compensation_%d", comp.StepIndex),
+					Payload:     comp.Payload,
+				}
+				tree.Add(compNode)
+				tree.Connect(dag.BasicEdge(node, compNode))
+			}
+		}
 	}
 
 	return nil
@@ -1271,6 +1332,10 @@ func (c *handlerContext) SideEffect(key string, effect SideEffect) (interface{},
 					log.Printf("Failed to unmarshal side effect result: %v", err)
 					return nil, fmt.Errorf("failed to unmarshal side effect result: %v", err)
 				}
+				// Add side effect to execution tree
+				if err := c.tp.addSideEffectToExecutionTree(c, c.taskID, key, result); err != nil {
+					log.Printf("Failed to add side effect to execution tree: %v", err)
+				}
 				log.Printf("Side effect with key %s for task ID %s completed successfully: %v", key, c.taskID, wrappedResult.Data)
 				return wrappedResult.Data, nil
 			}
@@ -1339,11 +1404,73 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 		return fmt.Errorf("failed to get saga: %v", err)
 	}
 
+	stepIndex := saga.CurrentStep
+
+	// Check if the step node already exists
+	existingNode, err := c.tp.executionTreeRepo.GetNodeBySagaAndStep(c, c.sagaID, stepIndex)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Failed to check for existing step node: %v", err)
+		return fmt.Errorf("failed to check for existing step node: %v", err)
+	}
+
+	var transactionNode *ExecutionNode
+	if existingNode == nil {
+		// Create transaction node only if it doesn't exist
+		transactionNode = &ExecutionNode{
+			ID:          uuid.New().String(),
+			ParentID:    &c.sagaID,
+			Type:        ExecutionNodeTypeSagaStep,
+			Status:      ExecutionStatusInProgress,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			HandlerName: fmt.Sprintf("SagaStep_%d", stepIndex),
+			StepIndex:   stepIndex,
+			RetryCount:  0,
+		}
+		if err := c.tp.addNodeToExecutionTree(c, transactionNode); err != nil {
+			log.Printf("Failed to add transaction node to execution tree: %v", err)
+			return fmt.Errorf("failed to add transaction node to execution tree: %v", err)
+		}
+	} else {
+		transactionNode = existingNode
+		transactionNode.Status = ExecutionStatusInProgress
+		transactionNode.UpdatedAt = time.Now()
+		if err := c.tp.updateNodeInExecutionTree(c, transactionNode); err != nil {
+			log.Printf("Failed to update transaction node in execution tree: %v", err)
+			return fmt.Errorf("failed to update transaction node in execution tree: %v", err)
+		}
+	}
+
+	// Create or update compensation node
+	compensationNode, err := c.tp.executionTreeRepo.GetCompensationNodeForStep(c, transactionNode.ID)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Failed to check for existing compensation node: %v", err)
+		return fmt.Errorf("failed to check for existing compensation node: %v", err)
+	}
+
+	if compensationNode == nil {
+		compensationNode = &ExecutionNode{
+			ID:             uuid.New().String(),
+			ParentID:       &transactionNode.ID,
+			Type:           ExecutionNodeTypeCompensation,
+			Status:         ExecutionStatusPending,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+			HandlerName:    fmt.Sprintf("Compensation_%d", stepIndex),
+			StepIndex:      stepIndex,
+			IsCompensation: true,
+		}
+		if err := c.tp.addNodeToExecutionTree(c, compensationNode); err != nil {
+			log.Printf("Failed to add compensation node to execution tree: %v", err)
+			return fmt.Errorf("failed to add compensation node to execution tree: %v", err)
+		}
+	}
+
 	transactionCtx := &transactionContext{
 		Context: c.Context,
 		tp:      c.tp,
 		sagaID:  c.sagaID,
-		stepID:  uuid.New().String(),
+		stepID:  transactionNode.ID,
 	}
 
 	log.Printf("Executing transaction for saga step")
@@ -1354,20 +1481,43 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 			Context: c.Context,
 			tp:      c.tp,
 			sagaID:  c.sagaID,
-			stepID:  transactionCtx.stepID,
+			stepID:  compensationNode.ID,
 		}
 
 		compensationResult, compErr := step.Compensation(compensationCtx)
 		if compErr != nil {
 			log.Printf("Compensation failed for saga step: %v", compErr)
-			return fmt.Errorf("transaction failed and compensation failed: %v, compensation error: %v", err, compErr)
+			compensationNode.Status = ExecutionStatusFailed
+			er := compErr.Error()
+			compensationNode.ErrorMessage = &er
+		} else {
+			compensationNode.Status = ExecutionStatusCompleted
+			compensationNode.Result, _ = json.Marshal(compensationResult)
+		}
+		compensationNode.CompletedAt = ptrTime(time.Now())
+		if updateErr := c.tp.updateNodeInExecutionTree(c, compensationNode); updateErr != nil {
+			log.Printf("Failed to update compensation node in execution tree: %v", updateErr)
 		}
 
-		log.Printf("Transaction failed, but compensation succeeded. Compensation result: %v", compensationResult)
-		return fmt.Errorf("transaction failed, compensation succeeded: %v", err)
+		transactionNode.Status = ExecutionStatusFailed
+		er := err.Error()
+		transactionNode.ErrorMessage = &er
+		transactionNode.CompletedAt = ptrTime(time.Now())
+		if updateErr := c.tp.updateNodeInExecutionTree(c, transactionNode); updateErr != nil {
+			log.Printf("Failed to update transaction node in execution tree: %v", updateErr)
+		}
+
+		return fmt.Errorf("transaction failed: %v", err)
 	}
 
 	log.Printf("Transaction completed successfully. Result: %v", transactionResult)
+
+	transactionNode.Status = ExecutionStatusCompleted
+	transactionNode.Result, _ = json.Marshal(transactionResult)
+	transactionNode.CompletedAt = ptrTime(time.Now())
+	if err := c.tp.updateNodeInExecutionTree(c, transactionNode); err != nil {
+		log.Printf("Failed to update transaction node in execution tree: %v", err)
+	}
 
 	log.Printf("Updating saga current step")
 	saga.CurrentStep++
@@ -1379,6 +1529,10 @@ func (c *handlerSagaContext) Step(step SagaStep) error {
 
 	log.Printf("Saga step completed successfully for saga ID %s", c.sagaID)
 	return nil
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }
 
 func (c *handlerSagaContext) EnqueueSaga(handler HandlerSagaFunc, params interface{}, options ...EnqueueOption) (string, error) {
@@ -1663,7 +1817,7 @@ func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[
 	node.Status = ExecutionStatusCompleted
 	node.CompletedAt = taskData.CompletedAt
 	node.Result = taskData.Result
-	if err := tp.executionTreeRepo.UpdateNode(tp.ctx, node); err != nil {
+	if err := tp.updateNodeInExecutionTree(tp.ctx, node); err != nil {
 		log.Printf("Failed to update execution node: %v", err)
 	}
 }
@@ -1693,7 +1847,7 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 		node.Status = ExecutionStatusFailed
 		errorMsg := err.Error()
 		node.ErrorMessage = &errorMsg
-		if updateErr := tp.executionTreeRepo.UpdateNode(tp.ctx, node); updateErr != nil {
+		if updateErr := tp.updateNodeInExecutionTree(tp.ctx, node); updateErr != nil {
 			log.Printf("Failed to update execution node: %v", updateErr)
 		}
 	}
@@ -1711,6 +1865,11 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 	for _, compensation := range compensations {
 		log.Printf("Dispatching compensation task ID %s for saga ID %s", compensation.ID, *taskData.SagaID)
 		tp.compensationPool.Dispatch(compensation)
+
+		// Add compensation to execution tree
+		if err := tp.addCompensationToExecutionTree(tp.ctx, taskData.ID, compensation); err != nil {
+			log.Printf("Failed to add compensation to execution tree: %v", err)
+		}
 	}
 
 	return retrypool.DeadTaskActionForceRetry
@@ -1762,6 +1921,18 @@ func (tp *Tempolite) onCompensationSuccess(controller retrypool.WorkerController
 	if err := tp.compensationRepo.UpdateCompensation(tp.ctx, compensationData); err != nil {
 		log.Printf("Failed to update compensation status: %v", err)
 	}
+
+	// Update compensation node in execution tree
+	node, err := tp.executionTreeRepo.GetNode(tp.ctx, compensationData.ID)
+	if err != nil {
+		log.Printf("Failed to get compensation node: %v", err)
+	} else {
+		node.Status = ExecutionStatusCompleted
+		node.CompletedAt = &compensationData.UpdatedAt
+		if updateErr := tp.updateNodeInExecutionTree(tp.ctx, node); updateErr != nil {
+			log.Printf("Failed to update compensation node in execution tree: %v", updateErr)
+		}
+	}
 }
 
 func (tp *Tempolite) onCompensationFailure(controller retrypool.WorkerController[*Compensation], workerID int, worker retrypool.Worker[*Compensation], task *retrypool.TaskWrapper[*Compensation], err error) retrypool.DeadTaskAction {
@@ -1779,6 +1950,19 @@ func (tp *Tempolite) onCompensationFailure(controller retrypool.WorkerController
 		saga.Status = SagaStatusCriticallyFailed
 		if updateErr := tp.sagaRepo.UpdateSaga(tp.ctx, saga); updateErr != nil {
 			log.Printf("Failed to update saga status: %v", updateErr)
+		}
+	}
+
+	// Update compensation node in execution tree
+	node, err := tp.executionTreeRepo.GetNode(tp.ctx, compensationData.ID)
+	if err != nil {
+		log.Printf("Failed to get compensation node: %v", err)
+	} else {
+		node.Status = ExecutionStatusFailed
+		errorMsg := err.Error()
+		node.ErrorMessage = &errorMsg
+		if updateErr := tp.updateNodeInExecutionTree(tp.ctx, node); updateErr != nil {
+			log.Printf("Failed to update compensation node in execution tree: %v", updateErr)
 		}
 	}
 
@@ -1817,10 +2001,33 @@ func (tp *Tempolite) onCompensationPanic(compensation *Compensation, v interface
 
 func (tp *Tempolite) onSideEffectSuccess(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask]) {
 	log.Printf("Side effect completed successfully")
+	sideEffectData := task.Data()
+
+	// Add side effect to execution tree
+	if err := tp.addSideEffectToExecutionTree(tp.ctx, sideEffectData.executionContextID, sideEffectData.key, nil); err != nil {
+		log.Printf("Failed to add side effect to execution tree: %v", err)
+	}
 }
 
 func (tp *Tempolite) onSideEffectFailure(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask], err error) retrypool.DeadTaskAction {
 	log.Printf("Side effect failed: %v", err)
+	sideEffectData := task.Data()
+
+	er := err.Error()
+	// Add failed side effect to execution tree
+	node := &ExecutionNode{
+		ID:           uuid.New().String(),
+		ParentID:     &sideEffectData.executionContextID,
+		Type:         ExecutionNodeTypeSideEffect,
+		Status:       ExecutionStatusFailed,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		HandlerName:  sideEffectData.key,
+		ErrorMessage: &er,
+	}
+	if addErr := tp.addNodeToExecutionTree(tp.ctx, node); addErr != nil {
+		log.Printf("Failed to add failed side effect to execution tree: %v", addErr)
+	}
 
 	if IsUnrecoverable(err) {
 		return retrypool.DeadTaskActionAddToDeadTasks
@@ -1861,6 +2068,12 @@ func (tp *Tempolite) addNodeToExecutionTree(ctx context.Context, node *Execution
 		tree.Connect(dag.BasicEdge(parentNode, node))
 	}
 
+	err := tp.executionTreeRepo.CreateNode(ctx, node)
+	if err != nil {
+		log.Printf("Failed to create node in repository: %v", err)
+		return fmt.Errorf("failed to create node in repository: %v", err)
+	}
+
 	log.Printf("Node %s added to execution tree successfully", node.ID)
 	return nil
 }
@@ -1879,8 +2092,151 @@ func (tp *Tempolite) updateNodeInExecutionTree(ctx context.Context, node *Execut
 	tree.Remove(node)
 	tree.Add(node)
 
+	err := tp.executionTreeRepo.UpdateNode(ctx, node)
+	if err != nil {
+		log.Printf("Failed to update node in repository: %v", err)
+		return fmt.Errorf("failed to update node in repository: %v", err)
+	}
+
 	log.Printf("Node %s updated in execution tree successfully", node.ID)
 	return nil
+}
+
+func (tp *Tempolite) addSideEffectToExecutionTree(ctx context.Context, parentID, sideEffectKey string, result []byte) error {
+	log.Printf("Adding side effect %s to execution tree", sideEffectKey)
+	now := time.Now()
+	node := &ExecutionNode{
+		ID:          uuid.New().String(),
+		ParentID:    &parentID,
+		Type:        ExecutionNodeTypeSideEffect,
+		Status:      ExecutionStatusCompleted,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		CompletedAt: &now,
+		HandlerName: sideEffectKey,
+		Result:      result,
+	}
+	return tp.addNodeToExecutionTree(ctx, node)
+}
+
+func (tp *Tempolite) addSagaStepToExecutionTree(ctx context.Context, sagaID string, stepIndex int, status ExecutionStatus) error {
+	log.Printf("Adding saga step %d to execution tree for saga %s", stepIndex, sagaID)
+	node := &ExecutionNode{
+		ID:          uuid.New().String(),
+		ParentID:    &sagaID,
+		Type:        ExecutionNodeTypeSagaStep,
+		Status:      status,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		HandlerName: fmt.Sprintf("SagaStep_%d", stepIndex),
+	}
+	return tp.addNodeToExecutionTree(ctx, node)
+}
+
+func (tp *Tempolite) addCompensationToExecutionTree(ctx context.Context, sagaStepID string, compensation *Compensation) error {
+	log.Printf("Adding compensation for step %d to execution tree", compensation.StepIndex)
+	node := &ExecutionNode{
+		ID:          compensation.ID,
+		ParentID:    &sagaStepID,
+		Type:        ExecutionNodeTypeCompensation,
+		Status:      ExecutionStatus(compensation.Status),
+		CreatedAt:   compensation.CreatedAt,
+		UpdatedAt:   compensation.UpdatedAt,
+		HandlerName: fmt.Sprintf("Compensation_%d", compensation.StepIndex),
+		Payload:     compensation.Payload,
+	}
+	return tp.addNodeToExecutionTree(ctx, node)
+}
+
+func (tp *Tempolite) PrintExecutionTree(ctx context.Context, rootID string) {
+	tree, err := tp.GetExecutionTree(ctx, rootID)
+	if err != nil {
+		log.Printf("Failed to get execution tree: %v", err)
+		return
+	}
+	v, e := tree.Root()
+	if e != nil {
+		log.Printf("Failed to get root node: %v", e)
+		return
+	}
+	fmt.Printf("Execution Tree for Root ID: %s\n", rootID)
+	printNode(tree, v, 0)
+}
+
+func printNode(tree *dag.AcyclicGraph, node dag.Vertex, depth int) {
+	if node == nil {
+		return
+	}
+
+	execNode, ok := node.(*ExecutionNode)
+	if !ok {
+		log.Printf("Node is not an ExecutionNode: %v", node)
+		return
+	}
+
+	indent := strings.Repeat("  ", depth)
+	fmt.Printf("%s- ID: %s\n", indent, execNode.ID)
+	fmt.Printf("%s  Type: %s\n", indent, getNodeTypeName(execNode.Type))
+	fmt.Printf("%s  Status: %s\n", indent, getStatusName(execNode.Status))
+	fmt.Printf("%s  Handler: %s\n", indent, execNode.HandlerName)
+	fmt.Printf("%s  Created: %s\n", indent, execNode.CreatedAt.Format(time.RFC3339))
+	if execNode.CompletedAt != nil {
+		fmt.Printf("%s  Completed: %s\n", indent, execNode.CompletedAt.Format(time.RFC3339))
+	}
+	if execNode.ErrorMessage != nil {
+		fmt.Printf("%s  Error: %s\n", indent, *execNode.ErrorMessage)
+	}
+	if execNode.Type == ExecutionNodeTypeSagaStep {
+		fmt.Printf("%s  Step Index: %d\n", indent, execNode.StepIndex)
+		fmt.Printf("%s  Retry Count: %d\n", indent, execNode.RetryCount)
+	}
+	if execNode.IsCompensation {
+		fmt.Printf("%s  Compensation: Yes\n", indent)
+	}
+
+	for _, childRaw := range tree.DownEdges(node) {
+		child, ok := childRaw.(*ExecutionNode)
+		if !ok {
+			continue
+		}
+		printNode(tree, child, depth+1)
+	}
+}
+
+func getNodeTypeName(nodeType ExecutionNodeType) string {
+	switch nodeType {
+	case ExecutionNodeTypeHandler:
+		return "Handler"
+	case ExecutionNodeTypeSagaHandler:
+		return "Saga Handler"
+	case ExecutionNodeTypeSagaStep:
+		return "Saga Step"
+	case ExecutionNodeTypeSideEffect:
+		return "Side Effect"
+	case ExecutionNodeTypeCompensation:
+		return "Compensation"
+	default:
+		return "Unknown"
+	}
+}
+
+func getStatusName(status ExecutionStatus) string {
+	switch status {
+	case ExecutionStatusPending:
+		return "Pending"
+	case ExecutionStatusInProgress:
+		return "In Progress"
+	case ExecutionStatusCompleted:
+		return "Completed"
+	case ExecutionStatusFailed:
+		return "Failed"
+	case ExecutionStatusCancelled:
+		return "Cancelled"
+	case ExecutionStatusCriticallyFailed:
+		return "Critically Failed"
+	default:
+		return "Unknown"
+	}
 }
 
 // SQLite Repository Implementations
@@ -2227,6 +2583,37 @@ func (r *SQLiteSideEffectRepository) SaveSideEffect(ctx context.Context, executi
 	return err
 }
 
+func (r *SQLiteSideEffectRepository) GetSideEffectsForNode(ctx context.Context, nodeID string) ([]*SideEffectResult, error) {
+	log.Printf("GetSideEffectsForNode: fetching side effects for node ID: %s", nodeID)
+	query := `
+    SELECT id, execution_context_id, key, result, created_at
+    FROM side_effects
+    WHERE execution_context_id = ?;
+    `
+	rows, err := r.db.QueryContext(ctx, query, nodeID)
+	if err != nil {
+		log.Printf("GetSideEffectsForNode: error fetching side effects: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*SideEffectResult
+	for rows.Next() {
+		var result SideEffectResult
+		var createdAt int64
+		err := rows.Scan(&result.ID, &result.NodeID, &result.Key, &result.Result, &createdAt)
+		if err != nil {
+			log.Printf("GetSideEffectsForNode: error scanning row: %v", err)
+			return nil, err
+		}
+		result.CreatedAt = time.Unix(createdAt, 0)
+		results = append(results, &result)
+	}
+
+	log.Printf("GetSideEffectsForNode: fetched %d side effects for node ID: %s", len(results), nodeID)
+	return results, nil
+}
+
 type SQLiteSignalRepository struct {
 	db *sql.DB
 }
@@ -2478,23 +2865,27 @@ func NewSQLiteExecutionTreeRepository(db *sql.DB) (*SQLiteExecutionTreeRepositor
 func (r *SQLiteExecutionTreeRepository) initDB() error {
 	log.Printf("initDB: creating execution_nodes table")
 	query := `
-	CREATE TABLE IF NOT EXISTS execution_nodes (
-		id TEXT PRIMARY KEY,
-		parent_id TEXT,
-		type INTEGER NOT NULL,
-		status INTEGER NOT NULL,
-		created_at INTEGER NOT NULL,
-		updated_at INTEGER NOT NULL,
-		completed_at INTEGER,
-		handler_name TEXT NOT NULL,
-		payload BLOB,
-		result BLOB,
-		error_message TEXT,
-		FOREIGN KEY(parent_id) REFERENCES execution_nodes(id)
-	);
-	CREATE INDEX IF NOT EXISTS idx_execution_nodes_parent_id ON execution_nodes(parent_id);
-	CREATE INDEX IF NOT EXISTS idx_execution_nodes_status ON execution_nodes(status);
-	`
+    CREATE TABLE IF NOT EXISTS execution_nodes (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT,
+        type INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        handler_name TEXT NOT NULL,
+        payload BLOB,
+        result BLOB,
+        error_message TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        step_index INTEGER,
+        is_compensation BOOLEAN NOT NULL DEFAULT 0,
+        FOREIGN KEY(parent_id) REFERENCES execution_nodes(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_execution_nodes_parent_id ON execution_nodes(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_execution_nodes_status ON execution_nodes(status);
+    CREATE INDEX IF NOT EXISTS idx_execution_nodes_type_step_index ON execution_nodes(type, step_index);
+    `
 	_, err := r.db.Exec(query)
 	if err != nil {
 		log.Printf("initDB: error creating execution_nodes table: %v", err)
@@ -2507,9 +2898,9 @@ func (r *SQLiteExecutionTreeRepository) initDB() error {
 func (r *SQLiteExecutionTreeRepository) CreateNode(ctx context.Context, node *ExecutionNode) error {
 	log.Printf("CreateNode: creating node: %v", node)
 	query := `
-	INSERT INTO execution_nodes (id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-	`
+    INSERT INTO execution_nodes (id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message, retry_count, step_index, is_compensation)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    `
 	_, err := r.db.ExecContext(ctx, query,
 		node.ID,
 		nullableString(node.ParentID),
@@ -2522,6 +2913,9 @@ func (r *SQLiteExecutionTreeRepository) CreateNode(ctx context.Context, node *Ex
 		node.Payload,
 		node.Result,
 		nullableString(node.ErrorMessage),
+		node.RetryCount,
+		node.StepIndex,
+		node.IsCompensation,
 	)
 	if err != nil {
 		log.Printf("CreateNode: error creating node: %v", err)
@@ -2578,10 +2972,10 @@ func (r *SQLiteExecutionTreeRepository) GetNode(ctx context.Context, id string) 
 func (r *SQLiteExecutionTreeRepository) UpdateNode(ctx context.Context, node *ExecutionNode) error {
 	log.Printf("UpdateNode: updating node: %v", node)
 	query := `
-	UPDATE execution_nodes
-	SET parent_id = ?, type = ?, status = ?, updated_at = ?, completed_at = ?, handler_name = ?, payload = ?, result = ?, error_message = ?
-	WHERE id = ?;
-	`
+    UPDATE execution_nodes
+    SET parent_id = ?, type = ?, status = ?, updated_at = ?, completed_at = ?, handler_name = ?, payload = ?, result = ?, error_message = ?, retry_count = ?, step_index = ?, is_compensation = ?
+    WHERE id = ?;
+    `
 	_, err := r.db.ExecContext(ctx, query,
 		nullableString(node.ParentID),
 		node.Type,
@@ -2592,6 +2986,9 @@ func (r *SQLiteExecutionTreeRepository) UpdateNode(ctx context.Context, node *Ex
 		node.Payload,
 		node.Result,
 		nullableString(node.ErrorMessage),
+		node.RetryCount,
+		node.StepIndex,
+		node.IsCompensation,
 		node.ID,
 	)
 	if err != nil {
@@ -2655,6 +3052,104 @@ func (r *SQLiteExecutionTreeRepository) GetChildNodes(ctx context.Context, paren
 	}
 	log.Printf("GetChildNodes: fetched %d child nodes", len(nodes))
 	return nodes, nil
+}
+
+func (r *SQLiteExecutionTreeRepository) GetNodeBySagaAndStep(ctx context.Context, sagaID string, stepIndex int) (*ExecutionNode, error) {
+	query := `
+    SELECT id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message, retry_count, step_index, is_compensation
+    FROM execution_nodes
+    WHERE parent_id = ? AND type = ? AND step_index = ?;
+    `
+	var node ExecutionNode
+	var createdAt, updatedAt int64
+	var completedAt sql.NullInt64
+	var parentID, errorMessage sql.NullString
+	err := r.db.QueryRowContext(ctx, query, sagaID, ExecutionNodeTypeSagaStep, stepIndex).Scan(
+		&node.ID,
+		&parentID,
+		&node.Type,
+		&node.Status,
+		&createdAt,
+		&updatedAt,
+		&completedAt,
+		&node.HandlerName,
+		&node.Payload,
+		&node.Result,
+		&errorMessage,
+		&node.RetryCount,
+		&node.StepIndex,
+		&node.IsCompensation,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	node.CreatedAt = time.Unix(createdAt, 0)
+	node.UpdatedAt = time.Unix(updatedAt, 0)
+	if completedAt.Valid {
+		completedTime := time.Unix(completedAt.Int64, 0)
+		node.CompletedAt = &completedTime
+	}
+	if parentID.Valid {
+		node.ParentID = &parentID.String
+	}
+	if errorMessage.Valid {
+		node.ErrorMessage = &errorMessage.String
+	}
+
+	return &node, nil
+}
+
+func (r *SQLiteExecutionTreeRepository) GetCompensationNodeForStep(ctx context.Context, stepNodeID string) (*ExecutionNode, error) {
+	query := `
+    SELECT id, parent_id, type, status, created_at, updated_at, completed_at, handler_name, payload, result, error_message, retry_count, step_index, is_compensation
+    FROM execution_nodes
+    WHERE parent_id = ? AND type = ?;
+    `
+	var node ExecutionNode
+	var createdAt, updatedAt int64
+	var completedAt sql.NullInt64
+	var parentID, errorMessage sql.NullString
+	err := r.db.QueryRowContext(ctx, query, stepNodeID, ExecutionNodeTypeCompensation).Scan(
+		&node.ID,
+		&parentID,
+		&node.Type,
+		&node.Status,
+		&createdAt,
+		&updatedAt,
+		&completedAt,
+		&node.HandlerName,
+		&node.Payload,
+		&node.Result,
+		&errorMessage,
+		&node.RetryCount,
+		&node.StepIndex,
+		&node.IsCompensation,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	node.CreatedAt = time.Unix(createdAt, 0)
+	node.UpdatedAt = time.Unix(updatedAt, 0)
+	if completedAt.Valid {
+		completedTime := time.Unix(completedAt.Int64, 0)
+		node.CompletedAt = &completedTime
+	}
+	if parentID.Valid {
+		node.ParentID = &parentID.String
+	}
+	if errorMessage.Valid {
+		node.ErrorMessage = &errorMessage.String
+	}
+
+	return &node, nil
 }
 
 type SQLiteCompensationRepository struct {
@@ -2807,6 +3302,46 @@ func (r *SQLiteCompensationRepository) GetCompensationsForSaga(ctx context.Conte
 		compensations = append(compensations, &compensation)
 	}
 	log.Printf("GetCompensationsForSaga: fetched %d compensations", len(compensations))
+	return compensations, nil
+}
+
+func (r *SQLiteCompensationRepository) GetCompensationsForSagaStep(ctx context.Context, sagaStepID string) ([]*Compensation, error) {
+	log.Printf("GetCompensationsForSagaStep: fetching compensations for saga step ID: %s", sagaStepID)
+	query := `
+    SELECT id, saga_id, step_index, payload, status, created_at, updated_at
+    FROM compensations
+    WHERE saga_id = (SELECT saga_id FROM execution_nodes WHERE id = ?) AND step_index = (SELECT current_step FROM sagas WHERE id = (SELECT saga_id FROM execution_nodes WHERE id = ?));
+    `
+	rows, err := r.db.QueryContext(ctx, query, sagaStepID, sagaStepID)
+	if err != nil {
+		log.Printf("GetCompensationsForSagaStep: error fetching compensations: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var compensations []*Compensation
+	for rows.Next() {
+		var comp Compensation
+		var createdAt, updatedAt int64
+		err := rows.Scan(
+			&comp.ID,
+			&comp.SagaID,
+			&comp.StepIndex,
+			&comp.Payload,
+			&comp.Status,
+			&createdAt,
+			&updatedAt,
+		)
+		if err != nil {
+			log.Printf("GetCompensationsForSagaStep: error scanning row: %v", err)
+			return nil, err
+		}
+		comp.CreatedAt = time.Unix(createdAt, 0)
+		comp.UpdatedAt = time.Unix(updatedAt, 0)
+		compensations = append(compensations, &comp)
+	}
+
+	log.Printf("GetCompensationsForSagaStep: fetched %d compensations for saga step ID: %s", len(compensations), sagaStepID)
 	return compensations, nil
 }
 
