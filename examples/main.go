@@ -39,9 +39,6 @@ func (s SimpleSideEffect) Run(ctx tempolite.SideEffectContext) (interface{}, err
 func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, error) {
 	log.Printf("Executing simple task: %s", task.Message)
 
-	// Simulate some work
-	// time.Sleep(1 * time.Second)
-
 	// Use a side effect
 	result, err := ctx.SideEffect("simple-task-side-effect", SimpleSideEffect{Message: task.Message})
 	if err != nil {
@@ -51,6 +48,24 @@ func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, 
 	log.Printf("Side Effect Example: Side effect result: %v", result)
 
 	return result, nil
+}
+
+func SagaHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, error) {
+
+	// Create a children saga
+	sagaTaskID, err := ctx.EnqueueSaga(saga, SagaTask{StepMessage: "Saga steps"})
+	if err != nil {
+		log.Fatalf("Failed to enqueue saga: %v", err)
+	}
+	log.Printf("Enqueued saga with ID: %s", sagaTaskID)
+
+	value, err := ctx.WaitForCompletion(sagaTaskID)
+	if err != nil {
+		log.Fatalf("Failed to wait for task completion: %v", err)
+	}
+	log.Printf("Task completed with value: %v", value)
+
+	return value, nil
 }
 
 // SagaStep1 implements the SagaStep interface for step 1
@@ -110,6 +125,9 @@ func main() {
 	}
 	defer tp.Close()
 
+	// tp.RegisterHandler(SagaHandler)
+	tp.RegisterHandler(SimpleHandler)
+
 	// Create a simple task
 	simpleTaskID, err := tp.Enqueue(context.Background(), SimpleHandler, SimpleTask{Message: "Hello, Tempolite!"})
 	if err != nil {
@@ -124,7 +142,7 @@ func main() {
 	}
 	log.Printf("Enqueued saga with ID: %s", sagaTaskID)
 
-	value, err := tp.WaitForTaskCompletion(context.Background(), simpleTaskID, time.Second)
+	value, err := tp.WaitForCompletion(context.Background(), simpleTaskID)
 	if err != nil {
 		log.Fatalf("Failed to wait for task completion: %v", err)
 	}
@@ -155,15 +173,15 @@ func main() {
 	tp.PrintExecutionTree(context.Background(), sagaTaskID)
 
 	// // Print execution tree
-	// executionTree, err := tp.GetExecutionTree(context.Background(), simpleTaskID)
-	// if err != nil {
-	// 	log.Fatalf("Failed to get execution tree: %v", err)
-	// }
-	// log.Printf("Execution tree for simple task:\n%s", executionTree.String())
+	executionTree, err := tp.GetExecutionTree(context.Background(), simpleTaskID)
+	if err != nil {
+		log.Fatalf("Failed to get execution tree: %v", err)
+	}
+	log.Printf("Execution tree for simple task:\n%s", executionTree.String())
 
-	// executionTree, err = tp.GetExecutionTree(context.Background(), sagaTaskID)
-	// if err != nil {
-	// 	log.Fatalf("Failed to get execution tree: %v", err)
-	// }
-	// log.Printf("Execution tree for saga task:\n%s", executionTree.String())
+	executionTree, err = tp.GetExecutionTree(context.Background(), sagaTaskID)
+	if err != nil {
+		log.Fatalf("Failed to get execution tree: %v", err)
+	}
+	log.Printf("Execution tree for saga task:\n%s", executionTree.String())
 }
