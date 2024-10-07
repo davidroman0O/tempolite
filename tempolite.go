@@ -982,6 +982,20 @@ func (tp *Tempolite) EnqueueSaga(ctx context.Context, saga *SagaInfo, params int
 		return "", fmt.Errorf("failed to create saga: %v", err)
 	}
 
+	// Create an execution node for the saga itself
+	sagaNode := &ExecutionNode{
+		ID:          saga.ID,
+		Type:        ExecutionNodeTypeSagaHandler,
+		Status:      ExecutionStatusPending,
+		CreatedAt:   saga.CreatedAt,
+		UpdatedAt:   saga.LastUpdatedAt,
+		HandlerName: saga.HandlerName,
+	}
+	if err := tp.executionTreeRepo.CreateNode(ctx, sagaNode); err != nil {
+		log.Printf("Failed to create saga execution node: %v", err)
+		return "", fmt.Errorf("failed to create saga execution node: %v", err)
+	}
+
 	// Prepare compensations
 	compensations := tp.prepareCompensations(saga)
 
@@ -1202,12 +1216,28 @@ type SagaTaskWorker struct {
 func (w *SagaTaskWorker) Run(ctx context.Context, task *SagaStepTask) error {
 	log.Printf("Running saga step %d for saga %s on worker %d", task.StepIndex, task.SagaID, w.ID)
 
+	// Create an execution node for this saga step
+	stepNode := &ExecutionNode{
+		ID:          uuid.New().String(),
+		ParentID:    &task.SagaID,
+		Type:        ExecutionNodeTypeSagaStep,
+		Status:      ExecutionStatusInProgress,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		HandlerName: fmt.Sprintf("SagaStep_%d", task.StepIndex),
+		StepIndex:   task.StepIndex,
+	}
+	if err := w.tp.executionTreeRepo.CreateNode(ctx, stepNode); err != nil {
+		log.Printf("Failed to create saga step execution node: %v", err)
+		return err
+	}
+
 	// Create a transaction context for the step
 	transactionCtx := &transactionContext{
 		Context: ctx,
 		tp:      w.tp,
 		sagaID:  task.SagaID,
-		stepID:  fmt.Sprintf("%s_step_%d", task.SagaID, task.StepIndex),
+		stepID:  stepNode.ID,
 	}
 
 	// Execute the transaction
@@ -1226,42 +1256,25 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *SagaStepTask) error {
 
 	if err != nil {
 		log.Printf("Step %d of saga %s failed: %v", task.StepIndex, task.SagaID, err)
-		return err
+		stepNode.Status = ExecutionStatusFailed
+		errorMsg := err.Error()
+		stepNode.ErrorMessage = &errorMsg
+	} else {
+		log.Printf("Step %d of saga %s completed successfully", task.StepIndex, task.SagaID)
+		stepNode.Status = ExecutionStatusCompleted
 	}
 
-	log.Printf("Step %d of saga %s completed successfully", task.StepIndex, task.SagaID)
-
-	// Update execution tree
-	if err := w.tp.addSagaStepToExecutionTree(ctx, task.SagaID, task.StepIndex, ExecutionStatusCompleted); err != nil {
-		log.Printf("Failed to update execution tree for step %d: %v", task.StepIndex, err)
+	stepNode.UpdatedAt = time.Now()
+	if updateErr := w.tp.executionTreeRepo.UpdateNode(ctx, stepNode); updateErr != nil {
+		log.Printf("Failed to update saga step execution node: %v", updateErr)
 	}
 
 	// If there's a next step, dispatch it
-	if task.Next != nil {
+	if err == nil && task.Next != nil {
 		task.Next()
 	}
 
-	return nil
-}
-
-func (w *SagaTaskWorker) prepareCompensations(saga *SagaInfo) {
-	saga.Compensations = make([]*CompensationTask, len(saga.Steps))
-	for i := len(saga.Steps) - 1; i >= 0; i-- {
-		compensationTask := &CompensationTask{
-			ID:        uuid.New().String(),
-			SagaID:    saga.ID,
-			StepIndex: i,
-			Step:      saga.Steps[i],
-		}
-		saga.Compensations[i] = compensationTask
-
-		if i < len(saga.Steps)-1 {
-			nextCompensation := saga.Compensations[i+1]
-			compensationTask.Next = func() {
-				w.tp.compensationPool.Dispatch(nextCompensation)
-			}
-		}
-	}
+	return err
 }
 
 type CompensationWorker struct {
@@ -2288,6 +2301,22 @@ func (tp *Tempolite) addSideEffectToExecutionTree(ctx context.Context, parentID,
 
 func (tp *Tempolite) addSagaStepToExecutionTree(ctx context.Context, sagaID string, stepIndex int, status ExecutionStatus) error {
 	log.Printf("Adding saga step %d to execution tree for saga %s", stepIndex, sagaID)
+
+	// Check if the node already exists
+	existingNode, err := tp.executionTreeRepo.GetNodeBySagaAndStep(ctx, sagaID, stepIndex)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Error checking for existing node: %v", err)
+		return err
+	}
+
+	if existingNode != nil {
+		// Update the existing node
+		existingNode.Status = status
+		existingNode.UpdatedAt = time.Now()
+		return tp.executionTreeRepo.UpdateNode(ctx, existingNode)
+	}
+
+	// Create a new node if it doesn't exist
 	node := &ExecutionNode{
 		ID:          uuid.New().String(),
 		ParentID:    &sagaID,
@@ -2296,6 +2325,7 @@ func (tp *Tempolite) addSagaStepToExecutionTree(ctx context.Context, sagaID stri
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		HandlerName: fmt.Sprintf("SagaStep_%d", stepIndex),
+		StepIndex:   stepIndex,
 	}
 	return tp.addNodeToExecutionTree(ctx, node)
 }
