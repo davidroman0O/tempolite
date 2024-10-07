@@ -1239,6 +1239,11 @@ type SagaTaskWorker struct {
 
 func (w *SagaTaskWorker) Run(ctx context.Context, task *SagaStepTask) error {
 	log.Printf("Running saga step %d for saga %s on worker %d", task.StepIndex, task.SagaID, w.ID)
+	// Add the step to the execution tree with "In Progress" status
+	err := w.tp.addSagaStepToExecutionTree(ctx, task.SagaID, task.StepIndex, ExecutionStatusInProgress)
+	if err != nil {
+		log.Printf("Failed to add saga step to execution tree: %v", err)
+	}
 
 	// Create an execution node for this saga step
 	stepNode := &ExecutionNode{
@@ -1784,6 +1789,12 @@ func (tp *Tempolite) onSagaStepSuccess(controller retrypool.WorkerController[*Sa
 	stepTask := task.Data()
 	log.Printf("Saga step %d for saga %s completed successfully", stepTask.StepIndex, stepTask.SagaID)
 
+	// Update the step status in the execution tree
+	err := tp.updateSagaStepStatus(tp.ctx, stepTask.SagaID, stepTask.StepIndex, ExecutionStatusCompleted)
+	if err != nil {
+		log.Printf("Failed to update saga step status in execution tree: %v", err)
+	}
+
 	// Update the saga status
 	saga, err := tp.sagaRepo.GetSaga(tp.ctx, stepTask.SagaID)
 	if err != nil {
@@ -1853,6 +1864,12 @@ func (tp *Tempolite) onSagaStepSuccess(controller retrypool.WorkerController[*Sa
 func (tp *Tempolite) onSagaStepFailure(controller retrypool.WorkerController[*SagaStepTask], workerID int, worker retrypool.Worker[*SagaStepTask], task *retrypool.TaskWrapper[*SagaStepTask], err error) retrypool.DeadTaskAction {
 	stepTask := task.Data()
 	log.Printf("Saga step %d for saga %s failed: %v", stepTask.StepIndex, stepTask.SagaID, err)
+
+	// Update the step status in the execution tree
+	updateErr := tp.updateSagaStepStatus(tp.ctx, stepTask.SagaID, stepTask.StepIndex, ExecutionStatusFailed)
+	if updateErr != nil {
+		log.Printf("Failed to update saga step status in execution tree: %v", updateErr)
+	}
 
 	saga, sagaErr := tp.sagaRepo.GetSaga(tp.ctx, stepTask.SagaID)
 	if sagaErr != nil {
@@ -2300,6 +2317,21 @@ func (tp *Tempolite) onNewDeadSideEffect(task *retrypool.DeadTask[*sideEffectTas
 }
 
 // Helper functions for execution tree management
+
+func (tp *Tempolite) updateSagaStepStatus(ctx context.Context, sagaID string, stepIndex int, status ExecutionStatus) error {
+	node, err := tp.executionTreeRepo.GetNodeBySagaAndStep(ctx, sagaID, stepIndex)
+	if err != nil {
+		return fmt.Errorf("failed to get saga step node: %v", err)
+	}
+
+	node.Status = status
+	node.UpdatedAt = time.Now()
+	if status == ExecutionStatusCompleted || status == ExecutionStatusFailed {
+		node.CompletedAt = &node.UpdatedAt
+	}
+
+	return tp.executionTreeRepo.UpdateNode(ctx, node)
+}
 
 func (tp *Tempolite) addNodeToExecutionTree(ctx context.Context, node *ExecutionNode) error {
 	log.Printf("Adding node %s to execution tree", node.ID)
