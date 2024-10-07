@@ -3655,9 +3655,16 @@ func nullableString(s *string) interface{} {
 }
 
 // Saga builder implementation
-
 type SagaBuilder struct {
 	steps []SagaStep
+}
+
+type SagaOption func(*SagaInfo)
+
+func WithName(name string) SagaOption {
+	return func(s *SagaInfo) {
+		s.HandlerName = name
+	}
 }
 
 func Saga() *SagaBuilder {
@@ -3669,13 +3676,23 @@ func (sb *SagaBuilder) With(step SagaStep) *SagaBuilder {
 	return sb
 }
 
-func (sb *SagaBuilder) Build() *SagaInfo {
-	return &SagaInfo{
+func (sb *SagaBuilder) Build(opts ...SagaOption) *SagaInfo {
+	saga := &SagaInfo{
 		ID:            uuid.New().String(),
 		Status:        SagaStatusPending,
 		CurrentStep:   0,
 		CreatedAt:     time.Now(),
 		LastUpdatedAt: time.Now(),
 		Steps:         sb.steps,
+		HandlerName:   fmt.Sprintf("DefaultSaga_%s", uuid.New().String()[:8]), // Default name
 	}
+
+	for _, opt := range opts {
+		opt(saga)
+	}
+
+	// Calculate and set the hash after all options have been applied
+	saga.Hash = calculateSagaHash(saga)
+
+	return saga
 }

@@ -125,7 +125,7 @@ func main() {
 	}
 	defer tp.Close()
 
-	// tp.RegisterHandler(SagaHandler)
+	tp.RegisterHandler(SagaHandler)
 	tp.RegisterHandler(SimpleHandler)
 
 	// Create a simple task
