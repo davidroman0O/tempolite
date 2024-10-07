@@ -675,6 +675,14 @@ func (tp *Tempolite) reconstructExecutionTree(ctx context.Context, node *Executi
 		return err
 	}
 
+	// Sort children by StepIndex if they are saga steps
+	sort.Slice(children, func(i, j int) bool {
+		if children[i].Type == ExecutionNodeTypeSagaStep && children[j].Type == ExecutionNodeTypeSagaStep {
+			return children[i].StepIndex < children[j].StepIndex
+		}
+		return children[i].CreatedAt.Before(children[j].CreatedAt)
+	})
+
 	log.Printf("Found %d child nodes for node %s", len(children), node.ID)
 	for _, child := range children {
 		err = tp.reconstructExecutionTree(ctx, child, tree)
@@ -1045,9 +1053,25 @@ func (tp *Tempolite) dispatchNextStep(ctx context.Context, saga *SagaInfo, stepI
 		saga.Status = SagaStatusCompleted
 		now := time.Now()
 		saga.CompletedAt = &now
+		saga.LastUpdatedAt = now
 		if err := tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
 			log.Printf("Failed to update saga status after completion: %v", err)
 		}
+
+		// Update the saga's root node in the execution tree
+		rootNode, err := tp.executionTreeRepo.GetNode(ctx, saga.ID)
+		if err != nil {
+			log.Printf("Failed to get saga root node: %v", err)
+		} else {
+			rootNode.Status = ExecutionStatusCompleted
+			rootNode.CompletedAt = &now
+			rootNode.UpdatedAt = now
+			if err := tp.executionTreeRepo.UpdateNode(ctx, rootNode); err != nil {
+				log.Printf("Failed to update saga root node: %v", err)
+			}
+		}
+
+		log.Printf("Saga %s completed successfully", saga.ID)
 		return
 	}
 
@@ -1270,8 +1294,24 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *SagaStepTask) error {
 	}
 
 	// If there's a next step, dispatch it
+
+	// If there's a next step, dispatch it
 	if err == nil && task.Next != nil {
 		task.Next()
+	} else if err == nil {
+		// This was the last step, update the saga status
+		saga, err := w.tp.sagaRepo.GetSaga(ctx, task.SagaID)
+		if err != nil {
+			log.Printf("Failed to get saga %s: %v", task.SagaID, err)
+			return err
+		}
+		saga.Status = SagaStatusCompleted
+		now := time.Now()
+		saga.CompletedAt = &now
+		if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
+			log.Printf("Failed to update saga status: %v", err)
+			return err
+		}
 	}
 
 	return err
@@ -1744,20 +1784,24 @@ func (tp *Tempolite) onSagaStepSuccess(controller retrypool.WorkerController[*Sa
 	stepTask := task.Data()
 	log.Printf("Saga step %d for saga %s completed successfully", stepTask.StepIndex, stepTask.SagaID)
 
-	// Update the saga status if this was the last step
+	// Update the saga status
 	saga, err := tp.sagaRepo.GetSaga(tp.ctx, stepTask.SagaID)
 	if err != nil {
 		log.Printf("Failed to get saga: %v", err)
 		return
 	}
 
-	if stepTask.StepIndex == len(saga.Steps)-1 {
+	saga.CurrentStep = stepTask.StepIndex + 1
+	saga.LastUpdatedAt = time.Now()
+	if saga.CurrentStep >= len(saga.Steps) {
 		saga.Status = SagaStatusCompleted
-		now := time.Now()
-		saga.CompletedAt = &now
-		if err := tp.sagaRepo.UpdateSaga(tp.ctx, saga); err != nil {
-			log.Printf("Failed to update saga status after completion: %v", err)
-		}
+		saga.CompletedAt = &saga.LastUpdatedAt
+	} else {
+		saga.Status = SagaStatusInProgress
+	}
+
+	if err := tp.sagaRepo.UpdateSaga(tp.ctx, saga); err != nil {
+		log.Printf("Failed to update saga status: %v", err)
 	}
 
 	// Update execution tree
@@ -1770,9 +1814,40 @@ func (tp *Tempolite) onSagaStepSuccess(controller retrypool.WorkerController[*Sa
 	now := time.Now()
 	node.Status = ExecutionStatusCompleted
 	node.CompletedAt = &now
+	node.UpdatedAt = now
 	if err := tp.executionTreeRepo.UpdateNode(tp.ctx, node); err != nil {
 		log.Printf("Failed to update execution node: %v", err)
 	}
+
+	// Update saga root node
+	rootNode, err := tp.executionTreeRepo.GetNode(tp.ctx, stepTask.SagaID)
+	if err != nil {
+		log.Printf("Failed to get saga root node: %v", err)
+	} else {
+		// Map saga status to execution status
+		var executionStatus ExecutionStatus
+		switch saga.Status {
+		case SagaStatusCompleted:
+			executionStatus = ExecutionStatusCompleted
+		case SagaStatusFailed, SagaStatusCriticallyFailed:
+			executionStatus = ExecutionStatusFailed
+		case SagaStatusCancelled:
+			executionStatus = ExecutionStatusCancelled
+		default:
+			executionStatus = ExecutionStatusInProgress
+		}
+
+		rootNode.Status = executionStatus
+		rootNode.UpdatedAt = now
+		if saga.Status == SagaStatusCompleted {
+			rootNode.CompletedAt = &now
+		}
+		if err := tp.executionTreeRepo.UpdateNode(tp.ctx, rootNode); err != nil {
+			log.Printf("Failed to update saga root node: %v", err)
+		}
+	}
+
+	log.Printf("Saga step %d for saga %s updated successfully. Saga status: %v", stepTask.StepIndex, stepTask.SagaID, saga.Status)
 }
 
 func (tp *Tempolite) onSagaStepFailure(controller retrypool.WorkerController[*SagaStepTask], workerID int, worker retrypool.Worker[*SagaStepTask], task *retrypool.TaskWrapper[*SagaStepTask], err error) retrypool.DeadTaskAction {
@@ -2284,14 +2359,25 @@ func (tp *Tempolite) updateNodeInExecutionTree(ctx context.Context, node *Execut
 
 func (tp *Tempolite) addSideEffectToExecutionTree(ctx context.Context, parentID, sideEffectKey string, result []byte) error {
 	log.Printf("Adding side effect %s to execution tree", sideEffectKey)
+
+	// Check if the parent node exists
+	_, err := tp.executionTreeRepo.GetNode(ctx, parentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Parent node %s not found, skipping side effect creation", parentID)
+			return nil
+		}
+		return fmt.Errorf("failed to get parent node: %v", err)
+	}
+
 	now := time.Now()
 	node := &ExecutionNode{
 		ID:          uuid.New().String(),
 		ParentID:    &parentID,
 		Type:        ExecutionNodeTypeSideEffect,
 		Status:      ExecutionStatusCompleted,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 		CompletedAt: &now,
 		HandlerName: sideEffectKey,
 		Result:      result,
