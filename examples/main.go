@@ -5,12 +5,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"math/rand/v2"
 	"time"
 
 	"github.com/davidroman0O/go-tempolite"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+var saga = tempolite.Saga().
+	With(SagaStep1{Message: " - Step 1"}).
+	With(SagaStep2{Message: " - Step 2"}).
+	Build()
 
 // SimpleTask represents a simple task with a message
 type SimpleTask struct {
@@ -75,34 +79,15 @@ func (s SagaStep2) Transaction(ctx tempolite.TransactionContext) (interface{}, e
 	// time.Sleep(1 * time.Second)
 	// Simulate a failure in step 2
 	// 70% chance of failure
-	if rand.Float32() < 0.7 {
-		return nil, fmt.Errorf("simulated failure in step 2")
-	}
+	// if rand.Float32() < 0.7 {
+	// 	return nil, fmt.Errorf("simulated failure in step 2")
+	// }
 	return nil, nil
 }
 
 func (s SagaStep2) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating saga step 2: %s", s.Message)
 	return nil, nil
-}
-
-// SagaHandler handles a saga with multiple steps
-func SagaHandler(ctx tempolite.HandlerSagaContext, task SagaTask) error {
-	log.Printf("Starting saga: %s", task.StepMessage)
-
-	// Step 1
-	err := ctx.Step(SagaStep1{Message: task.StepMessage + " - Step 1"})
-	if err != nil {
-		return err
-	}
-
-	// Step 2
-	err = ctx.Step(SagaStep2{Message: task.StepMessage + " - Step 2"})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func main() {
@@ -125,17 +110,15 @@ func main() {
 	}
 	defer tp.Close()
 
-	// Register handlers
-	tp.RegisterHandler(SimpleHandler)
-
 	// Create a simple task
 	simpleTaskID, err := tp.Enqueue(context.Background(), SimpleHandler, SimpleTask{Message: "Hello, Tempolite!"})
 	if err != nil {
 		log.Fatalf("Failed to enqueue simple task: %v", err)
 	}
 	log.Printf("Enqueued simple task with ID: %s", simpleTaskID)
+
 	// Create a saga
-	sagaTaskID, err := tp.EnqueueSaga(context.Background(), SagaHandler, SagaTask{StepMessage: "Saga steps"})
+	sagaTaskID, err := tp.EnqueueSaga(context.Background(), saga, SagaTask{StepMessage: "Saga steps"})
 	if err != nil {
 		log.Fatalf("Failed to enqueue saga: %v", err)
 	}
@@ -170,6 +153,7 @@ func main() {
 
 	tp.PrintExecutionTree(context.Background(), simpleTaskID)
 	tp.PrintExecutionTree(context.Background(), sagaTaskID)
+
 	// // Print execution tree
 	// executionTree, err := tp.GetExecutionTree(context.Background(), simpleTaskID)
 	// if err != nil {
