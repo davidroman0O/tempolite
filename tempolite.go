@@ -267,6 +267,14 @@ type CompensationTask struct {
 	Next      func()
 }
 
+type SagaStepTask struct {
+	SagaID     string
+	StepIndex  int
+	Step       SagaStep
+	Next       func()
+	RetryCount int
+}
+
 type sideEffectTask struct {
 	sideEffect         SideEffect
 	executionContextID string
@@ -290,7 +298,7 @@ type Tempolite struct {
 	compensationRepo  CompensationRepository
 	sagaStepRepo      SagaStepRepository
 	handlerPool       *retrypool.Pool[*Task]
-	sagaHandlerPool   *retrypool.Pool[*Task]
+	sagaHandlerPool   *retrypool.Pool[*SagaStepTask]
 	compensationPool  *retrypool.Pool[*CompensationTask]
 	sideEffectPool    *retrypool.Pool[*sideEffectTask]
 	db                *sql.DB
@@ -327,7 +335,7 @@ func WithHandlerWorkers(count int) TempoliteOption {
 func WithSagaWorkers(count int) TempoliteOption {
 	return func(tp *Tempolite) {
 		log.Printf("Initializing %d saga workers", count)
-		workers := make([]retrypool.Worker[*Task], count)
+		workers := make([]retrypool.Worker[*SagaStepTask], count)
 		for i := 0; i < count; i++ {
 			workers[i] = &SagaTaskWorker{ID: i, tp: tp}
 			log.Printf("Created saga worker %d", i)
@@ -375,15 +383,15 @@ func (tp *Tempolite) getHandlerPoolOptions() []retrypool.Option[*Task] {
 	}
 }
 
-func (tp *Tempolite) getSagaHandlerPoolOptions() []retrypool.Option[*Task] {
+func (tp *Tempolite) getSagaHandlerPoolOptions() []retrypool.Option[*SagaStepTask] {
 	log.Printf("Getting saga handler pool options")
-	return []retrypool.Option[*Task]{
-		retrypool.WithOnTaskSuccess[*Task](tp.onSagaHandlerSuccess),
-		retrypool.WithOnTaskFailure[*Task](tp.onSagaHandlerFailure),
-		retrypool.WithOnRetry[*Task](tp.onSagaHandlerRetry),
-		retrypool.WithAttempts[*Task](1),
-		retrypool.WithPanicHandler[*Task](tp.onSagaHandlerPanic),
-		retrypool.WithOnNewDeadTask[*Task](tp.onNewDeadTask),
+	return []retrypool.Option[*SagaStepTask]{
+		retrypool.WithOnTaskSuccess[*SagaStepTask](tp.onSagaStepSuccess),
+		retrypool.WithOnTaskFailure[*SagaStepTask](tp.onSagaStepFailure),
+		retrypool.WithOnRetry[*SagaStepTask](tp.onSagaStepRetry),
+		retrypool.WithAttempts[*SagaStepTask](1),
+		retrypool.WithPanicHandler[*SagaStepTask](tp.onSagaStepPanic),
+		retrypool.WithOnNewDeadTask[*SagaStepTask](tp.onNewDeadSagaStep),
 	}
 }
 
@@ -974,68 +982,77 @@ func (tp *Tempolite) EnqueueSaga(ctx context.Context, saga *SagaInfo, params int
 		return "", fmt.Errorf("failed to create saga: %v", err)
 	}
 
-	task := &Task{
-		ID:                 saga.ID,
-		ExecutionContextID: saga.ID,
-		HandlerName:        "ExecuteSaga", // This is now a placeholder
-		Status:             TaskStatusPending,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-		ScheduledAt:        time.Now(),
-		SagaID:             &saga.ID,
+	// Prepare compensations
+	compensations := tp.prepareCompensations(saga)
+
+	// Create and dispatch the first SagaStepTask
+	firstStep := &SagaStepTask{
+		SagaID:    saga.ID,
+		StepIndex: 0,
+		Step:      saga.Steps[0],
 	}
 
-	payload, err := json.Marshal(params)
-	if err != nil {
-		log.Printf("Failed to marshal saga parameters: %v", err)
-		return "", fmt.Errorf("failed to marshal saga parameters: %v", err)
-	}
-	task.Payload = payload
-
-	if err := tp.taskRepo.CreateTask(ctx, task); err != nil {
-		log.Printf("Failed to create saga task: %v", err)
-		return "", fmt.Errorf("failed to create saga task: %v", err)
+	// Set up the Next function for the first step
+	if len(saga.Steps) > 1 {
+		firstStep.Next = func() {
+			tp.dispatchNextStep(ctx, saga, 1, compensations)
+		}
 	}
 
-	executionNode := &ExecutionNode{
-		ID:          saga.ID,
-		Type:        ExecutionNodeTypeSagaHandler,
-		Status:      ExecutionStatusPending,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		HandlerName: "ExecuteSaga",
-		Payload:     payload,
-	}
-
-	if err := tp.executionTreeRepo.CreateNode(ctx, executionNode); err != nil {
-		log.Printf("Failed to create saga execution node: %v", err)
-		return "", fmt.Errorf("failed to create saga execution node: %v", err)
-	}
-
-	poolOptions := []retrypool.TaskOption[*Task]{
-		retrypool.WithMaxDuration[*Task](24 * time.Hour), // Default to 24 hours for sagas
+	poolOptions := []retrypool.TaskOption[*SagaStepTask]{
+		retrypool.WithMaxDuration[*SagaStepTask](24 * time.Hour), // Default to 24 hours for sagas
 	}
 	for _, opt := range options {
 		var opts enqueueOptions
 		opt(&opts)
 		if opts.maxDuration > 0 {
-			poolOptions = append(poolOptions, retrypool.WithMaxDuration[*Task](opts.maxDuration))
+			poolOptions = append(poolOptions, retrypool.WithMaxDuration[*SagaStepTask](opts.maxDuration))
 		}
 		if opts.timeLimit > 0 {
-			poolOptions = append(poolOptions, retrypool.WithTimeLimit[*Task](opts.timeLimit))
+			poolOptions = append(poolOptions, retrypool.WithTimeLimit[*SagaStepTask](opts.timeLimit))
 		}
 		if opts.immediate {
-			poolOptions = append(poolOptions, retrypool.WithImmediateRetry[*Task]())
+			poolOptions = append(poolOptions, retrypool.WithImmediateRetry[*SagaStepTask]())
 		}
 		if opts.panicOnTimeout {
-			poolOptions = append(poolOptions, retrypool.WithPanicOnTimeout[*Task]())
+			poolOptions = append(poolOptions, retrypool.WithPanicOnTimeout[*SagaStepTask]())
 		}
 	}
 
-	tp.sagaHandlerPool.Dispatch(task, poolOptions...)
+	tp.sagaHandlerPool.Dispatch(firstStep, poolOptions...)
 
 	log.Printf("Saga with ID %s enqueued successfully", saga.ID)
 	return saga.ID, nil
+}
+
+func (tp *Tempolite) dispatchNextStep(ctx context.Context, saga *SagaInfo, stepIndex int, compensations []*CompensationTask) {
+	if stepIndex >= len(saga.Steps) {
+		// All steps completed successfully
+		saga.Status = SagaStatusCompleted
+		now := time.Now()
+		saga.CompletedAt = &now
+		if err := tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
+			log.Printf("Failed to update saga status after completion: %v", err)
+		}
+		return
+	}
+
+	stepTask := &SagaStepTask{
+		SagaID:    saga.ID,
+		StepIndex: stepIndex,
+		Step:      saga.Steps[stepIndex],
+	}
+
+	// Set up the Next function for the current step
+	if stepIndex < len(saga.Steps)-1 {
+		nextStepIndex := stepIndex + 1
+		stepTask.Next = func() {
+			tp.dispatchNextStep(ctx, saga, nextStepIndex, compensations)
+		}
+	}
+
+	// Dispatch the step task to the saga handler pool
+	tp.sagaHandlerPool.Dispatch(stepTask)
 }
 
 func (tp *Tempolite) Wait(condition func(TempoliteInfo) bool, interval time.Duration) error {
@@ -1182,89 +1199,48 @@ type SagaTaskWorker struct {
 	tp *Tempolite
 }
 
-func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
-	log.Printf("Running saga task with ID %s on worker %d", task.ID, w.ID)
-	saga, err := w.tp.sagaRepo.GetSaga(ctx, *task.SagaID)
+func (w *SagaTaskWorker) Run(ctx context.Context, task *SagaStepTask) error {
+	log.Printf("Running saga step %d for saga %s on worker %d", task.StepIndex, task.SagaID, w.ID)
+
+	// Create a transaction context for the step
+	transactionCtx := &transactionContext{
+		Context: ctx,
+		tp:      w.tp,
+		sagaID:  task.SagaID,
+		stepID:  fmt.Sprintf("%s_step_%d", task.SagaID, task.StepIndex),
+	}
+
+	// Execute the transaction
+	stepResult, err := task.Step.Transaction(transactionCtx)
+	stepResultData := &SagaStepResult{
+		StepIndex: task.StepIndex,
+		Result:    stepResult,
+		Error:     err,
+		Timestamp: time.Now(),
+	}
+
+	// Store the step result
+	if err := w.tp.sagaStepRepo.SaveStepResult(ctx, task.SagaID, stepResultData); err != nil {
+		log.Printf("Failed to save step result: %v", err)
+	}
+
 	if err != nil {
-		return fmt.Errorf("failed to get saga: %v", err)
-	}
-
-	// Prepare compensations in advance
-	w.prepareCompensations(saga)
-
-	// Update saga status to in progress
-	saga.Status = SagaStatusInProgress
-	if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
-		log.Printf("Failed to update saga status to in progress: %v", err)
+		log.Printf("Step %d of saga %s failed: %v", task.StepIndex, task.SagaID, err)
 		return err
 	}
 
-	// Execute each step of the saga
-	for i, step := range saga.Steps {
-		log.Printf("Executing step %d of saga %s", i, saga.ID)
+	log.Printf("Step %d of saga %s completed successfully", task.StepIndex, task.SagaID)
 
-		saga.CurrentStep = i
-		if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
-			log.Printf("Failed to update saga current step: %v", err)
-			return err
-		}
-
-		// Create a transaction context for the step
-		transactionCtx := &transactionContext{
-			Context: ctx,
-			tp:      w.tp,
-			sagaID:  saga.ID,
-			stepID:  fmt.Sprintf("%s_step_%d", saga.ID, i),
-		}
-
-		// Execute the transaction
-		stepResult, err := step.Transaction(transactionCtx)
-		stepResultData := &SagaStepResult{
-			StepIndex: i,
-			Result:    stepResult,
-			Error:     err,
-			Timestamp: time.Now(),
-		}
-
-		// Store the step result
-		if err := w.tp.sagaStepRepo.SaveStepResult(ctx, saga.ID, stepResultData); err != nil {
-			log.Printf("Failed to save step result: %v", err)
-		}
-
-		if err != nil {
-			log.Printf("Step %d of saga %s failed: %v", i, saga.ID, err)
-
-			// Trigger the first compensation in the chain
-			if len(saga.Compensations) > 0 {
-				w.tp.compensationPool.Dispatch(saga.Compensations[len(saga.Compensations)-1])
-			}
-
-			saga.Status = SagaStatusFailed
-			if updateErr := w.tp.sagaRepo.UpdateSaga(ctx, saga); updateErr != nil {
-				log.Printf("Failed to update saga status after failure: %v", updateErr)
-			}
-
-			return err
-		}
-
-		log.Printf("Step %d of saga %s completed successfully", i, saga.ID)
-
-		// Update execution tree
-		if err := w.tp.addSagaStepToExecutionTree(ctx, saga.ID, i, ExecutionStatusCompleted); err != nil {
-			log.Printf("Failed to update execution tree for step %d: %v", i, err)
-		}
+	// Update execution tree
+	if err := w.tp.addSagaStepToExecutionTree(ctx, task.SagaID, task.StepIndex, ExecutionStatusCompleted); err != nil {
+		log.Printf("Failed to update execution tree for step %d: %v", task.StepIndex, err)
 	}
 
-	// All steps completed successfully
-	saga.Status = SagaStatusCompleted
-	now := time.Now()
-	saga.CompletedAt = &now
-	if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
-		log.Printf("Failed to update saga status after completion: %v", err)
-		return err
+	// If there's a next step, dispatch it
+	if task.Next != nil {
+		task.Next()
 	}
 
-	log.Printf("Saga task with ID %s completed successfully on worker %d", task.ID, w.ID)
 	return nil
 }
 
@@ -1751,55 +1727,46 @@ func (tp *Tempolite) onHandlerPanic(task *Task, v interface{}) {
 	}
 }
 
-func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task]) {
-	log.Printf("Saga task with ID %s succeeded", task.Data().ID)
-	taskData := task.Data()
-	taskData.Status = TaskStatusCompleted
-	now := time.Now()
-	taskData.CompletedAt = &now
-	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
-		log.Printf("Failed to update saga task status: %v", err)
-	}
+func (tp *Tempolite) onSagaStepSuccess(controller retrypool.WorkerController[*SagaStepTask], workerID int, worker retrypool.Worker[*SagaStepTask], task *retrypool.TaskWrapper[*SagaStepTask]) {
+	stepTask := task.Data()
+	log.Printf("Saga step %d for saga %s completed successfully", stepTask.StepIndex, stepTask.SagaID)
 
-	saga, err := tp.sagaRepo.GetSaga(tp.ctx, *taskData.SagaID)
+	// Update the saga status if this was the last step
+	saga, err := tp.sagaRepo.GetSaga(tp.ctx, stepTask.SagaID)
 	if err != nil {
 		log.Printf("Failed to get saga: %v", err)
 		return
 	}
 
-	// The saga status should already be updated in the SagaTaskWorker,
-	// but we'll double-check here just in case
-	if saga.Status != SagaStatusCompleted {
+	if stepTask.StepIndex == len(saga.Steps)-1 {
 		saga.Status = SagaStatusCompleted
+		now := time.Now()
 		saga.CompletedAt = &now
 		if err := tp.sagaRepo.UpdateSaga(tp.ctx, saga); err != nil {
-			log.Printf("Failed to update saga status: %v", err)
+			log.Printf("Failed to update saga status after completion: %v", err)
 		}
 	}
 
-	node, err := tp.executionTreeRepo.GetNode(tp.ctx, taskData.ID)
+	// Update execution tree
+	node, err := tp.executionTreeRepo.GetNodeBySagaAndStep(tp.ctx, stepTask.SagaID, stepTask.StepIndex)
 	if err != nil {
 		log.Printf("Failed to get execution node: %v", err)
 		return
 	}
 
+	now := time.Now()
 	node.Status = ExecutionStatusCompleted
-	node.CompletedAt = taskData.CompletedAt
-	node.Result = taskData.Result
-	if err := tp.updateNodeInExecutionTree(tp.ctx, node); err != nil {
+	node.CompletedAt = &now
+	if err := tp.executionTreeRepo.UpdateNode(tp.ctx, node); err != nil {
 		log.Printf("Failed to update execution node: %v", err)
 	}
 }
 
-func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task], err error) retrypool.DeadTaskAction {
-	log.Printf("Saga handler task with ID %s failed: %v", task.Data().ID, err)
-	taskData := task.Data()
-	taskData.Status = TaskStatusFailed
-	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
-		log.Printf("Failed to update saga task status: %v", err)
-	}
+func (tp *Tempolite) onSagaStepFailure(controller retrypool.WorkerController[*SagaStepTask], workerID int, worker retrypool.Worker[*SagaStepTask], task *retrypool.TaskWrapper[*SagaStepTask], err error) retrypool.DeadTaskAction {
+	stepTask := task.Data()
+	log.Printf("Saga step %d for saga %s failed: %v", stepTask.StepIndex, stepTask.SagaID, err)
 
-	saga, sagaErr := tp.sagaRepo.GetSaga(tp.ctx, *taskData.SagaID)
+	saga, sagaErr := tp.sagaRepo.GetSaga(tp.ctx, stepTask.SagaID)
 	if sagaErr != nil {
 		log.Printf("Failed to get saga: %v", sagaErr)
 	} else {
@@ -1809,14 +1776,14 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 		}
 	}
 
-	node, nodeErr := tp.executionTreeRepo.GetNode(tp.ctx, taskData.ID)
+	node, nodeErr := tp.executionTreeRepo.GetNodeBySagaAndStep(tp.ctx, stepTask.SagaID, stepTask.StepIndex)
 	if nodeErr != nil {
 		log.Printf("Failed to get execution node: %v", nodeErr)
 	} else {
 		node.Status = ExecutionStatusFailed
 		errorMsg := err.Error()
 		node.ErrorMessage = &errorMsg
-		if updateErr := tp.updateNodeInExecutionTree(tp.ctx, node); updateErr != nil {
+		if updateErr := tp.executionTreeRepo.UpdateNode(tp.ctx, node); updateErr != nil {
 			log.Printf("Failed to update execution node: %v", updateErr)
 		}
 	}
@@ -1825,96 +1792,140 @@ func (tp *Tempolite) onSagaHandlerFailure(controller retrypool.WorkerController[
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	// // Trigger compensations in reverse order
-	// for i := len(saga.Steps) - 1; i >= 0; i-- {
-	//     compensationTask := &CompensationTask{
-	//         ID:        uuid.New().String(),
-	//         SagaID:    saga.ID,
-	//         StepIndex: i,
-	//         Step:      saga.Steps[i],
-	//     }
-
-	//     // Set up the Next function for chaining compensations
-	//     if i > 0 {
-	//         prevIndex := i - 1
-	//         compensationTask.Next = func() {
-	//             nextCompensationTask := &CompensationTask{
-	//                 ID:        uuid.New().String(),
-	//                 SagaID:    saga.ID,
-	//                 StepIndex: prevIndex,
-	//                 Step:      saga.Steps[prevIndex],
-	//             }
-	//             tp.compensationPool.Dispatch(nextCompensationTask)
-	//         }
-	//     }
-
-	//     tp.compensationPool.Dispatch(compensationTask)
-
-	//     // Only dispatch the first compensation task, the rest will be chained
-	//     break
-	// }
-
-	///////////////////////////////////////////////////////////////////////////////
-
-	// // Trigger compensations in reverse order
-	// for i := len(saga.Steps) - 1; i >= 0; i-- {
-	// 	compensation := &Compensation{
-	// 		ID:        uuid.New().String(),
-	// 		SagaID:    saga.ID,
-	// 		StepIndex: i,
-	// 		Status:    ExecutionStatusPending,
-	// 		CreatedAt: time.Now(),
-	// 		UpdatedAt: time.Now(),
-	// 	}
-	// 	if err := tp.compensationRepo.CreateCompensation(tp.ctx, compensation); err != nil {
-	// 		log.Printf("Failed to create compensation for step %d: %v", i, err)
-	// 		continue
-	// 	}
-	// 	tp.compensationPool.Dispatch(compensation)
-	// }
-
-	///////////////////////////////////////////////////////////////////////////////
-
-	// TODO: Saga pattern says that we need to trigger the compensation that is behind us as a transaction from saga.Compensation
+	// Trigger compensation for the failed step
+	compensations, err := tp.compensationRepo.GetCompensationsForSaga(tp.ctx, stepTask.SagaID)
+	if err != nil {
+		log.Printf("Failed to get compensations for saga: %v", err)
+	} else {
+		for i := stepTask.StepIndex; i >= 0; i-- {
+			for _, comp := range compensations {
+				if comp.StepIndex == i {
+					compensationTask := &CompensationTask{
+						ID:        comp.ID,
+						SagaID:    comp.SagaID,
+						StepIndex: comp.StepIndex,
+						Step:      stepTask.Step, // Assuming the Step field contains the compensation logic
+					}
+					tp.compensationPool.Dispatch(compensationTask)
+					break
+				}
+			}
+		}
+	}
 
 	return retrypool.DeadTaskActionForceRetry
 }
 
-func (tp *Tempolite) onSagaHandlerRetry(attempt int, err error, task *retrypool.TaskWrapper[*Task]) {
-	log.Printf("Retrying saga handler task with ID %s, attempt %d, error: %v", task.Data().ID, attempt, err)
-	taskData := task.Data()
-	taskData.RetryCount = attempt
-	if err := tp.taskRepo.UpdateTask(tp.ctx, taskData); err != nil {
-		log.Printf("Failed to update saga task retry count: %v", err)
+func (tp *Tempolite) onNewDeadSagaStep(task *retrypool.DeadTask[*SagaStepTask]) {
+	log.Printf("New dead saga step detected: Saga ID %s, Step Index %d", task.Data.SagaID, task.Data.StepIndex)
+
+	// Update saga status to critically failed
+	saga, err := tp.sagaRepo.GetSaga(tp.ctx, task.Data.SagaID)
+	if err != nil {
+		log.Printf("Failed to get saga: %v", err)
+	} else {
+		saga.Status = SagaStatusCriticallyFailed
+		if updateErr := tp.sagaRepo.UpdateSaga(tp.ctx, saga); updateErr != nil {
+			log.Printf("Failed to update saga status for dead step: %v", updateErr)
+		}
+	}
+
+	// Update execution tree
+	node, nodeErr := tp.executionTreeRepo.GetNodeBySagaAndStep(tp.ctx, task.Data.SagaID, task.Data.StepIndex)
+	if nodeErr != nil {
+		log.Printf("Failed to get execution node: %v", nodeErr)
+	} else {
+		node.Status = ExecutionStatusCriticallyFailed
+		errorMsg := fmt.Sprintf("Step critically failed after %d retries", task.Retries)
+		node.ErrorMessage = &errorMsg
+		if updateErr := tp.executionTreeRepo.UpdateNode(tp.ctx, node); updateErr != nil {
+			log.Printf("Failed to update execution node for dead step: %v", updateErr)
+		}
+	}
+
+	// Trigger compensations for all steps up to the failed step
+	compensations, err := tp.compensationRepo.GetCompensationsForSaga(tp.ctx, task.Data.SagaID)
+	if err != nil {
+		log.Printf("Failed to get compensations for saga: %v", err)
+	} else {
+		for i := task.Data.StepIndex; i >= 0; i-- {
+			for _, comp := range compensations {
+				if comp.StepIndex == i {
+					compensationTask := &CompensationTask{
+						ID:        comp.ID,
+						SagaID:    comp.SagaID,
+						StepIndex: comp.StepIndex,
+						Step:      task.Data.Step, // Assuming the Step field contains the compensation logic
+					}
+					tp.compensationPool.Dispatch(compensationTask)
+					break
+				}
+			}
+		}
 	}
 }
 
-func (tp *Tempolite) onSagaHandlerPanic(task *Task, v interface{}) {
-	log.Printf("Saga handler panicked for task ID %s: %v", task.ID, v)
-	task.Status = TaskStatusFailed
-	errorMsg := fmt.Sprintf("Saga handler panicked: %v", v)
-	if err := tp.taskRepo.UpdateTask(tp.ctx, task); err != nil {
-		log.Printf("Failed to update saga task status after panic: %v", err)
+func (tp *Tempolite) onSagaStepRetry(attempt int, err error, task *retrypool.TaskWrapper[*SagaStepTask]) {
+	stepTask := task.Data()
+	log.Printf("Retrying saga step %d for saga %s, attempt %d: %v", stepTask.StepIndex, stepTask.SagaID, attempt, err)
+
+	stepTask.RetryCount = attempt
+
+	// Update the retry count in the execution tree
+	node, nodeErr := tp.executionTreeRepo.GetNodeBySagaAndStep(tp.ctx, stepTask.SagaID, stepTask.StepIndex)
+	if nodeErr != nil {
+		log.Printf("Failed to get execution node: %v", nodeErr)
+	} else {
+		node.RetryCount = attempt
+		if updateErr := tp.executionTreeRepo.UpdateNode(tp.ctx, node); updateErr != nil {
+			log.Printf("Failed to update execution node retry count: %v", updateErr)
+		}
+	}
+}
+
+func (tp *Tempolite) onSagaStepPanic(task *SagaStepTask, v interface{}) {
+	log.Printf("Saga step %d for saga %s panicked: %v", task.StepIndex, task.SagaID, v)
+
+	saga, err := tp.sagaRepo.GetSaga(tp.ctx, task.SagaID)
+	if err != nil {
+		log.Printf("Failed to get saga: %v", err)
+	} else {
+		saga.Status = SagaStatusFailed
+		if updateErr := tp.sagaRepo.UpdateSaga(tp.ctx, saga); updateErr != nil {
+			log.Printf("Failed to update saga status: %v", updateErr)
+		}
 	}
 
-	node, nodeErr := tp.executionTreeRepo.GetNode(tp.ctx, task.ID)
+	node, nodeErr := tp.executionTreeRepo.GetNodeBySagaAndStep(tp.ctx, task.SagaID, task.StepIndex)
 	if nodeErr != nil {
 		log.Printf("Failed to get execution node: %v", nodeErr)
 	} else {
 		node.Status = ExecutionStatusFailed
-		node.ErrorMessage = &errorMsg
+		panicMsg := fmt.Sprintf("Panic: %v", v)
+		node.ErrorMessage = &panicMsg
 		if updateErr := tp.executionTreeRepo.UpdateNode(tp.ctx, node); updateErr != nil {
 			log.Printf("Failed to update execution node: %v", updateErr)
 		}
 	}
 
-	saga, sagaErr := tp.sagaRepo.GetSaga(tp.ctx, *task.SagaID)
-	if sagaErr != nil {
-		log.Printf("Failed to get saga: %v", sagaErr)
+	// Trigger compensations
+	compensations, err := tp.compensationRepo.GetCompensationsForSaga(tp.ctx, task.SagaID)
+	if err != nil {
+		log.Printf("Failed to get compensations for saga: %v", err)
 	} else {
-		saga.Status = SagaStatusFailed
-		if updateErr := tp.sagaRepo.UpdateSaga(tp.ctx, saga); updateErr != nil {
-			log.Printf("Failed to update saga status: %v", updateErr)
+		for i := task.StepIndex; i >= 0; i-- {
+			for _, comp := range compensations {
+				if comp.StepIndex == i {
+					compensationTask := &CompensationTask{
+						ID:        comp.ID,
+						SagaID:    comp.SagaID,
+						StepIndex: comp.StepIndex,
+						Step:      task.Step,
+					}
+					tp.compensationPool.Dispatch(compensationTask)
+					break
+				}
+			}
 		}
 	}
 }
@@ -2500,25 +2511,24 @@ func (tp *Tempolite) ResumeSaga(ctx context.Context, sagaID string) error {
 		return fmt.Errorf("current step node not found")
 	}
 
-	task := &Task{
-		ID:                 uuid.New().String(),
-		ExecutionContextID: sagaID,
-		HandlerName:        currentStepNode.HandlerName,
-		Payload:            currentStepNode.Payload,
-		Status:             TaskStatusPending,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-		ScheduledAt:        time.Now(),
-		SagaID:             &sagaID,
+	// Prepare compensations
+	compensations := tp.prepareCompensations(sagaInfo)
+
+	stepTask := &SagaStepTask{
+		SagaID:    sagaID,
+		StepIndex: sagaInfo.CurrentStep,
+		Step:      sagaInfo.Steps[sagaInfo.CurrentStep],
 	}
 
-	err = tp.taskRepo.CreateTask(ctx, task)
-	if err != nil {
-		log.Printf("ResumeSaga: Failed to create task for current step: %v", err)
-		return err
+	// Set up the Next function for the current step
+	if sagaInfo.CurrentStep < len(sagaInfo.Steps)-1 {
+		nextStepIndex := sagaInfo.CurrentStep + 1
+		stepTask.Next = func() {
+			tp.dispatchNextStep(ctx, sagaInfo, nextStepIndex, compensations)
+		}
 	}
 
-	tp.sagaHandlerPool.Dispatch(task)
+	tp.sagaHandlerPool.Dispatch(stepTask)
 
 	log.Printf("ResumeSaga: Successfully resumed saga: %s", sagaID)
 	return nil
@@ -2564,6 +2574,27 @@ func (tp *Tempolite) CancelSaga(ctx context.Context, sagaID string) error {
 
 	log.Printf("CancelSaga: Successfully cancelled saga: %s", sagaID)
 	return nil
+}
+
+func (tp *Tempolite) prepareCompensations(saga *SagaInfo) []*CompensationTask {
+	compensations := make([]*CompensationTask, len(saga.Steps))
+	for i := len(saga.Steps) - 1; i >= 0; i-- {
+		compensationTask := &CompensationTask{
+			ID:        uuid.New().String(),
+			SagaID:    saga.ID,
+			StepIndex: i,
+			Step:      saga.Steps[i],
+		}
+		compensations[i] = compensationTask
+
+		if i < len(saga.Steps)-1 {
+			nextCompensation := compensations[i+1]
+			compensationTask.Next = func() {
+				tp.compensationPool.Dispatch(nextCompensation)
+			}
+		}
+	}
+	return compensations
 }
 
 // Helper function to get a summary of the saga execution

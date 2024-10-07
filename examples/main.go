@@ -45,7 +45,7 @@ func SimpleHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, 
 		return nil, fmt.Errorf("side effect failed: %v", err)
 	}
 
-	log.Printf("Side Effect Example: Side effect result: %v", result)
+	log.Printf("SimpleHandler Side Effect Example: Side effect result: %v", result)
 
 	return result, nil
 }
@@ -63,7 +63,7 @@ func SagaHandler(ctx tempolite.HandlerContext, task SimpleTask) (interface{}, er
 	if err != nil {
 		log.Fatalf("Failed to wait for task completion: %v", err)
 	}
-	log.Printf("Task completed with value: %v", value)
+	log.Printf("Saga Task completed with value: %v", value)
 
 	return value, nil
 }
