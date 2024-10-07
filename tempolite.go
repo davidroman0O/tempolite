@@ -954,7 +954,7 @@ func (tp *Tempolite) EnqueueSaga(ctx context.Context, saga *SagaInfo, params int
 	task := &Task{
 		ID:                 saga.ID,
 		ExecutionContextID: saga.ID,
-		HandlerName:        saga.HandlerName,
+		HandlerName:        "ExecuteSaga", // This is now a placeholder
 		Status:             TaskStatusPending,
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
@@ -980,7 +980,7 @@ func (tp *Tempolite) EnqueueSaga(ctx context.Context, saga *SagaInfo, params int
 		Status:      ExecutionStatusPending,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		HandlerName: saga.HandlerName,
+		HandlerName: "ExecuteSaga",
 		Payload:     payload,
 	}
 
@@ -1166,50 +1166,59 @@ func (w *SagaTaskWorker) Run(ctx context.Context, task *Task) error {
 		return fmt.Errorf("failed to get saga: %v", err)
 	}
 
-	handlerInfo, exists := w.tp.getHandler(saga.HandlerName)
-	if !exists {
-		return fmt.Errorf("no handler registered with name: %s", saga.HandlerName)
-	}
+	// Execute each step of the saga
+	for i, step := range saga.Steps {
+		log.Printf("Executing step %d of saga %s", i, saga.ID)
 
-	handlerValue := reflect.ValueOf(handlerInfo.Handler)
-	paramType := handlerValue.Type().In(1)
-	param := reflect.New(paramType).Interface()
-
-	err = json.Unmarshal(task.Payload, param)
-	if err != nil {
-		log.Printf("Failed to unmarshal task payload: %v", err)
-		return fmt.Errorf("failed to unmarshal task payload: %v", err)
-	}
-
-	handlerCtx := &handlerContext{
-		Context:            ctx,
-		tp:                 w.tp,
-		taskID:             task.ID,
-		executionContextID: task.ExecutionContextID,
-	}
-
-	log.Printf("Calling saga handler for task ID %s", task.ID)
-	results := handlerValue.Call([]reflect.Value{
-		reflect.ValueOf(handlerCtx),
-		reflect.ValueOf(param).Elem(),
-	})
-
-	if len(results) > 0 && !results[len(results)-1].IsNil() {
-		return results[len(results)-1].Interface().(error)
-	}
-
-	if len(results) > 1 {
-		wrappedResult := WrappedResult{
-			Metadata: map[string]interface{}{}, // Add any relevant metadata here
-			Data:     results[0].Interface(),
+		// Update saga status to in progress
+		saga.Status = SagaStatusInProgress
+		saga.CurrentStep = i
+		if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
+			log.Printf("Failed to update saga status: %v", err)
+			return err
 		}
-		resultBytes, err := json.Marshal(wrappedResult)
+
+		// Create a transaction context for the step
+		transactionCtx := &transactionContext{
+			Context: ctx,
+			tp:      w.tp,
+			sagaID:  saga.ID,
+			stepID:  fmt.Sprintf("%s_step_%d", saga.ID, i),
+		}
+
+		// Execute the transaction
+		_, err := step.Transaction(transactionCtx)
 		if err != nil {
-			log.Printf("Failed to marshal wrapped task result: %v", err)
-			return fmt.Errorf("failed to marshal wrapped task result: %v", err)
+			log.Printf("Step %d of saga %s failed: %v", i, saga.ID, err)
+
+			// Start compensation
+			for j := i; j >= 0; j-- {
+				compensationCtx := &compensationContext{
+					Context: ctx,
+					tp:      w.tp,
+					sagaID:  saga.ID,
+					stepID:  fmt.Sprintf("%s_step_%d", saga.ID, j),
+				}
+				if _, compensationErr := saga.Steps[j].Compensation(compensationCtx); compensationErr != nil {
+					log.Printf("Compensation for step %d of saga %s failed: %v", j, saga.ID, compensationErr)
+				}
+			}
+
+			saga.Status = SagaStatusFailed
+			if updateErr := w.tp.sagaRepo.UpdateSaga(ctx, saga); updateErr != nil {
+				log.Printf("Failed to update saga status after failure: %v", updateErr)
+			}
+
+			return err
 		}
-		task.Result = resultBytes
-		log.Printf("Saga task result marshaled successfully for task ID %s", task.ID)
+	}
+
+	// All steps completed successfully
+	saga.Status = SagaStatusCompleted
+	saga.CompletedAt = &time.Time{} // Set to current time
+	if err := w.tp.sagaRepo.UpdateSaga(ctx, saga); err != nil {
+		log.Printf("Failed to update saga status after completion: %v", err)
+		return err
 	}
 
 	log.Printf("Saga task with ID %s completed successfully on worker %d", task.ID, w.ID)
@@ -1654,7 +1663,7 @@ func (tp *Tempolite) onHandlerPanic(task *Task, v interface{}) {
 }
 
 func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[*Task], workerID int, worker retrypool.Worker[*Task], task *retrypool.TaskWrapper[*Task]) {
-	log.Printf("Saga handler task with ID %s succeeded", task.Data().ID)
+	log.Printf("Saga task with ID %s succeeded", task.Data().ID)
 	taskData := task.Data()
 	taskData.Status = TaskStatusCompleted
 	now := time.Now()
@@ -1669,10 +1678,14 @@ func (tp *Tempolite) onSagaHandlerSuccess(controller retrypool.WorkerController[
 		return
 	}
 
-	saga.Status = SagaStatusCompleted
-	saga.CompletedAt = taskData.CompletedAt
-	if err := tp.sagaRepo.UpdateSaga(tp.ctx, saga); err != nil {
-		log.Printf("Failed to update saga status: %v", err)
+	// The saga status should already be updated in the SagaTaskWorker,
+	// but we'll double-check here just in case
+	if saga.Status != SagaStatusCompleted {
+		saga.Status = SagaStatusCompleted
+		saga.CompletedAt = &now
+		if err := tp.sagaRepo.UpdateSaga(tp.ctx, saga); err != nil {
+			log.Printf("Failed to update saga status: %v", err)
+		}
 	}
 
 	node, err := tp.executionTreeRepo.GetNode(tp.ctx, taskData.ID)
