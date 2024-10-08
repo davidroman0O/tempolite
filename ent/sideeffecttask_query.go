@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
 )
@@ -22,6 +23,8 @@ type SideEffectTaskQuery struct {
 	order      []sideeffecttask.OrderOption
 	inters     []Interceptor
 	predicates []predicate.SideEffectTask
+	withNode   *NodeQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (setq *SideEffectTaskQuery) Unique(unique bool) *SideEffectTaskQuery {
 func (setq *SideEffectTaskQuery) Order(o ...sideeffecttask.OrderOption) *SideEffectTaskQuery {
 	setq.order = append(setq.order, o...)
 	return setq
+}
+
+// QueryNode chains the current query on the "node" edge.
+func (setq *SideEffectTaskQuery) QueryNode() *NodeQuery {
+	query := (&NodeClient{config: setq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := setq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := setq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffecttask.Table, sideeffecttask.FieldID, selector),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, sideeffecttask.NodeTable, sideeffecttask.NodeColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(setq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first SideEffectTask entity from the query.
@@ -250,10 +275,22 @@ func (setq *SideEffectTaskQuery) Clone() *SideEffectTaskQuery {
 		order:      append([]sideeffecttask.OrderOption{}, setq.order...),
 		inters:     append([]Interceptor{}, setq.inters...),
 		predicates: append([]predicate.SideEffectTask{}, setq.predicates...),
+		withNode:   setq.withNode.Clone(),
 		// clone intermediate query.
 		sql:  setq.sql.Clone(),
 		path: setq.path,
 	}
+}
+
+// WithNode tells the query-builder to eager-load the nodes that are connected to
+// the "node" edge. The optional arguments are used to configure the query builder of the edge.
+func (setq *SideEffectTaskQuery) WithNode(opts ...func(*NodeQuery)) *SideEffectTaskQuery {
+	query := (&NodeClient{config: setq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	setq.withNode = query
+	return setq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -310,15 +347,26 @@ func (setq *SideEffectTaskQuery) prepareQuery(ctx context.Context) error {
 
 func (setq *SideEffectTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SideEffectTask, error) {
 	var (
-		nodes = []*SideEffectTask{}
-		_spec = setq.querySpec()
+		nodes       = []*SideEffectTask{}
+		withFKs     = setq.withFKs
+		_spec       = setq.querySpec()
+		loadedTypes = [1]bool{
+			setq.withNode != nil,
+		}
 	)
+	if setq.withNode != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, sideeffecttask.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SideEffectTask).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &SideEffectTask{config: setq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -330,7 +378,46 @@ func (setq *SideEffectTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := setq.withNode; query != nil {
+		if err := setq.loadNode(ctx, query, nodes, nil,
+			func(n *SideEffectTask, e *Node) { n.Edges.Node = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (setq *SideEffectTaskQuery) loadNode(ctx context.Context, query *NodeQuery, nodes []*SideEffectTask, init func(*SideEffectTask), assign func(*SideEffectTask, *Node)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*SideEffectTask)
+	for i := range nodes {
+		if nodes[i].node_side_effect_task == nil {
+			continue
+		}
+		fk := *nodes[i].node_side_effect_task
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(node.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "node_side_effect_task" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (setq *SideEffectTaskQuery) sqlCount(ctx context.Context) (int, error) {

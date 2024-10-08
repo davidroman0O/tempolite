@@ -454,6 +454,29 @@ func HasExecutionContextWith(preds ...predicate.ExecutionContext) predicate.Hand
 	})
 }
 
+// HasNode applies the HasEdge predicate on the "node" edge.
+func HasNode() predicate.HandlerTask {
+	return predicate.HandlerTask(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, NodeTable, NodeColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasNodeWith applies the HasEdge predicate on the "node" edge with a given conditions (other predicates).
+func HasNodeWith(preds ...predicate.Node) predicate.HandlerTask {
+	return predicate.HandlerTask(func(s *sql.Selector) {
+		step := newNodeStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.HandlerTask) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.AndPredicates(predicates...))

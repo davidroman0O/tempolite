@@ -28,6 +28,21 @@ func (nc *NodeCreate) SetID(s string) *NodeCreate {
 	return nc
 }
 
+// AddChildIDs adds the "children" edge to the Node entity by IDs.
+func (nc *NodeCreate) AddChildIDs(ids ...string) *NodeCreate {
+	nc.mutation.AddChildIDs(ids...)
+	return nc
+}
+
+// AddChildren adds the "children" edges to the Node entity.
+func (nc *NodeCreate) AddChildren(n ...*Node) *NodeCreate {
+	ids := make([]string, len(n))
+	for i := range n {
+		ids[i] = n[i].ID
+	}
+	return nc.AddChildIDs(ids...)
+}
+
 // SetParentID sets the "parent" edge to the Node entity by ID.
 func (nc *NodeCreate) SetParentID(id string) *NodeCreate {
 	nc.mutation.SetParentID(id)
@@ -45,21 +60,6 @@ func (nc *NodeCreate) SetNillableParentID(id *string) *NodeCreate {
 // SetParent sets the "parent" edge to the Node entity.
 func (nc *NodeCreate) SetParent(n *Node) *NodeCreate {
 	return nc.SetParentID(n.ID)
-}
-
-// AddChildIDs adds the "children" edge to the Node entity by IDs.
-func (nc *NodeCreate) AddChildIDs(ids ...string) *NodeCreate {
-	nc.mutation.AddChildIDs(ids...)
-	return nc
-}
-
-// AddChildren adds the "children" edges to the Node entity.
-func (nc *NodeCreate) AddChildren(n ...*Node) *NodeCreate {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nc.AddChildIDs(ids...)
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by ID.
@@ -207,6 +207,22 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
+	if nodes := nc.mutation.ChildrenIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   node.ChildrenTable,
+			Columns: []string{node.ChildrenColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := nc.mutation.ParentIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -224,25 +240,9 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		_node.node_children = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := nc.mutation.ChildrenIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	if nodes := nc.mutation.HandlerTaskIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
+			Rel:     sqlgraph.O2O,
 			Inverse: false,
 			Table:   node.HandlerTaskTable,
 			Columns: []string{node.HandlerTaskColumn},
@@ -254,12 +254,11 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.node_handler_task = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := nc.mutation.SagaStepTaskIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
+			Rel:     sqlgraph.O2O,
 			Inverse: false,
 			Table:   node.SagaStepTaskTable,
 			Columns: []string{node.SagaStepTaskColumn},
@@ -271,12 +270,11 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.node_saga_step_task = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := nc.mutation.SideEffectTaskIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
+			Rel:     sqlgraph.O2O,
 			Inverse: false,
 			Table:   node.SideEffectTaskTable,
 			Columns: []string{node.SideEffectTaskColumn},
@@ -288,12 +286,11 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.node_side_effect_task = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := nc.mutation.CompensationTaskIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
+			Rel:     sqlgraph.O2O,
 			Inverse: false,
 			Table:   node.CompensationTaskTable,
 			Columns: []string{node.CompensationTaskColumn},
@@ -305,7 +302,6 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.node_compensation_task = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

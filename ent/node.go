@@ -22,21 +22,17 @@ type Node struct {
 	ID string `json:"id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the NodeQuery when eager-loading is set.
-	Edges                  NodeEdges `json:"edges"`
-	node_children          *string
-	node_handler_task      *string
-	node_saga_step_task    *int
-	node_side_effect_task  *int
-	node_compensation_task *int
-	selectValues           sql.SelectValues
+	Edges         NodeEdges `json:"edges"`
+	node_children *string
+	selectValues  sql.SelectValues
 }
 
 // NodeEdges holds the relations/edges for other nodes in the graph.
 type NodeEdges struct {
-	// Parent holds the value of the parent edge.
-	Parent *Node `json:"parent,omitempty"`
 	// Children holds the value of the children edge.
 	Children []*Node `json:"children,omitempty"`
+	// Parent holds the value of the parent edge.
+	Parent *Node `json:"parent,omitempty"`
 	// HandlerTask holds the value of the handler_task edge.
 	HandlerTask *HandlerTask `json:"handler_task,omitempty"`
 	// SagaStepTask holds the value of the saga_step_task edge.
@@ -50,24 +46,24 @@ type NodeEdges struct {
 	loadedTypes [6]bool
 }
 
+// ChildrenOrErr returns the Children value or an error if the edge
+// was not loaded in eager-loading.
+func (e NodeEdges) ChildrenOrErr() ([]*Node, error) {
+	if e.loadedTypes[0] {
+		return e.Children, nil
+	}
+	return nil, &NotLoadedError{edge: "children"}
+}
+
 // ParentOrErr returns the Parent value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e NodeEdges) ParentOrErr() (*Node, error) {
 	if e.Parent != nil {
 		return e.Parent, nil
-	} else if e.loadedTypes[0] {
+	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: node.Label}
 	}
 	return nil, &NotLoadedError{edge: "parent"}
-}
-
-// ChildrenOrErr returns the Children value or an error if the edge
-// was not loaded in eager-loading.
-func (e NodeEdges) ChildrenOrErr() ([]*Node, error) {
-	if e.loadedTypes[1] {
-		return e.Children, nil
-	}
-	return nil, &NotLoadedError{edge: "children"}
 }
 
 // HandlerTaskOrErr returns the HandlerTask value or an error if the edge
@@ -123,14 +119,6 @@ func (*Node) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case node.ForeignKeys[0]: // node_children
 			values[i] = new(sql.NullString)
-		case node.ForeignKeys[1]: // node_handler_task
-			values[i] = new(sql.NullString)
-		case node.ForeignKeys[2]: // node_saga_step_task
-			values[i] = new(sql.NullInt64)
-		case node.ForeignKeys[3]: // node_side_effect_task
-			values[i] = new(sql.NullInt64)
-		case node.ForeignKeys[4]: // node_compensation_task
-			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -159,34 +147,6 @@ func (n *Node) assignValues(columns []string, values []any) error {
 				n.node_children = new(string)
 				*n.node_children = value.String
 			}
-		case node.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field node_handler_task", values[i])
-			} else if value.Valid {
-				n.node_handler_task = new(string)
-				*n.node_handler_task = value.String
-			}
-		case node.ForeignKeys[2]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field node_saga_step_task", value)
-			} else if value.Valid {
-				n.node_saga_step_task = new(int)
-				*n.node_saga_step_task = int(value.Int64)
-			}
-		case node.ForeignKeys[3]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field node_side_effect_task", value)
-			} else if value.Valid {
-				n.node_side_effect_task = new(int)
-				*n.node_side_effect_task = int(value.Int64)
-			}
-		case node.ForeignKeys[4]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field node_compensation_task", value)
-			} else if value.Valid {
-				n.node_compensation_task = new(int)
-				*n.node_compensation_task = int(value.Int64)
-			}
 		default:
 			n.selectValues.Set(columns[i], values[i])
 		}
@@ -200,14 +160,14 @@ func (n *Node) Value(name string) (ent.Value, error) {
 	return n.selectValues.Get(name)
 }
 
-// QueryParent queries the "parent" edge of the Node entity.
-func (n *Node) QueryParent() *NodeQuery {
-	return NewNodeClient(n.config).QueryParent(n)
-}
-
 // QueryChildren queries the "children" edge of the Node entity.
 func (n *Node) QueryChildren() *NodeQuery {
 	return NewNodeClient(n.config).QueryChildren(n)
+}
+
+// QueryParent queries the "parent" edge of the Node entity.
+func (n *Node) QueryParent() *NodeQuery {
+	return NewNodeClient(n.config).QueryParent(n)
 }
 
 // QueryHandlerTask queries the "handler_task" edge of the Node entity.

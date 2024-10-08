@@ -12,8 +12,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davidroman0O/comfylite3 v0.0.0-20241001034633-f132126601f1 h1:KCWolehpWuwQW7NtAv48RqQfKA26TAiZkjI6eihJUIc=
 github.com/davidroman0O/comfylite3 v0.0.0-20241001034633-f132126601f1/go.mod h1:ZK7gxKnBEZF6EoUjFp6gRrq8GuYn7c68oXUMj5+iONY=
-github.com/davidroman0O/retrypool v0.0.0-20241003195316-3bbc3633b8b1 h1:3d3hHREeU0HXdQyfQQHEGr/yXINSuLQSAudfMBJj3Hk=
-github.com/davidroman0O/retrypool v0.0.0-20241003195316-3bbc3633b8b1/go.mod h1:JwPiwkzechOxNHCmaDs+/uk1tY9nQSLRrdiYLIy1gA4=
+github.com/davidroman0O/retrypool v0.0.0-20241008104544-56aaa5d9bd42 h1:NX2eAn2g2JJIafvRvqo2vUE9tbDJc9llktDfUfh03n8=
+github.com/davidroman0O/retrypool v0.0.0-20241008104544-56aaa5d9bd42/go.mod h1:JwPiwkzechOxNHCmaDs+/uk1tY9nQSLRrdiYLIy1gA4=
 github.com/go-openapi/inflect v0.19.0 h1:9jCH9scKIbHeV9m12SmPilScz6krDxKRasNNSNPXu/4=
 github.com/go-openapi/inflect v0.19.0/go.mod h1:lHpZVlpIQqLyKwJ4N+YSc9hchQy/i12fJykb83CRBH4=
 github.com/go-test/deep v1.0.3 h1:ZrJSEWsXzPOxaZnFteGEfooLba+ju3FYIbOrS+rQd68=

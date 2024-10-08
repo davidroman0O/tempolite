@@ -9,14 +9,39 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 )
 
 // CompensationTask is the model entity for the CompensationTask schema.
 type CompensationTask struct {
 	config
 	// ID of the ent.
-	ID           int `json:"id,omitempty"`
-	selectValues sql.SelectValues
+	ID int `json:"id,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the CompensationTaskQuery when eager-loading is set.
+	Edges                  CompensationTaskEdges `json:"edges"`
+	node_compensation_task *string
+	selectValues           sql.SelectValues
+}
+
+// CompensationTaskEdges holds the relations/edges for other nodes in the graph.
+type CompensationTaskEdges struct {
+	// Node holds the value of the node edge.
+	Node *Node `json:"node,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// NodeOrErr returns the Node value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e CompensationTaskEdges) NodeOrErr() (*Node, error) {
+	if e.Node != nil {
+		return e.Node, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: node.Label}
+	}
+	return nil, &NotLoadedError{edge: "node"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -26,6 +51,8 @@ func (*CompensationTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case compensationtask.FieldID:
 			values[i] = new(sql.NullInt64)
+		case compensationtask.ForeignKeys[0]: // node_compensation_task
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -47,6 +74,13 @@ func (ct *CompensationTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			ct.ID = int(value.Int64)
+		case compensationtask.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field node_compensation_task", values[i])
+			} else if value.Valid {
+				ct.node_compensation_task = new(string)
+				*ct.node_compensation_task = value.String
+			}
 		default:
 			ct.selectValues.Set(columns[i], values[i])
 		}
@@ -58,6 +92,11 @@ func (ct *CompensationTask) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (ct *CompensationTask) Value(name string) (ent.Value, error) {
 	return ct.selectValues.Get(name)
+}
+
+// QueryNode queries the "node" edge of the CompensationTask entity.
+func (ct *CompensationTask) QueryNode() *NodeQuery {
+	return NewCompensationTaskClient(ct.config).QueryNode(ct)
 }
 
 // Update returns a builder for updating this CompensationTask.

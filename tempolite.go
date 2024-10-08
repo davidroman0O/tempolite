@@ -124,7 +124,9 @@ func New(ctx context.Context, opts ...TempoliteOption) (*Tempolite, error) {
 		client: client,
 	}
 
-	t.handlerTaskPool = NewHandlerTaskPool(t, 1)
+	// You need as much workers as you have have sub-tasks
+	// The more you abuse the sub-tasks of sub-tasks, the more workers you need
+	t.handlerTaskPool = NewHandlerTaskPool(t, 5)
 
 	t.scheduler = NewScheduler(t) // starts immediately
 
@@ -186,20 +188,32 @@ func (tp *Tempolite) getInfo() TempoliteInfo {
 }
 
 func (tp *Tempolite) WaitFor(ctx context.Context, id string) (interface{}, error) {
-	var total int
+	var retryCount int = 0
+	var maxRetry int = 3
+	delay := time.Second / 16
 	var err error
-	if total, err = tp.client.Entry.Query().Where(entry.TaskID(id)).Count(ctx); err != nil {
-		return nil, err
+
+	var total int
+	for total == 0 && retryCount < maxRetry {
+		if total, err = tp.client.Entry.Query().Where(entry.TaskID(id)).Count(ctx); err != nil {
+			return nil, err
+		}
+		if total == 0 {
+			retryCount++
+			time.Sleep(delay)
+		}
 	}
+
 	if total == 0 {
 		return nil, fmt.Errorf("no task with id %s", id)
 	}
+
 	var entryValue *ent.Entry
 	if entryValue, err = tp.client.Entry.Query().Where(entry.TaskID(id)).First(ctx); err != nil {
 		return nil, err
 	}
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
 
 	for {
@@ -221,14 +235,13 @@ func (tp *Tempolite) WaitFor(ctx context.Context, id string) (interface{}, error
 						return nil, fmt.Errorf("no handler registered with name %s", handlerTaskValue.HandlerName)
 					}
 					return handlerInfo.ToInterface(handlerTaskValue.Payload)
-				case "saga":
-				case "compensation":
-				case "side_effect":
-				default:
-					return nil, fmt.Errorf("unknown task type %s", entryValue.Type)
 				}
-				return nil, fmt.Errorf("not implemented")
+				continue
+			case "saga":
+			case "compensation":
+			case "side_effect":
 			}
+			return nil, fmt.Errorf("not implemented")
 		}
 	}
 }
@@ -349,16 +362,17 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	var executionContext *ent.ExecutionContext
-
-	if executionContext, err = tx.
-		ExecutionContext.
-		Create().
-		SetID(uuid.NewString()).
-		Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
+	if opts.executionContextID == nil {
+		if executionContext, err = tx.
+			ExecutionContext.
+			Create().
+			SetID(uuid.NewString()).
+			Save(ctx); err != nil {
+			if err := tx.Rollback(); err != nil {
+				return "", err
+			}
 			return "", err
 		}
-		return "", err
 	}
 
 	var taskCtx *ent.TaskContext
@@ -376,38 +390,74 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	var handlerTask *ent.HandlerTask
-	if handlerTask, err = tx.
+	handlerTaskCreator := tx.
 		HandlerTask.
 		Create().
 		SetID(uuid.NewString()).
 		SetHandlerName(handlerName).
 		SetStatus(handlertask.Status(types.TaskStatusToString(types.TaskStatusPending))).
 		SetPayload(payloadBytes).
-		SetExecutionContext(executionContext).
-		SetTaskContext(taskCtx).
 		SetNumIn(handkerInfo.NumIn).
 		SetNumOut(handkerInfo.NumOut).
-		Save(ctx); err != nil {
+		SetTaskContext(taskCtx)
+
+	if opts.executionContextID != nil {
+		handlerTaskCreator.SetExecutionContextID(*opts.executionContextID)
+	} else {
+		handlerTaskCreator.SetExecutionContext(executionContext)
+	}
+
+	if handlerTask, err = handlerTaskCreator.Save(ctx); err != nil {
 		if err := tx.Rollback(); err != nil {
 			return "", err
 		}
 		return "", err
 	}
 
-	var node *ent.Node
-	if node, err = tx.
-		Node.
-		Create().
-		SetID(uuid.NewString()).
-		SetHandlerTaskID(handlerTask.ID).
-		Save(ctx); err != nil {
+	var nodeEntity *ent.Node
+	nodeCreator := tx.Node.Create().SetID(uuid.NewString()).SetHandlerTask(handlerTask)
+	if nodeEntity, err = nodeCreator.Save(ctx); err != nil {
 		if err := tx.Rollback(); err != nil {
+			return "", err
+		}
+		return "", err
+	}
+
+	if opts.nodeID != nil {
+		log.Printf("Adding node %s as child of node %s", nodeEntity.ID, *opts.nodeID)
+		parentTask, err := tx.HandlerTask.Query().Where(handlertask.ID(*opts.parentID)).Only(ctx)
+		if err != nil {
+			log.Printf("Parent task not found: %v", err)
+			if err := tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", fmt.Errorf("parent task not found: %v", err)
+		}
+		parentNode, err := parentTask.QueryNode().Only(ctx)
+		if err != nil {
+			log.Printf("Parent node not found: %v", err)
+			if err := tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", fmt.Errorf("parent node not found: %v", err)
+		}
+		if _, err = tx.Node.UpdateOneID(nodeEntity.ID).AddChildren(parentNode).Save(ctx); err != nil {
+			if err := tx.Rollback(); err != nil {
+				return "", err
+			}
 			return "", err
 		}
 	}
 
+	if _, err = tx.HandlerTask.Update().SetNode(nodeEntity).SetNodeID(nodeEntity.ID).Where(handlertask.ID(handlerTask.ID)).Save(ctx); err != nil {
+		if err := tx.Rollback(); err != nil {
+			return "", err
+		}
+		return "", err
+	}
+
 	graph := dag.AcyclicGraph{}
-	graph.Add(node)
+	graph.Add(nodeEntity)
 
 	var dagBytes []byte
 	if dagBytes, err = graph.MarshalJSON(); err != nil {
@@ -418,13 +468,19 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	var execution *ent.Execution
-	if execution, err = tx.
+	executionCreator := tx.
 		Execution.
 		Create().
 		SetID(uuid.NewString()).
-		SetExecutionContext(executionContext).
-		SetDag(dagBytes).
-		Save(ctx); err != nil {
+		SetDag(dagBytes)
+
+	if opts.executionContextID != nil {
+		executionCreator.SetExecutionContextID(*opts.executionContextID)
+	} else {
+		executionCreator.SetExecutionContext(executionContext)
+	}
+
+	if execution, err = executionCreator.Save(ctx); err != nil {
 		if err := tx.Rollback(); err != nil {
 			return "", err
 		}
@@ -432,7 +488,13 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	var entry *ent.Entry
-	if entry, err = tx.Entry.Create().SetTaskID(handlerTask.ID).SetHandlerTaskID(handlerTask.ID).SetType("handler").Save(ctx); err != nil {
+	entryCreator := tx.Entry.Create().SetTaskID(handlerTask.ID).SetHandlerTaskID(handlerTask.ID).SetType("handler")
+	if opts.executionContextID != nil {
+		entryCreator.SetExecutionContextID(*opts.executionContextID)
+	} else {
+		entryCreator.SetExecutionContext(executionContext)
+	}
+	if entry, err = entryCreator.Save(ctx); err != nil {
 		if err := tx.Rollback(); err != nil {
 			return "", err
 		}
@@ -441,9 +503,13 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 
 	log.Printf("Task enqueued with ID %s", handlerTask.ID)
 	log.Printf("Execution created with ID %s", execution.ID)
-	log.Printf("Execution Context created with ID %s", executionContext.ID)
+	if opts.executionContextID != nil {
+		log.Printf("Execution Context created with ID %s", *opts.executionContextID)
+	} else {
+		log.Printf("Execution Context created with ID %s", executionContext.ID)
+	}
 	log.Printf("Task Context created with ID %s", taskCtx.ID)
-	log.Printf("Node created with ID %s", node.ID)
+	log.Printf("Node created with ID %s", nodeEntity.ID)
 	log.Printf("Entry created with ID %d", entry.ID)
 
 	if err := tx.Commit(); err != nil {
@@ -460,6 +526,7 @@ type HandlerContext struct {
 	context.Context
 	tp                 *Tempolite
 	taskID             string
+	nodeID             string
 	executionContextID string
 }
 
@@ -467,6 +534,17 @@ func (c *HandlerContext) GetID() string {
 	return c.taskID
 }
 
+// TODO FIX: when we enqueue a children and it fails AND retries, we have a second handler_tasks, we need to check the relationships so the final dag is correct
 func (c *HandlerContext) Enqueue(handler interface{}, params interface{}, options ...EnqueueOption) (string, error) {
-	return c.tp.Enqueue(c, handler, params)
+	opts := []EnqueueOption{
+		WithParentID(c.taskID),
+		WithNodeID(c.nodeID),
+		WithExecutionContextID(c.executionContextID),
+	}
+	opts = append(opts, options...)
+	return c.tp.Enqueue(c, handler, params, opts...)
+}
+
+func (c *HandlerContext) WaitFor(id string) (interface{}, error) {
+	return c.tp.WaitFor(c, id)
 }

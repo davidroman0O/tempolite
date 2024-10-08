@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sagatask"
 )
@@ -22,6 +23,8 @@ type SagaTaskQuery struct {
 	order      []sagatask.OrderOption
 	inters     []Interceptor
 	predicates []predicate.SagaTask
+	withNode   *NodeQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (stq *SagaTaskQuery) Unique(unique bool) *SagaTaskQuery {
 func (stq *SagaTaskQuery) Order(o ...sagatask.OrderOption) *SagaTaskQuery {
 	stq.order = append(stq.order, o...)
 	return stq
+}
+
+// QueryNode chains the current query on the "node" edge.
+func (stq *SagaTaskQuery) QueryNode() *NodeQuery {
+	query := (&NodeClient{config: stq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := stq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := stq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sagatask.Table, sagatask.FieldID, selector),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, sagatask.NodeTable, sagatask.NodeColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(stq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first SagaTask entity from the query.
@@ -250,10 +275,22 @@ func (stq *SagaTaskQuery) Clone() *SagaTaskQuery {
 		order:      append([]sagatask.OrderOption{}, stq.order...),
 		inters:     append([]Interceptor{}, stq.inters...),
 		predicates: append([]predicate.SagaTask{}, stq.predicates...),
+		withNode:   stq.withNode.Clone(),
 		// clone intermediate query.
 		sql:  stq.sql.Clone(),
 		path: stq.path,
 	}
+}
+
+// WithNode tells the query-builder to eager-load the nodes that are connected to
+// the "node" edge. The optional arguments are used to configure the query builder of the edge.
+func (stq *SagaTaskQuery) WithNode(opts ...func(*NodeQuery)) *SagaTaskQuery {
+	query := (&NodeClient{config: stq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	stq.withNode = query
+	return stq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -310,15 +347,26 @@ func (stq *SagaTaskQuery) prepareQuery(ctx context.Context) error {
 
 func (stq *SagaTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SagaTask, error) {
 	var (
-		nodes = []*SagaTask{}
-		_spec = stq.querySpec()
+		nodes       = []*SagaTask{}
+		withFKs     = stq.withFKs
+		_spec       = stq.querySpec()
+		loadedTypes = [1]bool{
+			stq.withNode != nil,
+		}
 	)
+	if stq.withNode != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, sagatask.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SagaTask).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &SagaTask{config: stq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -330,7 +378,46 @@ func (stq *SagaTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sa
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := stq.withNode; query != nil {
+		if err := stq.loadNode(ctx, query, nodes, nil,
+			func(n *SagaTask, e *Node) { n.Edges.Node = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (stq *SagaTaskQuery) loadNode(ctx context.Context, query *NodeQuery, nodes []*SagaTask, init func(*SagaTask), assign func(*SagaTask, *Node)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*SagaTask)
+	for i := range nodes {
+		if nodes[i].node_saga_step_task == nil {
+			continue
+		}
+		fk := *nodes[i].node_saga_step_task
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(node.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "node_saga_step_task" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (stq *SagaTaskQuery) sqlCount(ctx context.Context) (int, error) {

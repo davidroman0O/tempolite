@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
@@ -173,6 +174,25 @@ func (htu *HandlerTaskUpdate) SetExecutionContext(e *ExecutionContext) *HandlerT
 	return htu.SetExecutionContextID(e.ID)
 }
 
+// SetNodeID sets the "node" edge to the Node entity by ID.
+func (htu *HandlerTaskUpdate) SetNodeID(id string) *HandlerTaskUpdate {
+	htu.mutation.SetNodeID(id)
+	return htu
+}
+
+// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
+func (htu *HandlerTaskUpdate) SetNillableNodeID(id *string) *HandlerTaskUpdate {
+	if id != nil {
+		htu = htu.SetNodeID(*id)
+	}
+	return htu
+}
+
+// SetNode sets the "node" edge to the Node entity.
+func (htu *HandlerTaskUpdate) SetNode(n *Node) *HandlerTaskUpdate {
+	return htu.SetNodeID(n.ID)
+}
+
 // Mutation returns the HandlerTaskMutation object of the builder.
 func (htu *HandlerTaskUpdate) Mutation() *HandlerTaskMutation {
 	return htu.mutation
@@ -187,6 +207,12 @@ func (htu *HandlerTaskUpdate) ClearTaskContext() *HandlerTaskUpdate {
 // ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
 func (htu *HandlerTaskUpdate) ClearExecutionContext() *HandlerTaskUpdate {
 	htu.mutation.ClearExecutionContext()
+	return htu
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (htu *HandlerTaskUpdate) ClearNode() *HandlerTaskUpdate {
+	htu.mutation.ClearNode()
 	return htu
 }
 
@@ -326,6 +352,35 @@ func (htu *HandlerTaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if htu.mutation.NodeCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   handlertask.NodeTable,
+			Columns: []string{handlertask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := htu.mutation.NodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   handlertask.NodeTable,
+			Columns: []string{handlertask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -497,6 +552,25 @@ func (htuo *HandlerTaskUpdateOne) SetExecutionContext(e *ExecutionContext) *Hand
 	return htuo.SetExecutionContextID(e.ID)
 }
 
+// SetNodeID sets the "node" edge to the Node entity by ID.
+func (htuo *HandlerTaskUpdateOne) SetNodeID(id string) *HandlerTaskUpdateOne {
+	htuo.mutation.SetNodeID(id)
+	return htuo
+}
+
+// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
+func (htuo *HandlerTaskUpdateOne) SetNillableNodeID(id *string) *HandlerTaskUpdateOne {
+	if id != nil {
+		htuo = htuo.SetNodeID(*id)
+	}
+	return htuo
+}
+
+// SetNode sets the "node" edge to the Node entity.
+func (htuo *HandlerTaskUpdateOne) SetNode(n *Node) *HandlerTaskUpdateOne {
+	return htuo.SetNodeID(n.ID)
+}
+
 // Mutation returns the HandlerTaskMutation object of the builder.
 func (htuo *HandlerTaskUpdateOne) Mutation() *HandlerTaskMutation {
 	return htuo.mutation
@@ -511,6 +585,12 @@ func (htuo *HandlerTaskUpdateOne) ClearTaskContext() *HandlerTaskUpdateOne {
 // ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
 func (htuo *HandlerTaskUpdateOne) ClearExecutionContext() *HandlerTaskUpdateOne {
 	htuo.mutation.ClearExecutionContext()
+	return htuo
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (htuo *HandlerTaskUpdateOne) ClearNode() *HandlerTaskUpdateOne {
+	htuo.mutation.ClearNode()
 	return htuo
 }
 
@@ -680,6 +760,35 @@ func (htuo *HandlerTaskUpdateOne) sqlSave(ctx context.Context) (_node *HandlerTa
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if htuo.mutation.NodeCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   handlertask.NodeTable,
+			Columns: []string{handlertask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := htuo.mutation.NodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   handlertask.NodeTable,
+			Columns: []string{handlertask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/sagatask"
 )
 
@@ -16,6 +17,25 @@ type SagaTaskCreate struct {
 	config
 	mutation *SagaTaskMutation
 	hooks    []Hook
+}
+
+// SetNodeID sets the "node" edge to the Node entity by ID.
+func (stc *SagaTaskCreate) SetNodeID(id string) *SagaTaskCreate {
+	stc.mutation.SetNodeID(id)
+	return stc
+}
+
+// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
+func (stc *SagaTaskCreate) SetNillableNodeID(id *string) *SagaTaskCreate {
+	if id != nil {
+		stc = stc.SetNodeID(*id)
+	}
+	return stc
+}
+
+// SetNode sets the "node" edge to the Node entity.
+func (stc *SagaTaskCreate) SetNode(n *Node) *SagaTaskCreate {
+	return stc.SetNodeID(n.ID)
 }
 
 // Mutation returns the SagaTaskMutation object of the builder.
@@ -78,6 +98,23 @@ func (stc *SagaTaskCreate) createSpec() (*SagaTask, *sqlgraph.CreateSpec) {
 		_node = &SagaTask{config: stc.config}
 		_spec = sqlgraph.NewCreateSpec(sagatask.Table, sqlgraph.NewFieldSpec(sagatask.FieldID, field.TypeInt))
 	)
+	if nodes := stc.mutation.NodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   sagatask.NodeTable,
+			Columns: []string{sagatask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.node_saga_step_task = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 

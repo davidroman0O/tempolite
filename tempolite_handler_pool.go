@@ -65,14 +65,20 @@ func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 		return fmt.Errorf("failed to unmarshal task payload: %v", err)
 	}
 
-	handlerCtx := HandlerContext{
-		Context: ctx,
-		tp:      h.tp,
-		taskID:  task.ID,
+	if task.Edges.ExecutionContext == nil {
+		return fmt.Errorf("task with ID %s has no execution context", task.ID)
 	}
 
-	if task.Edges.ExecutionContext != nil {
-		handlerCtx.executionContextID = task.Edges.ExecutionContext.ID
+	if task.Edges.Node == nil {
+		return fmt.Errorf("task with ID %s has no node", task.ID)
+	}
+
+	handlerCtx := HandlerContext{
+		Context:            ctx,
+		tp:                 h.tp,
+		taskID:             task.ID,
+		nodeID:             task.Edges.Node.ID,
+		executionContextID: task.Edges.ExecutionContext.ID,
 	}
 
 	log.Printf("Calling handler for task ID %s", task.ID)
@@ -194,8 +200,9 @@ func (tp *Tempolite) onHandlerTaskRetry(attempt int, err error, task *retrypool.
 }
 
 // Notification of panic when failure
-func (tp *Tempolite) onHandlerTaskPanic(task *ent.HandlerTask, v interface{}) {
+func (tp *Tempolite) onHandlerTaskPanic(task *ent.HandlerTask, v interface{}, stackTrace string) {
 	log.Printf("Task panicked: %v", v)
+	log.Println(stackTrace)
 }
 
 // Notification of dead task, no retry anymore

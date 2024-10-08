@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
@@ -37,6 +38,7 @@ type HandlerTask struct {
 	Edges                          HandlerTaskEdges `json:"edges"`
 	handler_task_task_context      *string
 	handler_task_execution_context *string
+	node_handler_task              *string
 	selectValues                   sql.SelectValues
 }
 
@@ -46,9 +48,11 @@ type HandlerTaskEdges struct {
 	TaskContext *TaskContext `json:"task_context,omitempty"`
 	// ExecutionContext holds the value of the execution_context edge.
 	ExecutionContext *ExecutionContext `json:"execution_context,omitempty"`
+	// Node holds the value of the node edge.
+	Node *Node `json:"node,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // TaskContextOrErr returns the TaskContext value or an error if the edge
@@ -73,6 +77,17 @@ func (e HandlerTaskEdges) ExecutionContextOrErr() (*ExecutionContext, error) {
 	return nil, &NotLoadedError{edge: "execution_context"}
 }
 
+// NodeOrErr returns the Node value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e HandlerTaskEdges) NodeOrErr() (*Node, error) {
+	if e.Node != nil {
+		return e.Node, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: node.Label}
+	}
+	return nil, &NotLoadedError{edge: "node"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*HandlerTask) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -87,6 +102,8 @@ func (*HandlerTask) scanValues(columns []string) ([]any, error) {
 		case handlertask.ForeignKeys[0]: // handler_task_task_context
 			values[i] = new(sql.NullString)
 		case handlertask.ForeignKeys[1]: // handler_task_execution_context
+			values[i] = new(sql.NullString)
+		case handlertask.ForeignKeys[2]: // node_handler_task
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -165,6 +182,13 @@ func (ht *HandlerTask) assignValues(columns []string, values []any) error {
 				ht.handler_task_execution_context = new(string)
 				*ht.handler_task_execution_context = value.String
 			}
+		case handlertask.ForeignKeys[2]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field node_handler_task", values[i])
+			} else if value.Valid {
+				ht.node_handler_task = new(string)
+				*ht.node_handler_task = value.String
+			}
 		default:
 			ht.selectValues.Set(columns[i], values[i])
 		}
@@ -186,6 +210,11 @@ func (ht *HandlerTask) QueryTaskContext() *TaskContextQuery {
 // QueryExecutionContext queries the "execution_context" edge of the HandlerTask entity.
 func (ht *HandlerTask) QueryExecutionContext() *ExecutionContextQuery {
 	return NewHandlerTaskClient(ht.config).QueryExecutionContext(ht)
+}
+
+// QueryNode queries the "node" edge of the HandlerTask entity.
+func (ht *HandlerTask) QueryNode() *NodeQuery {
+	return NewHandlerTaskClient(ht.config).QueryNode(ht)
 }
 
 // Update returns a builder for updating this HandlerTask.

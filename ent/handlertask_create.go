@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
@@ -105,6 +106,25 @@ func (htc *HandlerTaskCreate) SetNillableExecutionContextID(id *string) *Handler
 // SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
 func (htc *HandlerTaskCreate) SetExecutionContext(e *ExecutionContext) *HandlerTaskCreate {
 	return htc.SetExecutionContextID(e.ID)
+}
+
+// SetNodeID sets the "node" edge to the Node entity by ID.
+func (htc *HandlerTaskCreate) SetNodeID(id string) *HandlerTaskCreate {
+	htc.mutation.SetNodeID(id)
+	return htc
+}
+
+// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
+func (htc *HandlerTaskCreate) SetNillableNodeID(id *string) *HandlerTaskCreate {
+	if id != nil {
+		htc = htc.SetNodeID(*id)
+	}
+	return htc
+}
+
+// SetNode sets the "node" edge to the Node entity.
+func (htc *HandlerTaskCreate) SetNode(n *Node) *HandlerTaskCreate {
+	return htc.SetNodeID(n.ID)
 }
 
 // Mutation returns the HandlerTaskMutation object of the builder.
@@ -253,6 +273,23 @@ func (htc *HandlerTaskCreate) createSpec() (*HandlerTask, *sqlgraph.CreateSpec) 
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.handler_task_execution_context = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := htc.mutation.NodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   handlertask.NodeTable,
+			Columns: []string{handlertask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.node_handler_task = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

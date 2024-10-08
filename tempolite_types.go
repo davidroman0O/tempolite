@@ -37,10 +37,34 @@ type SageInfo struct{}
 type EnqueueOption func(*enqueueOptions)
 
 type enqueueOptions struct {
-	maxDuration    time.Duration
-	timeLimit      time.Duration
-	immediate      bool
-	panicOnTimeout bool
+	maxDuration        time.Duration
+	timeLimit          time.Duration
+	immediate          bool
+	panicOnTimeout     bool
+	parentID           *string
+	nodeID             *string
+	executionContextID *string
+}
+
+func WithExecutionContextID(id string) EnqueueOption {
+	return func(o *enqueueOptions) {
+		log.Printf("Setting execution context ID for enqueue option: %s", id)
+		o.executionContextID = &id
+	}
+}
+
+func WithParentID(id string) EnqueueOption {
+	return func(o *enqueueOptions) {
+		log.Printf("Setting parent ID for enqueue option: %s", id)
+		o.parentID = &id
+	}
+}
+
+func WithNodeID(id string) EnqueueOption {
+	return func(o *enqueueOptions) {
+		log.Printf("Setting node ID for enqueue option: %s", id)
+		o.nodeID = &id
+	}
 }
 
 func WithMaxDuration(duration time.Duration) EnqueueOption {

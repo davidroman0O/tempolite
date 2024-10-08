@@ -10,11 +10,14 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
 	"github.com/davidroman0O/go-tempolite/ent/entry"
 	"github.com/davidroman0O/go-tempolite/ent/execution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
 	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/go-tempolite/ent/sagatask"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
 	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
@@ -45,6 +48,8 @@ type CompensationTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
+	node          *string
+	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*CompensationTask, error)
 	predicates    []predicate.CompensationTask
@@ -146,6 +151,45 @@ func (m *CompensationTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetNodeID sets the "node" edge to the Node entity by id.
+func (m *CompensationTaskMutation) SetNodeID(id string) {
+	m.node = &id
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (m *CompensationTaskMutation) ClearNode() {
+	m.clearednode = true
+}
+
+// NodeCleared reports if the "node" edge to the Node entity was cleared.
+func (m *CompensationTaskMutation) NodeCleared() bool {
+	return m.clearednode
+}
+
+// NodeID returns the "node" edge ID in the mutation.
+func (m *CompensationTaskMutation) NodeID() (id string, exists bool) {
+	if m.node != nil {
+		return *m.node, true
+	}
+	return
+}
+
+// NodeIDs returns the "node" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NodeID instead. It exists only for internal usage by the builders.
+func (m *CompensationTaskMutation) NodeIDs() (ids []string) {
+	if id := m.node; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNode resets all changes to the "node" edge.
+func (m *CompensationTaskMutation) ResetNode() {
+	m.node = nil
+	m.clearednode = false
 }
 
 // Where appends a list predicates to the CompensationTaskMutation builder.
@@ -256,19 +300,28 @@ func (m *CompensationTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *CompensationTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.node != nil {
+		edges = append(edges, compensationtask.EdgeNode)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *CompensationTaskMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case compensationtask.EdgeNode:
+		if id := m.node; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *CompensationTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -280,25 +333,42 @@ func (m *CompensationTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *CompensationTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearednode {
+		edges = append(edges, compensationtask.EdgeNode)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *CompensationTaskMutation) EdgeCleared(name string) bool {
+	switch name {
+	case compensationtask.EdgeNode:
+		return m.clearednode
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *CompensationTaskMutation) ClearEdge(name string) error {
+	switch name {
+	case compensationtask.EdgeNode:
+		m.ClearNode()
+		return nil
+	}
 	return fmt.Errorf("unknown CompensationTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *CompensationTaskMutation) ResetEdge(name string) error {
+	switch name {
+	case compensationtask.EdgeNode:
+		m.ResetNode()
+		return nil
+	}
 	return fmt.Errorf("unknown CompensationTask edge %s", name)
 }
 
@@ -1674,6 +1744,8 @@ type HandlerTaskMutation struct {
 	clearedtask_context      bool
 	execution_context        *string
 	clearedexecution_context bool
+	node                     *string
+	clearednode              bool
 	done                     bool
 	oldValue                 func(context.Context) (*HandlerTask, error)
 	predicates               []predicate.HandlerTask
@@ -2192,6 +2264,45 @@ func (m *HandlerTaskMutation) ResetExecutionContext() {
 	m.clearedexecution_context = false
 }
 
+// SetNodeID sets the "node" edge to the Node entity by id.
+func (m *HandlerTaskMutation) SetNodeID(id string) {
+	m.node = &id
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (m *HandlerTaskMutation) ClearNode() {
+	m.clearednode = true
+}
+
+// NodeCleared reports if the "node" edge to the Node entity was cleared.
+func (m *HandlerTaskMutation) NodeCleared() bool {
+	return m.clearednode
+}
+
+// NodeID returns the "node" edge ID in the mutation.
+func (m *HandlerTaskMutation) NodeID() (id string, exists bool) {
+	if m.node != nil {
+		return *m.node, true
+	}
+	return
+}
+
+// NodeIDs returns the "node" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NodeID instead. It exists only for internal usage by the builders.
+func (m *HandlerTaskMutation) NodeIDs() (ids []string) {
+	if id := m.node; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNode resets all changes to the "node" edge.
+func (m *HandlerTaskMutation) ResetNode() {
+	m.node = nil
+	m.clearednode = false
+}
+
 // Where appends a list predicates to the HandlerTaskMutation builder.
 func (m *HandlerTaskMutation) Where(ps ...predicate.HandlerTask) {
 	m.predicates = append(m.predicates, ps...)
@@ -2475,12 +2586,15 @@ func (m *HandlerTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *HandlerTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.task_context != nil {
 		edges = append(edges, handlertask.EdgeTaskContext)
 	}
 	if m.execution_context != nil {
 		edges = append(edges, handlertask.EdgeExecutionContext)
+	}
+	if m.node != nil {
+		edges = append(edges, handlertask.EdgeNode)
 	}
 	return edges
 }
@@ -2497,13 +2611,17 @@ func (m *HandlerTaskMutation) AddedIDs(name string) []ent.Value {
 		if id := m.execution_context; id != nil {
 			return []ent.Value{*id}
 		}
+	case handlertask.EdgeNode:
+		if id := m.node; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *HandlerTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	return edges
 }
 
@@ -2515,12 +2633,15 @@ func (m *HandlerTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *HandlerTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedtask_context {
 		edges = append(edges, handlertask.EdgeTaskContext)
 	}
 	if m.clearedexecution_context {
 		edges = append(edges, handlertask.EdgeExecutionContext)
+	}
+	if m.clearednode {
+		edges = append(edges, handlertask.EdgeNode)
 	}
 	return edges
 }
@@ -2533,6 +2654,8 @@ func (m *HandlerTaskMutation) EdgeCleared(name string) bool {
 		return m.clearedtask_context
 	case handlertask.EdgeExecutionContext:
 		return m.clearedexecution_context
+	case handlertask.EdgeNode:
+		return m.clearednode
 	}
 	return false
 }
@@ -2546,6 +2669,9 @@ func (m *HandlerTaskMutation) ClearEdge(name string) error {
 		return nil
 	case handlertask.EdgeExecutionContext:
 		m.ClearExecutionContext()
+		return nil
+	case handlertask.EdgeNode:
+		m.ClearNode()
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask unique edge %s", name)
@@ -2561,6 +2687,9 @@ func (m *HandlerTaskMutation) ResetEdge(name string) error {
 	case handlertask.EdgeExecutionContext:
 		m.ResetExecutionContext()
 		return nil
+	case handlertask.EdgeNode:
+		m.ResetNode()
+		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask edge %s", name)
 }
@@ -2572,11 +2701,11 @@ type NodeMutation struct {
 	typ                      string
 	id                       *string
 	clearedFields            map[string]struct{}
-	parent                   *string
-	clearedparent            bool
 	children                 map[string]struct{}
 	removedchildren          map[string]struct{}
 	clearedchildren          bool
+	parent                   *string
+	clearedparent            bool
 	handler_task             *string
 	clearedhandler_task      bool
 	saga_step_task           *int
@@ -2694,45 +2823,6 @@ func (m *NodeMutation) IDs(ctx context.Context) ([]string, error) {
 	}
 }
 
-// SetParentID sets the "parent" edge to the Node entity by id.
-func (m *NodeMutation) SetParentID(id string) {
-	m.parent = &id
-}
-
-// ClearParent clears the "parent" edge to the Node entity.
-func (m *NodeMutation) ClearParent() {
-	m.clearedparent = true
-}
-
-// ParentCleared reports if the "parent" edge to the Node entity was cleared.
-func (m *NodeMutation) ParentCleared() bool {
-	return m.clearedparent
-}
-
-// ParentID returns the "parent" edge ID in the mutation.
-func (m *NodeMutation) ParentID() (id string, exists bool) {
-	if m.parent != nil {
-		return *m.parent, true
-	}
-	return
-}
-
-// ParentIDs returns the "parent" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ParentID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) ParentIDs() (ids []string) {
-	if id := m.parent; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetParent resets all changes to the "parent" edge.
-func (m *NodeMutation) ResetParent() {
-	m.parent = nil
-	m.clearedparent = false
-}
-
 // AddChildIDs adds the "children" edge to the Node entity by ids.
 func (m *NodeMutation) AddChildIDs(ids ...string) {
 	if m.children == nil {
@@ -2785,6 +2875,45 @@ func (m *NodeMutation) ResetChildren() {
 	m.children = nil
 	m.clearedchildren = false
 	m.removedchildren = nil
+}
+
+// SetParentID sets the "parent" edge to the Node entity by id.
+func (m *NodeMutation) SetParentID(id string) {
+	m.parent = &id
+}
+
+// ClearParent clears the "parent" edge to the Node entity.
+func (m *NodeMutation) ClearParent() {
+	m.clearedparent = true
+}
+
+// ParentCleared reports if the "parent" edge to the Node entity was cleared.
+func (m *NodeMutation) ParentCleared() bool {
+	return m.clearedparent
+}
+
+// ParentID returns the "parent" edge ID in the mutation.
+func (m *NodeMutation) ParentID() (id string, exists bool) {
+	if m.parent != nil {
+		return *m.parent, true
+	}
+	return
+}
+
+// ParentIDs returns the "parent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ParentID instead. It exists only for internal usage by the builders.
+func (m *NodeMutation) ParentIDs() (ids []string) {
+	if id := m.parent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetParent resets all changes to the "parent" edge.
+func (m *NodeMutation) ResetParent() {
+	m.parent = nil
+	m.clearedparent = false
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by id.
@@ -3052,11 +3181,11 @@ func (m *NodeMutation) ResetField(name string) error {
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *NodeMutation) AddedEdges() []string {
 	edges := make([]string, 0, 6)
-	if m.parent != nil {
-		edges = append(edges, node.EdgeParent)
-	}
 	if m.children != nil {
 		edges = append(edges, node.EdgeChildren)
+	}
+	if m.parent != nil {
+		edges = append(edges, node.EdgeParent)
 	}
 	if m.handler_task != nil {
 		edges = append(edges, node.EdgeHandlerTask)
@@ -3077,16 +3206,16 @@ func (m *NodeMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *NodeMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case node.EdgeParent:
-		if id := m.parent; id != nil {
-			return []ent.Value{*id}
-		}
 	case node.EdgeChildren:
 		ids := make([]ent.Value, 0, len(m.children))
 		for id := range m.children {
 			ids = append(ids, id)
 		}
 		return ids
+	case node.EdgeParent:
+		if id := m.parent; id != nil {
+			return []ent.Value{*id}
+		}
 	case node.EdgeHandlerTask:
 		if id := m.handler_task; id != nil {
 			return []ent.Value{*id}
@@ -3133,11 +3262,11 @@ func (m *NodeMutation) RemovedIDs(name string) []ent.Value {
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *NodeMutation) ClearedEdges() []string {
 	edges := make([]string, 0, 6)
-	if m.clearedparent {
-		edges = append(edges, node.EdgeParent)
-	}
 	if m.clearedchildren {
 		edges = append(edges, node.EdgeChildren)
+	}
+	if m.clearedparent {
+		edges = append(edges, node.EdgeParent)
 	}
 	if m.clearedhandler_task {
 		edges = append(edges, node.EdgeHandlerTask)
@@ -3158,10 +3287,10 @@ func (m *NodeMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *NodeMutation) EdgeCleared(name string) bool {
 	switch name {
-	case node.EdgeParent:
-		return m.clearedparent
 	case node.EdgeChildren:
 		return m.clearedchildren
+	case node.EdgeParent:
+		return m.clearedparent
 	case node.EdgeHandlerTask:
 		return m.clearedhandler_task
 	case node.EdgeSagaStepTask:
@@ -3201,11 +3330,11 @@ func (m *NodeMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *NodeMutation) ResetEdge(name string) error {
 	switch name {
-	case node.EdgeParent:
-		m.ResetParent()
-		return nil
 	case node.EdgeChildren:
 		m.ResetChildren()
+		return nil
+	case node.EdgeParent:
+		m.ResetParent()
 		return nil
 	case node.EdgeHandlerTask:
 		m.ResetHandlerTask()
@@ -3230,6 +3359,8 @@ type SagaTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
+	node          *string
+	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*SagaTask, error)
 	predicates    []predicate.SagaTask
@@ -3331,6 +3462,45 @@ func (m *SagaTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetNodeID sets the "node" edge to the Node entity by id.
+func (m *SagaTaskMutation) SetNodeID(id string) {
+	m.node = &id
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (m *SagaTaskMutation) ClearNode() {
+	m.clearednode = true
+}
+
+// NodeCleared reports if the "node" edge to the Node entity was cleared.
+func (m *SagaTaskMutation) NodeCleared() bool {
+	return m.clearednode
+}
+
+// NodeID returns the "node" edge ID in the mutation.
+func (m *SagaTaskMutation) NodeID() (id string, exists bool) {
+	if m.node != nil {
+		return *m.node, true
+	}
+	return
+}
+
+// NodeIDs returns the "node" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NodeID instead. It exists only for internal usage by the builders.
+func (m *SagaTaskMutation) NodeIDs() (ids []string) {
+	if id := m.node; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNode resets all changes to the "node" edge.
+func (m *SagaTaskMutation) ResetNode() {
+	m.node = nil
+	m.clearednode = false
 }
 
 // Where appends a list predicates to the SagaTaskMutation builder.
@@ -3441,19 +3611,28 @@ func (m *SagaTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SagaTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.node != nil {
+		edges = append(edges, sagatask.EdgeNode)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SagaTaskMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case sagatask.EdgeNode:
+		if id := m.node; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SagaTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -3465,25 +3644,42 @@ func (m *SagaTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SagaTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearednode {
+		edges = append(edges, sagatask.EdgeNode)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SagaTaskMutation) EdgeCleared(name string) bool {
+	switch name {
+	case sagatask.EdgeNode:
+		return m.clearednode
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SagaTaskMutation) ClearEdge(name string) error {
+	switch name {
+	case sagatask.EdgeNode:
+		m.ClearNode()
+		return nil
+	}
 	return fmt.Errorf("unknown SagaTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SagaTaskMutation) ResetEdge(name string) error {
+	switch name {
+	case sagatask.EdgeNode:
+		m.ResetNode()
+		return nil
+	}
 	return fmt.Errorf("unknown SagaTask edge %s", name)
 }
 
@@ -3494,6 +3690,8 @@ type SideEffectTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
+	node          *string
+	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*SideEffectTask, error)
 	predicates    []predicate.SideEffectTask
@@ -3595,6 +3793,45 @@ func (m *SideEffectTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetNodeID sets the "node" edge to the Node entity by id.
+func (m *SideEffectTaskMutation) SetNodeID(id string) {
+	m.node = &id
+}
+
+// ClearNode clears the "node" edge to the Node entity.
+func (m *SideEffectTaskMutation) ClearNode() {
+	m.clearednode = true
+}
+
+// NodeCleared reports if the "node" edge to the Node entity was cleared.
+func (m *SideEffectTaskMutation) NodeCleared() bool {
+	return m.clearednode
+}
+
+// NodeID returns the "node" edge ID in the mutation.
+func (m *SideEffectTaskMutation) NodeID() (id string, exists bool) {
+	if m.node != nil {
+		return *m.node, true
+	}
+	return
+}
+
+// NodeIDs returns the "node" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NodeID instead. It exists only for internal usage by the builders.
+func (m *SideEffectTaskMutation) NodeIDs() (ids []string) {
+	if id := m.node; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNode resets all changes to the "node" edge.
+func (m *SideEffectTaskMutation) ResetNode() {
+	m.node = nil
+	m.clearednode = false
 }
 
 // Where appends a list predicates to the SideEffectTaskMutation builder.
@@ -3705,19 +3942,28 @@ func (m *SideEffectTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SideEffectTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.node != nil {
+		edges = append(edges, sideeffecttask.EdgeNode)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SideEffectTaskMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case sideeffecttask.EdgeNode:
+		if id := m.node; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SideEffectTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -3729,25 +3975,42 @@ func (m *SideEffectTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SideEffectTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearednode {
+		edges = append(edges, sideeffecttask.EdgeNode)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SideEffectTaskMutation) EdgeCleared(name string) bool {
+	switch name {
+	case sideeffecttask.EdgeNode:
+		return m.clearednode
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SideEffectTaskMutation) ClearEdge(name string) error {
+	switch name {
+	case sideeffecttask.EdgeNode:
+		m.ClearNode()
+		return nil
+	}
 	return fmt.Errorf("unknown SideEffectTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SideEffectTaskMutation) ResetEdge(name string) error {
+	switch name {
+	case sideeffecttask.EdgeNode:
+		m.ResetNode()
+		return nil
+	}
 	return fmt.Errorf("unknown SideEffectTask edge %s", name)
 }
 

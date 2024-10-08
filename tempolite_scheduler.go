@@ -1,10 +1,13 @@
 package tempolite
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 
+	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 )
 
 // Will pull tasks from db to be dispatched
@@ -49,11 +52,31 @@ func (s *Scheduler) run() {
 					Where(handlertask.StatusEQ(handlertask.StatusPending)).
 					WithTaskContext().
 					WithExecutionContext().
+					WithNode().
 					First(s.tp.ctx)
 				if err != nil {
 					log.Printf("Error getting pending task: %v", err)
 					continue
 				}
+
+				node, err := s.tp.client.Node.
+					Query().
+					Where(node.HasHandlerTaskWith(handlertask.ID(handlerTask.ID))).
+					Only(s.tp.ctx)
+
+				if err != nil {
+					if ent.IsNotFound(err) {
+						fmt.Printf("no node found for handler task ID %s", handlerTask.ID)
+						continue
+					}
+					fmt.Printf("error querying node: %v", err)
+					continue
+				}
+
+				handlerTask.Edges.Node = node
+
+				fmt.Println(handlerTask.ID)
+				fmt.Println(handlerTask.Edges.Node)
 				if err := s.tp.handlerTaskPool.pool.Dispatch(handlerTask); err != nil {
 					log.Printf("Error dispatching task: %v", err)
 					continue

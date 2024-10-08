@@ -12,10 +12,10 @@ const (
 	Label = "node"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// EdgeParent holds the string denoting the parent edge name in mutations.
-	EdgeParent = "parent"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
+	// EdgeParent holds the string denoting the parent edge name in mutations.
+	EdgeParent = "parent"
 	// EdgeHandlerTask holds the string denoting the handler_task edge name in mutations.
 	EdgeHandlerTask = "handler_task"
 	// EdgeSagaStepTask holds the string denoting the saga_step_task edge name in mutations.
@@ -26,37 +26,37 @@ const (
 	EdgeCompensationTask = "compensation_task"
 	// Table holds the table name of the node in the database.
 	Table = "nodes"
-	// ParentTable is the table that holds the parent relation/edge.
-	ParentTable = "nodes"
-	// ParentColumn is the table column denoting the parent relation/edge.
-	ParentColumn = "node_children"
 	// ChildrenTable is the table that holds the children relation/edge.
 	ChildrenTable = "nodes"
 	// ChildrenColumn is the table column denoting the children relation/edge.
 	ChildrenColumn = "node_children"
+	// ParentTable is the table that holds the parent relation/edge.
+	ParentTable = "nodes"
+	// ParentColumn is the table column denoting the parent relation/edge.
+	ParentColumn = "node_children"
 	// HandlerTaskTable is the table that holds the handler_task relation/edge.
-	HandlerTaskTable = "nodes"
+	HandlerTaskTable = "handler_tasks"
 	// HandlerTaskInverseTable is the table name for the HandlerTask entity.
 	// It exists in this package in order to avoid circular dependency with the "handlertask" package.
 	HandlerTaskInverseTable = "handler_tasks"
 	// HandlerTaskColumn is the table column denoting the handler_task relation/edge.
 	HandlerTaskColumn = "node_handler_task"
 	// SagaStepTaskTable is the table that holds the saga_step_task relation/edge.
-	SagaStepTaskTable = "nodes"
+	SagaStepTaskTable = "saga_tasks"
 	// SagaStepTaskInverseTable is the table name for the SagaTask entity.
 	// It exists in this package in order to avoid circular dependency with the "sagatask" package.
 	SagaStepTaskInverseTable = "saga_tasks"
 	// SagaStepTaskColumn is the table column denoting the saga_step_task relation/edge.
 	SagaStepTaskColumn = "node_saga_step_task"
 	// SideEffectTaskTable is the table that holds the side_effect_task relation/edge.
-	SideEffectTaskTable = "nodes"
+	SideEffectTaskTable = "side_effect_tasks"
 	// SideEffectTaskInverseTable is the table name for the SideEffectTask entity.
 	// It exists in this package in order to avoid circular dependency with the "sideeffecttask" package.
 	SideEffectTaskInverseTable = "side_effect_tasks"
 	// SideEffectTaskColumn is the table column denoting the side_effect_task relation/edge.
 	SideEffectTaskColumn = "node_side_effect_task"
 	// CompensationTaskTable is the table that holds the compensation_task relation/edge.
-	CompensationTaskTable = "nodes"
+	CompensationTaskTable = "compensation_tasks"
 	// CompensationTaskInverseTable is the table name for the CompensationTask entity.
 	// It exists in this package in order to avoid circular dependency with the "compensationtask" package.
 	CompensationTaskInverseTable = "compensation_tasks"
@@ -73,10 +73,6 @@ var Columns = []string{
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
 	"node_children",
-	"node_handler_task",
-	"node_saga_step_task",
-	"node_side_effect_task",
-	"node_compensation_task",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -102,13 +98,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByParentField orders the results by parent field.
-func ByParentField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newParentStep(), sql.OrderByField(field, opts...))
-	}
-}
-
 // ByChildrenCount orders the results by children count.
 func ByChildrenCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -120,6 +109,13 @@ func ByChildrenCount(opts ...sql.OrderTermOption) OrderOption {
 func ByChildren(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newChildrenStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByParentField orders the results by parent field.
+func ByParentField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newParentStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -150,13 +146,6 @@ func ByCompensationTaskField(field string, opts ...sql.OrderTermOption) OrderOpt
 		sqlgraph.OrderByNeighborTerms(s, newCompensationTaskStep(), sql.OrderByField(field, opts...))
 	}
 }
-func newParentStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(Table, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
-	)
-}
 func newChildrenStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -164,31 +153,38 @@ func newChildrenStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, ChildrenTable, ChildrenColumn),
 	)
 }
+func newParentStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
+	)
+}
 func newHandlerTaskStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(HandlerTaskInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, HandlerTaskTable, HandlerTaskColumn),
+		sqlgraph.Edge(sqlgraph.O2O, false, HandlerTaskTable, HandlerTaskColumn),
 	)
 }
 func newSagaStepTaskStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SagaStepTaskInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, SagaStepTaskTable, SagaStepTaskColumn),
+		sqlgraph.Edge(sqlgraph.O2O, false, SagaStepTaskTable, SagaStepTaskColumn),
 	)
 }
 func newSideEffectTaskStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SideEffectTaskInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, SideEffectTaskTable, SideEffectTaskColumn),
+		sqlgraph.Edge(sqlgraph.O2O, false, SideEffectTaskTable, SideEffectTaskColumn),
 	)
 }
 func newCompensationTaskStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CompensationTaskInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, CompensationTaskTable, CompensationTaskColumn),
+		sqlgraph.Edge(sqlgraph.O2O, false, CompensationTaskTable, CompensationTaskColumn),
 	)
 }

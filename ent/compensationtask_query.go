@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -22,6 +23,8 @@ type CompensationTaskQuery struct {
 	order      []compensationtask.OrderOption
 	inters     []Interceptor
 	predicates []predicate.CompensationTask
+	withNode   *NodeQuery
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (ctq *CompensationTaskQuery) Unique(unique bool) *CompensationTaskQuery {
 func (ctq *CompensationTaskQuery) Order(o ...compensationtask.OrderOption) *CompensationTaskQuery {
 	ctq.order = append(ctq.order, o...)
 	return ctq
+}
+
+// QueryNode chains the current query on the "node" edge.
+func (ctq *CompensationTaskQuery) QueryNode() *NodeQuery {
+	query := (&NodeClient{config: ctq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := ctq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := ctq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(compensationtask.Table, compensationtask.FieldID, selector),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, compensationtask.NodeTable, compensationtask.NodeColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(ctq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first CompensationTask entity from the query.
@@ -250,10 +275,22 @@ func (ctq *CompensationTaskQuery) Clone() *CompensationTaskQuery {
 		order:      append([]compensationtask.OrderOption{}, ctq.order...),
 		inters:     append([]Interceptor{}, ctq.inters...),
 		predicates: append([]predicate.CompensationTask{}, ctq.predicates...),
+		withNode:   ctq.withNode.Clone(),
 		// clone intermediate query.
 		sql:  ctq.sql.Clone(),
 		path: ctq.path,
 	}
+}
+
+// WithNode tells the query-builder to eager-load the nodes that are connected to
+// the "node" edge. The optional arguments are used to configure the query builder of the edge.
+func (ctq *CompensationTaskQuery) WithNode(opts ...func(*NodeQuery)) *CompensationTaskQuery {
+	query := (&NodeClient{config: ctq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	ctq.withNode = query
+	return ctq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -310,15 +347,26 @@ func (ctq *CompensationTaskQuery) prepareQuery(ctx context.Context) error {
 
 func (ctq *CompensationTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CompensationTask, error) {
 	var (
-		nodes = []*CompensationTask{}
-		_spec = ctq.querySpec()
+		nodes       = []*CompensationTask{}
+		withFKs     = ctq.withFKs
+		_spec       = ctq.querySpec()
+		loadedTypes = [1]bool{
+			ctq.withNode != nil,
+		}
 	)
+	if ctq.withNode != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, compensationtask.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*CompensationTask).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &CompensationTask{config: ctq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -330,7 +378,46 @@ func (ctq *CompensationTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := ctq.withNode; query != nil {
+		if err := ctq.loadNode(ctx, query, nodes, nil,
+			func(n *CompensationTask, e *Node) { n.Edges.Node = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (ctq *CompensationTaskQuery) loadNode(ctx context.Context, query *NodeQuery, nodes []*CompensationTask, init func(*CompensationTask), assign func(*CompensationTask, *Node)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*CompensationTask)
+	for i := range nodes {
+		if nodes[i].node_compensation_task == nil {
+			continue
+		}
+		fk := *nodes[i].node_compensation_task
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(node.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "node_compensation_task" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (ctq *CompensationTaskQuery) sqlCount(ctx context.Context) (int, error) {

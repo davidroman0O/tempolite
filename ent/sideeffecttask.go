@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
 )
 
@@ -15,8 +16,32 @@ import (
 type SideEffectTask struct {
 	config
 	// ID of the ent.
-	ID           int `json:"id,omitempty"`
-	selectValues sql.SelectValues
+	ID int `json:"id,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SideEffectTaskQuery when eager-loading is set.
+	Edges                 SideEffectTaskEdges `json:"edges"`
+	node_side_effect_task *string
+	selectValues          sql.SelectValues
+}
+
+// SideEffectTaskEdges holds the relations/edges for other nodes in the graph.
+type SideEffectTaskEdges struct {
+	// Node holds the value of the node edge.
+	Node *Node `json:"node,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// NodeOrErr returns the Node value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SideEffectTaskEdges) NodeOrErr() (*Node, error) {
+	if e.Node != nil {
+		return e.Node, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: node.Label}
+	}
+	return nil, &NotLoadedError{edge: "node"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -26,6 +51,8 @@ func (*SideEffectTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sideeffecttask.FieldID:
 			values[i] = new(sql.NullInt64)
+		case sideeffecttask.ForeignKeys[0]: // node_side_effect_task
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -47,6 +74,13 @@ func (set *SideEffectTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			set.ID = int(value.Int64)
+		case sideeffecttask.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field node_side_effect_task", values[i])
+			} else if value.Valid {
+				set.node_side_effect_task = new(string)
+				*set.node_side_effect_task = value.String
+			}
 		default:
 			set.selectValues.Set(columns[i], values[i])
 		}
@@ -58,6 +92,11 @@ func (set *SideEffectTask) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (set *SideEffectTask) Value(name string) (ent.Value, error) {
 	return set.selectValues.Get(name)
+}
+
+// QueryNode queries the "node" edge of the SideEffectTask entity.
+func (set *SideEffectTask) QueryNode() *NodeQuery {
+	return NewSideEffectTaskClient(set.config).QueryNode(set)
 }
 
 // Update returns a builder for updating this SideEffectTask.

@@ -63,29 +63,6 @@ func IDContainsFold(id string) predicate.Node {
 	return predicate.Node(sql.FieldContainsFold(FieldID, id))
 }
 
-// HasParent applies the HasEdge predicate on the "parent" edge.
-func HasParent() predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasParentWith applies the HasEdge predicate on the "parent" edge with a given conditions (other predicates).
-func HasParentWith(preds ...predicate.Node) predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := newParentStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasChildren applies the HasEdge predicate on the "children" edge.
 func HasChildren() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {
@@ -109,12 +86,35 @@ func HasChildrenWith(preds ...predicate.Node) predicate.Node {
 	})
 }
 
+// HasParent applies the HasEdge predicate on the "parent" edge.
+func HasParent() predicate.Node {
+	return predicate.Node(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasParentWith applies the HasEdge predicate on the "parent" edge with a given conditions (other predicates).
+func HasParentWith(preds ...predicate.Node) predicate.Node {
+	return predicate.Node(func(s *sql.Selector) {
+		step := newParentStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasHandlerTask applies the HasEdge predicate on the "handler_task" edge.
 func HasHandlerTask() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, HandlerTaskTable, HandlerTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, HandlerTaskTable, HandlerTaskColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
@@ -137,7 +137,7 @@ func HasSagaStepTask() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, SagaStepTaskTable, SagaStepTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, SagaStepTaskTable, SagaStepTaskColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
@@ -160,7 +160,7 @@ func HasSideEffectTask() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, SideEffectTaskTable, SideEffectTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, SideEffectTaskTable, SideEffectTaskColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
@@ -183,7 +183,7 @@ func HasCompensationTask() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, CompensationTaskTable, CompensationTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, CompensationTaskTable, CompensationTaskColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

@@ -37,5 +37,8 @@ func (HandlerTask) Edges() []ent.Edge {
 			Unique(),
 		edge.To("execution_context", ExecutionContext.Type).
 			Unique(),
+		edge.From("node", Node.Type).
+			Ref("handler_task").
+			Unique(),
 	}
 }

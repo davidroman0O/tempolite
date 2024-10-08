@@ -379,6 +379,22 @@ func (c *CompensationTaskClient) GetX(ctx context.Context, id int) *Compensation
 	return obj
 }
 
+// QueryNode queries the node edge of a CompensationTask.
+func (c *CompensationTaskClient) QueryNode(ct *CompensationTask) *NodeQuery {
+	query := (&NodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ct.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(compensationtask.Table, compensationtask.FieldID, id),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, compensationtask.NodeTable, compensationtask.NodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(ct.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *CompensationTaskClient) Hooks() []Hook {
 	return c.hooks.CompensationTask
@@ -1039,6 +1055,22 @@ func (c *HandlerTaskClient) QueryExecutionContext(ht *HandlerTask) *ExecutionCon
 	return query
 }
 
+// QueryNode queries the node edge of a HandlerTask.
+func (c *HandlerTaskClient) QueryNode(ht *HandlerTask) *NodeQuery {
+	query := (&NodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ht.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(handlertask.Table, handlertask.FieldID, id),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, handlertask.NodeTable, handlertask.NodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(ht.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *HandlerTaskClient) Hooks() []Hook {
 	return c.hooks.HandlerTask
@@ -1172,22 +1204,6 @@ func (c *NodeClient) GetX(ctx context.Context, id string) *Node {
 	return obj
 }
 
-// QueryParent queries the parent edge of a Node.
-func (c *NodeClient) QueryParent(n *Node) *NodeQuery {
-	query := (&NodeClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := n.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(node.Table, node.FieldID, id),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, node.ParentTable, node.ParentColumn),
-		)
-		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryChildren queries the children edge of a Node.
 func (c *NodeClient) QueryChildren(n *Node) *NodeQuery {
 	query := (&NodeClient{config: c.config}).Query()
@@ -1204,6 +1220,22 @@ func (c *NodeClient) QueryChildren(n *Node) *NodeQuery {
 	return query
 }
 
+// QueryParent queries the parent edge of a Node.
+func (c *NodeClient) QueryParent(n *Node) *NodeQuery {
+	query := (&NodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := n.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(node.Table, node.FieldID, id),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, node.ParentTable, node.ParentColumn),
+		)
+		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryHandlerTask queries the handler_task edge of a Node.
 func (c *NodeClient) QueryHandlerTask(n *Node) *HandlerTaskQuery {
 	query := (&HandlerTaskClient{config: c.config}).Query()
@@ -1212,7 +1244,7 @@ func (c *NodeClient) QueryHandlerTask(n *Node) *HandlerTaskQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(node.Table, node.FieldID, id),
 			sqlgraph.To(handlertask.Table, handlertask.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, node.HandlerTaskTable, node.HandlerTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, node.HandlerTaskTable, node.HandlerTaskColumn),
 		)
 		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
 		return fromV, nil
@@ -1228,7 +1260,7 @@ func (c *NodeClient) QuerySagaStepTask(n *Node) *SagaTaskQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(node.Table, node.FieldID, id),
 			sqlgraph.To(sagatask.Table, sagatask.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, node.SagaStepTaskTable, node.SagaStepTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, node.SagaStepTaskTable, node.SagaStepTaskColumn),
 		)
 		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
 		return fromV, nil
@@ -1244,7 +1276,7 @@ func (c *NodeClient) QuerySideEffectTask(n *Node) *SideEffectTaskQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(node.Table, node.FieldID, id),
 			sqlgraph.To(sideeffecttask.Table, sideeffecttask.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, node.SideEffectTaskTable, node.SideEffectTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, node.SideEffectTaskTable, node.SideEffectTaskColumn),
 		)
 		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
 		return fromV, nil
@@ -1260,7 +1292,7 @@ func (c *NodeClient) QueryCompensationTask(n *Node) *CompensationTaskQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(node.Table, node.FieldID, id),
 			sqlgraph.To(compensationtask.Table, compensationtask.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, node.CompensationTaskTable, node.CompensationTaskColumn),
+			sqlgraph.Edge(sqlgraph.O2O, false, node.CompensationTaskTable, node.CompensationTaskColumn),
 		)
 		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
 		return fromV, nil
@@ -1401,6 +1433,22 @@ func (c *SagaTaskClient) GetX(ctx context.Context, id int) *SagaTask {
 	return obj
 }
 
+// QueryNode queries the node edge of a SagaTask.
+func (c *SagaTaskClient) QueryNode(st *SagaTask) *NodeQuery {
+	query := (&NodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := st.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sagatask.Table, sagatask.FieldID, id),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, sagatask.NodeTable, sagatask.NodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(st.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SagaTaskClient) Hooks() []Hook {
 	return c.hooks.SagaTask
@@ -1532,6 +1580,22 @@ func (c *SideEffectTaskClient) GetX(ctx context.Context, id int) *SideEffectTask
 		panic(err)
 	}
 	return obj
+}
+
+// QueryNode queries the node edge of a SideEffectTask.
+func (c *SideEffectTaskClient) QueryNode(set *SideEffectTask) *NodeQuery {
+	query := (&NodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := set.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffecttask.Table, sideeffecttask.FieldID, id),
+			sqlgraph.To(node.Table, node.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, sideeffecttask.NodeTable, sideeffecttask.NodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(set.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.

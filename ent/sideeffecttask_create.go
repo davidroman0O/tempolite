@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
 )
 
@@ -16,6 +17,25 @@ type SideEffectTaskCreate struct {
 	config
 	mutation *SideEffectTaskMutation
 	hooks    []Hook
+}
+
+// SetNodeID sets the "node" edge to the Node entity by ID.
+func (setc *SideEffectTaskCreate) SetNodeID(id string) *SideEffectTaskCreate {
+	setc.mutation.SetNodeID(id)
+	return setc
+}
+
+// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
+func (setc *SideEffectTaskCreate) SetNillableNodeID(id *string) *SideEffectTaskCreate {
+	if id != nil {
+		setc = setc.SetNodeID(*id)
+	}
+	return setc
+}
+
+// SetNode sets the "node" edge to the Node entity.
+func (setc *SideEffectTaskCreate) SetNode(n *Node) *SideEffectTaskCreate {
+	return setc.SetNodeID(n.ID)
 }
 
 // Mutation returns the SideEffectTaskMutation object of the builder.
@@ -78,6 +98,23 @@ func (setc *SideEffectTaskCreate) createSpec() (*SideEffectTask, *sqlgraph.Creat
 		_node = &SideEffectTask{config: setc.config}
 		_spec = sqlgraph.NewCreateSpec(sideeffecttask.Table, sqlgraph.NewFieldSpec(sideeffecttask.FieldID, field.TypeInt))
 	)
+	if nodes := setc.mutation.NodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   sideeffecttask.NodeTable,
+			Columns: []string{sideeffecttask.NodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.node_side_effect_task = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 

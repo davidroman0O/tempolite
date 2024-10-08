@@ -32,6 +32,8 @@ const (
 	EdgeTaskContext = "task_context"
 	// EdgeExecutionContext holds the string denoting the execution_context edge name in mutations.
 	EdgeExecutionContext = "execution_context"
+	// EdgeNode holds the string denoting the node edge name in mutations.
+	EdgeNode = "node"
 	// Table holds the table name of the handlertask in the database.
 	Table = "handler_tasks"
 	// TaskContextTable is the table that holds the task_context relation/edge.
@@ -48,6 +50,13 @@ const (
 	ExecutionContextInverseTable = "execution_contexts"
 	// ExecutionContextColumn is the table column denoting the execution_context relation/edge.
 	ExecutionContextColumn = "handler_task_execution_context"
+	// NodeTable is the table that holds the node relation/edge.
+	NodeTable = "handler_tasks"
+	// NodeInverseTable is the table name for the Node entity.
+	// It exists in this package in order to avoid circular dependency with the "node" package.
+	NodeInverseTable = "nodes"
+	// NodeColumn is the table column denoting the node relation/edge.
+	NodeColumn = "node_handler_task"
 )
 
 // Columns holds all SQL columns for handlertask fields.
@@ -67,6 +76,7 @@ var Columns = []string{
 var ForeignKeys = []string{
 	"handler_task_task_context",
 	"handler_task_execution_context",
+	"node_handler_task",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -152,6 +162,13 @@ func ByExecutionContextField(field string, opts ...sql.OrderTermOption) OrderOpt
 		sqlgraph.OrderByNeighborTerms(s, newExecutionContextStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByNodeField orders the results by node field.
+func ByNodeField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newNodeStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newTaskContextStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -164,5 +181,12 @@ func newExecutionContextStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionContextInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, ExecutionContextTable, ExecutionContextColumn),
+	)
+}
+func newNodeStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(NodeInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, true, NodeTable, NodeColumn),
 	)
 }

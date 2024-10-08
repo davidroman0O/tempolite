@@ -21,22 +21,20 @@ func (Node) Fields() []ent.Field {
 // Edges of the Node.
 func (Node) Edges() []ent.Edge {
 	return []ent.Edge{
-		// Self-referencing edge for parent node relationship
-		edge.To("children", Node.Type).
-			From("parent").
-			Unique(), // A node has only one parent
 
-		// Define an edge for each possible type of task
+		edge.To("children", Node.Type),
+
+		edge.From("parent", Node.Type).
+			Ref("children").
+			Unique(),
+
 		edge.To("handler_task", HandlerTask.Type).
-			Unique(), // A node can have only one HandlerTask
-
+			Unique(),
 		edge.To("saga_step_task", SagaTask.Type).
-			Unique(), // A node can have only one SagaStepTask
-
+			Unique(),
 		edge.To("side_effect_task", SideEffectTask.Type).
-			Unique(), // A node can have only one SideEffectTask
-
+			Unique(),
 		edge.To("compensation_task", CompensationTask.Type).
-			Unique(), // A node can have only one CompensationTask
+			Unique(),
 	}
 }

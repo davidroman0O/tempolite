@@ -4,6 +4,7 @@ package sagatask
 
 import (
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -50,6 +51,29 @@ func IDLT(id int) predicate.SagaTask {
 // IDLTE applies the LTE predicate on the ID field.
 func IDLTE(id int) predicate.SagaTask {
 	return predicate.SagaTask(sql.FieldLTE(FieldID, id))
+}
+
+// HasNode applies the HasEdge predicate on the "node" edge.
+func HasNode() predicate.SagaTask {
+	return predicate.SagaTask(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, NodeTable, NodeColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasNodeWith applies the HasEdge predicate on the "node" edge with a given conditions (other predicates).
+func HasNodeWith(preds ...predicate.Node) predicate.SagaTask {
+	return predicate.SagaTask(func(s *sql.Selector) {
+		step := newNodeStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.
