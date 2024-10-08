@@ -13,6 +13,7 @@ type TaskContext struct {
 // Fields of the TaskContext.
 func (TaskContext) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("id"),
 		field.Int("RetryCount").Default(0),
 		field.Int("MaxRetry").Default(1),
 	}

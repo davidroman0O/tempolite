@@ -2,6 +2,7 @@ package dag
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -665,7 +666,7 @@ type DotNode struct {
 }
 
 // Returns the DOT representation of this Graph.
-func (g *marshalGraph) Dot(opts *DotOpts) []byte {
+func (g *MarshalGraph) Dot(opts *DotOpts) []byte {
 	if opts == nil {
 		opts = &DotOpts{
 			DrawCycles: true,
@@ -702,7 +703,7 @@ func (g *marshalGraph) Dot(opts *DotOpts) []byte {
 	return w.Bytes()
 }
 
-func (v *marshalVertex) dot(g *marshalGraph, opts *DotOpts) []byte {
+func (v *marshalVertex) dot(g *MarshalGraph, opts *DotOpts) []byte {
 	var buf bytes.Buffer
 	graphName := g.Name
 	if graphName == "" {
@@ -736,7 +737,7 @@ func (v *marshalVertex) dot(g *marshalGraph, opts *DotOpts) []byte {
 	return buf.Bytes()
 }
 
-func (e *marshalEdge) dot(g *marshalGraph) string {
+func (e *marshalEdge) dot(g *MarshalGraph) string {
 	var buf bytes.Buffer
 	graphName := g.Name
 	if graphName == "" {
@@ -752,13 +753,13 @@ func (e *marshalEdge) dot(g *marshalGraph) string {
 	return buf.String()
 }
 
-func cycleDot(e *marshalEdge, g *marshalGraph) string {
+func cycleDot(e *marshalEdge, g *MarshalGraph) string {
 	return e.dot(g) + ` [color = "red", penwidth = "2.0"]`
 }
 
 // Write the subgraph body. The is recursive, and the depth argument is used to
 // record the current depth of iteration.
-func (g *marshalGraph) writeSubgraph(sg *marshalGraph, opts *DotOpts, depth int, w *indentWriter) {
+func (g *MarshalGraph) writeSubgraph(sg *MarshalGraph, opts *DotOpts, depth int, w *indentWriter) {
 	if depth == 0 {
 		return
 	}
@@ -778,7 +779,7 @@ func (g *marshalGraph) writeSubgraph(sg *marshalGraph, opts *DotOpts, depth int,
 	}
 }
 
-func (g *marshalGraph) writeBody(opts *DotOpts, w *indentWriter) {
+func (g *MarshalGraph) writeBody(opts *DotOpts, w *indentWriter) {
 	w.Indent()
 
 	for _, as := range attrStrings(g.Attrs) {
@@ -1279,7 +1280,7 @@ func (g *Graph) init() {
 
 // Dot returns a dot-formatted representation of the Graph.
 func (g *Graph) Dot(opts *DotOpts) []byte {
-	return newMarshalGraph("", g).Dot(opts)
+	return NewMarshalGraph("", g).Dot(opts)
 }
 
 // VertexName returns the name of a vertex.
@@ -1295,7 +1296,7 @@ func VertexName(raw Vertex) string {
 }
 
 // the marshal* structs are for serialization of the graph data.
-type marshalGraph struct {
+type MarshalGraph struct {
 	// Type is always "Graph", for identification as a top level object in the
 	// JSON stream.
 	Type string
@@ -1318,13 +1319,13 @@ type marshalGraph struct {
 
 	// Any number of subgraphs. A subgraph itself is considered a vertex, and
 	// may be referenced by either end of an edge.
-	Subgraphs []*marshalGraph `json:",omitempty"`
+	Subgraphs []*MarshalGraph `json:",omitempty"`
 
 	// Any lists of vertices that are included in cycles.
 	Cycles [][]*marshalVertex `json:",omitempty"`
 }
 
-func (g *marshalGraph) vertexByID(id string) *marshalVertex {
+func (g *MarshalGraph) vertexByID(id string) *marshalVertex {
 	for _, v := range g.Vertices {
 		if id == v.ID {
 			return v
@@ -1401,8 +1402,8 @@ func (e edges) Len() int           { return len(e) }
 func (e edges) Swap(i, j int)      { e[i], e[j] = e[j], e[i] }
 
 // build a marshalGraph structure from a *Graph
-func newMarshalGraph(name string, g *Graph) *marshalGraph {
-	mg := &marshalGraph{
+func NewMarshalGraph(name string, g *Graph) *MarshalGraph {
+	mg := &MarshalGraph{
 		Type:  "Graph",
 		Name:  name,
 		Attrs: make(map[string]string),
@@ -1411,7 +1412,7 @@ func newMarshalGraph(name string, g *Graph) *marshalGraph {
 	for _, v := range g.Vertices() {
 		id := marshalVertexID(v)
 		if sg, ok := marshalSubgrapher(v); ok {
-			smg := newMarshalGraph(VertexName(v), sg)
+			smg := NewMarshalGraph(VertexName(v), sg)
 			smg.ID = id
 			mg.Subgraphs = append(mg.Subgraphs, smg)
 		}
@@ -2148,4 +2149,107 @@ func (w *Walker) waitDeps(
 
 	// All dependencies satisfied and successful
 	doneCh <- true
+}
+
+///////////
+
+// MarshalJSON implements the json.Marshaler interface for Graph.
+func (g *Graph) MarshalJSON() ([]byte, error) {
+	type jsonEdge struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+	}
+
+	type jsonGraph struct {
+		Vertices []string   `json:"vertices"`
+		Edges    []jsonEdge `json:"edges"`
+	}
+
+	jg := jsonGraph{
+		Vertices: make([]string, 0, len(g.vertices)),
+		Edges:    make([]jsonEdge, 0, len(g.edges)),
+	}
+
+	// Marshal vertices
+	for v := range g.vertices {
+		jg.Vertices = append(jg.Vertices, VertexName(v))
+	}
+
+	// Marshal edges
+	for e := range g.edges {
+		edge := e.(Edge)
+		jg.Edges = append(jg.Edges, jsonEdge{
+			Source: VertexName(edge.Source()),
+			Target: VertexName(edge.Target()),
+		})
+	}
+
+	return json.Marshal(jg)
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for Graph.
+func (g *Graph) UnmarshalJSON(data []byte) error {
+	type jsonEdge struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+	}
+
+	type jsonGraph struct {
+		Vertices []string   `json:"vertices"`
+		Edges    []jsonEdge `json:"edges"`
+	}
+
+	var jg jsonGraph
+	if err := json.Unmarshal(data, &jg); err != nil {
+		return err
+	}
+
+	// Clear the existing graph
+	g.init()
+
+	// Unmarshal vertices
+	for _, v := range jg.Vertices {
+		g.Add(v)
+	}
+
+	// Unmarshal edges
+	for _, e := range jg.Edges {
+		source := g.getVertexByName(e.Source)
+		target := g.getVertexByName(e.Target)
+		if source == nil || target == nil {
+			return fmt.Errorf("invalid edge: %v -> %v", e.Source, e.Target)
+		}
+		g.Connect(BasicEdge(source, target))
+	}
+
+	return nil
+}
+
+// getVertexByName is a helper function to find a vertex by its name.
+func (g *Graph) getVertexByName(name string) Vertex {
+	for v := range g.vertices {
+		if VertexName(v) == name {
+			return v
+		}
+	}
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface for AcyclicGraph.
+func (g *AcyclicGraph) MarshalJSON() ([]byte, error) {
+	return g.Graph.MarshalJSON()
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for AcyclicGraph.
+func (g *AcyclicGraph) UnmarshalJSON(data []byte) error {
+	if err := g.Graph.UnmarshalJSON(data); err != nil {
+		return err
+	}
+
+	// Validate that the graph is acyclic
+	if err := g.Validate(); err != nil {
+		return fmt.Errorf("invalid acyclic graph: %v", err)
+	}
+
+	return nil
 }

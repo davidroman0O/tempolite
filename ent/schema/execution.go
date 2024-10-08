@@ -1,6 +1,10 @@
 package schema
 
-import "entgo.io/ent"
+import (
+	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
+	"entgo.io/ent/schema/field"
+)
 
 // Execution holds the schema definition for the Execution entity.
 // One execution is one whole execution of a workflow. It could starts with an Handler or a Saga.
@@ -11,10 +15,16 @@ type Execution struct {
 
 // Fields of the Execution.
 func (Execution) Fields() []ent.Field {
-	return nil
+	return []ent.Field{
+		field.String("id"),
+		field.Bytes("dag"),
+	}
 }
 
 // Edges of the Execution.
 func (Execution) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("execution_context", ExecutionContext.Type).
+			Unique(),
+	}
 }
