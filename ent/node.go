@@ -17,9 +17,11 @@ import (
 
 // Node is the model entity for the Node schema.
 type Node struct {
-	config
+	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
+	// Index holds the value of the "index" field.
+	Index int `json:"index,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the NodeQuery when eager-loading is set.
 	Edges         NodeEdges `json:"edges"`
@@ -115,6 +117,8 @@ func (*Node) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case node.FieldIndex:
+			values[i] = new(sql.NullInt64)
 		case node.FieldID:
 			values[i] = new(sql.NullString)
 		case node.ForeignKeys[0]: // node_children
@@ -139,6 +143,12 @@ func (n *Node) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				n.ID = value.String
+			}
+		case node.FieldIndex:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field index", values[i])
+			} else if value.Valid {
+				n.Index = int(value.Int64)
 			}
 		case node.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -212,7 +222,9 @@ func (n *Node) Unwrap() *Node {
 func (n *Node) String() string {
 	var builder strings.Builder
 	builder.WriteString("Node(")
-	builder.WriteString(fmt.Sprintf("id=%v", n.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", n.ID))
+	builder.WriteString("index=")
+	builder.WriteString(fmt.Sprintf("%v", n.Index))
 	builder.WriteByte(')')
 	return builder.String()
 }

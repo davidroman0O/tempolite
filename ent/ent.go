@@ -14,7 +14,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
 	"github.com/davidroman0O/go-tempolite/ent/entry"
-	"github.com/davidroman0O/go-tempolite/ent/execution"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
 	"github.com/davidroman0O/go-tempolite/ent/node"
@@ -83,7 +82,6 @@ func checkColumn(table, column string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			compensationtask.Table: compensationtask.ValidColumn,
 			entry.Table:            entry.ValidColumn,
-			execution.Table:        execution.ValidColumn,
 			executioncontext.Table: executioncontext.ValidColumn,
 			handlertask.Table:      handlertask.ValidColumn,
 			node.Table:             node.ValidColumn,

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -20,6 +21,12 @@ type NodeCreate struct {
 	config
 	mutation *NodeMutation
 	hooks    []Hook
+}
+
+// SetIndex sets the "index" field.
+func (nc *NodeCreate) SetIndex(i int) *NodeCreate {
+	nc.mutation.SetIndex(i)
+	return nc
 }
 
 // SetID sets the "id" field.
@@ -172,6 +179,9 @@ func (nc *NodeCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (nc *NodeCreate) check() error {
+	if _, ok := nc.mutation.Index(); !ok {
+		return &ValidationError{Name: "index", err: errors.New(`ent: missing required field "Node.index"`)}
+	}
 	return nil
 }
 
@@ -206,6 +216,10 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 	if id, ok := nc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := nc.mutation.Index(); ok {
+		_spec.SetField(node.FieldIndex, field.TypeInt, value)
+		_node.Index = value
 	}
 	if nodes := nc.mutation.ChildrenIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

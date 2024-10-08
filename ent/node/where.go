@@ -63,6 +63,51 @@ func IDContainsFold(id string) predicate.Node {
 	return predicate.Node(sql.FieldContainsFold(FieldID, id))
 }
 
+// Index applies equality check predicate on the "index" field. It's identical to IndexEQ.
+func Index(v int) predicate.Node {
+	return predicate.Node(sql.FieldEQ(FieldIndex, v))
+}
+
+// IndexEQ applies the EQ predicate on the "index" field.
+func IndexEQ(v int) predicate.Node {
+	return predicate.Node(sql.FieldEQ(FieldIndex, v))
+}
+
+// IndexNEQ applies the NEQ predicate on the "index" field.
+func IndexNEQ(v int) predicate.Node {
+	return predicate.Node(sql.FieldNEQ(FieldIndex, v))
+}
+
+// IndexIn applies the In predicate on the "index" field.
+func IndexIn(vs ...int) predicate.Node {
+	return predicate.Node(sql.FieldIn(FieldIndex, vs...))
+}
+
+// IndexNotIn applies the NotIn predicate on the "index" field.
+func IndexNotIn(vs ...int) predicate.Node {
+	return predicate.Node(sql.FieldNotIn(FieldIndex, vs...))
+}
+
+// IndexGT applies the GT predicate on the "index" field.
+func IndexGT(v int) predicate.Node {
+	return predicate.Node(sql.FieldGT(FieldIndex, v))
+}
+
+// IndexGTE applies the GTE predicate on the "index" field.
+func IndexGTE(v int) predicate.Node {
+	return predicate.Node(sql.FieldGTE(FieldIndex, v))
+}
+
+// IndexLT applies the LT predicate on the "index" field.
+func IndexLT(v int) predicate.Node {
+	return predicate.Node(sql.FieldLT(FieldIndex, v))
+}
+
+// IndexLTE applies the LTE predicate on the "index" field.
+func IndexLTE(v int) predicate.Node {
+	return predicate.Node(sql.FieldLTE(FieldIndex, v))
+}
+
 // HasChildren applies the HasEdge predicate on the "children" edge.
 func HasChildren() predicate.Node {
 	return predicate.Node(func(s *sql.Selector) {

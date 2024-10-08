@@ -2253,3 +2253,45 @@ func (g *AcyclicGraph) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+// UnmarshalJSON implements the json.Unmarshaler interface for Graph.
+func UnmarshalJSON(data []byte) (*AcyclicGraph, error) {
+	type jsonEdge struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+	}
+
+	var graph *AcyclicGraph
+
+	type jsonGraph struct {
+		Vertices []string   `json:"vertices"`
+		Edges    []jsonEdge `json:"edges"`
+	}
+
+	var jg jsonGraph
+	if err := json.Unmarshal(data, &jg); err != nil {
+		return nil, err
+	}
+
+	graph = &AcyclicGraph{}
+
+	// Clear the existing graph
+	graph.init()
+
+	// Unmarshal vertices
+	for _, v := range jg.Vertices {
+		graph.Add(v)
+	}
+
+	// Unmarshal edges
+	for _, e := range jg.Edges {
+		source := graph.getVertexByName(e.Source)
+		target := graph.getVertexByName(e.Target)
+		if source == nil || target == nil {
+			return nil, fmt.Errorf("invalid edge: %v -> %v", e.Source, e.Target)
+		}
+		graph.Connect(BasicEdge(source, target))
+	}
+
+	return graph, nil
+}

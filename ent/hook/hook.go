@@ -33,18 +33,6 @@ func (f EntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntryMutation", m)
 }
 
-// The ExecutionFunc type is an adapter to allow the use of ordinary
-// function as Execution mutator.
-type ExecutionFunc func(context.Context, *ent.ExecutionMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ExecutionMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionMutation", m)
-}
-
 // The ExecutionContextFunc type is an adapter to allow the use of ordinary
 // function as ExecutionContext mutator.
 type ExecutionContextFunc func(context.Context, *ent.ExecutionContextMutation) (ent.Value, error)

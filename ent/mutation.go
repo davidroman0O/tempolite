@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
 	"github.com/davidroman0O/go-tempolite/ent/entry"
-	"github.com/davidroman0O/go-tempolite/ent/execution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
 	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
@@ -32,7 +31,6 @@ const (
 	// Node types.
 	TypeCompensationTask = "CompensationTask"
 	TypeEntry            = "Entry"
-	TypeExecution        = "Execution"
 	TypeExecutionContext = "ExecutionContext"
 	TypeHandlerTask      = "HandlerTask"
 	TypeNode             = "Node"
@@ -1053,405 +1051,6 @@ func (m *EntryMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Entry edge %s", name)
-}
-
-// ExecutionMutation represents an operation that mutates the Execution nodes in the graph.
-type ExecutionMutation struct {
-	config
-	op                       Op
-	typ                      string
-	id                       *string
-	dag                      *[]byte
-	clearedFields            map[string]struct{}
-	execution_context        *string
-	clearedexecution_context bool
-	done                     bool
-	oldValue                 func(context.Context) (*Execution, error)
-	predicates               []predicate.Execution
-}
-
-var _ ent.Mutation = (*ExecutionMutation)(nil)
-
-// executionOption allows management of the mutation configuration using functional options.
-type executionOption func(*ExecutionMutation)
-
-// newExecutionMutation creates new mutation for the Execution entity.
-func newExecutionMutation(c config, op Op, opts ...executionOption) *ExecutionMutation {
-	m := &ExecutionMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeExecution,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withExecutionID sets the ID field of the mutation.
-func withExecutionID(id string) executionOption {
-	return func(m *ExecutionMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *Execution
-		)
-		m.oldValue = func(ctx context.Context) (*Execution, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().Execution.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withExecution sets the old Execution of the mutation.
-func withExecution(node *Execution) executionOption {
-	return func(m *ExecutionMutation) {
-		m.oldValue = func(context.Context) (*Execution, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m ExecutionMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m ExecutionMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of Execution entities.
-func (m *ExecutionMutation) SetID(id string) {
-	m.id = &id
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *ExecutionMutation) ID() (id string, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *ExecutionMutation) IDs(ctx context.Context) ([]string, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []string{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().Execution.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetDag sets the "dag" field.
-func (m *ExecutionMutation) SetDag(b []byte) {
-	m.dag = &b
-}
-
-// Dag returns the value of the "dag" field in the mutation.
-func (m *ExecutionMutation) Dag() (r []byte, exists bool) {
-	v := m.dag
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDag returns the old "dag" field's value of the Execution entity.
-// If the Execution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ExecutionMutation) OldDag(ctx context.Context) (v []byte, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDag is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDag requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDag: %w", err)
-	}
-	return oldValue.Dag, nil
-}
-
-// ResetDag resets all changes to the "dag" field.
-func (m *ExecutionMutation) ResetDag() {
-	m.dag = nil
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by id.
-func (m *ExecutionMutation) SetExecutionContextID(id string) {
-	m.execution_context = &id
-}
-
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (m *ExecutionMutation) ClearExecutionContext() {
-	m.clearedexecution_context = true
-}
-
-// ExecutionContextCleared reports if the "execution_context" edge to the ExecutionContext entity was cleared.
-func (m *ExecutionMutation) ExecutionContextCleared() bool {
-	return m.clearedexecution_context
-}
-
-// ExecutionContextID returns the "execution_context" edge ID in the mutation.
-func (m *ExecutionMutation) ExecutionContextID() (id string, exists bool) {
-	if m.execution_context != nil {
-		return *m.execution_context, true
-	}
-	return
-}
-
-// ExecutionContextIDs returns the "execution_context" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ExecutionContextID instead. It exists only for internal usage by the builders.
-func (m *ExecutionMutation) ExecutionContextIDs() (ids []string) {
-	if id := m.execution_context; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetExecutionContext resets all changes to the "execution_context" edge.
-func (m *ExecutionMutation) ResetExecutionContext() {
-	m.execution_context = nil
-	m.clearedexecution_context = false
-}
-
-// Where appends a list predicates to the ExecutionMutation builder.
-func (m *ExecutionMutation) Where(ps ...predicate.Execution) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the ExecutionMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *ExecutionMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.Execution, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *ExecutionMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *ExecutionMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (Execution).
-func (m *ExecutionMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *ExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 1)
-	if m.dag != nil {
-		fields = append(fields, execution.FieldDag)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *ExecutionMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case execution.FieldDag:
-		return m.Dag()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *ExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case execution.FieldDag:
-		return m.OldDag(ctx)
-	}
-	return nil, fmt.Errorf("unknown Execution field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *ExecutionMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case execution.FieldDag:
-		v, ok := value.([]byte)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDag(v)
-		return nil
-	}
-	return fmt.Errorf("unknown Execution field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *ExecutionMutation) AddedFields() []string {
-	return nil
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *ExecutionMutation) AddedField(name string) (ent.Value, bool) {
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *ExecutionMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown Execution numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *ExecutionMutation) ClearedFields() []string {
-	return nil
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *ExecutionMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *ExecutionMutation) ClearField(name string) error {
-	return fmt.Errorf("unknown Execution nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *ExecutionMutation) ResetField(name string) error {
-	switch name {
-	case execution.FieldDag:
-		m.ResetDag()
-		return nil
-	}
-	return fmt.Errorf("unknown Execution field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *ExecutionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.execution_context != nil {
-		edges = append(edges, execution.EdgeExecutionContext)
-	}
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *ExecutionMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case execution.EdgeExecutionContext:
-		if id := m.execution_context; id != nil {
-			return []ent.Value{*id}
-		}
-	}
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *ExecutionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *ExecutionMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *ExecutionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedexecution_context {
-		edges = append(edges, execution.EdgeExecutionContext)
-	}
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *ExecutionMutation) EdgeCleared(name string) bool {
-	switch name {
-	case execution.EdgeExecutionContext:
-		return m.clearedexecution_context
-	}
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *ExecutionMutation) ClearEdge(name string) error {
-	switch name {
-	case execution.EdgeExecutionContext:
-		m.ClearExecutionContext()
-		return nil
-	}
-	return fmt.Errorf("unknown Execution unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *ExecutionMutation) ResetEdge(name string) error {
-	switch name {
-	case execution.EdgeExecutionContext:
-		m.ResetExecutionContext()
-		return nil
-	}
-	return fmt.Errorf("unknown Execution edge %s", name)
 }
 
 // ExecutionContextMutation represents an operation that mutates the ExecutionContext nodes in the graph.
@@ -2700,6 +2299,8 @@ type NodeMutation struct {
 	op                       Op
 	typ                      string
 	id                       *string
+	index                    *int
+	addindex                 *int
 	clearedFields            map[string]struct{}
 	children                 map[string]struct{}
 	removedchildren          map[string]struct{}
@@ -2821,6 +2422,62 @@ func (m *NodeMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetIndex sets the "index" field.
+func (m *NodeMutation) SetIndex(i int) {
+	m.index = &i
+	m.addindex = nil
+}
+
+// Index returns the value of the "index" field in the mutation.
+func (m *NodeMutation) Index() (r int, exists bool) {
+	v := m.index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIndex returns the old "index" field's value of the Node entity.
+// If the Node object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *NodeMutation) OldIndex(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIndex is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIndex requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIndex: %w", err)
+	}
+	return oldValue.Index, nil
+}
+
+// AddIndex adds i to the "index" field.
+func (m *NodeMutation) AddIndex(i int) {
+	if m.addindex != nil {
+		*m.addindex += i
+	} else {
+		m.addindex = &i
+	}
+}
+
+// AddedIndex returns the value that was added to the "index" field in this mutation.
+func (m *NodeMutation) AddedIndex() (r int, exists bool) {
+	v := m.addindex
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetIndex resets all changes to the "index" field.
+func (m *NodeMutation) ResetIndex() {
+	m.index = nil
+	m.addindex = nil
 }
 
 // AddChildIDs adds the "children" edge to the Node entity by ids.
@@ -3106,7 +2763,10 @@ func (m *NodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *NodeMutation) Fields() []string {
-	fields := make([]string, 0, 0)
+	fields := make([]string, 0, 1)
+	if m.index != nil {
+		fields = append(fields, node.FieldIndex)
+	}
 	return fields
 }
 
@@ -3114,6 +2774,10 @@ func (m *NodeMutation) Fields() []string {
 // return value indicates that this field was not set, or was not defined in the
 // schema.
 func (m *NodeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case node.FieldIndex:
+		return m.Index()
+	}
 	return nil, false
 }
 
@@ -3121,6 +2785,10 @@ func (m *NodeMutation) Field(name string) (ent.Value, bool) {
 // returned if the mutation operation is not UpdateOne, or the query to the
 // database failed.
 func (m *NodeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case node.FieldIndex:
+		return m.OldIndex(ctx)
+	}
 	return nil, fmt.Errorf("unknown Node field %s", name)
 }
 
@@ -3129,6 +2797,13 @@ func (m *NodeMutation) OldField(ctx context.Context, name string) (ent.Value, er
 // type.
 func (m *NodeMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case node.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIndex(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Node field %s", name)
 }
@@ -3136,13 +2811,21 @@ func (m *NodeMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *NodeMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addindex != nil {
+		fields = append(fields, node.FieldIndex)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *NodeMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case node.FieldIndex:
+		return m.AddedIndex()
+	}
 	return nil, false
 }
 
@@ -3150,6 +2833,15 @@ func (m *NodeMutation) AddedField(name string) (ent.Value, bool) {
 // the field is not defined in the schema, or if the type mismatched the field
 // type.
 func (m *NodeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case node.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIndex(v)
+		return nil
+	}
 	return fmt.Errorf("unknown Node numeric field %s", name)
 }
 
@@ -3175,6 +2867,11 @@ func (m *NodeMutation) ClearField(name string) error {
 // ResetField resets all changes in the mutation for the field with the given name.
 // It returns an error if the field is not defined in the schema.
 func (m *NodeMutation) ResetField(name string) error {
+	switch name {
+	case node.FieldIndex:
+		m.ResetIndex()
+		return nil
+	}
 	return fmt.Errorf("unknown Node field %s", name)
 }
 

@@ -474,6 +474,18 @@ func (nq *NodeQuery) WithCompensationTask(opts ...func(*CompensationTaskQuery)) 
 
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
+//
+// Example:
+//
+//	var v []struct {
+//		Index int `json:"index,omitempty"`
+//		Count int `json:"count,omitempty"`
+//	}
+//
+//	client.Node.Query().
+//		GroupBy(node.FieldIndex).
+//		Aggregate(ent.Count()).
+//		Scan(ctx, &v)
 func (nq *NodeQuery) GroupBy(field string, fields ...string) *NodeGroupBy {
 	nq.ctx.Fields = append([]string{field}, fields...)
 	grbuild := &NodeGroupBy{build: nq}
@@ -485,6 +497,16 @@ func (nq *NodeQuery) GroupBy(field string, fields ...string) *NodeGroupBy {
 
 // Select allows the selection one or more fields/columns for the given query,
 // instead of selecting all fields in the entity.
+//
+// Example:
+//
+//	var v []struct {
+//		Index int `json:"index,omitempty"`
+//	}
+//
+//	client.Node.Query().
+//		Select(node.FieldIndex).
+//		Scan(ctx, &v)
 func (nq *NodeQuery) Select(fields ...string) *NodeSelect {
 	nq.ctx.Fields = append(nq.ctx.Fields, fields...)
 	sbuild := &NodeSelect{NodeQuery: nq}

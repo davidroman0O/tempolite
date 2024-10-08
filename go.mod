@@ -21,5 +21,7 @@ require (
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/zclconf/go-cty v1.8.0 // indirect
 	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
 )

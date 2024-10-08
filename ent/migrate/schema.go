@@ -76,26 +76,6 @@ var (
 			},
 		},
 	}
-	// ExecutionsColumns holds the columns for the "executions" table.
-	ExecutionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString},
-		{Name: "dag", Type: field.TypeBytes},
-		{Name: "execution_execution_context", Type: field.TypeString, Nullable: true},
-	}
-	// ExecutionsTable holds the schema information for the "executions" table.
-	ExecutionsTable = &schema.Table{
-		Name:       "executions",
-		Columns:    ExecutionsColumns,
-		PrimaryKey: []*schema.Column{ExecutionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "executions_execution_contexts_execution_context",
-				Columns:    []*schema.Column{ExecutionsColumns[2]},
-				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
-	}
 	// ExecutionContextsColumns holds the columns for the "execution_contexts" table.
 	ExecutionContextsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString},
@@ -149,6 +129,7 @@ var (
 	// NodesColumns holds the columns for the "nodes" table.
 	NodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString},
+		{Name: "index", Type: field.TypeInt},
 		{Name: "node_children", Type: field.TypeString, Nullable: true},
 	}
 	// NodesTable holds the schema information for the "nodes" table.
@@ -159,7 +140,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "nodes_nodes_children",
-				Columns:    []*schema.Column{NodesColumns[1]},
+				Columns:    []*schema.Column{NodesColumns[2]},
 				RefColumns: []*schema.Column{NodesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -219,7 +200,6 @@ var (
 	Tables = []*schema.Table{
 		CompensationTasksTable,
 		EntriesTable,
-		ExecutionsTable,
 		ExecutionContextsTable,
 		HandlerTasksTable,
 		NodesTable,
@@ -236,7 +216,6 @@ func init() {
 	EntriesTable.ForeignKeys[2].RefTable = SagaTasksTable
 	EntriesTable.ForeignKeys[3].RefTable = SideEffectTasksTable
 	EntriesTable.ForeignKeys[4].RefTable = CompensationTasksTable
-	ExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
 	HandlerTasksTable.ForeignKeys[0].RefTable = TaskContextsTable
 	HandlerTasksTable.ForeignKeys[1].RefTable = ExecutionContextsTable
 	HandlerTasksTable.ForeignKeys[2].RefTable = NodesTable

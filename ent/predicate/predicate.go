@@ -12,9 +12,6 @@ type CompensationTask func(*sql.Selector)
 // Entry is the predicate function for entry builders.
 type Entry func(*sql.Selector)
 
-// Execution is the predicate function for execution builders.
-type Execution func(*sql.Selector)
-
 // ExecutionContext is the predicate function for executioncontext builders.
 type ExecutionContext func(*sql.Selector)
 

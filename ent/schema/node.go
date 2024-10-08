@@ -15,6 +15,7 @@ type Node struct {
 func (Node) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id"),
+		field.Int("index"),
 	}
 }
 

@@ -79,6 +79,7 @@ func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 		taskID:             task.ID,
 		nodeID:             task.Edges.Node.ID,
 		executionContextID: task.Edges.ExecutionContext.ID,
+		enqueueCounter:     1,
 	}
 
 	log.Printf("Calling handler for task ID %s", task.ID)
@@ -167,6 +168,7 @@ func (tp *Tempolite) onHandlerTaskFailure(controller retrypool.WorkerController[
 	}
 
 	// TODO: test retry mechanism
+	// yup we need to make a better tracking of the retry branches
 	if taskContext.RetryCount < taskContext.MaxRetry {
 		if err = tp.client.
 			TaskContext.

@@ -31,6 +31,27 @@ func (nu *NodeUpdate) Where(ps ...predicate.Node) *NodeUpdate {
 	return nu
 }
 
+// SetIndex sets the "index" field.
+func (nu *NodeUpdate) SetIndex(i int) *NodeUpdate {
+	nu.mutation.ResetIndex()
+	nu.mutation.SetIndex(i)
+	return nu
+}
+
+// SetNillableIndex sets the "index" field if the given value is not nil.
+func (nu *NodeUpdate) SetNillableIndex(i *int) *NodeUpdate {
+	if i != nil {
+		nu.SetIndex(*i)
+	}
+	return nu
+}
+
+// AddIndex adds i to the "index" field.
+func (nu *NodeUpdate) AddIndex(i int) *NodeUpdate {
+	nu.mutation.AddIndex(i)
+	return nu
+}
+
 // AddChildIDs adds the "children" edge to the Node entity by IDs.
 func (nu *NodeUpdate) AddChildIDs(ids ...string) *NodeUpdate {
 	nu.mutation.AddChildIDs(ids...)
@@ -232,6 +253,12 @@ func (nu *NodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := nu.mutation.Index(); ok {
+		_spec.SetField(node.FieldIndex, field.TypeInt, value)
+	}
+	if value, ok := nu.mutation.AddedIndex(); ok {
+		_spec.AddField(node.FieldIndex, field.TypeInt, value)
 	}
 	if nu.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -441,6 +468,27 @@ type NodeUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *NodeMutation
+}
+
+// SetIndex sets the "index" field.
+func (nuo *NodeUpdateOne) SetIndex(i int) *NodeUpdateOne {
+	nuo.mutation.ResetIndex()
+	nuo.mutation.SetIndex(i)
+	return nuo
+}
+
+// SetNillableIndex sets the "index" field if the given value is not nil.
+func (nuo *NodeUpdateOne) SetNillableIndex(i *int) *NodeUpdateOne {
+	if i != nil {
+		nuo.SetIndex(*i)
+	}
+	return nuo
+}
+
+// AddIndex adds i to the "index" field.
+func (nuo *NodeUpdateOne) AddIndex(i int) *NodeUpdateOne {
+	nuo.mutation.AddIndex(i)
+	return nuo
 }
 
 // AddChildIDs adds the "children" edge to the Node entity by IDs.
@@ -674,6 +722,12 @@ func (nuo *NodeUpdateOne) sqlSave(ctx context.Context) (_node *Node, err error) 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := nuo.mutation.Index(); ok {
+		_spec.SetField(node.FieldIndex, field.TypeInt, value)
+	}
+	if value, ok := nuo.mutation.AddedIndex(); ok {
+		_spec.AddField(node.FieldIndex, field.TypeInt, value)
 	}
 	if nuo.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{

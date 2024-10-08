@@ -44,6 +44,14 @@ type enqueueOptions struct {
 	parentID           *string
 	nodeID             *string
 	executionContextID *string
+	index              *int
+}
+
+func WithIndex(index int) EnqueueOption {
+	return func(o *enqueueOptions) {
+		log.Printf("Setting index for enqueue option: %d", index)
+		o.index = &index
+	}
 }
 
 func WithExecutionContextID(id string) EnqueueOption {

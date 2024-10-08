@@ -12,6 +12,8 @@ const (
 	Label = "node"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldIndex holds the string denoting the index field in the database.
+	FieldIndex = "index"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -67,6 +69,7 @@ const (
 // Columns holds all SQL columns for node fields.
 var Columns = []string{
 	FieldID,
+	FieldIndex,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "nodes"
@@ -96,6 +99,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByIndex orders the results by the index field.
+func ByIndex(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIndex, opts...).ToFunc()
 }
 
 // ByChildrenCount orders the results by children count.

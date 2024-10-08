@@ -17,7 +17,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
 	"github.com/davidroman0O/go-tempolite/ent/entry"
-	"github.com/davidroman0O/go-tempolite/ent/execution"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
 	"github.com/davidroman0O/go-tempolite/ent/node"
@@ -35,8 +34,6 @@ type Client struct {
 	CompensationTask *CompensationTaskClient
 	// Entry is the client for interacting with the Entry builders.
 	Entry *EntryClient
-	// Execution is the client for interacting with the Execution builders.
-	Execution *ExecutionClient
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
 	ExecutionContext *ExecutionContextClient
 	// HandlerTask is the client for interacting with the HandlerTask builders.
@@ -62,7 +59,6 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.CompensationTask = NewCompensationTaskClient(c.config)
 	c.Entry = NewEntryClient(c.config)
-	c.Execution = NewExecutionClient(c.config)
 	c.ExecutionContext = NewExecutionContextClient(c.config)
 	c.HandlerTask = NewHandlerTaskClient(c.config)
 	c.Node = NewNodeClient(c.config)
@@ -163,7 +159,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:           cfg,
 		CompensationTask: NewCompensationTaskClient(cfg),
 		Entry:            NewEntryClient(cfg),
-		Execution:        NewExecutionClient(cfg),
 		ExecutionContext: NewExecutionContextClient(cfg),
 		HandlerTask:      NewHandlerTaskClient(cfg),
 		Node:             NewNodeClient(cfg),
@@ -191,7 +186,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:           cfg,
 		CompensationTask: NewCompensationTaskClient(cfg),
 		Entry:            NewEntryClient(cfg),
-		Execution:        NewExecutionClient(cfg),
 		ExecutionContext: NewExecutionContextClient(cfg),
 		HandlerTask:      NewHandlerTaskClient(cfg),
 		Node:             NewNodeClient(cfg),
@@ -227,8 +221,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.CompensationTask, c.Entry, c.Execution, c.ExecutionContext, c.HandlerTask,
-		c.Node, c.SagaTask, c.SideEffectTask, c.TaskContext,
+		c.CompensationTask, c.Entry, c.ExecutionContext, c.HandlerTask, c.Node,
+		c.SagaTask, c.SideEffectTask, c.TaskContext,
 	} {
 		n.Use(hooks...)
 	}
@@ -238,8 +232,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.CompensationTask, c.Entry, c.Execution, c.ExecutionContext, c.HandlerTask,
-		c.Node, c.SagaTask, c.SideEffectTask, c.TaskContext,
+		c.CompensationTask, c.Entry, c.ExecutionContext, c.HandlerTask, c.Node,
+		c.SagaTask, c.SideEffectTask, c.TaskContext,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -252,8 +246,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CompensationTask.mutate(ctx, m)
 	case *EntryMutation:
 		return c.Entry.mutate(ctx, m)
-	case *ExecutionMutation:
-		return c.Execution.mutate(ctx, m)
 	case *ExecutionContextMutation:
 		return c.ExecutionContext.mutate(ctx, m)
 	case *HandlerTaskMutation:
@@ -630,155 +622,6 @@ func (c *EntryClient) mutate(ctx context.Context, m *EntryMutation) (Value, erro
 		return (&EntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Entry mutation op: %q", m.Op())
-	}
-}
-
-// ExecutionClient is a client for the Execution schema.
-type ExecutionClient struct {
-	config
-}
-
-// NewExecutionClient returns a client for the Execution from the given config.
-func NewExecutionClient(c config) *ExecutionClient {
-	return &ExecutionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `execution.Hooks(f(g(h())))`.
-func (c *ExecutionClient) Use(hooks ...Hook) {
-	c.hooks.Execution = append(c.hooks.Execution, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `execution.Intercept(f(g(h())))`.
-func (c *ExecutionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.Execution = append(c.inters.Execution, interceptors...)
-}
-
-// Create returns a builder for creating a Execution entity.
-func (c *ExecutionClient) Create() *ExecutionCreate {
-	mutation := newExecutionMutation(c.config, OpCreate)
-	return &ExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of Execution entities.
-func (c *ExecutionClient) CreateBulk(builders ...*ExecutionCreate) *ExecutionCreateBulk {
-	return &ExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ExecutionClient) MapCreateBulk(slice any, setFunc func(*ExecutionCreate, int)) *ExecutionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ExecutionCreateBulk{err: fmt.Errorf("calling to ExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ExecutionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for Execution.
-func (c *ExecutionClient) Update() *ExecutionUpdate {
-	mutation := newExecutionMutation(c.config, OpUpdate)
-	return &ExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ExecutionClient) UpdateOne(e *Execution) *ExecutionUpdateOne {
-	mutation := newExecutionMutation(c.config, OpUpdateOne, withExecution(e))
-	return &ExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ExecutionClient) UpdateOneID(id string) *ExecutionUpdateOne {
-	mutation := newExecutionMutation(c.config, OpUpdateOne, withExecutionID(id))
-	return &ExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for Execution.
-func (c *ExecutionClient) Delete() *ExecutionDelete {
-	mutation := newExecutionMutation(c.config, OpDelete)
-	return &ExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ExecutionClient) DeleteOne(e *Execution) *ExecutionDeleteOne {
-	return c.DeleteOneID(e.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ExecutionClient) DeleteOneID(id string) *ExecutionDeleteOne {
-	builder := c.Delete().Where(execution.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ExecutionDeleteOne{builder}
-}
-
-// Query returns a query builder for Execution.
-func (c *ExecutionClient) Query() *ExecutionQuery {
-	return &ExecutionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeExecution},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a Execution entity by its id.
-func (c *ExecutionClient) Get(ctx context.Context, id string) (*Execution, error) {
-	return c.Query().Where(execution.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ExecutionClient) GetX(ctx context.Context, id string) *Execution {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryExecutionContext queries the execution_context edge of a Execution.
-func (c *ExecutionClient) QueryExecutionContext(e *Execution) *ExecutionContextQuery {
-	query := (&ExecutionContextClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := e.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(execution.Table, execution.FieldID, id),
-			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, execution.ExecutionContextTable, execution.ExecutionContextColumn),
-		)
-		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *ExecutionClient) Hooks() []Hook {
-	return c.hooks.Execution
-}
-
-// Interceptors returns the client interceptors.
-func (c *ExecutionClient) Interceptors() []Interceptor {
-	return c.inters.Execution
-}
-
-func (c *ExecutionClient) mutate(ctx context.Context, m *ExecutionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown Execution mutation op: %q", m.Op())
 	}
 }
 
@@ -1759,11 +1602,11 @@ func (c *TaskContextClient) mutate(ctx context.Context, m *TaskContextMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CompensationTask, Entry, Execution, ExecutionContext, HandlerTask, Node,
-		SagaTask, SideEffectTask, TaskContext []ent.Hook
+		CompensationTask, Entry, ExecutionContext, HandlerTask, Node, SagaTask,
+		SideEffectTask, TaskContext []ent.Hook
 	}
 	inters struct {
-		CompensationTask, Entry, Execution, ExecutionContext, HandlerTask, Node,
-		SagaTask, SideEffectTask, TaskContext []ent.Interceptor
+		CompensationTask, Entry, ExecutionContext, HandlerTask, Node, SagaTask,
+		SideEffectTask, TaskContext []ent.Interceptor
 	}
 )

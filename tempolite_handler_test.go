@@ -123,8 +123,8 @@ func TestHandlerChildren(t *testing.T) {
 
 var retryFlag atomic.Bool
 
-func simpleRetryHandler(ctx HandlerContext, task TaskInt) (interface{}, error) {
-	log.Printf("simpleRetryHandler Task %d", task)
+func simpleHandlerChildrenRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
+	log.Printf("simpleHandlerChildrenRetry Task %d", task)
 	if retryFlag.Load() {
 		retryFlag.Store(false)
 		fmt.Println("retryFlag set to false")
@@ -137,7 +137,7 @@ func parentHandlerRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
 	var err error
 	var id string
 
-	if id, err = ctx.Enqueue(simpleRetryHandler, TaskInt{task.Data + 2}); err != nil {
+	if id, err = ctx.Enqueue(simpleHandlerChildrenRetry, TaskInt{task.Data + 2}); err != nil {
 		return nil, err
 	}
 
@@ -146,8 +146,8 @@ func parentHandlerRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
 	return ctx.WaitFor(id)
 }
 
-// go test -v -timeout 30s -run ^TestHandlerRetries$ .
-func TestHandlerRetries(t *testing.T) {
+// go test -v -timeout 30s -run ^TestHandlerRetriesChildren$ .
+func TestHandlerRetriesChildren(t *testing.T) {
 
 	ctx := context.Background()
 
@@ -162,7 +162,7 @@ func TestHandlerRetries(t *testing.T) {
 
 	retryFlag.Store(true)
 
-	if err := tp.RegisterHandler(simpleRetryHandler); err != nil {
+	if err := tp.RegisterHandler(simpleHandlerChildrenRetry); err != nil {
 		t.Fatalf("Error registering handler: %v", err)
 	}
 
@@ -172,6 +172,78 @@ func TestHandlerRetries(t *testing.T) {
 
 	var id string
 	if id, err = tp.Enqueue(ctx, parentHandlerRetry, TaskInt{1}); err != nil {
+		t.Fatalf("Error enqueuing task: %v", err)
+	}
+
+	log.Printf("ID: %s", id)
+
+	ctxTimeout := context.Background()
+	ctxTimeout, cancel := context.WithTimeout(ctxTimeout, 5*time.Second)
+	defer cancel()
+
+	data, err := tp.WaitFor(ctxTimeout, id)
+	if err != nil {
+		t.Fatalf("Error waiting for task: %v", err)
+	}
+
+	log.Printf("Data: %v", data)
+
+	tp.Wait(func(ti TempoliteInfo) bool {
+		log.Println(ti)
+		return ti.IsCompleted()
+	}, time.Second)
+}
+
+func handlerChildrenHandler(ctx HandlerContext, task TaskInt) (interface{}, error) {
+	log.Printf("handlerChildrenHandler Task %d", task)
+	return nil, nil
+}
+
+func handlerParentRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
+	var err error
+	var id string
+
+	if id, err = ctx.Enqueue(handlerChildrenHandler, TaskInt{task.Data + 2}); err != nil {
+		return nil, err
+	}
+
+	if retryFlag.Load() {
+		retryFlag.Store(false)
+		fmt.Println("retryFlag set to false")
+		return nil, fmt.Errorf("failied on purpose")
+	}
+
+	log.Printf("parentHandler Task %d", task)
+
+	return ctx.WaitFor(id)
+}
+
+// go test -v -timeout 30s -run ^TestHandlerRetriesParent$ .
+func TestHandlerRetriesParent(t *testing.T) {
+
+	ctx := context.Background()
+
+	tp, err := New(ctx,
+		WithDestructive(),
+		WithPath("./db/tempolite_handler_parent_retries_test.db"),
+	)
+	if err != nil {
+		t.Fatalf("Error creating Tempolite: %v", err)
+	}
+	defer tp.Close()
+
+	retryFlag.Store(true)
+
+	if err := tp.RegisterHandler(handlerChildrenHandler); err != nil {
+		t.Fatalf("Error registering handler: %v", err)
+	}
+
+	if err := tp.RegisterHandler(handlerParentRetry); err != nil {
+		t.Fatalf("Error registering handler: %v", err)
+	}
+
+	var id string
+	if id, err = tp.Enqueue(ctx, handlerParentRetry, TaskInt{1}); err != nil {
 		t.Fatalf("Error enqueuing task: %v", err)
 	}
 
