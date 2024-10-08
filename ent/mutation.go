@@ -2301,12 +2301,8 @@ type NodeMutation struct {
 	id                       *string
 	index                    *int
 	addindex                 *int
-	clearedFields            map[string]struct{}
-	children                 map[string]struct{}
-	removedchildren          map[string]struct{}
-	clearedchildren          bool
 	parent                   *string
-	clearedparent            bool
+	clearedFields            map[string]struct{}
 	handler_task             *string
 	clearedhandler_task      bool
 	saga_step_task           *int
@@ -2480,97 +2476,53 @@ func (m *NodeMutation) ResetIndex() {
 	m.addindex = nil
 }
 
-// AddChildIDs adds the "children" edge to the Node entity by ids.
-func (m *NodeMutation) AddChildIDs(ids ...string) {
-	if m.children == nil {
-		m.children = make(map[string]struct{})
+// SetParent sets the "parent" field.
+func (m *NodeMutation) SetParent(s string) {
+	m.parent = &s
+}
+
+// Parent returns the value of the "parent" field in the mutation.
+func (m *NodeMutation) Parent() (r string, exists bool) {
+	v := m.parent
+	if v == nil {
+		return
 	}
-	for i := range ids {
-		m.children[ids[i]] = struct{}{}
+	return *v, true
+}
+
+// OldParent returns the old "parent" field's value of the Node entity.
+// If the Node object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *NodeMutation) OldParent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParent is only allowed on UpdateOne operations")
 	}
-}
-
-// ClearChildren clears the "children" edge to the Node entity.
-func (m *NodeMutation) ClearChildren() {
-	m.clearedchildren = true
-}
-
-// ChildrenCleared reports if the "children" edge to the Node entity was cleared.
-func (m *NodeMutation) ChildrenCleared() bool {
-	return m.clearedchildren
-}
-
-// RemoveChildIDs removes the "children" edge to the Node entity by IDs.
-func (m *NodeMutation) RemoveChildIDs(ids ...string) {
-	if m.removedchildren == nil {
-		m.removedchildren = make(map[string]struct{})
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParent requires an ID field in the mutation")
 	}
-	for i := range ids {
-		delete(m.children, ids[i])
-		m.removedchildren[ids[i]] = struct{}{}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParent: %w", err)
 	}
+	return oldValue.Parent, nil
 }
 
-// RemovedChildren returns the removed IDs of the "children" edge to the Node entity.
-func (m *NodeMutation) RemovedChildrenIDs() (ids []string) {
-	for id := range m.removedchildren {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ChildrenIDs returns the "children" edge IDs in the mutation.
-func (m *NodeMutation) ChildrenIDs() (ids []string) {
-	for id := range m.children {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetChildren resets all changes to the "children" edge.
-func (m *NodeMutation) ResetChildren() {
-	m.children = nil
-	m.clearedchildren = false
-	m.removedchildren = nil
-}
-
-// SetParentID sets the "parent" edge to the Node entity by id.
-func (m *NodeMutation) SetParentID(id string) {
-	m.parent = &id
-}
-
-// ClearParent clears the "parent" edge to the Node entity.
+// ClearParent clears the value of the "parent" field.
 func (m *NodeMutation) ClearParent() {
-	m.clearedparent = true
+	m.parent = nil
+	m.clearedFields[node.FieldParent] = struct{}{}
 }
 
-// ParentCleared reports if the "parent" edge to the Node entity was cleared.
+// ParentCleared returns if the "parent" field was cleared in this mutation.
 func (m *NodeMutation) ParentCleared() bool {
-	return m.clearedparent
+	_, ok := m.clearedFields[node.FieldParent]
+	return ok
 }
 
-// ParentID returns the "parent" edge ID in the mutation.
-func (m *NodeMutation) ParentID() (id string, exists bool) {
-	if m.parent != nil {
-		return *m.parent, true
-	}
-	return
-}
-
-// ParentIDs returns the "parent" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ParentID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) ParentIDs() (ids []string) {
-	if id := m.parent; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetParent resets all changes to the "parent" edge.
+// ResetParent resets all changes to the "parent" field.
 func (m *NodeMutation) ResetParent() {
 	m.parent = nil
-	m.clearedparent = false
+	delete(m.clearedFields, node.FieldParent)
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by id.
@@ -2763,9 +2715,12 @@ func (m *NodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *NodeMutation) Fields() []string {
-	fields := make([]string, 0, 1)
+	fields := make([]string, 0, 2)
 	if m.index != nil {
 		fields = append(fields, node.FieldIndex)
+	}
+	if m.parent != nil {
+		fields = append(fields, node.FieldParent)
 	}
 	return fields
 }
@@ -2777,6 +2732,8 @@ func (m *NodeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case node.FieldIndex:
 		return m.Index()
+	case node.FieldParent:
+		return m.Parent()
 	}
 	return nil, false
 }
@@ -2788,6 +2745,8 @@ func (m *NodeMutation) OldField(ctx context.Context, name string) (ent.Value, er
 	switch name {
 	case node.FieldIndex:
 		return m.OldIndex(ctx)
+	case node.FieldParent:
+		return m.OldParent(ctx)
 	}
 	return nil, fmt.Errorf("unknown Node field %s", name)
 }
@@ -2803,6 +2762,13 @@ func (m *NodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIndex(v)
+		return nil
+	case node.FieldParent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParent(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Node field %s", name)
@@ -2848,7 +2814,11 @@ func (m *NodeMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *NodeMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(node.FieldParent) {
+		fields = append(fields, node.FieldParent)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -2861,6 +2831,11 @@ func (m *NodeMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *NodeMutation) ClearField(name string) error {
+	switch name {
+	case node.FieldParent:
+		m.ClearParent()
+		return nil
+	}
 	return fmt.Errorf("unknown Node nullable field %s", name)
 }
 
@@ -2871,19 +2846,16 @@ func (m *NodeMutation) ResetField(name string) error {
 	case node.FieldIndex:
 		m.ResetIndex()
 		return nil
+	case node.FieldParent:
+		m.ResetParent()
+		return nil
 	}
 	return fmt.Errorf("unknown Node field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *NodeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
-	if m.children != nil {
-		edges = append(edges, node.EdgeChildren)
-	}
-	if m.parent != nil {
-		edges = append(edges, node.EdgeParent)
-	}
+	edges := make([]string, 0, 4)
 	if m.handler_task != nil {
 		edges = append(edges, node.EdgeHandlerTask)
 	}
@@ -2903,16 +2875,6 @@ func (m *NodeMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *NodeMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case node.EdgeChildren:
-		ids := make([]ent.Value, 0, len(m.children))
-		for id := range m.children {
-			ids = append(ids, id)
-		}
-		return ids
-	case node.EdgeParent:
-		if id := m.parent; id != nil {
-			return []ent.Value{*id}
-		}
 	case node.EdgeHandlerTask:
 		if id := m.handler_task; id != nil {
 			return []ent.Value{*id}
@@ -2935,36 +2897,19 @@ func (m *NodeMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *NodeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
-	if m.removedchildren != nil {
-		edges = append(edges, node.EdgeChildren)
-	}
+	edges := make([]string, 0, 4)
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *NodeMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case node.EdgeChildren:
-		ids := make([]ent.Value, 0, len(m.removedchildren))
-		for id := range m.removedchildren {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *NodeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
-	if m.clearedchildren {
-		edges = append(edges, node.EdgeChildren)
-	}
-	if m.clearedparent {
-		edges = append(edges, node.EdgeParent)
-	}
+	edges := make([]string, 0, 4)
 	if m.clearedhandler_task {
 		edges = append(edges, node.EdgeHandlerTask)
 	}
@@ -2984,10 +2929,6 @@ func (m *NodeMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *NodeMutation) EdgeCleared(name string) bool {
 	switch name {
-	case node.EdgeChildren:
-		return m.clearedchildren
-	case node.EdgeParent:
-		return m.clearedparent
 	case node.EdgeHandlerTask:
 		return m.clearedhandler_task
 	case node.EdgeSagaStepTask:
@@ -3004,9 +2945,6 @@ func (m *NodeMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *NodeMutation) ClearEdge(name string) error {
 	switch name {
-	case node.EdgeParent:
-		m.ClearParent()
-		return nil
 	case node.EdgeHandlerTask:
 		m.ClearHandlerTask()
 		return nil
@@ -3027,12 +2965,6 @@ func (m *NodeMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *NodeMutation) ResetEdge(name string) error {
 	switch name {
-	case node.EdgeChildren:
-		m.ResetChildren()
-		return nil
-	case node.EdgeParent:
-		m.ResetParent()
-		return nil
 	case node.EdgeHandlerTask:
 		m.ResetHandlerTask()
 		return nil

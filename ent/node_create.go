@@ -29,44 +29,24 @@ func (nc *NodeCreate) SetIndex(i int) *NodeCreate {
 	return nc
 }
 
+// SetParent sets the "parent" field.
+func (nc *NodeCreate) SetParent(s string) *NodeCreate {
+	nc.mutation.SetParent(s)
+	return nc
+}
+
+// SetNillableParent sets the "parent" field if the given value is not nil.
+func (nc *NodeCreate) SetNillableParent(s *string) *NodeCreate {
+	if s != nil {
+		nc.SetParent(*s)
+	}
+	return nc
+}
+
 // SetID sets the "id" field.
 func (nc *NodeCreate) SetID(s string) *NodeCreate {
 	nc.mutation.SetID(s)
 	return nc
-}
-
-// AddChildIDs adds the "children" edge to the Node entity by IDs.
-func (nc *NodeCreate) AddChildIDs(ids ...string) *NodeCreate {
-	nc.mutation.AddChildIDs(ids...)
-	return nc
-}
-
-// AddChildren adds the "children" edges to the Node entity.
-func (nc *NodeCreate) AddChildren(n ...*Node) *NodeCreate {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nc.AddChildIDs(ids...)
-}
-
-// SetParentID sets the "parent" edge to the Node entity by ID.
-func (nc *NodeCreate) SetParentID(id string) *NodeCreate {
-	nc.mutation.SetParentID(id)
-	return nc
-}
-
-// SetNillableParentID sets the "parent" edge to the Node entity by ID if the given value is not nil.
-func (nc *NodeCreate) SetNillableParentID(id *string) *NodeCreate {
-	if id != nil {
-		nc = nc.SetParentID(*id)
-	}
-	return nc
-}
-
-// SetParent sets the "parent" edge to the Node entity.
-func (nc *NodeCreate) SetParent(n *Node) *NodeCreate {
-	return nc.SetParentID(n.ID)
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by ID.
@@ -221,38 +201,9 @@ func (nc *NodeCreate) createSpec() (*Node, *sqlgraph.CreateSpec) {
 		_spec.SetField(node.FieldIndex, field.TypeInt, value)
 		_node.Index = value
 	}
-	if nodes := nc.mutation.ChildrenIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := nc.mutation.ParentIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   node.ParentTable,
-			Columns: []string{node.ParentColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.node_children = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
+	if value, ok := nc.mutation.Parent(); ok {
+		_spec.SetField(node.FieldParent, field.TypeString, value)
+		_node.Parent = value
 	}
 	if nodes := nc.mutation.HandlerTaskIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

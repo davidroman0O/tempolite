@@ -16,19 +16,13 @@ func (Node) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id"),
 		field.Int("index"),
+		field.String("parent").Optional(),
 	}
 }
 
 // Edges of the Node.
 func (Node) Edges() []ent.Edge {
 	return []ent.Edge{
-
-		edge.To("children", Node.Type),
-
-		edge.From("parent", Node.Type).
-			Ref("children").
-			Unique(),
-
 		edge.To("handler_task", HandlerTask.Type).
 			Unique(),
 		edge.To("saga_step_task", SagaTask.Type).

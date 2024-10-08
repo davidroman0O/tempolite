@@ -27,13 +27,10 @@ type NodeQuery struct {
 	order                []node.OrderOption
 	inters               []Interceptor
 	predicates           []predicate.Node
-	withChildren         *NodeQuery
-	withParent           *NodeQuery
 	withHandlerTask      *HandlerTaskQuery
 	withSagaStepTask     *SagaTaskQuery
 	withSideEffectTask   *SideEffectTaskQuery
 	withCompensationTask *CompensationTaskQuery
-	withFKs              bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -68,50 +65,6 @@ func (nq *NodeQuery) Unique(unique bool) *NodeQuery {
 func (nq *NodeQuery) Order(o ...node.OrderOption) *NodeQuery {
 	nq.order = append(nq.order, o...)
 	return nq
-}
-
-// QueryChildren chains the current query on the "children" edge.
-func (nq *NodeQuery) QueryChildren() *NodeQuery {
-	query := (&NodeClient{config: nq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := nq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := nq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(node.Table, node.FieldID, selector),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, node.ChildrenTable, node.ChildrenColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(nq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryParent chains the current query on the "parent" edge.
-func (nq *NodeQuery) QueryParent() *NodeQuery {
-	query := (&NodeClient{config: nq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := nq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := nq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(node.Table, node.FieldID, selector),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, node.ParentTable, node.ParentColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(nq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // QueryHandlerTask chains the current query on the "handler_task" edge.
@@ -394,8 +347,6 @@ func (nq *NodeQuery) Clone() *NodeQuery {
 		order:                append([]node.OrderOption{}, nq.order...),
 		inters:               append([]Interceptor{}, nq.inters...),
 		predicates:           append([]predicate.Node{}, nq.predicates...),
-		withChildren:         nq.withChildren.Clone(),
-		withParent:           nq.withParent.Clone(),
 		withHandlerTask:      nq.withHandlerTask.Clone(),
 		withSagaStepTask:     nq.withSagaStepTask.Clone(),
 		withSideEffectTask:   nq.withSideEffectTask.Clone(),
@@ -404,28 +355,6 @@ func (nq *NodeQuery) Clone() *NodeQuery {
 		sql:  nq.sql.Clone(),
 		path: nq.path,
 	}
-}
-
-// WithChildren tells the query-builder to eager-load the nodes that are connected to
-// the "children" edge. The optional arguments are used to configure the query builder of the edge.
-func (nq *NodeQuery) WithChildren(opts ...func(*NodeQuery)) *NodeQuery {
-	query := (&NodeClient{config: nq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	nq.withChildren = query
-	return nq
-}
-
-// WithParent tells the query-builder to eager-load the nodes that are connected to
-// the "parent" edge. The optional arguments are used to configure the query builder of the edge.
-func (nq *NodeQuery) WithParent(opts ...func(*NodeQuery)) *NodeQuery {
-	query := (&NodeClient{config: nq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	nq.withParent = query
-	return nq
 }
 
 // WithHandlerTask tells the query-builder to eager-load the nodes that are connected to
@@ -549,23 +478,14 @@ func (nq *NodeQuery) prepareQuery(ctx context.Context) error {
 func (nq *NodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Node, error) {
 	var (
 		nodes       = []*Node{}
-		withFKs     = nq.withFKs
 		_spec       = nq.querySpec()
-		loadedTypes = [6]bool{
-			nq.withChildren != nil,
-			nq.withParent != nil,
+		loadedTypes = [4]bool{
 			nq.withHandlerTask != nil,
 			nq.withSagaStepTask != nil,
 			nq.withSideEffectTask != nil,
 			nq.withCompensationTask != nil,
 		}
 	)
-	if nq.withParent != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, node.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Node).scanValues(nil, columns)
 	}
@@ -583,19 +503,6 @@ func (nq *NodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Node, e
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
-	}
-	if query := nq.withChildren; query != nil {
-		if err := nq.loadChildren(ctx, query, nodes,
-			func(n *Node) { n.Edges.Children = []*Node{} },
-			func(n *Node, e *Node) { n.Edges.Children = append(n.Edges.Children, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := nq.withParent; query != nil {
-		if err := nq.loadParent(ctx, query, nodes, nil,
-			func(n *Node, e *Node) { n.Edges.Parent = e }); err != nil {
-			return nil, err
-		}
 	}
 	if query := nq.withHandlerTask; query != nil {
 		if err := nq.loadHandlerTask(ctx, query, nodes, nil,
@@ -624,69 +531,6 @@ func (nq *NodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Node, e
 	return nodes, nil
 }
 
-func (nq *NodeQuery) loadChildren(ctx context.Context, query *NodeQuery, nodes []*Node, init func(*Node), assign func(*Node, *Node)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Node)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	query.withFKs = true
-	query.Where(predicate.Node(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(node.ChildrenColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.node_children
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "node_children" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "node_children" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (nq *NodeQuery) loadParent(ctx context.Context, query *NodeQuery, nodes []*Node, init func(*Node), assign func(*Node, *Node)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Node)
-	for i := range nodes {
-		if nodes[i].node_children == nil {
-			continue
-		}
-		fk := *nodes[i].node_children
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(node.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "node_children" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
 func (nq *NodeQuery) loadHandlerTask(ctx context.Context, query *HandlerTaskQuery, nodes []*Node, init func(*Node), assign func(*Node, *HandlerTask)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Node)

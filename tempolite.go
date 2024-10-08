@@ -336,7 +336,7 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
 	log.Printf("Enqueuing task with handler %s", handlerName)
 
-	handkerInfo, exists := tp.getHandler(handlerName)
+	handlerInfo, exists := tp.getHandler(handlerName)
 	if !exists {
 		log.Printf("No handler registered with name %s", handlerName)
 		return "", fmt.Errorf("no handler registered with name: %s", handlerName)
@@ -360,301 +360,113 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	if tx, err = tp.client.Tx(ctx); err != nil {
 		return "", err
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
 	// Before attempting to create a new taskContext or handlerTask, we need to check if we're not creating a duplicate of a retry
-	// So if I execited before and succeeded, but right after me my parent failed, then i will be re-executed since I'm not a side effect, therefore i need to re-identify myself eventually.
+	// So if I executed before and succeeded, but right after me my parent failed, then i will be re-executed since I'm not a side effect, therefore i need to re-identify myself eventually.
 	// Just to prevent my creation again
 	var existingNode *ent.Node
 
 	if opts.nodeID != nil && opts.index != nil {
 		log.Printf("Searching for existing node: ParentID=%s, Index=%d", *opts.nodeID, *opts.index)
-		existingNode, err = tp.findExistingNode(ctx, tx, *opts.nodeID, *opts.index)
+		existingNode, err = tp.findExistingChildNode(ctx, tx, *opts.nodeID, *opts.index)
 		if err != nil {
 			log.Printf("Error finding existing node: %v", err)
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
 			return "", err
 		}
 		if existingNode != nil {
-			log.Printf("Existing node found: ID=%s, Index=%d", existingNode.ID, existingNode.Index)
-
-			// Update the existing handler task
-			handlerTask, err := existingNode.QueryHandlerTask().Only(ctx)
-			if err != nil {
-				return "", err
-			}
-
-			updatedHandlerTask, err := tx.HandlerTask.UpdateOne(handlerTask).
-				SetStatus(handlertask.Status(types.TaskStatusToString(types.TaskStatusPending))).
-				SetPayload(payloadBytes).
-				Save(ctx)
-			if err != nil {
-				if err := tx.Rollback(); err != nil {
-					return "", err
-				}
-				return "", err
-			}
-
-			if err := tx.Commit(); err != nil {
-				return "", err
-			}
-			log.Printf("Existing task updated with ID %s", updatedHandlerTask.ID)
-			return updatedHandlerTask.ID, nil
+			return tp.updateExistingTask(ctx, tx, existingNode, payloadBytes)
 		} else {
 			log.Printf("No existing node found for ParentID=%s, Index=%d", *opts.nodeID, *opts.index)
 		}
-	}
-
-	fmt.Println("====")
-	if opts.parentID != nil {
-		fmt.Println(*opts.parentID)
-	}
-	if opts.nodeID != nil {
-		fmt.Println(*opts.nodeID)
-	}
-	if opts.index != nil {
-		fmt.Println(*opts.index)
-	}
-	fmt.Println("====")
-
-	if existingNode != nil {
-		log.Printf("Found existing node %s for index %d", existingNode.ID, *opts.index)
-		handlerTask, err := existingNode.QueryHandlerTask().Only(ctx)
-		if err != nil {
-			return "", err
-		}
-
-		// Update the existing handler task
-		updatedHandlerTask, err := tx.HandlerTask.UpdateOne(handlerTask).
-			SetStatus(handlertask.Status(types.TaskStatusToString(types.TaskStatusPending))).
-			SetPayload(payloadBytes).
-			Save(ctx)
-		if err != nil {
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		if err := tx.Commit(); err != nil {
-			return "", err
-		}
-		log.Printf("Existing task updated with ID %s", updatedHandlerTask.ID)
-		return updatedHandlerTask.ID, nil
 	}
 
 	var executionContext *ent.ExecutionContext
 
 	// if no parent, then we create a new execution context
 	if opts.executionContextID == nil {
-		if executionContext, err = tx.
-			ExecutionContext.
-			Create().
-			SetID(uuid.NewString()).
-			Save(ctx); err != nil {
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
+		if executionContext, err = tx.ExecutionContext.Create().SetID(uuid.NewString()).Save(ctx); err != nil {
+			return "", err
+		}
+	} else {
+		if executionContext, err = tx.ExecutionContext.Get(ctx, *opts.executionContextID); err != nil {
 			return "", err
 		}
 	}
 
-	var taskCtx *ent.TaskContext
-	if taskCtx, err = tx.
-		TaskContext.
-		Create().
+	taskCtx, err := tx.TaskContext.Create().
 		SetID(uuid.NewString()).
 		SetRetryCount(0).
 		SetMaxRetry(1).
-		Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
+		Save(ctx)
+	if err != nil {
 		return "", err
 	}
 
-	var handlerTask *ent.HandlerTask
-	handlerTaskCreator := tx.
-		HandlerTask.
-		Create().
+	handlerTask, err := tx.HandlerTask.Create().
 		SetID(uuid.NewString()).
 		SetHandlerName(handlerName).
 		SetStatus(handlertask.Status(types.TaskStatusToString(types.TaskStatusPending))).
 		SetPayload(payloadBytes).
-		SetNumIn(handkerInfo.NumIn).
-		SetNumOut(handkerInfo.NumOut).
-		SetTaskContext(taskCtx)
-
-	if opts.executionContextID != nil {
-		handlerTaskCreator.SetExecutionContextID(*opts.executionContextID)
-	} else {
-		handlerTaskCreator.SetExecutionContext(executionContext)
-	}
-
-	if handlerTask, err = handlerTaskCreator.Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
+		SetNumIn(handlerInfo.NumIn).
+		SetNumOut(handlerInfo.NumOut).
+		SetTaskContext(taskCtx).
+		SetExecutionContext(executionContext).
+		Save(ctx)
+	if err != nil {
 		return "", err
 	}
 
-	var nodeEntity *ent.Node
-	nodeCreator := tx.Node.Create().SetID(uuid.NewString()).SetHandlerTask(handlerTask)
+	nodeCreator := tx.Node.Create().
+		SetID(uuid.NewString()).
+		SetHandlerTask(handlerTask)
 
-	// so we can track who is who
 	if opts.index != nil {
-		nodeCreator = nodeCreator.SetIndex(*opts.index)
+		nodeCreator.SetIndex(*opts.index)
 	} else {
-		nodeCreator = nodeCreator.SetIndex(0)
-	}
-
-	if nodeEntity, err = nodeCreator.Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
-		return "", err
+		nodeCreator.SetIndex(0)
 	}
 
 	if opts.nodeID != nil {
-		if err := tp.ensureRelationships(ctx, *opts.nodeID, nodeEntity.ID); err != nil {
-			log.Printf("Failed to ensure relationships: %v", err)
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
+		nodeCreator.SetParent(*opts.nodeID)
 	}
 
-	// Verify relationships
-	if err := tp.verifyAndFixNodeRelationships(ctx, nodeEntity.ID); err != nil {
-		log.Printf("Failed to verify and fix node relationships: %v", err)
-	}
-
-	if opts.nodeID != nil {
-		log.Printf("Adding node %s as child of node %s", nodeEntity.ID, *opts.nodeID)
-		parentNode, err := tx.Node.Query().Where(node.ID(*opts.nodeID)).Only(ctx)
-		if err != nil {
-			log.Printf("Parent node not found: %v", err)
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", fmt.Errorf("parent node not found: %v", err)
-		}
-		if _, err = tx.Node.UpdateOneID(nodeEntity.ID).AddChildren(parentNode).Save(ctx); err != nil {
-			if err := tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-	}
-
-	if _, err = tx.HandlerTask.Update().SetNode(nodeEntity).SetNodeID(nodeEntity.ID).Where(handlertask.ID(handlerTask.ID)).Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
+	nodeEntity, err := nodeCreator.Save(ctx)
+	if err != nil {
 		return "", err
 	}
 
-	var entry *ent.Entry
-	entryCreator := tx.Entry.Create().SetTaskID(handlerTask.ID).SetHandlerTaskID(handlerTask.ID).SetType("handler")
-	if opts.executionContextID != nil {
-		entryCreator.SetExecutionContextID(*opts.executionContextID)
-	} else {
-		entryCreator.SetExecutionContext(executionContext)
-	}
-	if entry, err = entryCreator.Save(ctx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
+	entry, err := tx.Entry.Create().
+		SetTaskID(handlerTask.ID).
+		SetHandlerTaskID(handlerTask.ID).
+		SetType("handler").
+		SetExecutionContext(executionContext).
+		Save(ctx)
+	if err != nil {
 		return "", err
 	}
 
 	log.Printf("Task enqueued with ID %s", handlerTask.ID)
-	if opts.executionContextID != nil {
-		log.Printf("Execution Context created with ID %s", *opts.executionContextID)
-	} else {
-		log.Printf("Execution Context created with ID %s", executionContext.ID)
-	}
+	log.Printf("Execution Context created with ID %s", executionContext.ID)
 	log.Printf("Task Context created with ID %s", taskCtx.ID)
 	log.Printf("Node created with ID %s", nodeEntity.ID)
 	log.Printf("Entry created with ID %d", entry.ID)
 
 	if err := tx.Commit(); err != nil {
-		if err := tx.Rollback(); err != nil {
-			return "", err
-		}
 		return "", err
 	}
 
 	return handlerTask.ID, nil
 }
 
-func (tp *Tempolite) verifyAndFixNodeRelationships(ctx context.Context, nodeID string) error {
-	n, err := tp.client.Node.Query().
-		Where(node.ID(nodeID)).
-		WithChildren().
-		WithParent().
-		Only(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query node: %v", err)
-	}
-
-	log.Printf("Verifying node %s relationships:", nodeID)
-	log.Printf("  Parent: %v", n.Edges.Parent)
-	log.Printf("  Children count: %d", len(n.Edges.Children))
-
-	// Check if children are properly associated
-	for _, child := range n.Edges.Children {
-		childNode, err := tp.client.Node.Query().
-			Where(node.ID(child.ID)).
-			WithParent().
-			Only(ctx)
-		if err != nil {
-			log.Printf("Error querying child node %s: %v", child.ID, err)
-			continue
-		}
-		if childNode.Edges.Parent == nil || childNode.Edges.Parent.ID != nodeID {
-			log.Printf("Fixing parent relationship for child %s", child.ID)
-			_, err := tp.client.Node.UpdateOne(childNode).
-				SetParent(n).
-				Save(ctx)
-			if err != nil {
-				log.Printf("Error fixing parent relationship: %v", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (tp *Tempolite) queryChildren(ctx context.Context, parentID string) ([]*ent.Node, error) {
-	children, err := tp.client.Node.Query().
-		Where(node.HasParentWith(node.ID(parentID))).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query children: %v", err)
-	}
-	return children, nil
-}
-
-func (tp *Tempolite) ensureRelationships(ctx context.Context, parentID, childID string) error {
-	return tp.client.Node.UpdateOneID(childID).
-		SetParentID(parentID).
-		Exec(ctx)
-}
-
-func (tp *Tempolite) findExistingNode(ctx context.Context, tx *ent.Tx, parentID string, index int) (*ent.Node, error) {
-	var query *ent.NodeQuery
-	if tx != nil {
-		query = tx.Node.Query()
-	} else {
-		query = tp.client.Node.Query()
-	}
-
-	existingNode, err := query.
+func (tp *Tempolite) findExistingChildNode(ctx context.Context, tx *ent.Tx, parentID string, index int) (*ent.Node, error) {
+	existingNode, err := tx.Node.Query().
 		Where(
-			node.HasParentWith(node.ID(parentID)),
+			node.Parent(parentID),
 			node.Index(index),
 		).
 		Only(ctx)
@@ -667,6 +479,28 @@ func (tp *Tempolite) findExistingNode(ctx context.Context, tx *ent.Tx, parentID 
 	}
 
 	return existingNode, nil
+}
+
+func (tp *Tempolite) updateExistingTask(ctx context.Context, tx *ent.Tx, existingNode *ent.Node, payloadBytes []byte) (string, error) {
+	handlerTask, err := existingNode.QueryHandlerTask().Only(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	updatedHandlerTask, err := tx.HandlerTask.UpdateOne(handlerTask).
+		SetStatus(handlertask.Status(types.TaskStatusToString(types.TaskStatusPending))).
+		SetPayload(payloadBytes).
+		Save(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+
+	log.Printf("Existing task updated with ID %s", updatedHandlerTask.ID)
+	return updatedHandlerTask.ID, nil
 }
 
 type HandlerContext struct {
@@ -693,15 +527,6 @@ func (c *HandlerContext) Enqueue(handler interface{}, params interface{}, option
 	opts = append(opts, options...)
 	id, err := c.tp.Enqueue(c, handler, params, opts...)
 	if err != nil {
-		if ent.IsConstraintError(err) {
-			log.Printf("Constraint error encountered, attempting to find existing node")
-			existingNode, findErr := c.tp.findExistingNode(c, nil, c.nodeID, c.enqueueCounter)
-			if findErr == nil && existingNode != nil {
-				log.Printf("Found existing node on constraint error: %s", existingNode.ID)
-				return existingNode.ID, nil
-			}
-			log.Printf("Unable to find existing node: %v", findErr)
-		}
 		return "", err
 	}
 	c.enqueueCounter++

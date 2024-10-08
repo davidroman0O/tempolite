@@ -130,21 +130,13 @@ var (
 	NodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString},
 		{Name: "index", Type: field.TypeInt},
-		{Name: "node_children", Type: field.TypeString, Nullable: true},
+		{Name: "parent", Type: field.TypeString, Nullable: true},
 	}
 	// NodesTable holds the schema information for the "nodes" table.
 	NodesTable = &schema.Table{
 		Name:       "nodes",
 		Columns:    NodesColumns,
 		PrimaryKey: []*schema.Column{NodesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "nodes_nodes_children",
-				Columns:    []*schema.Column{NodesColumns[2]},
-				RefColumns: []*schema.Column{NodesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// SagaTasksColumns holds the columns for the "saga_tasks" table.
 	SagaTasksColumns = []*schema.Column{
@@ -219,7 +211,6 @@ func init() {
 	HandlerTasksTable.ForeignKeys[0].RefTable = TaskContextsTable
 	HandlerTasksTable.ForeignKeys[1].RefTable = ExecutionContextsTable
 	HandlerTasksTable.ForeignKeys[2].RefTable = NodesTable
-	NodesTable.ForeignKeys[0].RefTable = NodesTable
 	SagaTasksTable.ForeignKeys[0].RefTable = NodesTable
 	SideEffectTasksTable.ForeignKeys[0].RefTable = NodesTable
 }

@@ -14,10 +14,8 @@ const (
 	FieldID = "id"
 	// FieldIndex holds the string denoting the index field in the database.
 	FieldIndex = "index"
-	// EdgeChildren holds the string denoting the children edge name in mutations.
-	EdgeChildren = "children"
-	// EdgeParent holds the string denoting the parent edge name in mutations.
-	EdgeParent = "parent"
+	// FieldParent holds the string denoting the parent field in the database.
+	FieldParent = "parent"
 	// EdgeHandlerTask holds the string denoting the handler_task edge name in mutations.
 	EdgeHandlerTask = "handler_task"
 	// EdgeSagaStepTask holds the string denoting the saga_step_task edge name in mutations.
@@ -28,14 +26,6 @@ const (
 	EdgeCompensationTask = "compensation_task"
 	// Table holds the table name of the node in the database.
 	Table = "nodes"
-	// ChildrenTable is the table that holds the children relation/edge.
-	ChildrenTable = "nodes"
-	// ChildrenColumn is the table column denoting the children relation/edge.
-	ChildrenColumn = "node_children"
-	// ParentTable is the table that holds the parent relation/edge.
-	ParentTable = "nodes"
-	// ParentColumn is the table column denoting the parent relation/edge.
-	ParentColumn = "node_children"
 	// HandlerTaskTable is the table that holds the handler_task relation/edge.
 	HandlerTaskTable = "handler_tasks"
 	// HandlerTaskInverseTable is the table name for the HandlerTask entity.
@@ -70,23 +60,13 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldIndex,
-}
-
-// ForeignKeys holds the SQL foreign-keys that are owned by the "nodes"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"node_children",
+	FieldParent,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -106,25 +86,9 @@ func ByIndex(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIndex, opts...).ToFunc()
 }
 
-// ByChildrenCount orders the results by children count.
-func ByChildrenCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newChildrenStep(), opts...)
-	}
-}
-
-// ByChildren orders the results by children terms.
-func ByChildren(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newChildrenStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByParentField orders the results by parent field.
-func ByParentField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newParentStep(), sql.OrderByField(field, opts...))
-	}
+// ByParent orders the results by the parent field.
+func ByParent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParent, opts...).ToFunc()
 }
 
 // ByHandlerTaskField orders the results by handler_task field.
@@ -153,20 +117,6 @@ func ByCompensationTaskField(field string, opts ...sql.OrderTermOption) OrderOpt
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newCompensationTaskStep(), sql.OrderByField(field, opts...))
 	}
-}
-func newChildrenStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(Table, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ChildrenTable, ChildrenColumn),
-	)
-}
-func newParentStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(Table, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
-	)
 }
 func newHandlerTaskStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

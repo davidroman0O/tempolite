@@ -68,6 +68,11 @@ func Index(v int) predicate.Node {
 	return predicate.Node(sql.FieldEQ(FieldIndex, v))
 }
 
+// Parent applies equality check predicate on the "parent" field. It's identical to ParentEQ.
+func Parent(v string) predicate.Node {
+	return predicate.Node(sql.FieldEQ(FieldParent, v))
+}
+
 // IndexEQ applies the EQ predicate on the "index" field.
 func IndexEQ(v int) predicate.Node {
 	return predicate.Node(sql.FieldEQ(FieldIndex, v))
@@ -108,50 +113,79 @@ func IndexLTE(v int) predicate.Node {
 	return predicate.Node(sql.FieldLTE(FieldIndex, v))
 }
 
-// HasChildren applies the HasEdge predicate on the "children" edge.
-func HasChildren() predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ChildrenTable, ChildrenColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
+// ParentEQ applies the EQ predicate on the "parent" field.
+func ParentEQ(v string) predicate.Node {
+	return predicate.Node(sql.FieldEQ(FieldParent, v))
 }
 
-// HasChildrenWith applies the HasEdge predicate on the "children" edge with a given conditions (other predicates).
-func HasChildrenWith(preds ...predicate.Node) predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := newChildrenStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
+// ParentNEQ applies the NEQ predicate on the "parent" field.
+func ParentNEQ(v string) predicate.Node {
+	return predicate.Node(sql.FieldNEQ(FieldParent, v))
 }
 
-// HasParent applies the HasEdge predicate on the "parent" edge.
-func HasParent() predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
+// ParentIn applies the In predicate on the "parent" field.
+func ParentIn(vs ...string) predicate.Node {
+	return predicate.Node(sql.FieldIn(FieldParent, vs...))
 }
 
-// HasParentWith applies the HasEdge predicate on the "parent" edge with a given conditions (other predicates).
-func HasParentWith(preds ...predicate.Node) predicate.Node {
-	return predicate.Node(func(s *sql.Selector) {
-		step := newParentStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
+// ParentNotIn applies the NotIn predicate on the "parent" field.
+func ParentNotIn(vs ...string) predicate.Node {
+	return predicate.Node(sql.FieldNotIn(FieldParent, vs...))
+}
+
+// ParentGT applies the GT predicate on the "parent" field.
+func ParentGT(v string) predicate.Node {
+	return predicate.Node(sql.FieldGT(FieldParent, v))
+}
+
+// ParentGTE applies the GTE predicate on the "parent" field.
+func ParentGTE(v string) predicate.Node {
+	return predicate.Node(sql.FieldGTE(FieldParent, v))
+}
+
+// ParentLT applies the LT predicate on the "parent" field.
+func ParentLT(v string) predicate.Node {
+	return predicate.Node(sql.FieldLT(FieldParent, v))
+}
+
+// ParentLTE applies the LTE predicate on the "parent" field.
+func ParentLTE(v string) predicate.Node {
+	return predicate.Node(sql.FieldLTE(FieldParent, v))
+}
+
+// ParentContains applies the Contains predicate on the "parent" field.
+func ParentContains(v string) predicate.Node {
+	return predicate.Node(sql.FieldContains(FieldParent, v))
+}
+
+// ParentHasPrefix applies the HasPrefix predicate on the "parent" field.
+func ParentHasPrefix(v string) predicate.Node {
+	return predicate.Node(sql.FieldHasPrefix(FieldParent, v))
+}
+
+// ParentHasSuffix applies the HasSuffix predicate on the "parent" field.
+func ParentHasSuffix(v string) predicate.Node {
+	return predicate.Node(sql.FieldHasSuffix(FieldParent, v))
+}
+
+// ParentIsNil applies the IsNil predicate on the "parent" field.
+func ParentIsNil() predicate.Node {
+	return predicate.Node(sql.FieldIsNull(FieldParent))
+}
+
+// ParentNotNil applies the NotNil predicate on the "parent" field.
+func ParentNotNil() predicate.Node {
+	return predicate.Node(sql.FieldNotNull(FieldParent))
+}
+
+// ParentEqualFold applies the EqualFold predicate on the "parent" field.
+func ParentEqualFold(v string) predicate.Node {
+	return predicate.Node(sql.FieldEqualFold(FieldParent, v))
+}
+
+// ParentContainsFold applies the ContainsFold predicate on the "parent" field.
+func ParentContainsFold(v string) predicate.Node {
+	return predicate.Node(sql.FieldContainsFold(FieldParent, v))
 }
 
 // HasHandlerTask applies the HasEdge predicate on the "handler_task" edge.

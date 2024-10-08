@@ -1047,38 +1047,6 @@ func (c *NodeClient) GetX(ctx context.Context, id string) *Node {
 	return obj
 }
 
-// QueryChildren queries the children edge of a Node.
-func (c *NodeClient) QueryChildren(n *Node) *NodeQuery {
-	query := (&NodeClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := n.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(node.Table, node.FieldID, id),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, node.ChildrenTable, node.ChildrenColumn),
-		)
-		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryParent queries the parent edge of a Node.
-func (c *NodeClient) QueryParent(n *Node) *NodeQuery {
-	query := (&NodeClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := n.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(node.Table, node.FieldID, id),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, node.ParentTable, node.ParentColumn),
-		)
-		fromV = sqlgraph.Neighbors(n.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryHandlerTask queries the handler_task edge of a Node.
 func (c *NodeClient) QueryHandlerTask(n *Node) *HandlerTaskQuery {
 	query := (&HandlerTaskClient{config: c.config}).Query()

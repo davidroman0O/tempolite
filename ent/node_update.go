@@ -52,38 +52,24 @@ func (nu *NodeUpdate) AddIndex(i int) *NodeUpdate {
 	return nu
 }
 
-// AddChildIDs adds the "children" edge to the Node entity by IDs.
-func (nu *NodeUpdate) AddChildIDs(ids ...string) *NodeUpdate {
-	nu.mutation.AddChildIDs(ids...)
+// SetParent sets the "parent" field.
+func (nu *NodeUpdate) SetParent(s string) *NodeUpdate {
+	nu.mutation.SetParent(s)
 	return nu
 }
 
-// AddChildren adds the "children" edges to the Node entity.
-func (nu *NodeUpdate) AddChildren(n ...*Node) *NodeUpdate {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nu.AddChildIDs(ids...)
-}
-
-// SetParentID sets the "parent" edge to the Node entity by ID.
-func (nu *NodeUpdate) SetParentID(id string) *NodeUpdate {
-	nu.mutation.SetParentID(id)
-	return nu
-}
-
-// SetNillableParentID sets the "parent" edge to the Node entity by ID if the given value is not nil.
-func (nu *NodeUpdate) SetNillableParentID(id *string) *NodeUpdate {
-	if id != nil {
-		nu = nu.SetParentID(*id)
+// SetNillableParent sets the "parent" field if the given value is not nil.
+func (nu *NodeUpdate) SetNillableParent(s *string) *NodeUpdate {
+	if s != nil {
+		nu.SetParent(*s)
 	}
 	return nu
 }
 
-// SetParent sets the "parent" edge to the Node entity.
-func (nu *NodeUpdate) SetParent(n *Node) *NodeUpdate {
-	return nu.SetParentID(n.ID)
+// ClearParent clears the value of the "parent" field.
+func (nu *NodeUpdate) ClearParent() *NodeUpdate {
+	nu.mutation.ClearParent()
+	return nu
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by ID.
@@ -167,33 +153,6 @@ func (nu *NodeUpdate) Mutation() *NodeMutation {
 	return nu.mutation
 }
 
-// ClearChildren clears all "children" edges to the Node entity.
-func (nu *NodeUpdate) ClearChildren() *NodeUpdate {
-	nu.mutation.ClearChildren()
-	return nu
-}
-
-// RemoveChildIDs removes the "children" edge to Node entities by IDs.
-func (nu *NodeUpdate) RemoveChildIDs(ids ...string) *NodeUpdate {
-	nu.mutation.RemoveChildIDs(ids...)
-	return nu
-}
-
-// RemoveChildren removes "children" edges to Node entities.
-func (nu *NodeUpdate) RemoveChildren(n ...*Node) *NodeUpdate {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nu.RemoveChildIDs(ids...)
-}
-
-// ClearParent clears the "parent" edge to the Node entity.
-func (nu *NodeUpdate) ClearParent() *NodeUpdate {
-	nu.mutation.ClearParent()
-	return nu
-}
-
 // ClearHandlerTask clears the "handler_task" edge to the HandlerTask entity.
 func (nu *NodeUpdate) ClearHandlerTask() *NodeUpdate {
 	nu.mutation.ClearHandlerTask()
@@ -260,79 +219,11 @@ func (nu *NodeUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := nu.mutation.AddedIndex(); ok {
 		_spec.AddField(node.FieldIndex, field.TypeInt, value)
 	}
-	if nu.mutation.ChildrenCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nu.mutation.RemovedChildrenIDs(); len(nodes) > 0 && !nu.mutation.ChildrenCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nu.mutation.ChildrenIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := nu.mutation.Parent(); ok {
+		_spec.SetField(node.FieldParent, field.TypeString, value)
 	}
 	if nu.mutation.ParentCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   node.ParentTable,
-			Columns: []string{node.ParentColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nu.mutation.ParentIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   node.ParentTable,
-			Columns: []string{node.ParentColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+		_spec.ClearField(node.FieldParent, field.TypeString)
 	}
 	if nu.mutation.HandlerTaskCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -491,38 +382,24 @@ func (nuo *NodeUpdateOne) AddIndex(i int) *NodeUpdateOne {
 	return nuo
 }
 
-// AddChildIDs adds the "children" edge to the Node entity by IDs.
-func (nuo *NodeUpdateOne) AddChildIDs(ids ...string) *NodeUpdateOne {
-	nuo.mutation.AddChildIDs(ids...)
+// SetParent sets the "parent" field.
+func (nuo *NodeUpdateOne) SetParent(s string) *NodeUpdateOne {
+	nuo.mutation.SetParent(s)
 	return nuo
 }
 
-// AddChildren adds the "children" edges to the Node entity.
-func (nuo *NodeUpdateOne) AddChildren(n ...*Node) *NodeUpdateOne {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nuo.AddChildIDs(ids...)
-}
-
-// SetParentID sets the "parent" edge to the Node entity by ID.
-func (nuo *NodeUpdateOne) SetParentID(id string) *NodeUpdateOne {
-	nuo.mutation.SetParentID(id)
-	return nuo
-}
-
-// SetNillableParentID sets the "parent" edge to the Node entity by ID if the given value is not nil.
-func (nuo *NodeUpdateOne) SetNillableParentID(id *string) *NodeUpdateOne {
-	if id != nil {
-		nuo = nuo.SetParentID(*id)
+// SetNillableParent sets the "parent" field if the given value is not nil.
+func (nuo *NodeUpdateOne) SetNillableParent(s *string) *NodeUpdateOne {
+	if s != nil {
+		nuo.SetParent(*s)
 	}
 	return nuo
 }
 
-// SetParent sets the "parent" edge to the Node entity.
-func (nuo *NodeUpdateOne) SetParent(n *Node) *NodeUpdateOne {
-	return nuo.SetParentID(n.ID)
+// ClearParent clears the value of the "parent" field.
+func (nuo *NodeUpdateOne) ClearParent() *NodeUpdateOne {
+	nuo.mutation.ClearParent()
+	return nuo
 }
 
 // SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by ID.
@@ -604,33 +481,6 @@ func (nuo *NodeUpdateOne) SetCompensationTask(c *CompensationTask) *NodeUpdateOn
 // Mutation returns the NodeMutation object of the builder.
 func (nuo *NodeUpdateOne) Mutation() *NodeMutation {
 	return nuo.mutation
-}
-
-// ClearChildren clears all "children" edges to the Node entity.
-func (nuo *NodeUpdateOne) ClearChildren() *NodeUpdateOne {
-	nuo.mutation.ClearChildren()
-	return nuo
-}
-
-// RemoveChildIDs removes the "children" edge to Node entities by IDs.
-func (nuo *NodeUpdateOne) RemoveChildIDs(ids ...string) *NodeUpdateOne {
-	nuo.mutation.RemoveChildIDs(ids...)
-	return nuo
-}
-
-// RemoveChildren removes "children" edges to Node entities.
-func (nuo *NodeUpdateOne) RemoveChildren(n ...*Node) *NodeUpdateOne {
-	ids := make([]string, len(n))
-	for i := range n {
-		ids[i] = n[i].ID
-	}
-	return nuo.RemoveChildIDs(ids...)
-}
-
-// ClearParent clears the "parent" edge to the Node entity.
-func (nuo *NodeUpdateOne) ClearParent() *NodeUpdateOne {
-	nuo.mutation.ClearParent()
-	return nuo
 }
 
 // ClearHandlerTask clears the "handler_task" edge to the HandlerTask entity.
@@ -729,79 +579,11 @@ func (nuo *NodeUpdateOne) sqlSave(ctx context.Context) (_node *Node, err error) 
 	if value, ok := nuo.mutation.AddedIndex(); ok {
 		_spec.AddField(node.FieldIndex, field.TypeInt, value)
 	}
-	if nuo.mutation.ChildrenCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nuo.mutation.RemovedChildrenIDs(); len(nodes) > 0 && !nuo.mutation.ChildrenCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nuo.mutation.ChildrenIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   node.ChildrenTable,
-			Columns: []string{node.ChildrenColumn},
-			Bidi:    true,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := nuo.mutation.Parent(); ok {
+		_spec.SetField(node.FieldParent, field.TypeString, value)
 	}
 	if nuo.mutation.ParentCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   node.ParentTable,
-			Columns: []string{node.ParentColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := nuo.mutation.ParentIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   node.ParentTable,
-			Columns: []string{node.ParentColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+		_spec.ClearField(node.FieldParent, field.TypeString)
 	}
 	if nuo.mutation.HandlerTaskCleared() {
 		edge := &sqlgraph.EdgeSpec{
