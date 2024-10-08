@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// CompensationTask is the client for interacting with the CompensationTask builders.
 	CompensationTask *CompensationTaskClient
+	// Entry is the client for interacting with the Entry builders.
+	Entry *EntryClient
 	// Execution is the client for interacting with the Execution builders.
 	Execution *ExecutionClient
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
@@ -160,6 +162,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.CompensationTask = NewCompensationTaskClient(tx.config)
+	tx.Entry = NewEntryClient(tx.config)
 	tx.Execution = NewExecutionClient(tx.config)
 	tx.ExecutionContext = NewExecutionContextClient(tx.config)
 	tx.HandlerTask = NewHandlerTaskClient(tx.config)

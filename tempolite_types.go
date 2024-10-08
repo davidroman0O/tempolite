@@ -1,7 +1,8 @@
 package tempolite
 
 import (
-	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -15,18 +16,23 @@ type HandlerInfo struct {
 	NumOut     int
 }
 
+func (hi HandlerInfo) GetFn() reflect.Value {
+	return reflect.ValueOf(hi.Handler)
+}
+
+func (hi HandlerInfo) ToInterface(data []byte) (interface{}, error) {
+	handlerValue := reflect.ValueOf(hi.Handler)
+	paramType := handlerValue.Type().In(1)
+	param := reflect.New(paramType).Interface()
+	err := json.Unmarshal(data, &param)
+	if err != nil {
+		log.Printf("Failed to unmarshal task payload: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal task payload: %v", err)
+	}
+	return param, nil
+}
+
 type SageInfo struct{}
-
-type HandlerContext struct {
-	context.Context
-	tp                 *Tempolite
-	taskID             string
-	executionContextID string
-}
-
-func (c *HandlerContext) GetID() string {
-	return c.taskID
-}
 
 type EnqueueOption func(*enqueueOptions)
 

@@ -9,6 +9,9 @@ import (
 // CompensationTask is the predicate function for compensationtask builders.
 type CompensationTask func(*sql.Selector)
 
+// Entry is the predicate function for entry builders.
+type Entry func(*sql.Selector)
+
 // Execution is the predicate function for execution builders.
 type Execution func(*sql.Selector)
 

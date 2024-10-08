@@ -43,7 +43,13 @@ func (s *Scheduler) run() {
 				continue
 			}
 			if totalHandlerTasks > 0 {
-				handlerTask, err := s.tp.client.HandlerTask.Query().Where(handlertask.StatusEQ(handlertask.StatusPending)).First(s.tp.ctx)
+				handlerTask, err := s.tp.client.
+					HandlerTask.
+					Query().
+					Where(handlertask.StatusEQ(handlertask.StatusPending)).
+					WithTaskContext().
+					WithExecutionContext().
+					First(s.tp.ctx)
 				if err != nil {
 					log.Printf("Error getting pending task: %v", err)
 					continue

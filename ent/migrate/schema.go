@@ -18,6 +18,55 @@ var (
 		Columns:    CompensationTasksColumns,
 		PrimaryKey: []*schema.Column{CompensationTasksColumns[0]},
 	}
+	// EntriesColumns holds the columns for the "entries" table.
+	EntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "task_id", Type: field.TypeString},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"handler", "saga", "side_effect", "compensation"}},
+		{Name: "entry_execution_context", Type: field.TypeString, Nullable: true},
+		{Name: "entry_handler_task", Type: field.TypeString, Nullable: true},
+		{Name: "entry_saga_step_task", Type: field.TypeInt, Nullable: true},
+		{Name: "entry_side_effect_task", Type: field.TypeInt, Nullable: true},
+		{Name: "entry_compensation_task", Type: field.TypeInt, Nullable: true},
+	}
+	// EntriesTable holds the schema information for the "entries" table.
+	EntriesTable = &schema.Table{
+		Name:       "entries",
+		Columns:    EntriesColumns,
+		PrimaryKey: []*schema.Column{EntriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "entries_execution_contexts_execution_context",
+				Columns:    []*schema.Column{EntriesColumns[3]},
+				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "entries_handler_tasks_handler_task",
+				Columns:    []*schema.Column{EntriesColumns[4]},
+				RefColumns: []*schema.Column{HandlerTasksColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "entries_saga_tasks_saga_step_task",
+				Columns:    []*schema.Column{EntriesColumns[5]},
+				RefColumns: []*schema.Column{SagaTasksColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "entries_side_effect_tasks_side_effect_task",
+				Columns:    []*schema.Column{EntriesColumns[6]},
+				RefColumns: []*schema.Column{SideEffectTasksColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "entries_compensation_tasks_compensation_task",
+				Columns:    []*schema.Column{EntriesColumns[7]},
+				RefColumns: []*schema.Column{CompensationTasksColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// ExecutionsColumns holds the columns for the "executions" table.
 	ExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString},
@@ -163,6 +212,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		CompensationTasksTable,
+		EntriesTable,
 		ExecutionsTable,
 		ExecutionContextsTable,
 		HandlerTasksTable,
@@ -174,6 +224,11 @@ var (
 )
 
 func init() {
+	EntriesTable.ForeignKeys[0].RefTable = ExecutionContextsTable
+	EntriesTable.ForeignKeys[1].RefTable = HandlerTasksTable
+	EntriesTable.ForeignKeys[2].RefTable = SagaTasksTable
+	EntriesTable.ForeignKeys[3].RefTable = SideEffectTasksTable
+	EntriesTable.ForeignKeys[4].RefTable = CompensationTasksTable
 	ExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
 	HandlerTasksTable.ForeignKeys[0].RefTable = TaskContextsTable
 	HandlerTasksTable.ForeignKeys[1].RefTable = ExecutionContextsTable

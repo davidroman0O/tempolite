@@ -19,6 +19,7 @@ import (
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/dag"
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/entry"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
 	"github.com/davidroman0O/go-tempolite/types"
 	"github.com/google/uuid"
@@ -184,6 +185,54 @@ func (tp *Tempolite) getInfo() TempoliteInfo {
 	}
 }
 
+func (tp *Tempolite) WaitFor(ctx context.Context, id string) (interface{}, error) {
+	var total int
+	var err error
+	if total, err = tp.client.Entry.Query().Where(entry.TaskID(id)).Count(ctx); err != nil {
+		return nil, err
+	}
+	if total == 0 {
+		return nil, fmt.Errorf("no task with id %s", id)
+	}
+	var entryValue *ent.Entry
+	if entryValue, err = tp.client.Entry.Query().Where(entry.TaskID(id)).First(ctx); err != nil {
+		return nil, err
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Context done while waiting for ID %s", id)
+			return nil, ctx.Err()
+		case <-ticker.C:
+			switch entryValue.Type {
+			case "handler":
+				var handlerTaskValue *ent.HandlerTask
+				if handlerTaskValue, err = tp.client.HandlerTask.Query().Where(handlertask.ID(id)).First(ctx); err != nil {
+					return nil, err
+				}
+				switch handlerTaskValue.Status {
+				case handlertask.StatusCompleted:
+					handlerInfo, exists := tp.getHandler(handlerTaskValue.HandlerName)
+					if !exists {
+						return nil, fmt.Errorf("no handler registered with name %s", handlerTaskValue.HandlerName)
+					}
+					return handlerInfo.ToInterface(handlerTaskValue.Payload)
+				case "saga":
+				case "compensation":
+				case "side_effect":
+				default:
+					return nil, fmt.Errorf("unknown task type %s", entryValue.Type)
+				}
+				return nil, fmt.Errorf("not implemented")
+			}
+		}
+	}
+}
+
 func (tp *Tempolite) Wait(condition func(TempoliteInfo) bool, interval time.Duration) error {
 	log.Printf("Starting wait loop with interval %v", interval)
 	ticker := time.NewTicker(interval)
@@ -285,11 +334,6 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 		option(&opts)
 	}
 
-	// payload := &types.Payload{
-	// 	Metadata: map[string]interface{}{},
-	// 	Data:     params,
-	// }
-
 	payloadBytes, err := json.Marshal(params)
 	if err != nil {
 		log.Printf("Failed to marshal task parameters for handler %s: %v", handlerName, err)
@@ -355,6 +399,7 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 		Node.
 		Create().
 		SetID(uuid.NewString()).
+		SetHandlerTaskID(handlerTask.ID).
 		Save(ctx); err != nil {
 		if err := tx.Rollback(); err != nil {
 			return "", err
@@ -386,10 +431,20 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 		return "", err
 	}
 
+	var entry *ent.Entry
+	if entry, err = tx.Entry.Create().SetTaskID(handlerTask.ID).SetHandlerTaskID(handlerTask.ID).SetType("handler").Save(ctx); err != nil {
+		if err := tx.Rollback(); err != nil {
+			return "", err
+		}
+		return "", err
+	}
+
 	log.Printf("Task enqueued with ID %s", handlerTask.ID)
 	log.Printf("Execution created with ID %s", execution.ID)
 	log.Printf("Execution Context created with ID %s", executionContext.ID)
 	log.Printf("Task Context created with ID %s", taskCtx.ID)
+	log.Printf("Node created with ID %s", node.ID)
+	log.Printf("Entry created with ID %d", entry.ID)
 
 	if err := tx.Commit(); err != nil {
 		if err := tx.Rollback(); err != nil {
@@ -399,4 +454,19 @@ func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params in
 	}
 
 	return handlerTask.ID, nil
+}
+
+type HandlerContext struct {
+	context.Context
+	tp                 *Tempolite
+	taskID             string
+	executionContextID string
+}
+
+func (c *HandlerContext) GetID() string {
+	return c.taskID
+}
+
+func (c *HandlerContext) Enqueue(handler interface{}, params interface{}, options ...EnqueueOption) (string, error) {
+	return c.tp.Enqueue(c, handler, params)
 }

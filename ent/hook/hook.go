@@ -21,6 +21,18 @@ func (f CompensationTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CompensationTaskMutation", m)
 }
 
+// The EntryFunc type is an adapter to allow the use of ordinary
+// function as Entry mutator.
+type EntryFunc func(context.Context, *ent.EntryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EntryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntryMutation", m)
+}
+
 // The ExecutionFunc type is an adapter to allow the use of ordinary
 // function as Execution mutator.
 type ExecutionFunc func(context.Context, *ent.ExecutionMutation) (ent.Value, error)

@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
+	"github.com/davidroman0O/go-tempolite/ent/entry"
 	"github.com/davidroman0O/go-tempolite/ent/execution"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
@@ -32,6 +33,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// CompensationTask is the client for interacting with the CompensationTask builders.
 	CompensationTask *CompensationTaskClient
+	// Entry is the client for interacting with the Entry builders.
+	Entry *EntryClient
 	// Execution is the client for interacting with the Execution builders.
 	Execution *ExecutionClient
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
@@ -58,6 +61,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.CompensationTask = NewCompensationTaskClient(c.config)
+	c.Entry = NewEntryClient(c.config)
 	c.Execution = NewExecutionClient(c.config)
 	c.ExecutionContext = NewExecutionContextClient(c.config)
 	c.HandlerTask = NewHandlerTaskClient(c.config)
@@ -158,6 +162,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:              ctx,
 		config:           cfg,
 		CompensationTask: NewCompensationTaskClient(cfg),
+		Entry:            NewEntryClient(cfg),
 		Execution:        NewExecutionClient(cfg),
 		ExecutionContext: NewExecutionContextClient(cfg),
 		HandlerTask:      NewHandlerTaskClient(cfg),
@@ -185,6 +190,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:              ctx,
 		config:           cfg,
 		CompensationTask: NewCompensationTaskClient(cfg),
+		Entry:            NewEntryClient(cfg),
 		Execution:        NewExecutionClient(cfg),
 		ExecutionContext: NewExecutionContextClient(cfg),
 		HandlerTask:      NewHandlerTaskClient(cfg),
@@ -221,8 +227,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.CompensationTask, c.Execution, c.ExecutionContext, c.HandlerTask, c.Node,
-		c.SagaTask, c.SideEffectTask, c.TaskContext,
+		c.CompensationTask, c.Entry, c.Execution, c.ExecutionContext, c.HandlerTask,
+		c.Node, c.SagaTask, c.SideEffectTask, c.TaskContext,
 	} {
 		n.Use(hooks...)
 	}
@@ -232,8 +238,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.CompensationTask, c.Execution, c.ExecutionContext, c.HandlerTask, c.Node,
-		c.SagaTask, c.SideEffectTask, c.TaskContext,
+		c.CompensationTask, c.Entry, c.Execution, c.ExecutionContext, c.HandlerTask,
+		c.Node, c.SagaTask, c.SideEffectTask, c.TaskContext,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -244,6 +250,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *CompensationTaskMutation:
 		return c.CompensationTask.mutate(ctx, m)
+	case *EntryMutation:
+		return c.Entry.mutate(ctx, m)
 	case *ExecutionMutation:
 		return c.Execution.mutate(ctx, m)
 	case *ExecutionContextMutation:
@@ -393,6 +401,219 @@ func (c *CompensationTaskClient) mutate(ctx context.Context, m *CompensationTask
 		return (&CompensationTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CompensationTask mutation op: %q", m.Op())
+	}
+}
+
+// EntryClient is a client for the Entry schema.
+type EntryClient struct {
+	config
+}
+
+// NewEntryClient returns a client for the Entry from the given config.
+func NewEntryClient(c config) *EntryClient {
+	return &EntryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `entry.Hooks(f(g(h())))`.
+func (c *EntryClient) Use(hooks ...Hook) {
+	c.hooks.Entry = append(c.hooks.Entry, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `entry.Intercept(f(g(h())))`.
+func (c *EntryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Entry = append(c.inters.Entry, interceptors...)
+}
+
+// Create returns a builder for creating a Entry entity.
+func (c *EntryClient) Create() *EntryCreate {
+	mutation := newEntryMutation(c.config, OpCreate)
+	return &EntryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Entry entities.
+func (c *EntryClient) CreateBulk(builders ...*EntryCreate) *EntryCreateBulk {
+	return &EntryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EntryClient) MapCreateBulk(slice any, setFunc func(*EntryCreate, int)) *EntryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EntryCreateBulk{err: fmt.Errorf("calling to EntryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EntryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EntryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Entry.
+func (c *EntryClient) Update() *EntryUpdate {
+	mutation := newEntryMutation(c.config, OpUpdate)
+	return &EntryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EntryClient) UpdateOne(e *Entry) *EntryUpdateOne {
+	mutation := newEntryMutation(c.config, OpUpdateOne, withEntry(e))
+	return &EntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EntryClient) UpdateOneID(id int) *EntryUpdateOne {
+	mutation := newEntryMutation(c.config, OpUpdateOne, withEntryID(id))
+	return &EntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Entry.
+func (c *EntryClient) Delete() *EntryDelete {
+	mutation := newEntryMutation(c.config, OpDelete)
+	return &EntryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EntryClient) DeleteOne(e *Entry) *EntryDeleteOne {
+	return c.DeleteOneID(e.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EntryClient) DeleteOneID(id int) *EntryDeleteOne {
+	builder := c.Delete().Where(entry.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EntryDeleteOne{builder}
+}
+
+// Query returns a query builder for Entry.
+func (c *EntryClient) Query() *EntryQuery {
+	return &EntryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEntry},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Entry entity by its id.
+func (c *EntryClient) Get(ctx context.Context, id int) (*Entry, error) {
+	return c.Query().Where(entry.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EntryClient) GetX(ctx context.Context, id int) *Entry {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutionContext queries the execution_context edge of a Entry.
+func (c *EntryClient) QueryExecutionContext(e *Entry) *ExecutionContextQuery {
+	query := (&ExecutionContextClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entry.Table, entry.FieldID, id),
+			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, entry.ExecutionContextTable, entry.ExecutionContextColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryHandlerTask queries the handler_task edge of a Entry.
+func (c *EntryClient) QueryHandlerTask(e *Entry) *HandlerTaskQuery {
+	query := (&HandlerTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entry.Table, entry.FieldID, id),
+			sqlgraph.To(handlertask.Table, handlertask.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, entry.HandlerTaskTable, entry.HandlerTaskColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySagaStepTask queries the saga_step_task edge of a Entry.
+func (c *EntryClient) QuerySagaStepTask(e *Entry) *SagaTaskQuery {
+	query := (&SagaTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entry.Table, entry.FieldID, id),
+			sqlgraph.To(sagatask.Table, sagatask.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, entry.SagaStepTaskTable, entry.SagaStepTaskColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySideEffectTask queries the side_effect_task edge of a Entry.
+func (c *EntryClient) QuerySideEffectTask(e *Entry) *SideEffectTaskQuery {
+	query := (&SideEffectTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entry.Table, entry.FieldID, id),
+			sqlgraph.To(sideeffecttask.Table, sideeffecttask.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, entry.SideEffectTaskTable, entry.SideEffectTaskColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCompensationTask queries the compensation_task edge of a Entry.
+func (c *EntryClient) QueryCompensationTask(e *Entry) *CompensationTaskQuery {
+	query := (&CompensationTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := e.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(entry.Table, entry.FieldID, id),
+			sqlgraph.To(compensationtask.Table, compensationtask.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, entry.CompensationTaskTable, entry.CompensationTaskColumn),
+		)
+		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *EntryClient) Hooks() []Hook {
+	return c.hooks.Entry
+}
+
+// Interceptors returns the client interceptors.
+func (c *EntryClient) Interceptors() []Interceptor {
+	return c.inters.Entry
+}
+
+func (c *EntryClient) mutate(ctx context.Context, m *EntryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EntryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EntryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Entry mutation op: %q", m.Op())
 	}
 }
 
@@ -1474,11 +1695,11 @@ func (c *TaskContextClient) mutate(ctx context.Context, m *TaskContextMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CompensationTask, Execution, ExecutionContext, HandlerTask, Node, SagaTask,
-		SideEffectTask, TaskContext []ent.Hook
+		CompensationTask, Entry, Execution, ExecutionContext, HandlerTask, Node,
+		SagaTask, SideEffectTask, TaskContext []ent.Hook
 	}
 	inters struct {
-		CompensationTask, Execution, ExecutionContext, HandlerTask, Node, SagaTask,
-		SideEffectTask, TaskContext []ent.Interceptor
+		CompensationTask, Entry, Execution, ExecutionContext, HandlerTask, Node,
+		SagaTask, SideEffectTask, TaskContext []ent.Interceptor
 	}
 )

@@ -9,6 +9,7 @@ import (
 
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 	"github.com/davidroman0O/retrypool"
 )
 
@@ -58,11 +59,7 @@ func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 	/// When we panic, we tends to: failure + retry + panic
 	/// When we fail, we tends to: failure + retry
 
-	handlerValue := reflect.ValueOf(handlerInfo.Handler)
-	paramType := handlerValue.Type().In(1)
-	param := reflect.New(paramType).Interface()
-
-	err := json.Unmarshal(task.Payload, &param)
+	param, err := handlerInfo.ToInterface(task.Payload)
 	if err != nil {
 		log.Printf("Failed to unmarshal task payload: %v", err)
 		return fmt.Errorf("failed to unmarshal task payload: %v", err)
@@ -79,7 +76,7 @@ func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 	}
 
 	log.Printf("Calling handler for task ID %s", task.ID)
-	results := handlerValue.Call([]reflect.Value{
+	results := handlerInfo.GetFn().Call([]reflect.Value{
 		reflect.ValueOf(handlerCtx),
 		reflect.ValueOf(param).Elem(),
 	})
@@ -155,7 +152,27 @@ func (tp *Tempolite) onHandlerTaskFailure(controller retrypool.WorkerController[
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	// TODO: add retry mechanism
+	taskContext, err := tp.client.TaskContext.Query().Where(
+		taskcontext.ID(task.Data().Edges.TaskContext.ID),
+	).First(tp.ctx)
+	if err != nil {
+		log.Printf("Failed to get task context: %v", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	// TODO: test retry mechanism
+	if taskContext.RetryCount < taskContext.MaxRetry {
+		if err = tp.client.
+			TaskContext.
+			Update().
+			SetRetryCount(taskContext.RetryCount + 1).
+			Where(taskcontext.ID(taskContext.ID)).
+			Exec(tp.ctx); err != nil {
+			log.Printf("Failed to update task context: %v", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+		return retrypool.DeadTaskActionForceRetry
+	}
 
 	if err = tp.client.
 		HandlerTask.
