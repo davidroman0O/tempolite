@@ -196,6 +196,7 @@ func (tp *Tempolite) onHandlerTaskFailure(controller retrypool.WorkerController[
 
 // Post failure, we retry the task
 func (tp *Tempolite) onHandlerTaskRetry(attempt int, err error, task *retrypool.TaskWrapper[*ent.HandlerTask]) {
+	// TODO: we need to create a new task on a new execution context??
 	log.Printf("Task retrying: %v", err)
 }
 

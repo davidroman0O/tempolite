@@ -125,8 +125,9 @@ var retryFlag atomic.Bool
 
 func simpleRetryHandler(ctx HandlerContext, task TaskInt) (interface{}, error) {
 	log.Printf("simpleRetryHandler Task %d", task)
-	if !retryFlag.Load() {
-		retryFlag.Store(true)
+	if retryFlag.Load() {
+		retryFlag.Store(false)
+		fmt.Println("retryFlag set to false")
 		return nil, fmt.Errorf("failied on purpose")
 	}
 	return nil, nil
@@ -136,7 +137,7 @@ func parentHandlerRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
 	var err error
 	var id string
 
-	if id, err = ctx.Enqueue(simpleTestHandler, TaskInt{task.Data + 2}); err != nil {
+	if id, err = ctx.Enqueue(simpleRetryHandler, TaskInt{task.Data + 2}); err != nil {
 		return nil, err
 	}
 
@@ -145,6 +146,7 @@ func parentHandlerRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
 	return ctx.WaitFor(id)
 }
 
+// go test -v -timeout 30s -run ^TestHandlerRetries$ .
 func TestHandlerRetries(t *testing.T) {
 
 	ctx := context.Background()
@@ -158,6 +160,8 @@ func TestHandlerRetries(t *testing.T) {
 	}
 	defer tp.Close()
 
+	retryFlag.Store(true)
+
 	if err := tp.RegisterHandler(simpleRetryHandler); err != nil {
 		t.Fatalf("Error registering handler: %v", err)
 	}
@@ -167,7 +171,7 @@ func TestHandlerRetries(t *testing.T) {
 	}
 
 	var id string
-	if id, err = tp.Enqueue(ctx, parentHandler, TaskInt{1}); err != nil {
+	if id, err = tp.Enqueue(ctx, parentHandlerRetry, TaskInt{1}); err != nil {
 		t.Fatalf("Error enqueuing task: %v", err)
 	}
 
