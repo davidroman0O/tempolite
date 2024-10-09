@@ -8,7 +8,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/sagatask"
 )
 
@@ -16,32 +15,8 @@ import (
 type SagaTask struct {
 	config
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the SagaTaskQuery when eager-loading is set.
-	Edges               SagaTaskEdges `json:"edges"`
-	node_saga_step_task *string
-	selectValues        sql.SelectValues
-}
-
-// SagaTaskEdges holds the relations/edges for other nodes in the graph.
-type SagaTaskEdges struct {
-	// Node holds the value of the node edge.
-	Node *Node `json:"node,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// NodeOrErr returns the Node value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SagaTaskEdges) NodeOrErr() (*Node, error) {
-	if e.Node != nil {
-		return e.Node, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: node.Label}
-	}
-	return nil, &NotLoadedError{edge: "node"}
+	ID           int `json:"id,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -51,8 +26,6 @@ func (*SagaTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sagatask.FieldID:
 			values[i] = new(sql.NullInt64)
-		case sagatask.ForeignKeys[0]: // node_saga_step_task
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -74,13 +47,6 @@ func (st *SagaTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			st.ID = int(value.Int64)
-		case sagatask.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field node_saga_step_task", values[i])
-			} else if value.Valid {
-				st.node_saga_step_task = new(string)
-				*st.node_saga_step_task = value.String
-			}
 		default:
 			st.selectValues.Set(columns[i], values[i])
 		}
@@ -92,11 +58,6 @@ func (st *SagaTask) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (st *SagaTask) Value(name string) (ent.Value, error) {
 	return st.selectValues.Get(name)
-}
-
-// QueryNode queries the "node" edge of the SagaTask entity.
-func (st *SagaTask) QueryNode() *NodeQuery {
-	return NewSagaTaskClient(st.config).QueryNode(st)
 }
 
 // Update returns a builder for updating this SagaTask.

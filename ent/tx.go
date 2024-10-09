@@ -14,20 +14,16 @@ type Tx struct {
 	config
 	// CompensationTask is the client for interacting with the CompensationTask builders.
 	CompensationTask *CompensationTaskClient
-	// Entry is the client for interacting with the Entry builders.
-	Entry *EntryClient
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
 	ExecutionContext *ExecutionContextClient
+	// HandlerExecution is the client for interacting with the HandlerExecution builders.
+	HandlerExecution *HandlerExecutionClient
 	// HandlerTask is the client for interacting with the HandlerTask builders.
 	HandlerTask *HandlerTaskClient
-	// Node is the client for interacting with the Node builders.
-	Node *NodeClient
 	// SagaTask is the client for interacting with the SagaTask builders.
 	SagaTask *SagaTaskClient
 	// SideEffectTask is the client for interacting with the SideEffectTask builders.
 	SideEffectTask *SideEffectTaskClient
-	// TaskContext is the client for interacting with the TaskContext builders.
-	TaskContext *TaskContextClient
 
 	// lazily loaded.
 	client     *Client
@@ -160,13 +156,11 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.CompensationTask = NewCompensationTaskClient(tx.config)
-	tx.Entry = NewEntryClient(tx.config)
 	tx.ExecutionContext = NewExecutionContextClient(tx.config)
+	tx.HandlerExecution = NewHandlerExecutionClient(tx.config)
 	tx.HandlerTask = NewHandlerTaskClient(tx.config)
-	tx.Node = NewNodeClient(tx.config)
 	tx.SagaTask = NewSagaTaskClient(tx.config)
 	tx.SideEffectTask = NewSideEffectTaskClient(tx.config)
-	tx.TaskContext = NewTaskContextClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

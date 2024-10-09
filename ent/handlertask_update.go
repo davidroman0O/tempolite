@@ -6,15 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 // HandlerTaskUpdate is the builder for updating HandlerTask entities.
@@ -30,13 +29,13 @@ func (htu *HandlerTaskUpdate) Where(ps ...predicate.HandlerTask) *HandlerTaskUpd
 	return htu
 }
 
-// SetHandlerName sets the "handlerName" field.
+// SetHandlerName sets the "handler_name" field.
 func (htu *HandlerTaskUpdate) SetHandlerName(s string) *HandlerTaskUpdate {
 	htu.mutation.SetHandlerName(s)
 	return htu
 }
 
-// SetNillableHandlerName sets the "handlerName" field if the given value is not nil.
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
 func (htu *HandlerTaskUpdate) SetNillableHandlerName(s *string) *HandlerTaskUpdate {
 	if s != nil {
 		htu.SetHandlerName(*s)
@@ -44,29 +43,9 @@ func (htu *HandlerTaskUpdate) SetNillableHandlerName(s *string) *HandlerTaskUpda
 	return htu
 }
 
-// SetStatus sets the "status" field.
-func (htu *HandlerTaskUpdate) SetStatus(h handlertask.Status) *HandlerTaskUpdate {
-	htu.mutation.SetStatus(h)
-	return htu
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableStatus(h *handlertask.Status) *HandlerTaskUpdate {
-	if h != nil {
-		htu.SetStatus(*h)
-	}
-	return htu
-}
-
 // SetPayload sets the "payload" field.
 func (htu *HandlerTaskUpdate) SetPayload(b []byte) *HandlerTaskUpdate {
 	htu.mutation.SetPayload(b)
-	return htu
-}
-
-// ClearPayload clears the value of the "payload" field.
-func (htu *HandlerTaskUpdate) ClearPayload() *HandlerTaskUpdate {
-	htu.mutation.ClearPayload()
 	return htu
 }
 
@@ -94,103 +73,71 @@ func (htu *HandlerTaskUpdate) ClearError() *HandlerTaskUpdate {
 	return htu
 }
 
-// SetNumIn sets the "numIn" field.
-func (htu *HandlerTaskUpdate) SetNumIn(i int) *HandlerTaskUpdate {
-	htu.mutation.ResetNumIn()
-	htu.mutation.SetNumIn(i)
+// SetStatus sets the "status" field.
+func (htu *HandlerTaskUpdate) SetStatus(h handlertask.Status) *HandlerTaskUpdate {
+	htu.mutation.SetStatus(h)
 	return htu
 }
 
-// SetNillableNumIn sets the "numIn" field if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableNumIn(i *int) *HandlerTaskUpdate {
-	if i != nil {
-		htu.SetNumIn(*i)
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (htu *HandlerTaskUpdate) SetNillableStatus(h *handlertask.Status) *HandlerTaskUpdate {
+	if h != nil {
+		htu.SetStatus(*h)
 	}
 	return htu
 }
 
-// AddNumIn adds i to the "numIn" field.
-func (htu *HandlerTaskUpdate) AddNumIn(i int) *HandlerTaskUpdate {
-	htu.mutation.AddNumIn(i)
+// SetCreatedAt sets the "created_at" field.
+func (htu *HandlerTaskUpdate) SetCreatedAt(t time.Time) *HandlerTaskUpdate {
+	htu.mutation.SetCreatedAt(t)
 	return htu
 }
 
-// SetNumOut sets the "numOut" field.
-func (htu *HandlerTaskUpdate) SetNumOut(i int) *HandlerTaskUpdate {
-	htu.mutation.ResetNumOut()
-	htu.mutation.SetNumOut(i)
-	return htu
-}
-
-// SetNillableNumOut sets the "numOut" field if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableNumOut(i *int) *HandlerTaskUpdate {
-	if i != nil {
-		htu.SetNumOut(*i)
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (htu *HandlerTaskUpdate) SetNillableCreatedAt(t *time.Time) *HandlerTaskUpdate {
+	if t != nil {
+		htu.SetCreatedAt(*t)
 	}
 	return htu
 }
 
-// AddNumOut adds i to the "numOut" field.
-func (htu *HandlerTaskUpdate) AddNumOut(i int) *HandlerTaskUpdate {
-	htu.mutation.AddNumOut(i)
+// SetCompletedAt sets the "completed_at" field.
+func (htu *HandlerTaskUpdate) SetCompletedAt(t time.Time) *HandlerTaskUpdate {
+	htu.mutation.SetCompletedAt(t)
 	return htu
 }
 
-// SetTaskContextID sets the "task_context" edge to the TaskContext entity by ID.
-func (htu *HandlerTaskUpdate) SetTaskContextID(id string) *HandlerTaskUpdate {
-	htu.mutation.SetTaskContextID(id)
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (htu *HandlerTaskUpdate) SetNillableCompletedAt(t *time.Time) *HandlerTaskUpdate {
+	if t != nil {
+		htu.SetCompletedAt(*t)
+	}
 	return htu
 }
 
-// SetNillableTaskContextID sets the "task_context" edge to the TaskContext entity by ID if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableTaskContextID(id *string) *HandlerTaskUpdate {
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (htu *HandlerTaskUpdate) ClearCompletedAt() *HandlerTaskUpdate {
+	htu.mutation.ClearCompletedAt()
+	return htu
+}
+
+// SetHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID.
+func (htu *HandlerTaskUpdate) SetHandlerExecutionID(id string) *HandlerTaskUpdate {
+	htu.mutation.SetHandlerExecutionID(id)
+	return htu
+}
+
+// SetNillableHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID if the given value is not nil.
+func (htu *HandlerTaskUpdate) SetNillableHandlerExecutionID(id *string) *HandlerTaskUpdate {
 	if id != nil {
-		htu = htu.SetTaskContextID(*id)
+		htu = htu.SetHandlerExecutionID(*id)
 	}
 	return htu
 }
 
-// SetTaskContext sets the "task_context" edge to the TaskContext entity.
-func (htu *HandlerTaskUpdate) SetTaskContext(t *TaskContext) *HandlerTaskUpdate {
-	return htu.SetTaskContextID(t.ID)
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID.
-func (htu *HandlerTaskUpdate) SetExecutionContextID(id string) *HandlerTaskUpdate {
-	htu.mutation.SetExecutionContextID(id)
-	return htu
-}
-
-// SetNillableExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableExecutionContextID(id *string) *HandlerTaskUpdate {
-	if id != nil {
-		htu = htu.SetExecutionContextID(*id)
-	}
-	return htu
-}
-
-// SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
-func (htu *HandlerTaskUpdate) SetExecutionContext(e *ExecutionContext) *HandlerTaskUpdate {
-	return htu.SetExecutionContextID(e.ID)
-}
-
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (htu *HandlerTaskUpdate) SetNodeID(id string) *HandlerTaskUpdate {
-	htu.mutation.SetNodeID(id)
-	return htu
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (htu *HandlerTaskUpdate) SetNillableNodeID(id *string) *HandlerTaskUpdate {
-	if id != nil {
-		htu = htu.SetNodeID(*id)
-	}
-	return htu
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (htu *HandlerTaskUpdate) SetNode(n *Node) *HandlerTaskUpdate {
-	return htu.SetNodeID(n.ID)
+// SetHandlerExecution sets the "handler_execution" edge to the HandlerExecution entity.
+func (htu *HandlerTaskUpdate) SetHandlerExecution(h *HandlerExecution) *HandlerTaskUpdate {
+	return htu.SetHandlerExecutionID(h.ID)
 }
 
 // Mutation returns the HandlerTaskMutation object of the builder.
@@ -198,21 +145,9 @@ func (htu *HandlerTaskUpdate) Mutation() *HandlerTaskMutation {
 	return htu.mutation
 }
 
-// ClearTaskContext clears the "task_context" edge to the TaskContext entity.
-func (htu *HandlerTaskUpdate) ClearTaskContext() *HandlerTaskUpdate {
-	htu.mutation.ClearTaskContext()
-	return htu
-}
-
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (htu *HandlerTaskUpdate) ClearExecutionContext() *HandlerTaskUpdate {
-	htu.mutation.ClearExecutionContext()
-	return htu
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (htu *HandlerTaskUpdate) ClearNode() *HandlerTaskUpdate {
-	htu.mutation.ClearNode()
+// ClearHandlerExecution clears the "handler_execution" edge to the HandlerExecution entity.
+func (htu *HandlerTaskUpdate) ClearHandlerExecution() *HandlerTaskUpdate {
+	htu.mutation.ClearHandlerExecution()
 	return htu
 }
 
@@ -268,14 +203,8 @@ func (htu *HandlerTaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := htu.mutation.HandlerName(); ok {
 		_spec.SetField(handlertask.FieldHandlerName, field.TypeString, value)
 	}
-	if value, ok := htu.mutation.Status(); ok {
-		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
-	}
 	if value, ok := htu.mutation.Payload(); ok {
 		_spec.SetField(handlertask.FieldPayload, field.TypeBytes, value)
-	}
-	if htu.mutation.PayloadCleared() {
-		_spec.ClearField(handlertask.FieldPayload, field.TypeBytes)
 	}
 	if value, ok := htu.mutation.Result(); ok {
 		_spec.SetField(handlertask.FieldResult, field.TypeBytes, value)
@@ -289,98 +218,40 @@ func (htu *HandlerTaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if htu.mutation.ErrorCleared() {
 		_spec.ClearField(handlertask.FieldError, field.TypeBytes)
 	}
-	if value, ok := htu.mutation.NumIn(); ok {
-		_spec.SetField(handlertask.FieldNumIn, field.TypeInt, value)
+	if value, ok := htu.mutation.Status(); ok {
+		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := htu.mutation.AddedNumIn(); ok {
-		_spec.AddField(handlertask.FieldNumIn, field.TypeInt, value)
+	if value, ok := htu.mutation.CreatedAt(); ok {
+		_spec.SetField(handlertask.FieldCreatedAt, field.TypeTime, value)
 	}
-	if value, ok := htu.mutation.NumOut(); ok {
-		_spec.SetField(handlertask.FieldNumOut, field.TypeInt, value)
+	if value, ok := htu.mutation.CompletedAt(); ok {
+		_spec.SetField(handlertask.FieldCompletedAt, field.TypeTime, value)
 	}
-	if value, ok := htu.mutation.AddedNumOut(); ok {
-		_spec.AddField(handlertask.FieldNumOut, field.TypeInt, value)
+	if htu.mutation.CompletedAtCleared() {
+		_spec.ClearField(handlertask.FieldCompletedAt, field.TypeTime)
 	}
-	if htu.mutation.TaskContextCleared() {
+	if htu.mutation.HandlerExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.TaskContextTable,
-			Columns: []string{handlertask.TaskContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(taskcontext.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := htu.mutation.TaskContextIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.TaskContextTable,
-			Columns: []string{handlertask.TaskContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(taskcontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if htu.mutation.ExecutionContextCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.ExecutionContextTable,
-			Columns: []string{handlertask.ExecutionContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := htu.mutation.ExecutionContextIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.ExecutionContextTable,
-			Columns: []string{handlertask.ExecutionContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if htu.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
 			Inverse: true,
-			Table:   handlertask.NodeTable,
-			Columns: []string{handlertask.NodeColumn},
+			Table:   handlertask.HandlerExecutionTable,
+			Columns: []string{handlertask.HandlerExecutionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := htu.mutation.NodeIDs(); len(nodes) > 0 {
+	if nodes := htu.mutation.HandlerExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   handlertask.NodeTable,
-			Columns: []string{handlertask.NodeColumn},
+			Table:   handlertask.HandlerExecutionTable,
+			Columns: []string{handlertask.HandlerExecutionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -408,13 +279,13 @@ type HandlerTaskUpdateOne struct {
 	mutation *HandlerTaskMutation
 }
 
-// SetHandlerName sets the "handlerName" field.
+// SetHandlerName sets the "handler_name" field.
 func (htuo *HandlerTaskUpdateOne) SetHandlerName(s string) *HandlerTaskUpdateOne {
 	htuo.mutation.SetHandlerName(s)
 	return htuo
 }
 
-// SetNillableHandlerName sets the "handlerName" field if the given value is not nil.
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
 func (htuo *HandlerTaskUpdateOne) SetNillableHandlerName(s *string) *HandlerTaskUpdateOne {
 	if s != nil {
 		htuo.SetHandlerName(*s)
@@ -422,29 +293,9 @@ func (htuo *HandlerTaskUpdateOne) SetNillableHandlerName(s *string) *HandlerTask
 	return htuo
 }
 
-// SetStatus sets the "status" field.
-func (htuo *HandlerTaskUpdateOne) SetStatus(h handlertask.Status) *HandlerTaskUpdateOne {
-	htuo.mutation.SetStatus(h)
-	return htuo
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableStatus(h *handlertask.Status) *HandlerTaskUpdateOne {
-	if h != nil {
-		htuo.SetStatus(*h)
-	}
-	return htuo
-}
-
 // SetPayload sets the "payload" field.
 func (htuo *HandlerTaskUpdateOne) SetPayload(b []byte) *HandlerTaskUpdateOne {
 	htuo.mutation.SetPayload(b)
-	return htuo
-}
-
-// ClearPayload clears the value of the "payload" field.
-func (htuo *HandlerTaskUpdateOne) ClearPayload() *HandlerTaskUpdateOne {
-	htuo.mutation.ClearPayload()
 	return htuo
 }
 
@@ -472,103 +323,71 @@ func (htuo *HandlerTaskUpdateOne) ClearError() *HandlerTaskUpdateOne {
 	return htuo
 }
 
-// SetNumIn sets the "numIn" field.
-func (htuo *HandlerTaskUpdateOne) SetNumIn(i int) *HandlerTaskUpdateOne {
-	htuo.mutation.ResetNumIn()
-	htuo.mutation.SetNumIn(i)
+// SetStatus sets the "status" field.
+func (htuo *HandlerTaskUpdateOne) SetStatus(h handlertask.Status) *HandlerTaskUpdateOne {
+	htuo.mutation.SetStatus(h)
 	return htuo
 }
 
-// SetNillableNumIn sets the "numIn" field if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableNumIn(i *int) *HandlerTaskUpdateOne {
-	if i != nil {
-		htuo.SetNumIn(*i)
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (htuo *HandlerTaskUpdateOne) SetNillableStatus(h *handlertask.Status) *HandlerTaskUpdateOne {
+	if h != nil {
+		htuo.SetStatus(*h)
 	}
 	return htuo
 }
 
-// AddNumIn adds i to the "numIn" field.
-func (htuo *HandlerTaskUpdateOne) AddNumIn(i int) *HandlerTaskUpdateOne {
-	htuo.mutation.AddNumIn(i)
+// SetCreatedAt sets the "created_at" field.
+func (htuo *HandlerTaskUpdateOne) SetCreatedAt(t time.Time) *HandlerTaskUpdateOne {
+	htuo.mutation.SetCreatedAt(t)
 	return htuo
 }
 
-// SetNumOut sets the "numOut" field.
-func (htuo *HandlerTaskUpdateOne) SetNumOut(i int) *HandlerTaskUpdateOne {
-	htuo.mutation.ResetNumOut()
-	htuo.mutation.SetNumOut(i)
-	return htuo
-}
-
-// SetNillableNumOut sets the "numOut" field if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableNumOut(i *int) *HandlerTaskUpdateOne {
-	if i != nil {
-		htuo.SetNumOut(*i)
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (htuo *HandlerTaskUpdateOne) SetNillableCreatedAt(t *time.Time) *HandlerTaskUpdateOne {
+	if t != nil {
+		htuo.SetCreatedAt(*t)
 	}
 	return htuo
 }
 
-// AddNumOut adds i to the "numOut" field.
-func (htuo *HandlerTaskUpdateOne) AddNumOut(i int) *HandlerTaskUpdateOne {
-	htuo.mutation.AddNumOut(i)
+// SetCompletedAt sets the "completed_at" field.
+func (htuo *HandlerTaskUpdateOne) SetCompletedAt(t time.Time) *HandlerTaskUpdateOne {
+	htuo.mutation.SetCompletedAt(t)
 	return htuo
 }
 
-// SetTaskContextID sets the "task_context" edge to the TaskContext entity by ID.
-func (htuo *HandlerTaskUpdateOne) SetTaskContextID(id string) *HandlerTaskUpdateOne {
-	htuo.mutation.SetTaskContextID(id)
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (htuo *HandlerTaskUpdateOne) SetNillableCompletedAt(t *time.Time) *HandlerTaskUpdateOne {
+	if t != nil {
+		htuo.SetCompletedAt(*t)
+	}
 	return htuo
 }
 
-// SetNillableTaskContextID sets the "task_context" edge to the TaskContext entity by ID if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableTaskContextID(id *string) *HandlerTaskUpdateOne {
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (htuo *HandlerTaskUpdateOne) ClearCompletedAt() *HandlerTaskUpdateOne {
+	htuo.mutation.ClearCompletedAt()
+	return htuo
+}
+
+// SetHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID.
+func (htuo *HandlerTaskUpdateOne) SetHandlerExecutionID(id string) *HandlerTaskUpdateOne {
+	htuo.mutation.SetHandlerExecutionID(id)
+	return htuo
+}
+
+// SetNillableHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID if the given value is not nil.
+func (htuo *HandlerTaskUpdateOne) SetNillableHandlerExecutionID(id *string) *HandlerTaskUpdateOne {
 	if id != nil {
-		htuo = htuo.SetTaskContextID(*id)
+		htuo = htuo.SetHandlerExecutionID(*id)
 	}
 	return htuo
 }
 
-// SetTaskContext sets the "task_context" edge to the TaskContext entity.
-func (htuo *HandlerTaskUpdateOne) SetTaskContext(t *TaskContext) *HandlerTaskUpdateOne {
-	return htuo.SetTaskContextID(t.ID)
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID.
-func (htuo *HandlerTaskUpdateOne) SetExecutionContextID(id string) *HandlerTaskUpdateOne {
-	htuo.mutation.SetExecutionContextID(id)
-	return htuo
-}
-
-// SetNillableExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableExecutionContextID(id *string) *HandlerTaskUpdateOne {
-	if id != nil {
-		htuo = htuo.SetExecutionContextID(*id)
-	}
-	return htuo
-}
-
-// SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
-func (htuo *HandlerTaskUpdateOne) SetExecutionContext(e *ExecutionContext) *HandlerTaskUpdateOne {
-	return htuo.SetExecutionContextID(e.ID)
-}
-
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (htuo *HandlerTaskUpdateOne) SetNodeID(id string) *HandlerTaskUpdateOne {
-	htuo.mutation.SetNodeID(id)
-	return htuo
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (htuo *HandlerTaskUpdateOne) SetNillableNodeID(id *string) *HandlerTaskUpdateOne {
-	if id != nil {
-		htuo = htuo.SetNodeID(*id)
-	}
-	return htuo
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (htuo *HandlerTaskUpdateOne) SetNode(n *Node) *HandlerTaskUpdateOne {
-	return htuo.SetNodeID(n.ID)
+// SetHandlerExecution sets the "handler_execution" edge to the HandlerExecution entity.
+func (htuo *HandlerTaskUpdateOne) SetHandlerExecution(h *HandlerExecution) *HandlerTaskUpdateOne {
+	return htuo.SetHandlerExecutionID(h.ID)
 }
 
 // Mutation returns the HandlerTaskMutation object of the builder.
@@ -576,21 +395,9 @@ func (htuo *HandlerTaskUpdateOne) Mutation() *HandlerTaskMutation {
 	return htuo.mutation
 }
 
-// ClearTaskContext clears the "task_context" edge to the TaskContext entity.
-func (htuo *HandlerTaskUpdateOne) ClearTaskContext() *HandlerTaskUpdateOne {
-	htuo.mutation.ClearTaskContext()
-	return htuo
-}
-
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (htuo *HandlerTaskUpdateOne) ClearExecutionContext() *HandlerTaskUpdateOne {
-	htuo.mutation.ClearExecutionContext()
-	return htuo
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (htuo *HandlerTaskUpdateOne) ClearNode() *HandlerTaskUpdateOne {
-	htuo.mutation.ClearNode()
+// ClearHandlerExecution clears the "handler_execution" edge to the HandlerExecution entity.
+func (htuo *HandlerTaskUpdateOne) ClearHandlerExecution() *HandlerTaskUpdateOne {
+	htuo.mutation.ClearHandlerExecution()
 	return htuo
 }
 
@@ -676,14 +483,8 @@ func (htuo *HandlerTaskUpdateOne) sqlSave(ctx context.Context) (_node *HandlerTa
 	if value, ok := htuo.mutation.HandlerName(); ok {
 		_spec.SetField(handlertask.FieldHandlerName, field.TypeString, value)
 	}
-	if value, ok := htuo.mutation.Status(); ok {
-		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
-	}
 	if value, ok := htuo.mutation.Payload(); ok {
 		_spec.SetField(handlertask.FieldPayload, field.TypeBytes, value)
-	}
-	if htuo.mutation.PayloadCleared() {
-		_spec.ClearField(handlertask.FieldPayload, field.TypeBytes)
 	}
 	if value, ok := htuo.mutation.Result(); ok {
 		_spec.SetField(handlertask.FieldResult, field.TypeBytes, value)
@@ -697,98 +498,40 @@ func (htuo *HandlerTaskUpdateOne) sqlSave(ctx context.Context) (_node *HandlerTa
 	if htuo.mutation.ErrorCleared() {
 		_spec.ClearField(handlertask.FieldError, field.TypeBytes)
 	}
-	if value, ok := htuo.mutation.NumIn(); ok {
-		_spec.SetField(handlertask.FieldNumIn, field.TypeInt, value)
+	if value, ok := htuo.mutation.Status(); ok {
+		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := htuo.mutation.AddedNumIn(); ok {
-		_spec.AddField(handlertask.FieldNumIn, field.TypeInt, value)
+	if value, ok := htuo.mutation.CreatedAt(); ok {
+		_spec.SetField(handlertask.FieldCreatedAt, field.TypeTime, value)
 	}
-	if value, ok := htuo.mutation.NumOut(); ok {
-		_spec.SetField(handlertask.FieldNumOut, field.TypeInt, value)
+	if value, ok := htuo.mutation.CompletedAt(); ok {
+		_spec.SetField(handlertask.FieldCompletedAt, field.TypeTime, value)
 	}
-	if value, ok := htuo.mutation.AddedNumOut(); ok {
-		_spec.AddField(handlertask.FieldNumOut, field.TypeInt, value)
+	if htuo.mutation.CompletedAtCleared() {
+		_spec.ClearField(handlertask.FieldCompletedAt, field.TypeTime)
 	}
-	if htuo.mutation.TaskContextCleared() {
+	if htuo.mutation.HandlerExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.TaskContextTable,
-			Columns: []string{handlertask.TaskContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(taskcontext.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := htuo.mutation.TaskContextIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.TaskContextTable,
-			Columns: []string{handlertask.TaskContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(taskcontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if htuo.mutation.ExecutionContextCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.ExecutionContextTable,
-			Columns: []string{handlertask.ExecutionContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := htuo.mutation.ExecutionContextIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.ExecutionContextTable,
-			Columns: []string{handlertask.ExecutionContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if htuo.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
 			Inverse: true,
-			Table:   handlertask.NodeTable,
-			Columns: []string{handlertask.NodeColumn},
+			Table:   handlertask.HandlerExecutionTable,
+			Columns: []string{handlertask.HandlerExecutionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := htuo.mutation.NodeIDs(); len(nodes) > 0 {
+	if nodes := htuo.mutation.HandlerExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   handlertask.NodeTable,
-			Columns: []string{handlertask.NodeColumn},
+			Table:   handlertask.HandlerExecutionTable,
+			Columns: []string{handlertask.HandlerExecutionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

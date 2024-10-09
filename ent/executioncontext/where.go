@@ -3,7 +3,10 @@
 package executioncontext
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -60,6 +63,219 @@ func IDEqualFold(id string) predicate.ExecutionContext {
 // IDContainsFold applies the ContainsFold predicate on the ID field.
 func IDContainsFold(id string) predicate.ExecutionContext {
 	return predicate.ExecutionContext(sql.FieldContainsFold(FieldID, id))
+}
+
+// CurrentRunID applies equality check predicate on the "current_run_id" field. It's identical to CurrentRunIDEQ.
+func CurrentRunID(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldCurrentRunID, v))
+}
+
+// StartTime applies equality check predicate on the "start_time" field. It's identical to StartTimeEQ.
+func StartTime(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldStartTime, v))
+}
+
+// EndTime applies equality check predicate on the "end_time" field. It's identical to EndTimeEQ.
+func EndTime(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldEndTime, v))
+}
+
+// CurrentRunIDEQ applies the EQ predicate on the "current_run_id" field.
+func CurrentRunIDEQ(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDNEQ applies the NEQ predicate on the "current_run_id" field.
+func CurrentRunIDNEQ(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNEQ(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDIn applies the In predicate on the "current_run_id" field.
+func CurrentRunIDIn(vs ...string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldIn(FieldCurrentRunID, vs...))
+}
+
+// CurrentRunIDNotIn applies the NotIn predicate on the "current_run_id" field.
+func CurrentRunIDNotIn(vs ...string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNotIn(FieldCurrentRunID, vs...))
+}
+
+// CurrentRunIDGT applies the GT predicate on the "current_run_id" field.
+func CurrentRunIDGT(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGT(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDGTE applies the GTE predicate on the "current_run_id" field.
+func CurrentRunIDGTE(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGTE(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDLT applies the LT predicate on the "current_run_id" field.
+func CurrentRunIDLT(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLT(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDLTE applies the LTE predicate on the "current_run_id" field.
+func CurrentRunIDLTE(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLTE(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDContains applies the Contains predicate on the "current_run_id" field.
+func CurrentRunIDContains(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldContains(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDHasPrefix applies the HasPrefix predicate on the "current_run_id" field.
+func CurrentRunIDHasPrefix(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldHasPrefix(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDHasSuffix applies the HasSuffix predicate on the "current_run_id" field.
+func CurrentRunIDHasSuffix(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldHasSuffix(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDEqualFold applies the EqualFold predicate on the "current_run_id" field.
+func CurrentRunIDEqualFold(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEqualFold(FieldCurrentRunID, v))
+}
+
+// CurrentRunIDContainsFold applies the ContainsFold predicate on the "current_run_id" field.
+func CurrentRunIDContainsFold(v string) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldContainsFold(FieldCurrentRunID, v))
+}
+
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// StartTimeEQ applies the EQ predicate on the "start_time" field.
+func StartTimeEQ(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldStartTime, v))
+}
+
+// StartTimeNEQ applies the NEQ predicate on the "start_time" field.
+func StartTimeNEQ(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNEQ(FieldStartTime, v))
+}
+
+// StartTimeIn applies the In predicate on the "start_time" field.
+func StartTimeIn(vs ...time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldIn(FieldStartTime, vs...))
+}
+
+// StartTimeNotIn applies the NotIn predicate on the "start_time" field.
+func StartTimeNotIn(vs ...time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNotIn(FieldStartTime, vs...))
+}
+
+// StartTimeGT applies the GT predicate on the "start_time" field.
+func StartTimeGT(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGT(FieldStartTime, v))
+}
+
+// StartTimeGTE applies the GTE predicate on the "start_time" field.
+func StartTimeGTE(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGTE(FieldStartTime, v))
+}
+
+// StartTimeLT applies the LT predicate on the "start_time" field.
+func StartTimeLT(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLT(FieldStartTime, v))
+}
+
+// StartTimeLTE applies the LTE predicate on the "start_time" field.
+func StartTimeLTE(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLTE(FieldStartTime, v))
+}
+
+// EndTimeEQ applies the EQ predicate on the "end_time" field.
+func EndTimeEQ(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldEQ(FieldEndTime, v))
+}
+
+// EndTimeNEQ applies the NEQ predicate on the "end_time" field.
+func EndTimeNEQ(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNEQ(FieldEndTime, v))
+}
+
+// EndTimeIn applies the In predicate on the "end_time" field.
+func EndTimeIn(vs ...time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldIn(FieldEndTime, vs...))
+}
+
+// EndTimeNotIn applies the NotIn predicate on the "end_time" field.
+func EndTimeNotIn(vs ...time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNotIn(FieldEndTime, vs...))
+}
+
+// EndTimeGT applies the GT predicate on the "end_time" field.
+func EndTimeGT(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGT(FieldEndTime, v))
+}
+
+// EndTimeGTE applies the GTE predicate on the "end_time" field.
+func EndTimeGTE(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldGTE(FieldEndTime, v))
+}
+
+// EndTimeLT applies the LT predicate on the "end_time" field.
+func EndTimeLT(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLT(FieldEndTime, v))
+}
+
+// EndTimeLTE applies the LTE predicate on the "end_time" field.
+func EndTimeLTE(v time.Time) predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldLTE(FieldEndTime, v))
+}
+
+// EndTimeIsNil applies the IsNil predicate on the "end_time" field.
+func EndTimeIsNil() predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldIsNull(FieldEndTime))
+}
+
+// EndTimeNotNil applies the NotNil predicate on the "end_time" field.
+func EndTimeNotNil() predicate.ExecutionContext {
+	return predicate.ExecutionContext(sql.FieldNotNull(FieldEndTime))
+}
+
+// HasHandlerExecutions applies the HasEdge predicate on the "handler_executions" edge.
+func HasHandlerExecutions() predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, HandlerExecutionsTable, HandlerExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasHandlerExecutionsWith applies the HasEdge predicate on the "handler_executions" edge with a given conditions (other predicates).
+func HasHandlerExecutionsWith(preds ...predicate.HandlerExecution) predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := newHandlerExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

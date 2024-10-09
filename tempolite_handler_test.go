@@ -121,6 +121,69 @@ func TestHandlerChildren(t *testing.T) {
 	}, time.Second)
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+func simpleRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
+	if retryFlag.Load() {
+		retryFlag.Store(false)
+		return nil, fmt.Errorf("failed on purpose")
+	}
+
+	log.Printf("simpleRetry Task %d", task)
+
+	return nil, nil
+}
+
+// go test -v -timeout 30s -run ^TestHandlerSimpleRetry$ .
+func TestHandlerSimpleRetry(t *testing.T) {
+
+	ctx := context.Background()
+
+	tp, err := New(ctx,
+		WithDestructive(),
+		WithPath("./db/tempolite_handler_retry_test.db"),
+	)
+	if err != nil {
+		t.Fatalf("Error creating Tempolite: %v", err)
+	}
+	defer tp.Close()
+
+	retryFlag.Store(true)
+
+	if err := tp.RegisterHandler(simpleTestHandler); err != nil {
+		t.Fatalf("Error registering handler: %v", err)
+	}
+
+	if err := tp.RegisterHandler(simpleRetry); err != nil {
+		t.Fatalf("Error registering handler: %v", err)
+	}
+
+	var id string
+	if id, err = tp.Enqueue(ctx, simpleRetry, TaskInt{1}); err != nil {
+		t.Fatalf("Error enqueuing task: %v", err)
+	}
+
+	log.Printf("ID: %s", id)
+
+	ctxTimeout := context.Background()
+	ctxTimeout, cancel := context.WithTimeout(ctxTimeout, 5*time.Second)
+	defer cancel()
+
+	data, err := tp.WaitFor(ctxTimeout, id)
+	if err != nil {
+		t.Fatalf("Error waiting for task: %v", err)
+	}
+
+	log.Printf("Data: %v", data)
+
+	tp.Wait(func(ti TempoliteInfo) bool {
+		log.Println(ti)
+		return ti.IsCompleted()
+	}, time.Second)
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
 var retryFlag atomic.Bool
 
 func simpleHandlerChildrenRetry(ctx HandlerContext, task TaskInt) (interface{}, error) {
@@ -223,6 +286,13 @@ func TestHandlerRetriesParent(t *testing.T) {
 
 	ctx := context.Background()
 
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		log.Printf("Recovered from panic: %v", r)
+	// 		fmt.Println(ctx.Err())
+	// 	}
+	// }()
+
 	tp, err := New(ctx,
 		WithDestructive(),
 		WithPath("./db/tempolite_handler_parent_retries_test.db"),
@@ -250,7 +320,7 @@ func TestHandlerRetriesParent(t *testing.T) {
 	log.Printf("ID: %s", id)
 
 	ctxTimeout := context.Background()
-	ctxTimeout, cancel := context.WithTimeout(ctxTimeout, 5*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(ctxTimeout, 15*time.Second)
 	defer cancel()
 
 	data, err := tp.WaitFor(ctxTimeout, id)
@@ -264,6 +334,7 @@ func TestHandlerRetriesParent(t *testing.T) {
 		log.Println(ti)
 		return ti.IsCompleted()
 	}, time.Second)
+	fmt.Println("end wait")
 }
 
 func dynamicHandlerChildrenHandler(ctx HandlerContext, task TaskInt) (interface{}, error) {

@@ -13,13 +13,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
-	"github.com/davidroman0O/go-tempolite/ent/entry"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/sagatask"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -81,13 +79,11 @@ func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			compensationtask.Table: compensationtask.ValidColumn,
-			entry.Table:            entry.ValidColumn,
 			executioncontext.Table: executioncontext.ValidColumn,
+			handlerexecution.Table: handlerexecution.ValidColumn,
 			handlertask.Table:      handlertask.ValidColumn,
-			node.Table:             node.ValidColumn,
 			sagatask.Table:         sagatask.ValidColumn,
 			sideeffecttask.Table:   sideeffecttask.ValidColumn,
-			taskcontext.Table:      taskcontext.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

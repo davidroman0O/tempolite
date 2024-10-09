@@ -7,17 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
-	"github.com/davidroman0O/go-tempolite/ent/entry"
+	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/sagatask"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 const (
@@ -30,13 +27,11 @@ const (
 
 	// Node types.
 	TypeCompensationTask = "CompensationTask"
-	TypeEntry            = "Entry"
 	TypeExecutionContext = "ExecutionContext"
+	TypeHandlerExecution = "HandlerExecution"
 	TypeHandlerTask      = "HandlerTask"
-	TypeNode             = "Node"
 	TypeSagaTask         = "SagaTask"
 	TypeSideEffectTask   = "SideEffectTask"
-	TypeTaskContext      = "TaskContext"
 )
 
 // CompensationTaskMutation represents an operation that mutates the CompensationTask nodes in the graph.
@@ -46,8 +41,6 @@ type CompensationTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
-	node          *string
-	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*CompensationTask, error)
 	predicates    []predicate.CompensationTask
@@ -149,45 +142,6 @@ func (m *CompensationTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetNodeID sets the "node" edge to the Node entity by id.
-func (m *CompensationTaskMutation) SetNodeID(id string) {
-	m.node = &id
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (m *CompensationTaskMutation) ClearNode() {
-	m.clearednode = true
-}
-
-// NodeCleared reports if the "node" edge to the Node entity was cleared.
-func (m *CompensationTaskMutation) NodeCleared() bool {
-	return m.clearednode
-}
-
-// NodeID returns the "node" edge ID in the mutation.
-func (m *CompensationTaskMutation) NodeID() (id string, exists bool) {
-	if m.node != nil {
-		return *m.node, true
-	}
-	return
-}
-
-// NodeIDs returns the "node" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// NodeID instead. It exists only for internal usage by the builders.
-func (m *CompensationTaskMutation) NodeIDs() (ids []string) {
-	if id := m.node; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetNode resets all changes to the "node" edge.
-func (m *CompensationTaskMutation) ResetNode() {
-	m.node = nil
-	m.clearednode = false
 }
 
 // Where appends a list predicates to the CompensationTaskMutation builder.
@@ -298,28 +252,19 @@ func (m *CompensationTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *CompensationTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.node != nil {
-		edges = append(edges, compensationtask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *CompensationTaskMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case compensationtask.EdgeNode:
-		if id := m.node; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *CompensationTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -331,738 +276,45 @@ func (m *CompensationTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *CompensationTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearednode {
-		edges = append(edges, compensationtask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *CompensationTaskMutation) EdgeCleared(name string) bool {
-	switch name {
-	case compensationtask.EdgeNode:
-		return m.clearednode
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *CompensationTaskMutation) ClearEdge(name string) error {
-	switch name {
-	case compensationtask.EdgeNode:
-		m.ClearNode()
-		return nil
-	}
 	return fmt.Errorf("unknown CompensationTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *CompensationTaskMutation) ResetEdge(name string) error {
-	switch name {
-	case compensationtask.EdgeNode:
-		m.ResetNode()
-		return nil
-	}
 	return fmt.Errorf("unknown CompensationTask edge %s", name)
-}
-
-// EntryMutation represents an operation that mutates the Entry nodes in the graph.
-type EntryMutation struct {
-	config
-	op                       Op
-	typ                      string
-	id                       *int
-	taskID                   *string
-	_type                    *entry.Type
-	clearedFields            map[string]struct{}
-	execution_context        *string
-	clearedexecution_context bool
-	handler_task             *string
-	clearedhandler_task      bool
-	saga_step_task           *int
-	clearedsaga_step_task    bool
-	side_effect_task         *int
-	clearedside_effect_task  bool
-	compensation_task        *int
-	clearedcompensation_task bool
-	done                     bool
-	oldValue                 func(context.Context) (*Entry, error)
-	predicates               []predicate.Entry
-}
-
-var _ ent.Mutation = (*EntryMutation)(nil)
-
-// entryOption allows management of the mutation configuration using functional options.
-type entryOption func(*EntryMutation)
-
-// newEntryMutation creates new mutation for the Entry entity.
-func newEntryMutation(c config, op Op, opts ...entryOption) *EntryMutation {
-	m := &EntryMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeEntry,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withEntryID sets the ID field of the mutation.
-func withEntryID(id int) entryOption {
-	return func(m *EntryMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *Entry
-		)
-		m.oldValue = func(ctx context.Context) (*Entry, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().Entry.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withEntry sets the old Entry of the mutation.
-func withEntry(node *Entry) entryOption {
-	return func(m *EntryMutation) {
-		m.oldValue = func(context.Context) (*Entry, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m EntryMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m EntryMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *EntryMutation) ID() (id int, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *EntryMutation) IDs(ctx context.Context) ([]int, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []int{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().Entry.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetTaskID sets the "taskID" field.
-func (m *EntryMutation) SetTaskID(s string) {
-	m.taskID = &s
-}
-
-// TaskID returns the value of the "taskID" field in the mutation.
-func (m *EntryMutation) TaskID() (r string, exists bool) {
-	v := m.taskID
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTaskID returns the old "taskID" field's value of the Entry entity.
-// If the Entry object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntryMutation) OldTaskID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTaskID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTaskID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTaskID: %w", err)
-	}
-	return oldValue.TaskID, nil
-}
-
-// ResetTaskID resets all changes to the "taskID" field.
-func (m *EntryMutation) ResetTaskID() {
-	m.taskID = nil
-}
-
-// SetType sets the "type" field.
-func (m *EntryMutation) SetType(e entry.Type) {
-	m._type = &e
-}
-
-// GetType returns the value of the "type" field in the mutation.
-func (m *EntryMutation) GetType() (r entry.Type, exists bool) {
-	v := m._type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldType returns the old "type" field's value of the Entry entity.
-// If the Entry object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntryMutation) OldType(ctx context.Context) (v entry.Type, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldType: %w", err)
-	}
-	return oldValue.Type, nil
-}
-
-// ResetType resets all changes to the "type" field.
-func (m *EntryMutation) ResetType() {
-	m._type = nil
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by id.
-func (m *EntryMutation) SetExecutionContextID(id string) {
-	m.execution_context = &id
-}
-
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (m *EntryMutation) ClearExecutionContext() {
-	m.clearedexecution_context = true
-}
-
-// ExecutionContextCleared reports if the "execution_context" edge to the ExecutionContext entity was cleared.
-func (m *EntryMutation) ExecutionContextCleared() bool {
-	return m.clearedexecution_context
-}
-
-// ExecutionContextID returns the "execution_context" edge ID in the mutation.
-func (m *EntryMutation) ExecutionContextID() (id string, exists bool) {
-	if m.execution_context != nil {
-		return *m.execution_context, true
-	}
-	return
-}
-
-// ExecutionContextIDs returns the "execution_context" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ExecutionContextID instead. It exists only for internal usage by the builders.
-func (m *EntryMutation) ExecutionContextIDs() (ids []string) {
-	if id := m.execution_context; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetExecutionContext resets all changes to the "execution_context" edge.
-func (m *EntryMutation) ResetExecutionContext() {
-	m.execution_context = nil
-	m.clearedexecution_context = false
-}
-
-// SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by id.
-func (m *EntryMutation) SetHandlerTaskID(id string) {
-	m.handler_task = &id
-}
-
-// ClearHandlerTask clears the "handler_task" edge to the HandlerTask entity.
-func (m *EntryMutation) ClearHandlerTask() {
-	m.clearedhandler_task = true
-}
-
-// HandlerTaskCleared reports if the "handler_task" edge to the HandlerTask entity was cleared.
-func (m *EntryMutation) HandlerTaskCleared() bool {
-	return m.clearedhandler_task
-}
-
-// HandlerTaskID returns the "handler_task" edge ID in the mutation.
-func (m *EntryMutation) HandlerTaskID() (id string, exists bool) {
-	if m.handler_task != nil {
-		return *m.handler_task, true
-	}
-	return
-}
-
-// HandlerTaskIDs returns the "handler_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// HandlerTaskID instead. It exists only for internal usage by the builders.
-func (m *EntryMutation) HandlerTaskIDs() (ids []string) {
-	if id := m.handler_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetHandlerTask resets all changes to the "handler_task" edge.
-func (m *EntryMutation) ResetHandlerTask() {
-	m.handler_task = nil
-	m.clearedhandler_task = false
-}
-
-// SetSagaStepTaskID sets the "saga_step_task" edge to the SagaTask entity by id.
-func (m *EntryMutation) SetSagaStepTaskID(id int) {
-	m.saga_step_task = &id
-}
-
-// ClearSagaStepTask clears the "saga_step_task" edge to the SagaTask entity.
-func (m *EntryMutation) ClearSagaStepTask() {
-	m.clearedsaga_step_task = true
-}
-
-// SagaStepTaskCleared reports if the "saga_step_task" edge to the SagaTask entity was cleared.
-func (m *EntryMutation) SagaStepTaskCleared() bool {
-	return m.clearedsaga_step_task
-}
-
-// SagaStepTaskID returns the "saga_step_task" edge ID in the mutation.
-func (m *EntryMutation) SagaStepTaskID() (id int, exists bool) {
-	if m.saga_step_task != nil {
-		return *m.saga_step_task, true
-	}
-	return
-}
-
-// SagaStepTaskIDs returns the "saga_step_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// SagaStepTaskID instead. It exists only for internal usage by the builders.
-func (m *EntryMutation) SagaStepTaskIDs() (ids []int) {
-	if id := m.saga_step_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetSagaStepTask resets all changes to the "saga_step_task" edge.
-func (m *EntryMutation) ResetSagaStepTask() {
-	m.saga_step_task = nil
-	m.clearedsaga_step_task = false
-}
-
-// SetSideEffectTaskID sets the "side_effect_task" edge to the SideEffectTask entity by id.
-func (m *EntryMutation) SetSideEffectTaskID(id int) {
-	m.side_effect_task = &id
-}
-
-// ClearSideEffectTask clears the "side_effect_task" edge to the SideEffectTask entity.
-func (m *EntryMutation) ClearSideEffectTask() {
-	m.clearedside_effect_task = true
-}
-
-// SideEffectTaskCleared reports if the "side_effect_task" edge to the SideEffectTask entity was cleared.
-func (m *EntryMutation) SideEffectTaskCleared() bool {
-	return m.clearedside_effect_task
-}
-
-// SideEffectTaskID returns the "side_effect_task" edge ID in the mutation.
-func (m *EntryMutation) SideEffectTaskID() (id int, exists bool) {
-	if m.side_effect_task != nil {
-		return *m.side_effect_task, true
-	}
-	return
-}
-
-// SideEffectTaskIDs returns the "side_effect_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// SideEffectTaskID instead. It exists only for internal usage by the builders.
-func (m *EntryMutation) SideEffectTaskIDs() (ids []int) {
-	if id := m.side_effect_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetSideEffectTask resets all changes to the "side_effect_task" edge.
-func (m *EntryMutation) ResetSideEffectTask() {
-	m.side_effect_task = nil
-	m.clearedside_effect_task = false
-}
-
-// SetCompensationTaskID sets the "compensation_task" edge to the CompensationTask entity by id.
-func (m *EntryMutation) SetCompensationTaskID(id int) {
-	m.compensation_task = &id
-}
-
-// ClearCompensationTask clears the "compensation_task" edge to the CompensationTask entity.
-func (m *EntryMutation) ClearCompensationTask() {
-	m.clearedcompensation_task = true
-}
-
-// CompensationTaskCleared reports if the "compensation_task" edge to the CompensationTask entity was cleared.
-func (m *EntryMutation) CompensationTaskCleared() bool {
-	return m.clearedcompensation_task
-}
-
-// CompensationTaskID returns the "compensation_task" edge ID in the mutation.
-func (m *EntryMutation) CompensationTaskID() (id int, exists bool) {
-	if m.compensation_task != nil {
-		return *m.compensation_task, true
-	}
-	return
-}
-
-// CompensationTaskIDs returns the "compensation_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// CompensationTaskID instead. It exists only for internal usage by the builders.
-func (m *EntryMutation) CompensationTaskIDs() (ids []int) {
-	if id := m.compensation_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetCompensationTask resets all changes to the "compensation_task" edge.
-func (m *EntryMutation) ResetCompensationTask() {
-	m.compensation_task = nil
-	m.clearedcompensation_task = false
-}
-
-// Where appends a list predicates to the EntryMutation builder.
-func (m *EntryMutation) Where(ps ...predicate.Entry) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the EntryMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *EntryMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.Entry, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *EntryMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *EntryMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (Entry).
-func (m *EntryMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *EntryMutation) Fields() []string {
-	fields := make([]string, 0, 2)
-	if m.taskID != nil {
-		fields = append(fields, entry.FieldTaskID)
-	}
-	if m._type != nil {
-		fields = append(fields, entry.FieldType)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *EntryMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case entry.FieldTaskID:
-		return m.TaskID()
-	case entry.FieldType:
-		return m.GetType()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *EntryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case entry.FieldTaskID:
-		return m.OldTaskID(ctx)
-	case entry.FieldType:
-		return m.OldType(ctx)
-	}
-	return nil, fmt.Errorf("unknown Entry field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *EntryMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case entry.FieldTaskID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTaskID(v)
-		return nil
-	case entry.FieldType:
-		v, ok := value.(entry.Type)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetType(v)
-		return nil
-	}
-	return fmt.Errorf("unknown Entry field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *EntryMutation) AddedFields() []string {
-	return nil
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *EntryMutation) AddedField(name string) (ent.Value, bool) {
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *EntryMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown Entry numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *EntryMutation) ClearedFields() []string {
-	return nil
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *EntryMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *EntryMutation) ClearField(name string) error {
-	return fmt.Errorf("unknown Entry nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *EntryMutation) ResetField(name string) error {
-	switch name {
-	case entry.FieldTaskID:
-		m.ResetTaskID()
-		return nil
-	case entry.FieldType:
-		m.ResetType()
-		return nil
-	}
-	return fmt.Errorf("unknown Entry field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *EntryMutation) AddedEdges() []string {
-	edges := make([]string, 0, 5)
-	if m.execution_context != nil {
-		edges = append(edges, entry.EdgeExecutionContext)
-	}
-	if m.handler_task != nil {
-		edges = append(edges, entry.EdgeHandlerTask)
-	}
-	if m.saga_step_task != nil {
-		edges = append(edges, entry.EdgeSagaStepTask)
-	}
-	if m.side_effect_task != nil {
-		edges = append(edges, entry.EdgeSideEffectTask)
-	}
-	if m.compensation_task != nil {
-		edges = append(edges, entry.EdgeCompensationTask)
-	}
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *EntryMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case entry.EdgeExecutionContext:
-		if id := m.execution_context; id != nil {
-			return []ent.Value{*id}
-		}
-	case entry.EdgeHandlerTask:
-		if id := m.handler_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case entry.EdgeSagaStepTask:
-		if id := m.saga_step_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case entry.EdgeSideEffectTask:
-		if id := m.side_effect_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case entry.EdgeCompensationTask:
-		if id := m.compensation_task; id != nil {
-			return []ent.Value{*id}
-		}
-	}
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *EntryMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 5)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *EntryMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *EntryMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 5)
-	if m.clearedexecution_context {
-		edges = append(edges, entry.EdgeExecutionContext)
-	}
-	if m.clearedhandler_task {
-		edges = append(edges, entry.EdgeHandlerTask)
-	}
-	if m.clearedsaga_step_task {
-		edges = append(edges, entry.EdgeSagaStepTask)
-	}
-	if m.clearedside_effect_task {
-		edges = append(edges, entry.EdgeSideEffectTask)
-	}
-	if m.clearedcompensation_task {
-		edges = append(edges, entry.EdgeCompensationTask)
-	}
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *EntryMutation) EdgeCleared(name string) bool {
-	switch name {
-	case entry.EdgeExecutionContext:
-		return m.clearedexecution_context
-	case entry.EdgeHandlerTask:
-		return m.clearedhandler_task
-	case entry.EdgeSagaStepTask:
-		return m.clearedsaga_step_task
-	case entry.EdgeSideEffectTask:
-		return m.clearedside_effect_task
-	case entry.EdgeCompensationTask:
-		return m.clearedcompensation_task
-	}
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *EntryMutation) ClearEdge(name string) error {
-	switch name {
-	case entry.EdgeExecutionContext:
-		m.ClearExecutionContext()
-		return nil
-	case entry.EdgeHandlerTask:
-		m.ClearHandlerTask()
-		return nil
-	case entry.EdgeSagaStepTask:
-		m.ClearSagaStepTask()
-		return nil
-	case entry.EdgeSideEffectTask:
-		m.ClearSideEffectTask()
-		return nil
-	case entry.EdgeCompensationTask:
-		m.ClearCompensationTask()
-		return nil
-	}
-	return fmt.Errorf("unknown Entry unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *EntryMutation) ResetEdge(name string) error {
-	switch name {
-	case entry.EdgeExecutionContext:
-		m.ResetExecutionContext()
-		return nil
-	case entry.EdgeHandlerTask:
-		m.ResetHandlerTask()
-		return nil
-	case entry.EdgeSagaStepTask:
-		m.ResetSagaStepTask()
-		return nil
-	case entry.EdgeSideEffectTask:
-		m.ResetSideEffectTask()
-		return nil
-	case entry.EdgeCompensationTask:
-		m.ResetCompensationTask()
-		return nil
-	}
-	return fmt.Errorf("unknown Entry edge %s", name)
 }
 
 // ExecutionContextMutation represents an operation that mutates the ExecutionContext nodes in the graph.
 type ExecutionContextMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *string
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*ExecutionContext, error)
-	predicates    []predicate.ExecutionContext
+	op                        Op
+	typ                       string
+	id                        *string
+	current_run_id            *string
+	status                    *executioncontext.Status
+	start_time                *time.Time
+	end_time                  *time.Time
+	clearedFields             map[string]struct{}
+	handler_executions        map[string]struct{}
+	removedhandler_executions map[string]struct{}
+	clearedhandler_executions bool
+	done                      bool
+	oldValue                  func(context.Context) (*ExecutionContext, error)
+	predicates                []predicate.ExecutionContext
 }
 
 var _ ent.Mutation = (*ExecutionContextMutation)(nil)
@@ -1169,6 +421,217 @@ func (m *ExecutionContextMutation) IDs(ctx context.Context) ([]string, error) {
 	}
 }
 
+// SetCurrentRunID sets the "current_run_id" field.
+func (m *ExecutionContextMutation) SetCurrentRunID(s string) {
+	m.current_run_id = &s
+}
+
+// CurrentRunID returns the value of the "current_run_id" field in the mutation.
+func (m *ExecutionContextMutation) CurrentRunID() (r string, exists bool) {
+	v := m.current_run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrentRunID returns the old "current_run_id" field's value of the ExecutionContext entity.
+// If the ExecutionContext object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionContextMutation) OldCurrentRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrentRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrentRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrentRunID: %w", err)
+	}
+	return oldValue.CurrentRunID, nil
+}
+
+// ResetCurrentRunID resets all changes to the "current_run_id" field.
+func (m *ExecutionContextMutation) ResetCurrentRunID() {
+	m.current_run_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ExecutionContextMutation) SetStatus(e executioncontext.Status) {
+	m.status = &e
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ExecutionContextMutation) Status() (r executioncontext.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ExecutionContext entity.
+// If the ExecutionContext object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionContextMutation) OldStatus(ctx context.Context) (v executioncontext.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ExecutionContextMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetStartTime sets the "start_time" field.
+func (m *ExecutionContextMutation) SetStartTime(t time.Time) {
+	m.start_time = &t
+}
+
+// StartTime returns the value of the "start_time" field in the mutation.
+func (m *ExecutionContextMutation) StartTime() (r time.Time, exists bool) {
+	v := m.start_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartTime returns the old "start_time" field's value of the ExecutionContext entity.
+// If the ExecutionContext object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionContextMutation) OldStartTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartTime: %w", err)
+	}
+	return oldValue.StartTime, nil
+}
+
+// ResetStartTime resets all changes to the "start_time" field.
+func (m *ExecutionContextMutation) ResetStartTime() {
+	m.start_time = nil
+}
+
+// SetEndTime sets the "end_time" field.
+func (m *ExecutionContextMutation) SetEndTime(t time.Time) {
+	m.end_time = &t
+}
+
+// EndTime returns the value of the "end_time" field in the mutation.
+func (m *ExecutionContextMutation) EndTime() (r time.Time, exists bool) {
+	v := m.end_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndTime returns the old "end_time" field's value of the ExecutionContext entity.
+// If the ExecutionContext object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionContextMutation) OldEndTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndTime: %w", err)
+	}
+	return oldValue.EndTime, nil
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (m *ExecutionContextMutation) ClearEndTime() {
+	m.end_time = nil
+	m.clearedFields[executioncontext.FieldEndTime] = struct{}{}
+}
+
+// EndTimeCleared returns if the "end_time" field was cleared in this mutation.
+func (m *ExecutionContextMutation) EndTimeCleared() bool {
+	_, ok := m.clearedFields[executioncontext.FieldEndTime]
+	return ok
+}
+
+// ResetEndTime resets all changes to the "end_time" field.
+func (m *ExecutionContextMutation) ResetEndTime() {
+	m.end_time = nil
+	delete(m.clearedFields, executioncontext.FieldEndTime)
+}
+
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by ids.
+func (m *ExecutionContextMutation) AddHandlerExecutionIDs(ids ...string) {
+	if m.handler_executions == nil {
+		m.handler_executions = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.handler_executions[ids[i]] = struct{}{}
+	}
+}
+
+// ClearHandlerExecutions clears the "handler_executions" edge to the HandlerExecution entity.
+func (m *ExecutionContextMutation) ClearHandlerExecutions() {
+	m.clearedhandler_executions = true
+}
+
+// HandlerExecutionsCleared reports if the "handler_executions" edge to the HandlerExecution entity was cleared.
+func (m *ExecutionContextMutation) HandlerExecutionsCleared() bool {
+	return m.clearedhandler_executions
+}
+
+// RemoveHandlerExecutionIDs removes the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (m *ExecutionContextMutation) RemoveHandlerExecutionIDs(ids ...string) {
+	if m.removedhandler_executions == nil {
+		m.removedhandler_executions = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.handler_executions, ids[i])
+		m.removedhandler_executions[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedHandlerExecutions returns the removed IDs of the "handler_executions" edge to the HandlerExecution entity.
+func (m *ExecutionContextMutation) RemovedHandlerExecutionsIDs() (ids []string) {
+	for id := range m.removedhandler_executions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// HandlerExecutionsIDs returns the "handler_executions" edge IDs in the mutation.
+func (m *ExecutionContextMutation) HandlerExecutionsIDs() (ids []string) {
+	for id := range m.handler_executions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetHandlerExecutions resets all changes to the "handler_executions" edge.
+func (m *ExecutionContextMutation) ResetHandlerExecutions() {
+	m.handler_executions = nil
+	m.clearedhandler_executions = false
+	m.removedhandler_executions = nil
+}
+
 // Where appends a list predicates to the ExecutionContextMutation builder.
 func (m *ExecutionContextMutation) Where(ps ...predicate.ExecutionContext) {
 	m.predicates = append(m.predicates, ps...)
@@ -1203,7 +666,19 @@ func (m *ExecutionContextMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExecutionContextMutation) Fields() []string {
-	fields := make([]string, 0, 0)
+	fields := make([]string, 0, 4)
+	if m.current_run_id != nil {
+		fields = append(fields, executioncontext.FieldCurrentRunID)
+	}
+	if m.status != nil {
+		fields = append(fields, executioncontext.FieldStatus)
+	}
+	if m.start_time != nil {
+		fields = append(fields, executioncontext.FieldStartTime)
+	}
+	if m.end_time != nil {
+		fields = append(fields, executioncontext.FieldEndTime)
+	}
 	return fields
 }
 
@@ -1211,6 +686,16 @@ func (m *ExecutionContextMutation) Fields() []string {
 // return value indicates that this field was not set, or was not defined in the
 // schema.
 func (m *ExecutionContextMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case executioncontext.FieldCurrentRunID:
+		return m.CurrentRunID()
+	case executioncontext.FieldStatus:
+		return m.Status()
+	case executioncontext.FieldStartTime:
+		return m.StartTime()
+	case executioncontext.FieldEndTime:
+		return m.EndTime()
+	}
 	return nil, false
 }
 
@@ -1218,6 +703,16 @@ func (m *ExecutionContextMutation) Field(name string) (ent.Value, bool) {
 // returned if the mutation operation is not UpdateOne, or the query to the
 // database failed.
 func (m *ExecutionContextMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case executioncontext.FieldCurrentRunID:
+		return m.OldCurrentRunID(ctx)
+	case executioncontext.FieldStatus:
+		return m.OldStatus(ctx)
+	case executioncontext.FieldStartTime:
+		return m.OldStartTime(ctx)
+	case executioncontext.FieldEndTime:
+		return m.OldEndTime(ctx)
+	}
 	return nil, fmt.Errorf("unknown ExecutionContext field %s", name)
 }
 
@@ -1226,6 +721,34 @@ func (m *ExecutionContextMutation) OldField(ctx context.Context, name string) (e
 // type.
 func (m *ExecutionContextMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case executioncontext.FieldCurrentRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrentRunID(v)
+		return nil
+	case executioncontext.FieldStatus:
+		v, ok := value.(executioncontext.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case executioncontext.FieldStartTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartTime(v)
+		return nil
+	case executioncontext.FieldEndTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndTime(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ExecutionContext field %s", name)
 }
@@ -1247,13 +770,19 @@ func (m *ExecutionContextMutation) AddedField(name string) (ent.Value, bool) {
 // the field is not defined in the schema, or if the type mismatched the field
 // type.
 func (m *ExecutionContextMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown ExecutionContext numeric field %s", name)
 }
 
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ExecutionContextMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(executioncontext.FieldEndTime) {
+		fields = append(fields, executioncontext.FieldEndTime)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -1266,61 +795,1157 @@ func (m *ExecutionContextMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ExecutionContextMutation) ClearField(name string) error {
+	switch name {
+	case executioncontext.FieldEndTime:
+		m.ClearEndTime()
+		return nil
+	}
 	return fmt.Errorf("unknown ExecutionContext nullable field %s", name)
 }
 
 // ResetField resets all changes in the mutation for the field with the given name.
 // It returns an error if the field is not defined in the schema.
 func (m *ExecutionContextMutation) ResetField(name string) error {
+	switch name {
+	case executioncontext.FieldCurrentRunID:
+		m.ResetCurrentRunID()
+		return nil
+	case executioncontext.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case executioncontext.FieldStartTime:
+		m.ResetStartTime()
+		return nil
+	case executioncontext.FieldEndTime:
+		m.ResetEndTime()
+		return nil
+	}
 	return fmt.Errorf("unknown ExecutionContext field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ExecutionContextMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.handler_executions != nil {
+		edges = append(edges, executioncontext.EdgeHandlerExecutions)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ExecutionContextMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case executioncontext.EdgeHandlerExecutions:
+		ids := make([]ent.Value, 0, len(m.handler_executions))
+		for id := range m.handler_executions {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ExecutionContextMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.removedhandler_executions != nil {
+		edges = append(edges, executioncontext.EdgeHandlerExecutions)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *ExecutionContextMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case executioncontext.EdgeHandlerExecutions:
+		ids := make([]ent.Value, 0, len(m.removedhandler_executions))
+		for id := range m.removedhandler_executions {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ExecutionContextMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedhandler_executions {
+		edges = append(edges, executioncontext.EdgeHandlerExecutions)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ExecutionContextMutation) EdgeCleared(name string) bool {
+	switch name {
+	case executioncontext.EdgeHandlerExecutions:
+		return m.clearedhandler_executions
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ExecutionContextMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown ExecutionContext unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ExecutionContextMutation) ResetEdge(name string) error {
+	switch name {
+	case executioncontext.EdgeHandlerExecutions:
+		m.ResetHandlerExecutions()
+		return nil
+	}
 	return fmt.Errorf("unknown ExecutionContext edge %s", name)
+}
+
+// HandlerExecutionMutation represents an operation that mutates the HandlerExecution nodes in the graph.
+type HandlerExecutionMutation struct {
+	config
+	op                       Op
+	typ                      string
+	id                       *string
+	run_id                   *string
+	handler_name             *string
+	status                   *handlerexecution.Status
+	start_time               *time.Time
+	end_time                 *time.Time
+	retry_count              *int
+	addretry_count           *int
+	max_retries              *int
+	addmax_retries           *int
+	clearedFields            map[string]struct{}
+	execution_context        *string
+	clearedexecution_context bool
+	parent                   *string
+	clearedparent            bool
+	children                 map[string]struct{}
+	removedchildren          map[string]struct{}
+	clearedchildren          bool
+	tasks                    map[string]struct{}
+	removedtasks             map[string]struct{}
+	clearedtasks             bool
+	done                     bool
+	oldValue                 func(context.Context) (*HandlerExecution, error)
+	predicates               []predicate.HandlerExecution
+}
+
+var _ ent.Mutation = (*HandlerExecutionMutation)(nil)
+
+// handlerexecutionOption allows management of the mutation configuration using functional options.
+type handlerexecutionOption func(*HandlerExecutionMutation)
+
+// newHandlerExecutionMutation creates new mutation for the HandlerExecution entity.
+func newHandlerExecutionMutation(c config, op Op, opts ...handlerexecutionOption) *HandlerExecutionMutation {
+	m := &HandlerExecutionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeHandlerExecution,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withHandlerExecutionID sets the ID field of the mutation.
+func withHandlerExecutionID(id string) handlerexecutionOption {
+	return func(m *HandlerExecutionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *HandlerExecution
+		)
+		m.oldValue = func(ctx context.Context) (*HandlerExecution, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().HandlerExecution.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withHandlerExecution sets the old HandlerExecution of the mutation.
+func withHandlerExecution(node *HandlerExecution) handlerexecutionOption {
+	return func(m *HandlerExecutionMutation) {
+		m.oldValue = func(context.Context) (*HandlerExecution, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m HandlerExecutionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m HandlerExecutionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of HandlerExecution entities.
+func (m *HandlerExecutionMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *HandlerExecutionMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *HandlerExecutionMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().HandlerExecution.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetRunID sets the "run_id" field.
+func (m *HandlerExecutionMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *HandlerExecutionMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *HandlerExecutionMutation) ResetRunID() {
+	m.run_id = nil
+}
+
+// SetHandlerName sets the "handler_name" field.
+func (m *HandlerExecutionMutation) SetHandlerName(s string) {
+	m.handler_name = &s
+}
+
+// HandlerName returns the value of the "handler_name" field in the mutation.
+func (m *HandlerExecutionMutation) HandlerName() (r string, exists bool) {
+	v := m.handler_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHandlerName returns the old "handler_name" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldHandlerName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHandlerName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHandlerName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHandlerName: %w", err)
+	}
+	return oldValue.HandlerName, nil
+}
+
+// ResetHandlerName resets all changes to the "handler_name" field.
+func (m *HandlerExecutionMutation) ResetHandlerName() {
+	m.handler_name = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *HandlerExecutionMutation) SetStatus(h handlerexecution.Status) {
+	m.status = &h
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *HandlerExecutionMutation) Status() (r handlerexecution.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldStatus(ctx context.Context) (v handlerexecution.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *HandlerExecutionMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetStartTime sets the "start_time" field.
+func (m *HandlerExecutionMutation) SetStartTime(t time.Time) {
+	m.start_time = &t
+}
+
+// StartTime returns the value of the "start_time" field in the mutation.
+func (m *HandlerExecutionMutation) StartTime() (r time.Time, exists bool) {
+	v := m.start_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartTime returns the old "start_time" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldStartTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartTime: %w", err)
+	}
+	return oldValue.StartTime, nil
+}
+
+// ResetStartTime resets all changes to the "start_time" field.
+func (m *HandlerExecutionMutation) ResetStartTime() {
+	m.start_time = nil
+}
+
+// SetEndTime sets the "end_time" field.
+func (m *HandlerExecutionMutation) SetEndTime(t time.Time) {
+	m.end_time = &t
+}
+
+// EndTime returns the value of the "end_time" field in the mutation.
+func (m *HandlerExecutionMutation) EndTime() (r time.Time, exists bool) {
+	v := m.end_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndTime returns the old "end_time" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldEndTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndTime: %w", err)
+	}
+	return oldValue.EndTime, nil
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (m *HandlerExecutionMutation) ClearEndTime() {
+	m.end_time = nil
+	m.clearedFields[handlerexecution.FieldEndTime] = struct{}{}
+}
+
+// EndTimeCleared returns if the "end_time" field was cleared in this mutation.
+func (m *HandlerExecutionMutation) EndTimeCleared() bool {
+	_, ok := m.clearedFields[handlerexecution.FieldEndTime]
+	return ok
+}
+
+// ResetEndTime resets all changes to the "end_time" field.
+func (m *HandlerExecutionMutation) ResetEndTime() {
+	m.end_time = nil
+	delete(m.clearedFields, handlerexecution.FieldEndTime)
+}
+
+// SetRetryCount sets the "retry_count" field.
+func (m *HandlerExecutionMutation) SetRetryCount(i int) {
+	m.retry_count = &i
+	m.addretry_count = nil
+}
+
+// RetryCount returns the value of the "retry_count" field in the mutation.
+func (m *HandlerExecutionMutation) RetryCount() (r int, exists bool) {
+	v := m.retry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryCount returns the old "retry_count" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldRetryCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryCount: %w", err)
+	}
+	return oldValue.RetryCount, nil
+}
+
+// AddRetryCount adds i to the "retry_count" field.
+func (m *HandlerExecutionMutation) AddRetryCount(i int) {
+	if m.addretry_count != nil {
+		*m.addretry_count += i
+	} else {
+		m.addretry_count = &i
+	}
+}
+
+// AddedRetryCount returns the value that was added to the "retry_count" field in this mutation.
+func (m *HandlerExecutionMutation) AddedRetryCount() (r int, exists bool) {
+	v := m.addretry_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRetryCount resets all changes to the "retry_count" field.
+func (m *HandlerExecutionMutation) ResetRetryCount() {
+	m.retry_count = nil
+	m.addretry_count = nil
+}
+
+// SetMaxRetries sets the "max_retries" field.
+func (m *HandlerExecutionMutation) SetMaxRetries(i int) {
+	m.max_retries = &i
+	m.addmax_retries = nil
+}
+
+// MaxRetries returns the value of the "max_retries" field in the mutation.
+func (m *HandlerExecutionMutation) MaxRetries() (r int, exists bool) {
+	v := m.max_retries
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxRetries returns the old "max_retries" field's value of the HandlerExecution entity.
+// If the HandlerExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerExecutionMutation) OldMaxRetries(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxRetries is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxRetries requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxRetries: %w", err)
+	}
+	return oldValue.MaxRetries, nil
+}
+
+// AddMaxRetries adds i to the "max_retries" field.
+func (m *HandlerExecutionMutation) AddMaxRetries(i int) {
+	if m.addmax_retries != nil {
+		*m.addmax_retries += i
+	} else {
+		m.addmax_retries = &i
+	}
+}
+
+// AddedMaxRetries returns the value that was added to the "max_retries" field in this mutation.
+func (m *HandlerExecutionMutation) AddedMaxRetries() (r int, exists bool) {
+	v := m.addmax_retries
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMaxRetries resets all changes to the "max_retries" field.
+func (m *HandlerExecutionMutation) ResetMaxRetries() {
+	m.max_retries = nil
+	m.addmax_retries = nil
+}
+
+// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by id.
+func (m *HandlerExecutionMutation) SetExecutionContextID(id string) {
+	m.execution_context = &id
+}
+
+// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
+func (m *HandlerExecutionMutation) ClearExecutionContext() {
+	m.clearedexecution_context = true
+}
+
+// ExecutionContextCleared reports if the "execution_context" edge to the ExecutionContext entity was cleared.
+func (m *HandlerExecutionMutation) ExecutionContextCleared() bool {
+	return m.clearedexecution_context
+}
+
+// ExecutionContextID returns the "execution_context" edge ID in the mutation.
+func (m *HandlerExecutionMutation) ExecutionContextID() (id string, exists bool) {
+	if m.execution_context != nil {
+		return *m.execution_context, true
+	}
+	return
+}
+
+// ExecutionContextIDs returns the "execution_context" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ExecutionContextID instead. It exists only for internal usage by the builders.
+func (m *HandlerExecutionMutation) ExecutionContextIDs() (ids []string) {
+	if id := m.execution_context; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetExecutionContext resets all changes to the "execution_context" edge.
+func (m *HandlerExecutionMutation) ResetExecutionContext() {
+	m.execution_context = nil
+	m.clearedexecution_context = false
+}
+
+// SetParentID sets the "parent" edge to the HandlerExecution entity by id.
+func (m *HandlerExecutionMutation) SetParentID(id string) {
+	m.parent = &id
+}
+
+// ClearParent clears the "parent" edge to the HandlerExecution entity.
+func (m *HandlerExecutionMutation) ClearParent() {
+	m.clearedparent = true
+}
+
+// ParentCleared reports if the "parent" edge to the HandlerExecution entity was cleared.
+func (m *HandlerExecutionMutation) ParentCleared() bool {
+	return m.clearedparent
+}
+
+// ParentID returns the "parent" edge ID in the mutation.
+func (m *HandlerExecutionMutation) ParentID() (id string, exists bool) {
+	if m.parent != nil {
+		return *m.parent, true
+	}
+	return
+}
+
+// ParentIDs returns the "parent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ParentID instead. It exists only for internal usage by the builders.
+func (m *HandlerExecutionMutation) ParentIDs() (ids []string) {
+	if id := m.parent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetParent resets all changes to the "parent" edge.
+func (m *HandlerExecutionMutation) ResetParent() {
+	m.parent = nil
+	m.clearedparent = false
+}
+
+// AddChildIDs adds the "children" edge to the HandlerExecution entity by ids.
+func (m *HandlerExecutionMutation) AddChildIDs(ids ...string) {
+	if m.children == nil {
+		m.children = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.children[ids[i]] = struct{}{}
+	}
+}
+
+// ClearChildren clears the "children" edge to the HandlerExecution entity.
+func (m *HandlerExecutionMutation) ClearChildren() {
+	m.clearedchildren = true
+}
+
+// ChildrenCleared reports if the "children" edge to the HandlerExecution entity was cleared.
+func (m *HandlerExecutionMutation) ChildrenCleared() bool {
+	return m.clearedchildren
+}
+
+// RemoveChildIDs removes the "children" edge to the HandlerExecution entity by IDs.
+func (m *HandlerExecutionMutation) RemoveChildIDs(ids ...string) {
+	if m.removedchildren == nil {
+		m.removedchildren = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.children, ids[i])
+		m.removedchildren[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedChildren returns the removed IDs of the "children" edge to the HandlerExecution entity.
+func (m *HandlerExecutionMutation) RemovedChildrenIDs() (ids []string) {
+	for id := range m.removedchildren {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ChildrenIDs returns the "children" edge IDs in the mutation.
+func (m *HandlerExecutionMutation) ChildrenIDs() (ids []string) {
+	for id := range m.children {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetChildren resets all changes to the "children" edge.
+func (m *HandlerExecutionMutation) ResetChildren() {
+	m.children = nil
+	m.clearedchildren = false
+	m.removedchildren = nil
+}
+
+// AddTaskIDs adds the "tasks" edge to the HandlerTask entity by ids.
+func (m *HandlerExecutionMutation) AddTaskIDs(ids ...string) {
+	if m.tasks == nil {
+		m.tasks = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.tasks[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTasks clears the "tasks" edge to the HandlerTask entity.
+func (m *HandlerExecutionMutation) ClearTasks() {
+	m.clearedtasks = true
+}
+
+// TasksCleared reports if the "tasks" edge to the HandlerTask entity was cleared.
+func (m *HandlerExecutionMutation) TasksCleared() bool {
+	return m.clearedtasks
+}
+
+// RemoveTaskIDs removes the "tasks" edge to the HandlerTask entity by IDs.
+func (m *HandlerExecutionMutation) RemoveTaskIDs(ids ...string) {
+	if m.removedtasks == nil {
+		m.removedtasks = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.tasks, ids[i])
+		m.removedtasks[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTasks returns the removed IDs of the "tasks" edge to the HandlerTask entity.
+func (m *HandlerExecutionMutation) RemovedTasksIDs() (ids []string) {
+	for id := range m.removedtasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TasksIDs returns the "tasks" edge IDs in the mutation.
+func (m *HandlerExecutionMutation) TasksIDs() (ids []string) {
+	for id := range m.tasks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTasks resets all changes to the "tasks" edge.
+func (m *HandlerExecutionMutation) ResetTasks() {
+	m.tasks = nil
+	m.clearedtasks = false
+	m.removedtasks = nil
+}
+
+// Where appends a list predicates to the HandlerExecutionMutation builder.
+func (m *HandlerExecutionMutation) Where(ps ...predicate.HandlerExecution) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the HandlerExecutionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *HandlerExecutionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.HandlerExecution, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *HandlerExecutionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *HandlerExecutionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (HandlerExecution).
+func (m *HandlerExecutionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *HandlerExecutionMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.run_id != nil {
+		fields = append(fields, handlerexecution.FieldRunID)
+	}
+	if m.handler_name != nil {
+		fields = append(fields, handlerexecution.FieldHandlerName)
+	}
+	if m.status != nil {
+		fields = append(fields, handlerexecution.FieldStatus)
+	}
+	if m.start_time != nil {
+		fields = append(fields, handlerexecution.FieldStartTime)
+	}
+	if m.end_time != nil {
+		fields = append(fields, handlerexecution.FieldEndTime)
+	}
+	if m.retry_count != nil {
+		fields = append(fields, handlerexecution.FieldRetryCount)
+	}
+	if m.max_retries != nil {
+		fields = append(fields, handlerexecution.FieldMaxRetries)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *HandlerExecutionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case handlerexecution.FieldRunID:
+		return m.RunID()
+	case handlerexecution.FieldHandlerName:
+		return m.HandlerName()
+	case handlerexecution.FieldStatus:
+		return m.Status()
+	case handlerexecution.FieldStartTime:
+		return m.StartTime()
+	case handlerexecution.FieldEndTime:
+		return m.EndTime()
+	case handlerexecution.FieldRetryCount:
+		return m.RetryCount()
+	case handlerexecution.FieldMaxRetries:
+		return m.MaxRetries()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *HandlerExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case handlerexecution.FieldRunID:
+		return m.OldRunID(ctx)
+	case handlerexecution.FieldHandlerName:
+		return m.OldHandlerName(ctx)
+	case handlerexecution.FieldStatus:
+		return m.OldStatus(ctx)
+	case handlerexecution.FieldStartTime:
+		return m.OldStartTime(ctx)
+	case handlerexecution.FieldEndTime:
+		return m.OldEndTime(ctx)
+	case handlerexecution.FieldRetryCount:
+		return m.OldRetryCount(ctx)
+	case handlerexecution.FieldMaxRetries:
+		return m.OldMaxRetries(ctx)
+	}
+	return nil, fmt.Errorf("unknown HandlerExecution field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HandlerExecutionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case handlerexecution.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case handlerexecution.FieldHandlerName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHandlerName(v)
+		return nil
+	case handlerexecution.FieldStatus:
+		v, ok := value.(handlerexecution.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case handlerexecution.FieldStartTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartTime(v)
+		return nil
+	case handlerexecution.FieldEndTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndTime(v)
+		return nil
+	case handlerexecution.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryCount(v)
+		return nil
+	case handlerexecution.FieldMaxRetries:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxRetries(v)
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *HandlerExecutionMutation) AddedFields() []string {
+	var fields []string
+	if m.addretry_count != nil {
+		fields = append(fields, handlerexecution.FieldRetryCount)
+	}
+	if m.addmax_retries != nil {
+		fields = append(fields, handlerexecution.FieldMaxRetries)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *HandlerExecutionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case handlerexecution.FieldRetryCount:
+		return m.AddedRetryCount()
+	case handlerexecution.FieldMaxRetries:
+		return m.AddedMaxRetries()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HandlerExecutionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case handlerexecution.FieldRetryCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRetryCount(v)
+		return nil
+	case handlerexecution.FieldMaxRetries:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxRetries(v)
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *HandlerExecutionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(handlerexecution.FieldEndTime) {
+		fields = append(fields, handlerexecution.FieldEndTime)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *HandlerExecutionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *HandlerExecutionMutation) ClearField(name string) error {
+	switch name {
+	case handlerexecution.FieldEndTime:
+		m.ClearEndTime()
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *HandlerExecutionMutation) ResetField(name string) error {
+	switch name {
+	case handlerexecution.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case handlerexecution.FieldHandlerName:
+		m.ResetHandlerName()
+		return nil
+	case handlerexecution.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case handlerexecution.FieldStartTime:
+		m.ResetStartTime()
+		return nil
+	case handlerexecution.FieldEndTime:
+		m.ResetEndTime()
+		return nil
+	case handlerexecution.FieldRetryCount:
+		m.ResetRetryCount()
+		return nil
+	case handlerexecution.FieldMaxRetries:
+		m.ResetMaxRetries()
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *HandlerExecutionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.execution_context != nil {
+		edges = append(edges, handlerexecution.EdgeExecutionContext)
+	}
+	if m.parent != nil {
+		edges = append(edges, handlerexecution.EdgeParent)
+	}
+	if m.children != nil {
+		edges = append(edges, handlerexecution.EdgeChildren)
+	}
+	if m.tasks != nil {
+		edges = append(edges, handlerexecution.EdgeTasks)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *HandlerExecutionMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case handlerexecution.EdgeExecutionContext:
+		if id := m.execution_context; id != nil {
+			return []ent.Value{*id}
+		}
+	case handlerexecution.EdgeParent:
+		if id := m.parent; id != nil {
+			return []ent.Value{*id}
+		}
+	case handlerexecution.EdgeChildren:
+		ids := make([]ent.Value, 0, len(m.children))
+		for id := range m.children {
+			ids = append(ids, id)
+		}
+		return ids
+	case handlerexecution.EdgeTasks:
+		ids := make([]ent.Value, 0, len(m.tasks))
+		for id := range m.tasks {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *HandlerExecutionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.removedchildren != nil {
+		edges = append(edges, handlerexecution.EdgeChildren)
+	}
+	if m.removedtasks != nil {
+		edges = append(edges, handlerexecution.EdgeTasks)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *HandlerExecutionMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case handlerexecution.EdgeChildren:
+		ids := make([]ent.Value, 0, len(m.removedchildren))
+		for id := range m.removedchildren {
+			ids = append(ids, id)
+		}
+		return ids
+	case handlerexecution.EdgeTasks:
+		ids := make([]ent.Value, 0, len(m.removedtasks))
+		for id := range m.removedtasks {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *HandlerExecutionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.clearedexecution_context {
+		edges = append(edges, handlerexecution.EdgeExecutionContext)
+	}
+	if m.clearedparent {
+		edges = append(edges, handlerexecution.EdgeParent)
+	}
+	if m.clearedchildren {
+		edges = append(edges, handlerexecution.EdgeChildren)
+	}
+	if m.clearedtasks {
+		edges = append(edges, handlerexecution.EdgeTasks)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *HandlerExecutionMutation) EdgeCleared(name string) bool {
+	switch name {
+	case handlerexecution.EdgeExecutionContext:
+		return m.clearedexecution_context
+	case handlerexecution.EdgeParent:
+		return m.clearedparent
+	case handlerexecution.EdgeChildren:
+		return m.clearedchildren
+	case handlerexecution.EdgeTasks:
+		return m.clearedtasks
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *HandlerExecutionMutation) ClearEdge(name string) error {
+	switch name {
+	case handlerexecution.EdgeExecutionContext:
+		m.ClearExecutionContext()
+		return nil
+	case handlerexecution.EdgeParent:
+		m.ClearParent()
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *HandlerExecutionMutation) ResetEdge(name string) error {
+	switch name {
+	case handlerexecution.EdgeExecutionContext:
+		m.ResetExecutionContext()
+		return nil
+	case handlerexecution.EdgeParent:
+		m.ResetParent()
+		return nil
+	case handlerexecution.EdgeChildren:
+		m.ResetChildren()
+		return nil
+	case handlerexecution.EdgeTasks:
+		m.ResetTasks()
+		return nil
+	}
+	return fmt.Errorf("unknown HandlerExecution edge %s", name)
 }
 
 // HandlerTaskMutation represents an operation that mutates the HandlerTask nodes in the graph.
@@ -1329,22 +1954,16 @@ type HandlerTaskMutation struct {
 	op                       Op
 	typ                      string
 	id                       *string
-	handlerName              *string
-	status                   *handlertask.Status
+	handler_name             *string
 	payload                  *[]byte
 	result                   *[]byte
 	error                    *[]byte
-	numIn                    *int
-	addnumIn                 *int
-	numOut                   *int
-	addnumOut                *int
+	status                   *handlertask.Status
+	created_at               *time.Time
+	completed_at             *time.Time
 	clearedFields            map[string]struct{}
-	task_context             *string
-	clearedtask_context      bool
-	execution_context        *string
-	clearedexecution_context bool
-	node                     *string
-	clearednode              bool
+	handler_execution        *string
+	clearedhandler_execution bool
 	done                     bool
 	oldValue                 func(context.Context) (*HandlerTask, error)
 	predicates               []predicate.HandlerTask
@@ -1454,21 +2073,21 @@ func (m *HandlerTaskMutation) IDs(ctx context.Context) ([]string, error) {
 	}
 }
 
-// SetHandlerName sets the "handlerName" field.
+// SetHandlerName sets the "handler_name" field.
 func (m *HandlerTaskMutation) SetHandlerName(s string) {
-	m.handlerName = &s
+	m.handler_name = &s
 }
 
-// HandlerName returns the value of the "handlerName" field in the mutation.
+// HandlerName returns the value of the "handler_name" field in the mutation.
 func (m *HandlerTaskMutation) HandlerName() (r string, exists bool) {
-	v := m.handlerName
+	v := m.handler_name
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldHandlerName returns the old "handlerName" field's value of the HandlerTask entity.
+// OldHandlerName returns the old "handler_name" field's value of the HandlerTask entity.
 // If the HandlerTask object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
 func (m *HandlerTaskMutation) OldHandlerName(ctx context.Context) (v string, err error) {
@@ -1485,45 +2104,9 @@ func (m *HandlerTaskMutation) OldHandlerName(ctx context.Context) (v string, err
 	return oldValue.HandlerName, nil
 }
 
-// ResetHandlerName resets all changes to the "handlerName" field.
+// ResetHandlerName resets all changes to the "handler_name" field.
 func (m *HandlerTaskMutation) ResetHandlerName() {
-	m.handlerName = nil
-}
-
-// SetStatus sets the "status" field.
-func (m *HandlerTaskMutation) SetStatus(h handlertask.Status) {
-	m.status = &h
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *HandlerTaskMutation) Status() (r handlertask.Status, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the HandlerTask entity.
-// If the HandlerTask object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *HandlerTaskMutation) OldStatus(ctx context.Context) (v handlertask.Status, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *HandlerTaskMutation) ResetStatus() {
-	m.status = nil
+	m.handler_name = nil
 }
 
 // SetPayload sets the "payload" field.
@@ -1557,22 +2140,9 @@ func (m *HandlerTaskMutation) OldPayload(ctx context.Context) (v []byte, err err
 	return oldValue.Payload, nil
 }
 
-// ClearPayload clears the value of the "payload" field.
-func (m *HandlerTaskMutation) ClearPayload() {
-	m.payload = nil
-	m.clearedFields[handlertask.FieldPayload] = struct{}{}
-}
-
-// PayloadCleared returns if the "payload" field was cleared in this mutation.
-func (m *HandlerTaskMutation) PayloadCleared() bool {
-	_, ok := m.clearedFields[handlertask.FieldPayload]
-	return ok
-}
-
 // ResetPayload resets all changes to the "payload" field.
 func (m *HandlerTaskMutation) ResetPayload() {
 	m.payload = nil
-	delete(m.clearedFields, handlertask.FieldPayload)
 }
 
 // SetResult sets the "result" field.
@@ -1673,233 +2243,164 @@ func (m *HandlerTaskMutation) ResetError() {
 	delete(m.clearedFields, handlertask.FieldError)
 }
 
-// SetNumIn sets the "numIn" field.
-func (m *HandlerTaskMutation) SetNumIn(i int) {
-	m.numIn = &i
-	m.addnumIn = nil
+// SetStatus sets the "status" field.
+func (m *HandlerTaskMutation) SetStatus(h handlertask.Status) {
+	m.status = &h
 }
 
-// NumIn returns the value of the "numIn" field in the mutation.
-func (m *HandlerTaskMutation) NumIn() (r int, exists bool) {
-	v := m.numIn
+// Status returns the value of the "status" field in the mutation.
+func (m *HandlerTaskMutation) Status() (r handlertask.Status, exists bool) {
+	v := m.status
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldNumIn returns the old "numIn" field's value of the HandlerTask entity.
+// OldStatus returns the old "status" field's value of the HandlerTask entity.
 // If the HandlerTask object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *HandlerTaskMutation) OldNumIn(ctx context.Context) (v int, err error) {
+func (m *HandlerTaskMutation) OldStatus(ctx context.Context) (v handlertask.Status, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNumIn is only allowed on UpdateOne operations")
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNumIn requires an ID field in the mutation")
+		return v, errors.New("OldStatus requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNumIn: %w", err)
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
 	}
-	return oldValue.NumIn, nil
+	return oldValue.Status, nil
 }
 
-// AddNumIn adds i to the "numIn" field.
-func (m *HandlerTaskMutation) AddNumIn(i int) {
-	if m.addnumIn != nil {
-		*m.addnumIn += i
-	} else {
-		m.addnumIn = &i
-	}
+// ResetStatus resets all changes to the "status" field.
+func (m *HandlerTaskMutation) ResetStatus() {
+	m.status = nil
 }
 
-// AddedNumIn returns the value that was added to the "numIn" field in this mutation.
-func (m *HandlerTaskMutation) AddedNumIn() (r int, exists bool) {
-	v := m.addnumIn
+// SetCreatedAt sets the "created_at" field.
+func (m *HandlerTaskMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *HandlerTaskMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// ResetNumIn resets all changes to the "numIn" field.
-func (m *HandlerTaskMutation) ResetNumIn() {
-	m.numIn = nil
-	m.addnumIn = nil
-}
-
-// SetNumOut sets the "numOut" field.
-func (m *HandlerTaskMutation) SetNumOut(i int) {
-	m.numOut = &i
-	m.addnumOut = nil
-}
-
-// NumOut returns the value of the "numOut" field in the mutation.
-func (m *HandlerTaskMutation) NumOut() (r int, exists bool) {
-	v := m.numOut
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldNumOut returns the old "numOut" field's value of the HandlerTask entity.
+// OldCreatedAt returns the old "created_at" field's value of the HandlerTask entity.
 // If the HandlerTask object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *HandlerTaskMutation) OldNumOut(ctx context.Context) (v int, err error) {
+func (m *HandlerTaskMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNumOut is only allowed on UpdateOne operations")
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNumOut requires an ID field in the mutation")
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNumOut: %w", err)
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
 	}
-	return oldValue.NumOut, nil
+	return oldValue.CreatedAt, nil
 }
 
-// AddNumOut adds i to the "numOut" field.
-func (m *HandlerTaskMutation) AddNumOut(i int) {
-	if m.addnumOut != nil {
-		*m.addnumOut += i
-	} else {
-		m.addnumOut = &i
-	}
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *HandlerTaskMutation) ResetCreatedAt() {
+	m.created_at = nil
 }
 
-// AddedNumOut returns the value that was added to the "numOut" field in this mutation.
-func (m *HandlerTaskMutation) AddedNumOut() (r int, exists bool) {
-	v := m.addnumOut
+// SetCompletedAt sets the "completed_at" field.
+func (m *HandlerTaskMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *HandlerTaskMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// ResetNumOut resets all changes to the "numOut" field.
-func (m *HandlerTaskMutation) ResetNumOut() {
-	m.numOut = nil
-	m.addnumOut = nil
+// OldCompletedAt returns the old "completed_at" field's value of the HandlerTask entity.
+// If the HandlerTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HandlerTaskMutation) OldCompletedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
 }
 
-// SetTaskContextID sets the "task_context" edge to the TaskContext entity by id.
-func (m *HandlerTaskMutation) SetTaskContextID(id string) {
-	m.task_context = &id
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *HandlerTaskMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[handlertask.FieldCompletedAt] = struct{}{}
 }
 
-// ClearTaskContext clears the "task_context" edge to the TaskContext entity.
-func (m *HandlerTaskMutation) ClearTaskContext() {
-	m.clearedtask_context = true
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *HandlerTaskMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[handlertask.FieldCompletedAt]
+	return ok
 }
 
-// TaskContextCleared reports if the "task_context" edge to the TaskContext entity was cleared.
-func (m *HandlerTaskMutation) TaskContextCleared() bool {
-	return m.clearedtask_context
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *HandlerTaskMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, handlertask.FieldCompletedAt)
 }
 
-// TaskContextID returns the "task_context" edge ID in the mutation.
-func (m *HandlerTaskMutation) TaskContextID() (id string, exists bool) {
-	if m.task_context != nil {
-		return *m.task_context, true
+// SetHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by id.
+func (m *HandlerTaskMutation) SetHandlerExecutionID(id string) {
+	m.handler_execution = &id
+}
+
+// ClearHandlerExecution clears the "handler_execution" edge to the HandlerExecution entity.
+func (m *HandlerTaskMutation) ClearHandlerExecution() {
+	m.clearedhandler_execution = true
+}
+
+// HandlerExecutionCleared reports if the "handler_execution" edge to the HandlerExecution entity was cleared.
+func (m *HandlerTaskMutation) HandlerExecutionCleared() bool {
+	return m.clearedhandler_execution
+}
+
+// HandlerExecutionID returns the "handler_execution" edge ID in the mutation.
+func (m *HandlerTaskMutation) HandlerExecutionID() (id string, exists bool) {
+	if m.handler_execution != nil {
+		return *m.handler_execution, true
 	}
 	return
 }
 
-// TaskContextIDs returns the "task_context" edge IDs in the mutation.
+// HandlerExecutionIDs returns the "handler_execution" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// TaskContextID instead. It exists only for internal usage by the builders.
-func (m *HandlerTaskMutation) TaskContextIDs() (ids []string) {
-	if id := m.task_context; id != nil {
+// HandlerExecutionID instead. It exists only for internal usage by the builders.
+func (m *HandlerTaskMutation) HandlerExecutionIDs() (ids []string) {
+	if id := m.handler_execution; id != nil {
 		ids = append(ids, *id)
 	}
 	return
 }
 
-// ResetTaskContext resets all changes to the "task_context" edge.
-func (m *HandlerTaskMutation) ResetTaskContext() {
-	m.task_context = nil
-	m.clearedtask_context = false
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by id.
-func (m *HandlerTaskMutation) SetExecutionContextID(id string) {
-	m.execution_context = &id
-}
-
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (m *HandlerTaskMutation) ClearExecutionContext() {
-	m.clearedexecution_context = true
-}
-
-// ExecutionContextCleared reports if the "execution_context" edge to the ExecutionContext entity was cleared.
-func (m *HandlerTaskMutation) ExecutionContextCleared() bool {
-	return m.clearedexecution_context
-}
-
-// ExecutionContextID returns the "execution_context" edge ID in the mutation.
-func (m *HandlerTaskMutation) ExecutionContextID() (id string, exists bool) {
-	if m.execution_context != nil {
-		return *m.execution_context, true
-	}
-	return
-}
-
-// ExecutionContextIDs returns the "execution_context" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ExecutionContextID instead. It exists only for internal usage by the builders.
-func (m *HandlerTaskMutation) ExecutionContextIDs() (ids []string) {
-	if id := m.execution_context; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetExecutionContext resets all changes to the "execution_context" edge.
-func (m *HandlerTaskMutation) ResetExecutionContext() {
-	m.execution_context = nil
-	m.clearedexecution_context = false
-}
-
-// SetNodeID sets the "node" edge to the Node entity by id.
-func (m *HandlerTaskMutation) SetNodeID(id string) {
-	m.node = &id
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (m *HandlerTaskMutation) ClearNode() {
-	m.clearednode = true
-}
-
-// NodeCleared reports if the "node" edge to the Node entity was cleared.
-func (m *HandlerTaskMutation) NodeCleared() bool {
-	return m.clearednode
-}
-
-// NodeID returns the "node" edge ID in the mutation.
-func (m *HandlerTaskMutation) NodeID() (id string, exists bool) {
-	if m.node != nil {
-		return *m.node, true
-	}
-	return
-}
-
-// NodeIDs returns the "node" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// NodeID instead. It exists only for internal usage by the builders.
-func (m *HandlerTaskMutation) NodeIDs() (ids []string) {
-	if id := m.node; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetNode resets all changes to the "node" edge.
-func (m *HandlerTaskMutation) ResetNode() {
-	m.node = nil
-	m.clearednode = false
+// ResetHandlerExecution resets all changes to the "handler_execution" edge.
+func (m *HandlerTaskMutation) ResetHandlerExecution() {
+	m.handler_execution = nil
+	m.clearedhandler_execution = false
 }
 
 // Where appends a list predicates to the HandlerTaskMutation builder.
@@ -1937,11 +2438,8 @@ func (m *HandlerTaskMutation) Type() string {
 // AddedFields().
 func (m *HandlerTaskMutation) Fields() []string {
 	fields := make([]string, 0, 7)
-	if m.handlerName != nil {
+	if m.handler_name != nil {
 		fields = append(fields, handlertask.FieldHandlerName)
-	}
-	if m.status != nil {
-		fields = append(fields, handlertask.FieldStatus)
 	}
 	if m.payload != nil {
 		fields = append(fields, handlertask.FieldPayload)
@@ -1952,11 +2450,14 @@ func (m *HandlerTaskMutation) Fields() []string {
 	if m.error != nil {
 		fields = append(fields, handlertask.FieldError)
 	}
-	if m.numIn != nil {
-		fields = append(fields, handlertask.FieldNumIn)
+	if m.status != nil {
+		fields = append(fields, handlertask.FieldStatus)
 	}
-	if m.numOut != nil {
-		fields = append(fields, handlertask.FieldNumOut)
+	if m.created_at != nil {
+		fields = append(fields, handlertask.FieldCreatedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, handlertask.FieldCompletedAt)
 	}
 	return fields
 }
@@ -1968,18 +2469,18 @@ func (m *HandlerTaskMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case handlertask.FieldHandlerName:
 		return m.HandlerName()
-	case handlertask.FieldStatus:
-		return m.Status()
 	case handlertask.FieldPayload:
 		return m.Payload()
 	case handlertask.FieldResult:
 		return m.Result()
 	case handlertask.FieldError:
 		return m.Error()
-	case handlertask.FieldNumIn:
-		return m.NumIn()
-	case handlertask.FieldNumOut:
-		return m.NumOut()
+	case handlertask.FieldStatus:
+		return m.Status()
+	case handlertask.FieldCreatedAt:
+		return m.CreatedAt()
+	case handlertask.FieldCompletedAt:
+		return m.CompletedAt()
 	}
 	return nil, false
 }
@@ -1991,18 +2492,18 @@ func (m *HandlerTaskMutation) OldField(ctx context.Context, name string) (ent.Va
 	switch name {
 	case handlertask.FieldHandlerName:
 		return m.OldHandlerName(ctx)
-	case handlertask.FieldStatus:
-		return m.OldStatus(ctx)
 	case handlertask.FieldPayload:
 		return m.OldPayload(ctx)
 	case handlertask.FieldResult:
 		return m.OldResult(ctx)
 	case handlertask.FieldError:
 		return m.OldError(ctx)
-	case handlertask.FieldNumIn:
-		return m.OldNumIn(ctx)
-	case handlertask.FieldNumOut:
-		return m.OldNumOut(ctx)
+	case handlertask.FieldStatus:
+		return m.OldStatus(ctx)
+	case handlertask.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case handlertask.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown HandlerTask field %s", name)
 }
@@ -2018,13 +2519,6 @@ func (m *HandlerTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetHandlerName(v)
-		return nil
-	case handlertask.FieldStatus:
-		v, ok := value.(handlertask.Status)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
 		return nil
 	case handlertask.FieldPayload:
 		v, ok := value.([]byte)
@@ -2047,19 +2541,26 @@ func (m *HandlerTaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetError(v)
 		return nil
-	case handlertask.FieldNumIn:
-		v, ok := value.(int)
+	case handlertask.FieldStatus:
+		v, ok := value.(handlertask.Status)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetNumIn(v)
+		m.SetStatus(v)
 		return nil
-	case handlertask.FieldNumOut:
-		v, ok := value.(int)
+	case handlertask.FieldCreatedAt:
+		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetNumOut(v)
+		m.SetCreatedAt(v)
+		return nil
+	case handlertask.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask field %s", name)
@@ -2068,26 +2569,13 @@ func (m *HandlerTaskMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *HandlerTaskMutation) AddedFields() []string {
-	var fields []string
-	if m.addnumIn != nil {
-		fields = append(fields, handlertask.FieldNumIn)
-	}
-	if m.addnumOut != nil {
-		fields = append(fields, handlertask.FieldNumOut)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *HandlerTaskMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case handlertask.FieldNumIn:
-		return m.AddedNumIn()
-	case handlertask.FieldNumOut:
-		return m.AddedNumOut()
-	}
 	return nil, false
 }
 
@@ -2096,20 +2584,6 @@ func (m *HandlerTaskMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *HandlerTaskMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case handlertask.FieldNumIn:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddNumIn(v)
-		return nil
-	case handlertask.FieldNumOut:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddNumOut(v)
-		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask numeric field %s", name)
 }
@@ -2118,14 +2592,14 @@ func (m *HandlerTaskMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *HandlerTaskMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(handlertask.FieldPayload) {
-		fields = append(fields, handlertask.FieldPayload)
-	}
 	if m.FieldCleared(handlertask.FieldResult) {
 		fields = append(fields, handlertask.FieldResult)
 	}
 	if m.FieldCleared(handlertask.FieldError) {
 		fields = append(fields, handlertask.FieldError)
+	}
+	if m.FieldCleared(handlertask.FieldCompletedAt) {
+		fields = append(fields, handlertask.FieldCompletedAt)
 	}
 	return fields
 }
@@ -2141,14 +2615,14 @@ func (m *HandlerTaskMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *HandlerTaskMutation) ClearField(name string) error {
 	switch name {
-	case handlertask.FieldPayload:
-		m.ClearPayload()
-		return nil
 	case handlertask.FieldResult:
 		m.ClearResult()
 		return nil
 	case handlertask.FieldError:
 		m.ClearError()
+		return nil
+	case handlertask.FieldCompletedAt:
+		m.ClearCompletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask nullable field %s", name)
@@ -2161,9 +2635,6 @@ func (m *HandlerTaskMutation) ResetField(name string) error {
 	case handlertask.FieldHandlerName:
 		m.ResetHandlerName()
 		return nil
-	case handlertask.FieldStatus:
-		m.ResetStatus()
-		return nil
 	case handlertask.FieldPayload:
 		m.ResetPayload()
 		return nil
@@ -2173,11 +2644,14 @@ func (m *HandlerTaskMutation) ResetField(name string) error {
 	case handlertask.FieldError:
 		m.ResetError()
 		return nil
-	case handlertask.FieldNumIn:
-		m.ResetNumIn()
+	case handlertask.FieldStatus:
+		m.ResetStatus()
 		return nil
-	case handlertask.FieldNumOut:
-		m.ResetNumOut()
+	case handlertask.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case handlertask.FieldCompletedAt:
+		m.ResetCompletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask field %s", name)
@@ -2185,15 +2659,9 @@ func (m *HandlerTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *HandlerTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.task_context != nil {
-		edges = append(edges, handlertask.EdgeTaskContext)
-	}
-	if m.execution_context != nil {
-		edges = append(edges, handlertask.EdgeExecutionContext)
-	}
-	if m.node != nil {
-		edges = append(edges, handlertask.EdgeNode)
+	edges := make([]string, 0, 1)
+	if m.handler_execution != nil {
+		edges = append(edges, handlertask.EdgeHandlerExecution)
 	}
 	return edges
 }
@@ -2202,16 +2670,8 @@ func (m *HandlerTaskMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *HandlerTaskMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case handlertask.EdgeTaskContext:
-		if id := m.task_context; id != nil {
-			return []ent.Value{*id}
-		}
-	case handlertask.EdgeExecutionContext:
-		if id := m.execution_context; id != nil {
-			return []ent.Value{*id}
-		}
-	case handlertask.EdgeNode:
-		if id := m.node; id != nil {
+	case handlertask.EdgeHandlerExecution:
+		if id := m.handler_execution; id != nil {
 			return []ent.Value{*id}
 		}
 	}
@@ -2220,7 +2680,7 @@ func (m *HandlerTaskMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *HandlerTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -2232,15 +2692,9 @@ func (m *HandlerTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *HandlerTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.clearedtask_context {
-		edges = append(edges, handlertask.EdgeTaskContext)
-	}
-	if m.clearedexecution_context {
-		edges = append(edges, handlertask.EdgeExecutionContext)
-	}
-	if m.clearednode {
-		edges = append(edges, handlertask.EdgeNode)
+	edges := make([]string, 0, 1)
+	if m.clearedhandler_execution {
+		edges = append(edges, handlertask.EdgeHandlerExecution)
 	}
 	return edges
 }
@@ -2249,12 +2703,8 @@ func (m *HandlerTaskMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *HandlerTaskMutation) EdgeCleared(name string) bool {
 	switch name {
-	case handlertask.EdgeTaskContext:
-		return m.clearedtask_context
-	case handlertask.EdgeExecutionContext:
-		return m.clearedexecution_context
-	case handlertask.EdgeNode:
-		return m.clearednode
+	case handlertask.EdgeHandlerExecution:
+		return m.clearedhandler_execution
 	}
 	return false
 }
@@ -2263,14 +2713,8 @@ func (m *HandlerTaskMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *HandlerTaskMutation) ClearEdge(name string) error {
 	switch name {
-	case handlertask.EdgeTaskContext:
-		m.ClearTaskContext()
-		return nil
-	case handlertask.EdgeExecutionContext:
-		m.ClearExecutionContext()
-		return nil
-	case handlertask.EdgeNode:
-		m.ClearNode()
+	case handlertask.EdgeHandlerExecution:
+		m.ClearHandlerExecution()
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask unique edge %s", name)
@@ -2280,705 +2724,11 @@ func (m *HandlerTaskMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *HandlerTaskMutation) ResetEdge(name string) error {
 	switch name {
-	case handlertask.EdgeTaskContext:
-		m.ResetTaskContext()
-		return nil
-	case handlertask.EdgeExecutionContext:
-		m.ResetExecutionContext()
-		return nil
-	case handlertask.EdgeNode:
-		m.ResetNode()
+	case handlertask.EdgeHandlerExecution:
+		m.ResetHandlerExecution()
 		return nil
 	}
 	return fmt.Errorf("unknown HandlerTask edge %s", name)
-}
-
-// NodeMutation represents an operation that mutates the Node nodes in the graph.
-type NodeMutation struct {
-	config
-	op                       Op
-	typ                      string
-	id                       *string
-	index                    *int
-	addindex                 *int
-	parent                   *string
-	clearedFields            map[string]struct{}
-	handler_task             *string
-	clearedhandler_task      bool
-	saga_step_task           *int
-	clearedsaga_step_task    bool
-	side_effect_task         *int
-	clearedside_effect_task  bool
-	compensation_task        *int
-	clearedcompensation_task bool
-	done                     bool
-	oldValue                 func(context.Context) (*Node, error)
-	predicates               []predicate.Node
-}
-
-var _ ent.Mutation = (*NodeMutation)(nil)
-
-// nodeOption allows management of the mutation configuration using functional options.
-type nodeOption func(*NodeMutation)
-
-// newNodeMutation creates new mutation for the Node entity.
-func newNodeMutation(c config, op Op, opts ...nodeOption) *NodeMutation {
-	m := &NodeMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeNode,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withNodeID sets the ID field of the mutation.
-func withNodeID(id string) nodeOption {
-	return func(m *NodeMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *Node
-		)
-		m.oldValue = func(ctx context.Context) (*Node, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().Node.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withNode sets the old Node of the mutation.
-func withNode(node *Node) nodeOption {
-	return func(m *NodeMutation) {
-		m.oldValue = func(context.Context) (*Node, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m NodeMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m NodeMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of Node entities.
-func (m *NodeMutation) SetID(id string) {
-	m.id = &id
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *NodeMutation) ID() (id string, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *NodeMutation) IDs(ctx context.Context) ([]string, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []string{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().Node.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetIndex sets the "index" field.
-func (m *NodeMutation) SetIndex(i int) {
-	m.index = &i
-	m.addindex = nil
-}
-
-// Index returns the value of the "index" field in the mutation.
-func (m *NodeMutation) Index() (r int, exists bool) {
-	v := m.index
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIndex returns the old "index" field's value of the Node entity.
-// If the Node object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *NodeMutation) OldIndex(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIndex is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIndex requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIndex: %w", err)
-	}
-	return oldValue.Index, nil
-}
-
-// AddIndex adds i to the "index" field.
-func (m *NodeMutation) AddIndex(i int) {
-	if m.addindex != nil {
-		*m.addindex += i
-	} else {
-		m.addindex = &i
-	}
-}
-
-// AddedIndex returns the value that was added to the "index" field in this mutation.
-func (m *NodeMutation) AddedIndex() (r int, exists bool) {
-	v := m.addindex
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetIndex resets all changes to the "index" field.
-func (m *NodeMutation) ResetIndex() {
-	m.index = nil
-	m.addindex = nil
-}
-
-// SetParent sets the "parent" field.
-func (m *NodeMutation) SetParent(s string) {
-	m.parent = &s
-}
-
-// Parent returns the value of the "parent" field in the mutation.
-func (m *NodeMutation) Parent() (r string, exists bool) {
-	v := m.parent
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldParent returns the old "parent" field's value of the Node entity.
-// If the Node object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *NodeMutation) OldParent(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldParent is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldParent requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldParent: %w", err)
-	}
-	return oldValue.Parent, nil
-}
-
-// ClearParent clears the value of the "parent" field.
-func (m *NodeMutation) ClearParent() {
-	m.parent = nil
-	m.clearedFields[node.FieldParent] = struct{}{}
-}
-
-// ParentCleared returns if the "parent" field was cleared in this mutation.
-func (m *NodeMutation) ParentCleared() bool {
-	_, ok := m.clearedFields[node.FieldParent]
-	return ok
-}
-
-// ResetParent resets all changes to the "parent" field.
-func (m *NodeMutation) ResetParent() {
-	m.parent = nil
-	delete(m.clearedFields, node.FieldParent)
-}
-
-// SetHandlerTaskID sets the "handler_task" edge to the HandlerTask entity by id.
-func (m *NodeMutation) SetHandlerTaskID(id string) {
-	m.handler_task = &id
-}
-
-// ClearHandlerTask clears the "handler_task" edge to the HandlerTask entity.
-func (m *NodeMutation) ClearHandlerTask() {
-	m.clearedhandler_task = true
-}
-
-// HandlerTaskCleared reports if the "handler_task" edge to the HandlerTask entity was cleared.
-func (m *NodeMutation) HandlerTaskCleared() bool {
-	return m.clearedhandler_task
-}
-
-// HandlerTaskID returns the "handler_task" edge ID in the mutation.
-func (m *NodeMutation) HandlerTaskID() (id string, exists bool) {
-	if m.handler_task != nil {
-		return *m.handler_task, true
-	}
-	return
-}
-
-// HandlerTaskIDs returns the "handler_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// HandlerTaskID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) HandlerTaskIDs() (ids []string) {
-	if id := m.handler_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetHandlerTask resets all changes to the "handler_task" edge.
-func (m *NodeMutation) ResetHandlerTask() {
-	m.handler_task = nil
-	m.clearedhandler_task = false
-}
-
-// SetSagaStepTaskID sets the "saga_step_task" edge to the SagaTask entity by id.
-func (m *NodeMutation) SetSagaStepTaskID(id int) {
-	m.saga_step_task = &id
-}
-
-// ClearSagaStepTask clears the "saga_step_task" edge to the SagaTask entity.
-func (m *NodeMutation) ClearSagaStepTask() {
-	m.clearedsaga_step_task = true
-}
-
-// SagaStepTaskCleared reports if the "saga_step_task" edge to the SagaTask entity was cleared.
-func (m *NodeMutation) SagaStepTaskCleared() bool {
-	return m.clearedsaga_step_task
-}
-
-// SagaStepTaskID returns the "saga_step_task" edge ID in the mutation.
-func (m *NodeMutation) SagaStepTaskID() (id int, exists bool) {
-	if m.saga_step_task != nil {
-		return *m.saga_step_task, true
-	}
-	return
-}
-
-// SagaStepTaskIDs returns the "saga_step_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// SagaStepTaskID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) SagaStepTaskIDs() (ids []int) {
-	if id := m.saga_step_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetSagaStepTask resets all changes to the "saga_step_task" edge.
-func (m *NodeMutation) ResetSagaStepTask() {
-	m.saga_step_task = nil
-	m.clearedsaga_step_task = false
-}
-
-// SetSideEffectTaskID sets the "side_effect_task" edge to the SideEffectTask entity by id.
-func (m *NodeMutation) SetSideEffectTaskID(id int) {
-	m.side_effect_task = &id
-}
-
-// ClearSideEffectTask clears the "side_effect_task" edge to the SideEffectTask entity.
-func (m *NodeMutation) ClearSideEffectTask() {
-	m.clearedside_effect_task = true
-}
-
-// SideEffectTaskCleared reports if the "side_effect_task" edge to the SideEffectTask entity was cleared.
-func (m *NodeMutation) SideEffectTaskCleared() bool {
-	return m.clearedside_effect_task
-}
-
-// SideEffectTaskID returns the "side_effect_task" edge ID in the mutation.
-func (m *NodeMutation) SideEffectTaskID() (id int, exists bool) {
-	if m.side_effect_task != nil {
-		return *m.side_effect_task, true
-	}
-	return
-}
-
-// SideEffectTaskIDs returns the "side_effect_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// SideEffectTaskID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) SideEffectTaskIDs() (ids []int) {
-	if id := m.side_effect_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetSideEffectTask resets all changes to the "side_effect_task" edge.
-func (m *NodeMutation) ResetSideEffectTask() {
-	m.side_effect_task = nil
-	m.clearedside_effect_task = false
-}
-
-// SetCompensationTaskID sets the "compensation_task" edge to the CompensationTask entity by id.
-func (m *NodeMutation) SetCompensationTaskID(id int) {
-	m.compensation_task = &id
-}
-
-// ClearCompensationTask clears the "compensation_task" edge to the CompensationTask entity.
-func (m *NodeMutation) ClearCompensationTask() {
-	m.clearedcompensation_task = true
-}
-
-// CompensationTaskCleared reports if the "compensation_task" edge to the CompensationTask entity was cleared.
-func (m *NodeMutation) CompensationTaskCleared() bool {
-	return m.clearedcompensation_task
-}
-
-// CompensationTaskID returns the "compensation_task" edge ID in the mutation.
-func (m *NodeMutation) CompensationTaskID() (id int, exists bool) {
-	if m.compensation_task != nil {
-		return *m.compensation_task, true
-	}
-	return
-}
-
-// CompensationTaskIDs returns the "compensation_task" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// CompensationTaskID instead. It exists only for internal usage by the builders.
-func (m *NodeMutation) CompensationTaskIDs() (ids []int) {
-	if id := m.compensation_task; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetCompensationTask resets all changes to the "compensation_task" edge.
-func (m *NodeMutation) ResetCompensationTask() {
-	m.compensation_task = nil
-	m.clearedcompensation_task = false
-}
-
-// Where appends a list predicates to the NodeMutation builder.
-func (m *NodeMutation) Where(ps ...predicate.Node) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the NodeMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *NodeMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.Node, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *NodeMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *NodeMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (Node).
-func (m *NodeMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *NodeMutation) Fields() []string {
-	fields := make([]string, 0, 2)
-	if m.index != nil {
-		fields = append(fields, node.FieldIndex)
-	}
-	if m.parent != nil {
-		fields = append(fields, node.FieldParent)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *NodeMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case node.FieldIndex:
-		return m.Index()
-	case node.FieldParent:
-		return m.Parent()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *NodeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case node.FieldIndex:
-		return m.OldIndex(ctx)
-	case node.FieldParent:
-		return m.OldParent(ctx)
-	}
-	return nil, fmt.Errorf("unknown Node field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *NodeMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case node.FieldIndex:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIndex(v)
-		return nil
-	case node.FieldParent:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetParent(v)
-		return nil
-	}
-	return fmt.Errorf("unknown Node field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *NodeMutation) AddedFields() []string {
-	var fields []string
-	if m.addindex != nil {
-		fields = append(fields, node.FieldIndex)
-	}
-	return fields
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *NodeMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case node.FieldIndex:
-		return m.AddedIndex()
-	}
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *NodeMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	case node.FieldIndex:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddIndex(v)
-		return nil
-	}
-	return fmt.Errorf("unknown Node numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *NodeMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(node.FieldParent) {
-		fields = append(fields, node.FieldParent)
-	}
-	return fields
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *NodeMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *NodeMutation) ClearField(name string) error {
-	switch name {
-	case node.FieldParent:
-		m.ClearParent()
-		return nil
-	}
-	return fmt.Errorf("unknown Node nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *NodeMutation) ResetField(name string) error {
-	switch name {
-	case node.FieldIndex:
-		m.ResetIndex()
-		return nil
-	case node.FieldParent:
-		m.ResetParent()
-		return nil
-	}
-	return fmt.Errorf("unknown Node field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *NodeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 4)
-	if m.handler_task != nil {
-		edges = append(edges, node.EdgeHandlerTask)
-	}
-	if m.saga_step_task != nil {
-		edges = append(edges, node.EdgeSagaStepTask)
-	}
-	if m.side_effect_task != nil {
-		edges = append(edges, node.EdgeSideEffectTask)
-	}
-	if m.compensation_task != nil {
-		edges = append(edges, node.EdgeCompensationTask)
-	}
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *NodeMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case node.EdgeHandlerTask:
-		if id := m.handler_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case node.EdgeSagaStepTask:
-		if id := m.saga_step_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case node.EdgeSideEffectTask:
-		if id := m.side_effect_task; id != nil {
-			return []ent.Value{*id}
-		}
-	case node.EdgeCompensationTask:
-		if id := m.compensation_task; id != nil {
-			return []ent.Value{*id}
-		}
-	}
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *NodeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 4)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *NodeMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *NodeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 4)
-	if m.clearedhandler_task {
-		edges = append(edges, node.EdgeHandlerTask)
-	}
-	if m.clearedsaga_step_task {
-		edges = append(edges, node.EdgeSagaStepTask)
-	}
-	if m.clearedside_effect_task {
-		edges = append(edges, node.EdgeSideEffectTask)
-	}
-	if m.clearedcompensation_task {
-		edges = append(edges, node.EdgeCompensationTask)
-	}
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *NodeMutation) EdgeCleared(name string) bool {
-	switch name {
-	case node.EdgeHandlerTask:
-		return m.clearedhandler_task
-	case node.EdgeSagaStepTask:
-		return m.clearedsaga_step_task
-	case node.EdgeSideEffectTask:
-		return m.clearedside_effect_task
-	case node.EdgeCompensationTask:
-		return m.clearedcompensation_task
-	}
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *NodeMutation) ClearEdge(name string) error {
-	switch name {
-	case node.EdgeHandlerTask:
-		m.ClearHandlerTask()
-		return nil
-	case node.EdgeSagaStepTask:
-		m.ClearSagaStepTask()
-		return nil
-	case node.EdgeSideEffectTask:
-		m.ClearSideEffectTask()
-		return nil
-	case node.EdgeCompensationTask:
-		m.ClearCompensationTask()
-		return nil
-	}
-	return fmt.Errorf("unknown Node unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *NodeMutation) ResetEdge(name string) error {
-	switch name {
-	case node.EdgeHandlerTask:
-		m.ResetHandlerTask()
-		return nil
-	case node.EdgeSagaStepTask:
-		m.ResetSagaStepTask()
-		return nil
-	case node.EdgeSideEffectTask:
-		m.ResetSideEffectTask()
-		return nil
-	case node.EdgeCompensationTask:
-		m.ResetCompensationTask()
-		return nil
-	}
-	return fmt.Errorf("unknown Node edge %s", name)
 }
 
 // SagaTaskMutation represents an operation that mutates the SagaTask nodes in the graph.
@@ -2988,8 +2738,6 @@ type SagaTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
-	node          *string
-	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*SagaTask, error)
 	predicates    []predicate.SagaTask
@@ -3091,45 +2839,6 @@ func (m *SagaTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetNodeID sets the "node" edge to the Node entity by id.
-func (m *SagaTaskMutation) SetNodeID(id string) {
-	m.node = &id
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (m *SagaTaskMutation) ClearNode() {
-	m.clearednode = true
-}
-
-// NodeCleared reports if the "node" edge to the Node entity was cleared.
-func (m *SagaTaskMutation) NodeCleared() bool {
-	return m.clearednode
-}
-
-// NodeID returns the "node" edge ID in the mutation.
-func (m *SagaTaskMutation) NodeID() (id string, exists bool) {
-	if m.node != nil {
-		return *m.node, true
-	}
-	return
-}
-
-// NodeIDs returns the "node" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// NodeID instead. It exists only for internal usage by the builders.
-func (m *SagaTaskMutation) NodeIDs() (ids []string) {
-	if id := m.node; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetNode resets all changes to the "node" edge.
-func (m *SagaTaskMutation) ResetNode() {
-	m.node = nil
-	m.clearednode = false
 }
 
 // Where appends a list predicates to the SagaTaskMutation builder.
@@ -3240,28 +2949,19 @@ func (m *SagaTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SagaTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.node != nil {
-		edges = append(edges, sagatask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SagaTaskMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case sagatask.EdgeNode:
-		if id := m.node; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SagaTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -3273,42 +2973,25 @@ func (m *SagaTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SagaTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearednode {
-		edges = append(edges, sagatask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SagaTaskMutation) EdgeCleared(name string) bool {
-	switch name {
-	case sagatask.EdgeNode:
-		return m.clearednode
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SagaTaskMutation) ClearEdge(name string) error {
-	switch name {
-	case sagatask.EdgeNode:
-		m.ClearNode()
-		return nil
-	}
 	return fmt.Errorf("unknown SagaTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SagaTaskMutation) ResetEdge(name string) error {
-	switch name {
-	case sagatask.EdgeNode:
-		m.ResetNode()
-		return nil
-	}
 	return fmt.Errorf("unknown SagaTask edge %s", name)
 }
 
@@ -3319,8 +3002,6 @@ type SideEffectTaskMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
-	node          *string
-	clearednode   bool
 	done          bool
 	oldValue      func(context.Context) (*SideEffectTask, error)
 	predicates    []predicate.SideEffectTask
@@ -3422,45 +3103,6 @@ func (m *SideEffectTaskMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetNodeID sets the "node" edge to the Node entity by id.
-func (m *SideEffectTaskMutation) SetNodeID(id string) {
-	m.node = &id
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (m *SideEffectTaskMutation) ClearNode() {
-	m.clearednode = true
-}
-
-// NodeCleared reports if the "node" edge to the Node entity was cleared.
-func (m *SideEffectTaskMutation) NodeCleared() bool {
-	return m.clearednode
-}
-
-// NodeID returns the "node" edge ID in the mutation.
-func (m *SideEffectTaskMutation) NodeID() (id string, exists bool) {
-	if m.node != nil {
-		return *m.node, true
-	}
-	return
-}
-
-// NodeIDs returns the "node" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// NodeID instead. It exists only for internal usage by the builders.
-func (m *SideEffectTaskMutation) NodeIDs() (ids []string) {
-	if id := m.node; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetNode resets all changes to the "node" edge.
-func (m *SideEffectTaskMutation) ResetNode() {
-	m.node = nil
-	m.clearednode = false
 }
 
 // Where appends a list predicates to the SideEffectTaskMutation builder.
@@ -3571,28 +3213,19 @@ func (m *SideEffectTaskMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SideEffectTaskMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.node != nil {
-		edges = append(edges, sideeffecttask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SideEffectTaskMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case sideeffecttask.EdgeNode:
-		if id := m.node; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SideEffectTaskMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -3604,496 +3237,24 @@ func (m *SideEffectTaskMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SideEffectTaskMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearednode {
-		edges = append(edges, sideeffecttask.EdgeNode)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SideEffectTaskMutation) EdgeCleared(name string) bool {
-	switch name {
-	case sideeffecttask.EdgeNode:
-		return m.clearednode
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SideEffectTaskMutation) ClearEdge(name string) error {
-	switch name {
-	case sideeffecttask.EdgeNode:
-		m.ClearNode()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectTask unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SideEffectTaskMutation) ResetEdge(name string) error {
-	switch name {
-	case sideeffecttask.EdgeNode:
-		m.ResetNode()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectTask edge %s", name)
-}
-
-// TaskContextMutation represents an operation that mutates the TaskContext nodes in the graph.
-type TaskContextMutation struct {
-	config
-	op             Op
-	typ            string
-	id             *string
-	_RetryCount    *int
-	add_RetryCount *int
-	_MaxRetry      *int
-	add_MaxRetry   *int
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*TaskContext, error)
-	predicates     []predicate.TaskContext
-}
-
-var _ ent.Mutation = (*TaskContextMutation)(nil)
-
-// taskcontextOption allows management of the mutation configuration using functional options.
-type taskcontextOption func(*TaskContextMutation)
-
-// newTaskContextMutation creates new mutation for the TaskContext entity.
-func newTaskContextMutation(c config, op Op, opts ...taskcontextOption) *TaskContextMutation {
-	m := &TaskContextMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeTaskContext,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withTaskContextID sets the ID field of the mutation.
-func withTaskContextID(id string) taskcontextOption {
-	return func(m *TaskContextMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *TaskContext
-		)
-		m.oldValue = func(ctx context.Context) (*TaskContext, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().TaskContext.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withTaskContext sets the old TaskContext of the mutation.
-func withTaskContext(node *TaskContext) taskcontextOption {
-	return func(m *TaskContextMutation) {
-		m.oldValue = func(context.Context) (*TaskContext, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m TaskContextMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m TaskContextMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of TaskContext entities.
-func (m *TaskContextMutation) SetID(id string) {
-	m.id = &id
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *TaskContextMutation) ID() (id string, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *TaskContextMutation) IDs(ctx context.Context) ([]string, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []string{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().TaskContext.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetRetryCount sets the "RetryCount" field.
-func (m *TaskContextMutation) SetRetryCount(i int) {
-	m._RetryCount = &i
-	m.add_RetryCount = nil
-}
-
-// RetryCount returns the value of the "RetryCount" field in the mutation.
-func (m *TaskContextMutation) RetryCount() (r int, exists bool) {
-	v := m._RetryCount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRetryCount returns the old "RetryCount" field's value of the TaskContext entity.
-// If the TaskContext object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaskContextMutation) OldRetryCount(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRetryCount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRetryCount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRetryCount: %w", err)
-	}
-	return oldValue.RetryCount, nil
-}
-
-// AddRetryCount adds i to the "RetryCount" field.
-func (m *TaskContextMutation) AddRetryCount(i int) {
-	if m.add_RetryCount != nil {
-		*m.add_RetryCount += i
-	} else {
-		m.add_RetryCount = &i
-	}
-}
-
-// AddedRetryCount returns the value that was added to the "RetryCount" field in this mutation.
-func (m *TaskContextMutation) AddedRetryCount() (r int, exists bool) {
-	v := m.add_RetryCount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetRetryCount resets all changes to the "RetryCount" field.
-func (m *TaskContextMutation) ResetRetryCount() {
-	m._RetryCount = nil
-	m.add_RetryCount = nil
-}
-
-// SetMaxRetry sets the "MaxRetry" field.
-func (m *TaskContextMutation) SetMaxRetry(i int) {
-	m._MaxRetry = &i
-	m.add_MaxRetry = nil
-}
-
-// MaxRetry returns the value of the "MaxRetry" field in the mutation.
-func (m *TaskContextMutation) MaxRetry() (r int, exists bool) {
-	v := m._MaxRetry
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMaxRetry returns the old "MaxRetry" field's value of the TaskContext entity.
-// If the TaskContext object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaskContextMutation) OldMaxRetry(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMaxRetry is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMaxRetry requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMaxRetry: %w", err)
-	}
-	return oldValue.MaxRetry, nil
-}
-
-// AddMaxRetry adds i to the "MaxRetry" field.
-func (m *TaskContextMutation) AddMaxRetry(i int) {
-	if m.add_MaxRetry != nil {
-		*m.add_MaxRetry += i
-	} else {
-		m.add_MaxRetry = &i
-	}
-}
-
-// AddedMaxRetry returns the value that was added to the "MaxRetry" field in this mutation.
-func (m *TaskContextMutation) AddedMaxRetry() (r int, exists bool) {
-	v := m.add_MaxRetry
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetMaxRetry resets all changes to the "MaxRetry" field.
-func (m *TaskContextMutation) ResetMaxRetry() {
-	m._MaxRetry = nil
-	m.add_MaxRetry = nil
-}
-
-// Where appends a list predicates to the TaskContextMutation builder.
-func (m *TaskContextMutation) Where(ps ...predicate.TaskContext) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the TaskContextMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *TaskContextMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.TaskContext, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *TaskContextMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *TaskContextMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (TaskContext).
-func (m *TaskContextMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *TaskContextMutation) Fields() []string {
-	fields := make([]string, 0, 2)
-	if m._RetryCount != nil {
-		fields = append(fields, taskcontext.FieldRetryCount)
-	}
-	if m._MaxRetry != nil {
-		fields = append(fields, taskcontext.FieldMaxRetry)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *TaskContextMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		return m.RetryCount()
-	case taskcontext.FieldMaxRetry:
-		return m.MaxRetry()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *TaskContextMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		return m.OldRetryCount(ctx)
-	case taskcontext.FieldMaxRetry:
-		return m.OldMaxRetry(ctx)
-	}
-	return nil, fmt.Errorf("unknown TaskContext field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *TaskContextMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRetryCount(v)
-		return nil
-	case taskcontext.FieldMaxRetry:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMaxRetry(v)
-		return nil
-	}
-	return fmt.Errorf("unknown TaskContext field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *TaskContextMutation) AddedFields() []string {
-	var fields []string
-	if m.add_RetryCount != nil {
-		fields = append(fields, taskcontext.FieldRetryCount)
-	}
-	if m.add_MaxRetry != nil {
-		fields = append(fields, taskcontext.FieldMaxRetry)
-	}
-	return fields
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *TaskContextMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		return m.AddedRetryCount()
-	case taskcontext.FieldMaxRetry:
-		return m.AddedMaxRetry()
-	}
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *TaskContextMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddRetryCount(v)
-		return nil
-	case taskcontext.FieldMaxRetry:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddMaxRetry(v)
-		return nil
-	}
-	return fmt.Errorf("unknown TaskContext numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *TaskContextMutation) ClearedFields() []string {
-	return nil
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *TaskContextMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *TaskContextMutation) ClearField(name string) error {
-	return fmt.Errorf("unknown TaskContext nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *TaskContextMutation) ResetField(name string) error {
-	switch name {
-	case taskcontext.FieldRetryCount:
-		m.ResetRetryCount()
-		return nil
-	case taskcontext.FieldMaxRetry:
-		m.ResetMaxRetry()
-		return nil
-	}
-	return fmt.Errorf("unknown TaskContext field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *TaskContextMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *TaskContextMutation) AddedIDs(name string) []ent.Value {
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *TaskContextMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *TaskContextMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *TaskContextMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *TaskContextMutation) EdgeCleared(name string) bool {
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *TaskContextMutation) ClearEdge(name string) error {
-	return fmt.Errorf("unknown TaskContext unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *TaskContextMutation) ResetEdge(name string) error {
-	return fmt.Errorf("unknown TaskContext edge %s", name)
 }

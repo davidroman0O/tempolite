@@ -2,12 +2,11 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
 
 // ExecutionContext holds the schema definition for the ExecutionContext entity.
-// Each time you use `tempolite` to enqueue an Handler or Saga, it will create one unique ExecutionContext.
-// That whole flow might fail and retry, thus creating many Execution for the same ExecutionContext.
 type ExecutionContext struct {
 	ent.Schema
 }
@@ -15,11 +14,20 @@ type ExecutionContext struct {
 // Fields of the ExecutionContext.
 func (ExecutionContext) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("id"),
+		field.String("id").
+			Unique(),
+		field.String("current_run_id"),
+		field.Enum("status").
+			Values("running", "completed", "failed"),
+		field.Time("start_time"),
+		field.Time("end_time").
+			Optional(),
 	}
 }
 
 // Edges of the ExecutionContext.
 func (ExecutionContext) Edges() []ent.Edge {
-	return []ent.Edge{}
+	return []ent.Edge{
+		edge.To("handler_executions", HandlerExecution.Type),
+	}
 }

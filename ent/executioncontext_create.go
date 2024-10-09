@@ -4,11 +4,14 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 )
 
 // ExecutionContextCreate is the builder for creating a ExecutionContext entity.
@@ -18,10 +21,57 @@ type ExecutionContextCreate struct {
 	hooks    []Hook
 }
 
+// SetCurrentRunID sets the "current_run_id" field.
+func (ecc *ExecutionContextCreate) SetCurrentRunID(s string) *ExecutionContextCreate {
+	ecc.mutation.SetCurrentRunID(s)
+	return ecc
+}
+
+// SetStatus sets the "status" field.
+func (ecc *ExecutionContextCreate) SetStatus(e executioncontext.Status) *ExecutionContextCreate {
+	ecc.mutation.SetStatus(e)
+	return ecc
+}
+
+// SetStartTime sets the "start_time" field.
+func (ecc *ExecutionContextCreate) SetStartTime(t time.Time) *ExecutionContextCreate {
+	ecc.mutation.SetStartTime(t)
+	return ecc
+}
+
+// SetEndTime sets the "end_time" field.
+func (ecc *ExecutionContextCreate) SetEndTime(t time.Time) *ExecutionContextCreate {
+	ecc.mutation.SetEndTime(t)
+	return ecc
+}
+
+// SetNillableEndTime sets the "end_time" field if the given value is not nil.
+func (ecc *ExecutionContextCreate) SetNillableEndTime(t *time.Time) *ExecutionContextCreate {
+	if t != nil {
+		ecc.SetEndTime(*t)
+	}
+	return ecc
+}
+
 // SetID sets the "id" field.
 func (ecc *ExecutionContextCreate) SetID(s string) *ExecutionContextCreate {
 	ecc.mutation.SetID(s)
 	return ecc
+}
+
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecc *ExecutionContextCreate) AddHandlerExecutionIDs(ids ...string) *ExecutionContextCreate {
+	ecc.mutation.AddHandlerExecutionIDs(ids...)
+	return ecc
+}
+
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecc *ExecutionContextCreate) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextCreate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
+	}
+	return ecc.AddHandlerExecutionIDs(ids...)
 }
 
 // Mutation returns the ExecutionContextMutation object of the builder.
@@ -58,6 +108,20 @@ func (ecc *ExecutionContextCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (ecc *ExecutionContextCreate) check() error {
+	if _, ok := ecc.mutation.CurrentRunID(); !ok {
+		return &ValidationError{Name: "current_run_id", err: errors.New(`ent: missing required field "ExecutionContext.current_run_id"`)}
+	}
+	if _, ok := ecc.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ExecutionContext.status"`)}
+	}
+	if v, ok := ecc.mutation.Status(); ok {
+		if err := executioncontext.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ExecutionContext.status": %w`, err)}
+		}
+	}
+	if _, ok := ecc.mutation.StartTime(); !ok {
+		return &ValidationError{Name: "start_time", err: errors.New(`ent: missing required field "ExecutionContext.start_time"`)}
+	}
 	return nil
 }
 
@@ -92,6 +156,38 @@ func (ecc *ExecutionContextCreate) createSpec() (*ExecutionContext, *sqlgraph.Cr
 	if id, ok := ecc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := ecc.mutation.CurrentRunID(); ok {
+		_spec.SetField(executioncontext.FieldCurrentRunID, field.TypeString, value)
+		_node.CurrentRunID = value
+	}
+	if value, ok := ecc.mutation.Status(); ok {
+		_spec.SetField(executioncontext.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
+	}
+	if value, ok := ecc.mutation.StartTime(); ok {
+		_spec.SetField(executioncontext.FieldStartTime, field.TypeTime, value)
+		_node.StartTime = value
+	}
+	if value, ok := ecc.mutation.EndTime(); ok {
+		_spec.SetField(executioncontext.FieldEndTime, field.TypeTime, value)
+		_node.EndTime = value
+	}
+	if nodes := ecc.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

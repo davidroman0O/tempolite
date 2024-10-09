@@ -5,6 +5,7 @@ package ent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -13,10 +14,39 @@ import (
 
 // ExecutionContext is the model entity for the ExecutionContext schema.
 type ExecutionContext struct {
-	config
+	config `json:"-"`
 	// ID of the ent.
-	ID           string `json:"id,omitempty"`
+	ID string `json:"id,omitempty"`
+	// CurrentRunID holds the value of the "current_run_id" field.
+	CurrentRunID string `json:"current_run_id,omitempty"`
+	// Status holds the value of the "status" field.
+	Status executioncontext.Status `json:"status,omitempty"`
+	// StartTime holds the value of the "start_time" field.
+	StartTime time.Time `json:"start_time,omitempty"`
+	// EndTime holds the value of the "end_time" field.
+	EndTime time.Time `json:"end_time,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the ExecutionContextQuery when eager-loading is set.
+	Edges        ExecutionContextEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// ExecutionContextEdges holds the relations/edges for other nodes in the graph.
+type ExecutionContextEdges struct {
+	// HandlerExecutions holds the value of the handler_executions edge.
+	HandlerExecutions []*HandlerExecution `json:"handler_executions,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// HandlerExecutionsOrErr returns the HandlerExecutions value or an error if the edge
+// was not loaded in eager-loading.
+func (e ExecutionContextEdges) HandlerExecutionsOrErr() ([]*HandlerExecution, error) {
+	if e.loadedTypes[0] {
+		return e.HandlerExecutions, nil
+	}
+	return nil, &NotLoadedError{edge: "handler_executions"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -24,8 +54,10 @@ func (*ExecutionContext) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case executioncontext.FieldID:
+		case executioncontext.FieldID, executioncontext.FieldCurrentRunID, executioncontext.FieldStatus:
 			values[i] = new(sql.NullString)
+		case executioncontext.FieldStartTime, executioncontext.FieldEndTime:
+			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -47,6 +79,30 @@ func (ec *ExecutionContext) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ec.ID = value.String
 			}
+		case executioncontext.FieldCurrentRunID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field current_run_id", values[i])
+			} else if value.Valid {
+				ec.CurrentRunID = value.String
+			}
+		case executioncontext.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				ec.Status = executioncontext.Status(value.String)
+			}
+		case executioncontext.FieldStartTime:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field start_time", values[i])
+			} else if value.Valid {
+				ec.StartTime = value.Time
+			}
+		case executioncontext.FieldEndTime:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field end_time", values[i])
+			} else if value.Valid {
+				ec.EndTime = value.Time
+			}
 		default:
 			ec.selectValues.Set(columns[i], values[i])
 		}
@@ -58,6 +114,11 @@ func (ec *ExecutionContext) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (ec *ExecutionContext) Value(name string) (ent.Value, error) {
 	return ec.selectValues.Get(name)
+}
+
+// QueryHandlerExecutions queries the "handler_executions" edge of the ExecutionContext entity.
+func (ec *ExecutionContext) QueryHandlerExecutions() *HandlerExecutionQuery {
+	return NewExecutionContextClient(ec.config).QueryHandlerExecutions(ec)
 }
 
 // Update returns a builder for updating this ExecutionContext.
@@ -82,7 +143,18 @@ func (ec *ExecutionContext) Unwrap() *ExecutionContext {
 func (ec *ExecutionContext) String() string {
 	var builder strings.Builder
 	builder.WriteString("ExecutionContext(")
-	builder.WriteString(fmt.Sprintf("id=%v", ec.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", ec.ID))
+	builder.WriteString("current_run_id=")
+	builder.WriteString(ec.CurrentRunID)
+	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", ec.Status))
+	builder.WriteString(", ")
+	builder.WriteString("start_time=")
+	builder.WriteString(ec.StartTime.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("end_time=")
+	builder.WriteString(ec.EndTime.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

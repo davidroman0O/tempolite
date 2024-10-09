@@ -9,23 +9,17 @@ import (
 // CompensationTask is the predicate function for compensationtask builders.
 type CompensationTask func(*sql.Selector)
 
-// Entry is the predicate function for entry builders.
-type Entry func(*sql.Selector)
-
 // ExecutionContext is the predicate function for executioncontext builders.
 type ExecutionContext func(*sql.Selector)
 
+// HandlerExecution is the predicate function for handlerexecution builders.
+type HandlerExecution func(*sql.Selector)
+
 // HandlerTask is the predicate function for handlertask builders.
 type HandlerTask func(*sql.Selector)
-
-// Node is the predicate function for node builders.
-type Node func(*sql.Selector)
 
 // SagaTask is the predicate function for sagatask builders.
 type SagaTask func(*sql.Selector)
 
 // SideEffectTask is the predicate function for sideeffecttask builders.
 type SideEffectTask func(*sql.Selector)
-
-// TaskContext is the predicate function for taskcontext builders.
-type TaskContext func(*sql.Selector)

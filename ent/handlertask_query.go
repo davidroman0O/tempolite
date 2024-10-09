@@ -11,11 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 // HandlerTaskQuery is the builder for querying HandlerTask entities.
@@ -25,9 +23,7 @@ type HandlerTaskQuery struct {
 	order                []handlertask.OrderOption
 	inters               []Interceptor
 	predicates           []predicate.HandlerTask
-	withTaskContext      *TaskContextQuery
-	withExecutionContext *ExecutionContextQuery
-	withNode             *NodeQuery
+	withHandlerExecution *HandlerExecutionQuery
 	withFKs              bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -65,9 +61,9 @@ func (htq *HandlerTaskQuery) Order(o ...handlertask.OrderOption) *HandlerTaskQue
 	return htq
 }
 
-// QueryTaskContext chains the current query on the "task_context" edge.
-func (htq *HandlerTaskQuery) QueryTaskContext() *TaskContextQuery {
-	query := (&TaskContextClient{config: htq.config}).Query()
+// QueryHandlerExecution chains the current query on the "handler_execution" edge.
+func (htq *HandlerTaskQuery) QueryHandlerExecution() *HandlerExecutionQuery {
+	query := (&HandlerExecutionClient{config: htq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := htq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -78,52 +74,8 @@ func (htq *HandlerTaskQuery) QueryTaskContext() *TaskContextQuery {
 		}
 		step := sqlgraph.NewStep(
 			sqlgraph.From(handlertask.Table, handlertask.FieldID, selector),
-			sqlgraph.To(taskcontext.Table, taskcontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, handlertask.TaskContextTable, handlertask.TaskContextColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(htq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryExecutionContext chains the current query on the "execution_context" edge.
-func (htq *HandlerTaskQuery) QueryExecutionContext() *ExecutionContextQuery {
-	query := (&ExecutionContextClient{config: htq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := htq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := htq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlertask.Table, handlertask.FieldID, selector),
-			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, handlertask.ExecutionContextTable, handlertask.ExecutionContextColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(htq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryNode chains the current query on the "node" edge.
-func (htq *HandlerTaskQuery) QueryNode() *NodeQuery {
-	query := (&NodeClient{config: htq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := htq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := htq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlertask.Table, handlertask.FieldID, selector),
-			sqlgraph.To(node.Table, node.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, handlertask.NodeTable, handlertask.NodeColumn),
+			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, handlertask.HandlerExecutionTable, handlertask.HandlerExecutionColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(htq.driver.Dialect(), step)
 		return fromU, nil
@@ -323,45 +275,21 @@ func (htq *HandlerTaskQuery) Clone() *HandlerTaskQuery {
 		order:                append([]handlertask.OrderOption{}, htq.order...),
 		inters:               append([]Interceptor{}, htq.inters...),
 		predicates:           append([]predicate.HandlerTask{}, htq.predicates...),
-		withTaskContext:      htq.withTaskContext.Clone(),
-		withExecutionContext: htq.withExecutionContext.Clone(),
-		withNode:             htq.withNode.Clone(),
+		withHandlerExecution: htq.withHandlerExecution.Clone(),
 		// clone intermediate query.
 		sql:  htq.sql.Clone(),
 		path: htq.path,
 	}
 }
 
-// WithTaskContext tells the query-builder to eager-load the nodes that are connected to
-// the "task_context" edge. The optional arguments are used to configure the query builder of the edge.
-func (htq *HandlerTaskQuery) WithTaskContext(opts ...func(*TaskContextQuery)) *HandlerTaskQuery {
-	query := (&TaskContextClient{config: htq.config}).Query()
+// WithHandlerExecution tells the query-builder to eager-load the nodes that are connected to
+// the "handler_execution" edge. The optional arguments are used to configure the query builder of the edge.
+func (htq *HandlerTaskQuery) WithHandlerExecution(opts ...func(*HandlerExecutionQuery)) *HandlerTaskQuery {
+	query := (&HandlerExecutionClient{config: htq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	htq.withTaskContext = query
-	return htq
-}
-
-// WithExecutionContext tells the query-builder to eager-load the nodes that are connected to
-// the "execution_context" edge. The optional arguments are used to configure the query builder of the edge.
-func (htq *HandlerTaskQuery) WithExecutionContext(opts ...func(*ExecutionContextQuery)) *HandlerTaskQuery {
-	query := (&ExecutionContextClient{config: htq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	htq.withExecutionContext = query
-	return htq
-}
-
-// WithNode tells the query-builder to eager-load the nodes that are connected to
-// the "node" edge. The optional arguments are used to configure the query builder of the edge.
-func (htq *HandlerTaskQuery) WithNode(opts ...func(*NodeQuery)) *HandlerTaskQuery {
-	query := (&NodeClient{config: htq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	htq.withNode = query
+	htq.withHandlerExecution = query
 	return htq
 }
 
@@ -371,7 +299,7 @@ func (htq *HandlerTaskQuery) WithNode(opts ...func(*NodeQuery)) *HandlerTaskQuer
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handlerName,omitempty"`
+//		HandlerName string `json:"handler_name,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -394,7 +322,7 @@ func (htq *HandlerTaskQuery) GroupBy(field string, fields ...string) *HandlerTas
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handlerName,omitempty"`
+//		HandlerName string `json:"handler_name,omitempty"`
 //	}
 //
 //	client.HandlerTask.Query().
@@ -444,13 +372,11 @@ func (htq *HandlerTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 		nodes       = []*HandlerTask{}
 		withFKs     = htq.withFKs
 		_spec       = htq.querySpec()
-		loadedTypes = [3]bool{
-			htq.withTaskContext != nil,
-			htq.withExecutionContext != nil,
-			htq.withNode != nil,
+		loadedTypes = [1]bool{
+			htq.withHandlerExecution != nil,
 		}
 	)
-	if htq.withTaskContext != nil || htq.withExecutionContext != nil || htq.withNode != nil {
+	if htq.withHandlerExecution != nil {
 		withFKs = true
 	}
 	if withFKs {
@@ -474,35 +400,23 @@ func (htq *HandlerTaskQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := htq.withTaskContext; query != nil {
-		if err := htq.loadTaskContext(ctx, query, nodes, nil,
-			func(n *HandlerTask, e *TaskContext) { n.Edges.TaskContext = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := htq.withExecutionContext; query != nil {
-		if err := htq.loadExecutionContext(ctx, query, nodes, nil,
-			func(n *HandlerTask, e *ExecutionContext) { n.Edges.ExecutionContext = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := htq.withNode; query != nil {
-		if err := htq.loadNode(ctx, query, nodes, nil,
-			func(n *HandlerTask, e *Node) { n.Edges.Node = e }); err != nil {
+	if query := htq.withHandlerExecution; query != nil {
+		if err := htq.loadHandlerExecution(ctx, query, nodes, nil,
+			func(n *HandlerTask, e *HandlerExecution) { n.Edges.HandlerExecution = e }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (htq *HandlerTaskQuery) loadTaskContext(ctx context.Context, query *TaskContextQuery, nodes []*HandlerTask, init func(*HandlerTask), assign func(*HandlerTask, *TaskContext)) error {
+func (htq *HandlerTaskQuery) loadHandlerExecution(ctx context.Context, query *HandlerExecutionQuery, nodes []*HandlerTask, init func(*HandlerTask), assign func(*HandlerTask, *HandlerExecution)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*HandlerTask)
 	for i := range nodes {
-		if nodes[i].handler_task_task_context == nil {
+		if nodes[i].handler_execution_tasks == nil {
 			continue
 		}
-		fk := *nodes[i].handler_task_task_context
+		fk := *nodes[i].handler_execution_tasks
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -511,7 +425,7 @@ func (htq *HandlerTaskQuery) loadTaskContext(ctx context.Context, query *TaskCon
 	if len(ids) == 0 {
 		return nil
 	}
-	query.Where(taskcontext.IDIn(ids...))
+	query.Where(handlerexecution.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
@@ -519,71 +433,7 @@ func (htq *HandlerTaskQuery) loadTaskContext(ctx context.Context, query *TaskCon
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "handler_task_task_context" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (htq *HandlerTaskQuery) loadExecutionContext(ctx context.Context, query *ExecutionContextQuery, nodes []*HandlerTask, init func(*HandlerTask), assign func(*HandlerTask, *ExecutionContext)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*HandlerTask)
-	for i := range nodes {
-		if nodes[i].handler_task_execution_context == nil {
-			continue
-		}
-		fk := *nodes[i].handler_task_execution_context
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(executioncontext.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "handler_task_execution_context" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (htq *HandlerTaskQuery) loadNode(ctx context.Context, query *NodeQuery, nodes []*HandlerTask, init func(*HandlerTask), assign func(*HandlerTask, *Node)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*HandlerTask)
-	for i := range nodes {
-		if nodes[i].node_handler_task == nil {
-			continue
-		}
-		fk := *nodes[i].node_handler_task
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(node.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "node_handler_task" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "handler_execution_tasks" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)

@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -28,34 +27,9 @@ func (ctu *CompensationTaskUpdate) Where(ps ...predicate.CompensationTask) *Comp
 	return ctu
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (ctu *CompensationTaskUpdate) SetNodeID(id string) *CompensationTaskUpdate {
-	ctu.mutation.SetNodeID(id)
-	return ctu
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (ctu *CompensationTaskUpdate) SetNillableNodeID(id *string) *CompensationTaskUpdate {
-	if id != nil {
-		ctu = ctu.SetNodeID(*id)
-	}
-	return ctu
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (ctu *CompensationTaskUpdate) SetNode(n *Node) *CompensationTaskUpdate {
-	return ctu.SetNodeID(n.ID)
-}
-
 // Mutation returns the CompensationTaskMutation object of the builder.
 func (ctu *CompensationTaskUpdate) Mutation() *CompensationTaskMutation {
 	return ctu.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (ctu *CompensationTaskUpdate) ClearNode() *CompensationTaskUpdate {
-	ctu.mutation.ClearNode()
-	return ctu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -94,35 +68,6 @@ func (ctu *CompensationTaskUpdate) sqlSave(ctx context.Context) (n int, err erro
 			}
 		}
 	}
-	if ctu.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   compensationtask.NodeTable,
-			Columns: []string{compensationtask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ctu.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   compensationtask.NodeTable,
-			Columns: []string{compensationtask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, ctu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{compensationtask.Label}
@@ -143,34 +88,9 @@ type CompensationTaskUpdateOne struct {
 	mutation *CompensationTaskMutation
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (ctuo *CompensationTaskUpdateOne) SetNodeID(id string) *CompensationTaskUpdateOne {
-	ctuo.mutation.SetNodeID(id)
-	return ctuo
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (ctuo *CompensationTaskUpdateOne) SetNillableNodeID(id *string) *CompensationTaskUpdateOne {
-	if id != nil {
-		ctuo = ctuo.SetNodeID(*id)
-	}
-	return ctuo
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (ctuo *CompensationTaskUpdateOne) SetNode(n *Node) *CompensationTaskUpdateOne {
-	return ctuo.SetNodeID(n.ID)
-}
-
 // Mutation returns the CompensationTaskMutation object of the builder.
 func (ctuo *CompensationTaskUpdateOne) Mutation() *CompensationTaskMutation {
 	return ctuo.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (ctuo *CompensationTaskUpdateOne) ClearNode() *CompensationTaskUpdateOne {
-	ctuo.mutation.ClearNode()
-	return ctuo
 }
 
 // Where appends a list predicates to the CompensationTaskUpdate builder.
@@ -238,35 +158,6 @@ func (ctuo *CompensationTaskUpdateOne) sqlSave(ctx context.Context) (_node *Comp
 				ps[i](selector)
 			}
 		}
-	}
-	if ctuo.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   compensationtask.NodeTable,
-			Columns: []string{compensationtask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ctuo.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   compensationtask.NodeTable,
-			Columns: []string{compensationtask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &CompensationTask{config: ctuo.config}
 	_spec.Assign = _node.assignValues

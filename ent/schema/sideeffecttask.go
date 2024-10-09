@@ -2,7 +2,6 @@ package schema
 
 import (
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 )
 
 // SideEffectTask holds the schema definition for the SideEffectTask entity.
@@ -17,9 +16,5 @@ func (SideEffectTask) Fields() []ent.Field {
 
 // Edges of the SideEffectTask.
 func (SideEffectTask) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("node", Node.Type).
-			Ref("side_effect_task").
-			Unique(),
-	}
+	return []ent.Edge{}
 }

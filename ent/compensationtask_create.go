@@ -9,7 +9,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 )
 
 // CompensationTaskCreate is the builder for creating a CompensationTask entity.
@@ -17,25 +16,6 @@ type CompensationTaskCreate struct {
 	config
 	mutation *CompensationTaskMutation
 	hooks    []Hook
-}
-
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (ctc *CompensationTaskCreate) SetNodeID(id string) *CompensationTaskCreate {
-	ctc.mutation.SetNodeID(id)
-	return ctc
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (ctc *CompensationTaskCreate) SetNillableNodeID(id *string) *CompensationTaskCreate {
-	if id != nil {
-		ctc = ctc.SetNodeID(*id)
-	}
-	return ctc
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (ctc *CompensationTaskCreate) SetNode(n *Node) *CompensationTaskCreate {
-	return ctc.SetNodeID(n.ID)
 }
 
 // Mutation returns the CompensationTaskMutation object of the builder.
@@ -98,23 +78,6 @@ func (ctc *CompensationTaskCreate) createSpec() (*CompensationTask, *sqlgraph.Cr
 		_node = &CompensationTask{config: ctc.config}
 		_spec = sqlgraph.NewCreateSpec(compensationtask.Table, sqlgraph.NewFieldSpec(compensationtask.FieldID, field.TypeInt))
 	)
-	if nodes := ctc.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   compensationtask.NodeTable,
-			Columns: []string{compensationtask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.node_compensation_task = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	return _node, _spec
 }
 

@@ -5,13 +5,12 @@ package ent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 // HandlerTask is the model entity for the HandlerTask schema.
@@ -19,73 +18,45 @@ type HandlerTask struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
-	// HandlerName holds the value of the "handlerName" field.
-	HandlerName string `json:"handlerName,omitempty"`
-	// Status holds the value of the "status" field.
-	Status handlertask.Status `json:"status,omitempty"`
+	// HandlerName holds the value of the "handler_name" field.
+	HandlerName string `json:"handler_name,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload []byte `json:"payload,omitempty"`
 	// Result holds the value of the "result" field.
 	Result []byte `json:"result,omitempty"`
 	// Error holds the value of the "error" field.
 	Error []byte `json:"error,omitempty"`
-	// NumIn holds the value of the "numIn" field.
-	NumIn int `json:"numIn,omitempty"`
-	// NumOut holds the value of the "numOut" field.
-	NumOut int `json:"numOut,omitempty"`
+	// Status holds the value of the "status" field.
+	Status handlertask.Status `json:"status,omitempty"`
+	// CreatedAt holds the value of the "created_at" field.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// CompletedAt holds the value of the "completed_at" field.
+	CompletedAt time.Time `json:"completed_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the HandlerTaskQuery when eager-loading is set.
-	Edges                          HandlerTaskEdges `json:"edges"`
-	handler_task_task_context      *string
-	handler_task_execution_context *string
-	node_handler_task              *string
-	selectValues                   sql.SelectValues
+	Edges                   HandlerTaskEdges `json:"edges"`
+	handler_execution_tasks *string
+	selectValues            sql.SelectValues
 }
 
 // HandlerTaskEdges holds the relations/edges for other nodes in the graph.
 type HandlerTaskEdges struct {
-	// TaskContext holds the value of the task_context edge.
-	TaskContext *TaskContext `json:"task_context,omitempty"`
-	// ExecutionContext holds the value of the execution_context edge.
-	ExecutionContext *ExecutionContext `json:"execution_context,omitempty"`
-	// Node holds the value of the node edge.
-	Node *Node `json:"node,omitempty"`
+	// HandlerExecution holds the value of the handler_execution edge.
+	HandlerExecution *HandlerExecution `json:"handler_execution,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [1]bool
 }
 
-// TaskContextOrErr returns the TaskContext value or an error if the edge
+// HandlerExecutionOrErr returns the HandlerExecution value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e HandlerTaskEdges) TaskContextOrErr() (*TaskContext, error) {
-	if e.TaskContext != nil {
-		return e.TaskContext, nil
+func (e HandlerTaskEdges) HandlerExecutionOrErr() (*HandlerExecution, error) {
+	if e.HandlerExecution != nil {
+		return e.HandlerExecution, nil
 	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: taskcontext.Label}
+		return nil, &NotFoundError{label: handlerexecution.Label}
 	}
-	return nil, &NotLoadedError{edge: "task_context"}
-}
-
-// ExecutionContextOrErr returns the ExecutionContext value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e HandlerTaskEdges) ExecutionContextOrErr() (*ExecutionContext, error) {
-	if e.ExecutionContext != nil {
-		return e.ExecutionContext, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: executioncontext.Label}
-	}
-	return nil, &NotLoadedError{edge: "execution_context"}
-}
-
-// NodeOrErr returns the Node value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e HandlerTaskEdges) NodeOrErr() (*Node, error) {
-	if e.Node != nil {
-		return e.Node, nil
-	} else if e.loadedTypes[2] {
-		return nil, &NotFoundError{label: node.Label}
-	}
-	return nil, &NotLoadedError{edge: "node"}
+	return nil, &NotLoadedError{edge: "handler_execution"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -95,15 +66,11 @@ func (*HandlerTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case handlertask.FieldPayload, handlertask.FieldResult, handlertask.FieldError:
 			values[i] = new([]byte)
-		case handlertask.FieldNumIn, handlertask.FieldNumOut:
-			values[i] = new(sql.NullInt64)
 		case handlertask.FieldID, handlertask.FieldHandlerName, handlertask.FieldStatus:
 			values[i] = new(sql.NullString)
-		case handlertask.ForeignKeys[0]: // handler_task_task_context
-			values[i] = new(sql.NullString)
-		case handlertask.ForeignKeys[1]: // handler_task_execution_context
-			values[i] = new(sql.NullString)
-		case handlertask.ForeignKeys[2]: // node_handler_task
+		case handlertask.FieldCreatedAt, handlertask.FieldCompletedAt:
+			values[i] = new(sql.NullTime)
+		case handlertask.ForeignKeys[0]: // handler_execution_tasks
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -128,15 +95,9 @@ func (ht *HandlerTask) assignValues(columns []string, values []any) error {
 			}
 		case handlertask.FieldHandlerName:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field handlerName", values[i])
+				return fmt.Errorf("unexpected type %T for field handler_name", values[i])
 			} else if value.Valid {
 				ht.HandlerName = value.String
-			}
-		case handlertask.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				ht.Status = handlertask.Status(value.String)
 			}
 		case handlertask.FieldPayload:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -156,38 +117,30 @@ func (ht *HandlerTask) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				ht.Error = *value
 			}
-		case handlertask.FieldNumIn:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field numIn", values[i])
+		case handlertask.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ht.NumIn = int(value.Int64)
+				ht.Status = handlertask.Status(value.String)
 			}
-		case handlertask.FieldNumOut:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field numOut", values[i])
+		case handlertask.FieldCreatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ht.NumOut = int(value.Int64)
+				ht.CreatedAt = value.Time
+			}
+		case handlertask.FieldCompletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field completed_at", values[i])
+			} else if value.Valid {
+				ht.CompletedAt = value.Time
 			}
 		case handlertask.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field handler_task_task_context", values[i])
+				return fmt.Errorf("unexpected type %T for field handler_execution_tasks", values[i])
 			} else if value.Valid {
-				ht.handler_task_task_context = new(string)
-				*ht.handler_task_task_context = value.String
-			}
-		case handlertask.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field handler_task_execution_context", values[i])
-			} else if value.Valid {
-				ht.handler_task_execution_context = new(string)
-				*ht.handler_task_execution_context = value.String
-			}
-		case handlertask.ForeignKeys[2]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field node_handler_task", values[i])
-			} else if value.Valid {
-				ht.node_handler_task = new(string)
-				*ht.node_handler_task = value.String
+				ht.handler_execution_tasks = new(string)
+				*ht.handler_execution_tasks = value.String
 			}
 		default:
 			ht.selectValues.Set(columns[i], values[i])
@@ -202,19 +155,9 @@ func (ht *HandlerTask) Value(name string) (ent.Value, error) {
 	return ht.selectValues.Get(name)
 }
 
-// QueryTaskContext queries the "task_context" edge of the HandlerTask entity.
-func (ht *HandlerTask) QueryTaskContext() *TaskContextQuery {
-	return NewHandlerTaskClient(ht.config).QueryTaskContext(ht)
-}
-
-// QueryExecutionContext queries the "execution_context" edge of the HandlerTask entity.
-func (ht *HandlerTask) QueryExecutionContext() *ExecutionContextQuery {
-	return NewHandlerTaskClient(ht.config).QueryExecutionContext(ht)
-}
-
-// QueryNode queries the "node" edge of the HandlerTask entity.
-func (ht *HandlerTask) QueryNode() *NodeQuery {
-	return NewHandlerTaskClient(ht.config).QueryNode(ht)
+// QueryHandlerExecution queries the "handler_execution" edge of the HandlerTask entity.
+func (ht *HandlerTask) QueryHandlerExecution() *HandlerExecutionQuery {
+	return NewHandlerTaskClient(ht.config).QueryHandlerExecution(ht)
 }
 
 // Update returns a builder for updating this HandlerTask.
@@ -240,11 +183,8 @@ func (ht *HandlerTask) String() string {
 	var builder strings.Builder
 	builder.WriteString("HandlerTask(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", ht.ID))
-	builder.WriteString("handlerName=")
+	builder.WriteString("handler_name=")
 	builder.WriteString(ht.HandlerName)
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(fmt.Sprintf("%v", ht.Status))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", ht.Payload))
@@ -255,11 +195,14 @@ func (ht *HandlerTask) String() string {
 	builder.WriteString("error=")
 	builder.WriteString(fmt.Sprintf("%v", ht.Error))
 	builder.WriteString(", ")
-	builder.WriteString("numIn=")
-	builder.WriteString(fmt.Sprintf("%v", ht.NumIn))
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", ht.Status))
 	builder.WriteString(", ")
-	builder.WriteString("numOut=")
-	builder.WriteString(fmt.Sprintf("%v", ht.NumOut))
+	builder.WriteString("created_at=")
+	builder.WriteString(ht.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("completed_at=")
+	builder.WriteString(ht.CompletedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

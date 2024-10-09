@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"time"
 
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 	"github.com/davidroman0O/retrypool"
 )
 
@@ -27,10 +28,12 @@ func NewHandlerTaskPool(tp *Tempolite, count int) *HandlerTaskPool {
 	}
 
 	opts := []retrypool.Option[*ent.HandlerTask]{
+		retrypool.WithAttempts[*ent.HandlerTask](1),
+
 		retrypool.WithOnTaskSuccess[*ent.HandlerTask](tp.onHandlerTaskSuccess),
 		retrypool.WithOnTaskFailure[*ent.HandlerTask](tp.onHandlerTaskFailure),
+
 		retrypool.WithOnRetry[*ent.HandlerTask](tp.onHandlerTaskRetry),
-		retrypool.WithAttempts[*ent.HandlerTask](1),
 		retrypool.WithPanicHandler[*ent.HandlerTask](tp.onHandlerTaskPanic),
 		retrypool.WithOnNewDeadTask[*ent.HandlerTask](tp.onDeadHandlerTask),
 	}
@@ -45,41 +48,36 @@ type HandlerWorker struct {
 	tp *Tempolite
 }
 
-// Quite simple, we get the handler function, get the type of the second parameter, create a new instance of it, unmarshal the payload into it, and call the handler function with the HandlerContext and the parameter.
-// Then simply marshal the result and error, and update the task with the result and error. Let the scheduler work!
 func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 	log.Printf("Running task with ID %s on worker %d", task.ID, h.ID)
 
-	handlerInfo, exists := h.tp.getHandler(task.HandlerName)
-	if !exists {
-		log.Printf("No handler registered with name: %s", task.HandlerName)
-		return fmt.Errorf("no handler registered with name: %s", task.HandlerName)
+	handlerExec, err := h.tp.client.HandlerExecution.Query().
+		Where(handlerexecution.HasTasksWith(handlertask.ID(task.ID))).
+		WithExecutionContext().
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch handler execution for task %s: %w", task.ID, err)
 	}
 
-	/// When we panic, we tends to: failure + retry + panic
-	/// When we fail, we tends to: failure + retry
+	if handlerExec.Edges.ExecutionContext == nil {
+		return fmt.Errorf("handler execution %s has no associated execution context", handlerExec.ID)
+	}
+
+	handlerInfo, exists := h.tp.getHandler(task.HandlerName)
+	if !exists {
+		return h.updateTaskFailure(ctx, task, fmt.Errorf("no handler registered with name: %s", task.HandlerName))
+	}
 
 	param, err := handlerInfo.ToInterface(task.Payload)
 	if err != nil {
-		log.Printf("Failed to unmarshal task payload: %v", err)
-		return fmt.Errorf("failed to unmarshal task payload: %v", err)
-	}
-
-	if task.Edges.ExecutionContext == nil {
-		return fmt.Errorf("task with ID %s has no execution context", task.ID)
-	}
-
-	if task.Edges.Node == nil {
-		return fmt.Errorf("task with ID %s has no node", task.ID)
+		return h.updateTaskFailure(ctx, task, fmt.Errorf("failed to unmarshal task payload: %v", err))
 	}
 
 	handlerCtx := HandlerContext{
 		Context:            ctx,
 		tp:                 h.tp,
-		taskID:             task.ID,
-		nodeID:             task.Edges.Node.ID,
-		executionContextID: task.Edges.ExecutionContext.ID,
-		enqueueCounter:     1,
+		handlerExecutionID: handlerExec.ID,
+		executionContextID: handlerExec.Edges.ExecutionContext.ID,
 	}
 
 	log.Printf("Calling handler for task ID %s", task.ID)
@@ -87,128 +85,167 @@ func (h *HandlerWorker) Run(ctx context.Context, task *ent.HandlerTask) error {
 		reflect.ValueOf(handlerCtx),
 		reflect.ValueOf(param).Elem(),
 	})
-
-	if len(results) > 0 && !results[len(results)-1].IsNil() {
-		log.Printf("Handler for task ID %s returned an error: %v", task.ID, results[len(results)-1].Interface())
-		return results[len(results)-1].Interface().(error)
-	}
+	log.Printf("Handler call for task ID %s completed", task.ID)
 
 	var res interface{}
 	var errRes error
-	// it should be error
-	if len(results) == 1 {
-		if !results[0].IsNil() {
-			errRes = results[0].Interface().(error)
-		}
-	} else if len(results) == 2 {
-		// should be data + error
-		if !results[0].IsNil() {
-			res = results[0].Interface()
-		}
-		if !results[1].IsNil() {
-			errRes = results[1].Interface().(error)
-		}
-	} else {
-		return fmt.Errorf("handler function must return 1 or 2 values")
+	if len(results) > 0 && !results[len(results)-1].IsNil() {
+		errRes = results[len(results)-1].Interface().(error)
+	}
+	if len(results) == 2 && !results[0].IsNil() {
+		res = results[0].Interface()
 	}
 
-	log.Printf("Task with ID %s completed successfully on worker %d", task.ID, h.ID)
-	log.Printf("Task result: %v", res)
-	log.Printf("Task error: %v", errRes)
+	fmt.Println(res, errRes)
 
-	var bytesRes []byte
-	if bytesRes, err = json.Marshal(res); err != nil {
-		log.Printf("Failed to marshal task result: %v", err)
-		return fmt.Errorf("failed to marshal task result: %v", err)
+	if errRes != nil {
+		return h.updateTaskFailure(ctx, task, errRes)
 	}
 
-	var bytesErr []byte
-	if bytesErr, err = json.Marshal(errRes); err != nil {
-		log.Printf("Failed to marshal task error: %v", err)
-		return fmt.Errorf("failed to marshal task error: %v", err)
+	return h.updateTaskResult(ctx, task, handlerExec, res, nil)
+}
+
+func (h *HandlerWorker) updateTaskResult(ctx context.Context, task *ent.HandlerTask, handlerExec *ent.HandlerExecution, result interface{}, handlerErr error) error {
+	tx, err := h.tp.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	status := handlertask.StatusCompleted
+	if handlerErr != nil {
+		status = handlertask.StatusFailed
 	}
 
-	if err = h.tp.
-		client.
-		HandlerTask.
-		Update().
-		SetStatus(handlertask.StatusCompleted).
-		SetError(bytesErr).
-		SetResult(bytesRes).
-		Where(
-			handlertask.ID(task.ID),
-		).
-		Exec(ctx); err != nil {
-		log.Printf("Failed to update task with ID %s: %v", task.ID, err)
+	resultBytes, _ := json.Marshal(result)
+	var errorBytes []byte
+	if handlerErr != nil {
+		errorBytes, _ = json.Marshal(handlerErr.Error())
 	}
 
-	return nil
+	_, err = tx.HandlerTask.UpdateOne(task).
+		SetStatus(status).
+		SetResult(resultBytes).
+		SetError(errorBytes).
+		SetCompletedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	_, err = tx.HandlerExecution.UpdateOne(handlerExec).
+		SetStatus(handlerexecution.Status(status.String())).
+		SetEndTime(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update handler execution: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+func (h *HandlerWorker) updateTaskFailure(ctx context.Context, task *ent.HandlerTask, err error) error {
+	errorBytes, _ := json.Marshal(err.Error())
+
+	tx, err := h.tp.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.HandlerTask.UpdateOne(task).
+		SetStatus(handlertask.StatusFailed).
+		SetError(errorBytes).
+		SetCompletedAt(time.Now()).
+		Save(ctx); err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	if _, err := tx.HandlerExecution.UpdateOneID(task.Edges.HandlerExecution.ID).
+		SetStatus(handlerexecution.StatusFailed).
+		SetEndTime(time.Now()).
+		Save(ctx); err != nil {
+		return fmt.Errorf("failed to update handler execution: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// After updating the task as failed, we return the original error
+	// This will trigger the retry mechanism in onHandlerTaskFailure
+	return err
 }
 
 func (tp *Tempolite) onHandlerTaskSuccess(controller retrypool.WorkerController[*ent.HandlerTask], workerID int, worker retrypool.Worker[*ent.HandlerTask], task *retrypool.TaskWrapper[*ent.HandlerTask]) {
-	log.Printf("Task completed successfully")
+	log.Printf("Task completed successfully %s", task.Data().HandlerName)
+	fmt.Println(tp.getInfo())
+	fmt.Println(tp.handlerTaskPool.pool.DeadTaskCount())
+	fmt.Println(tp.handlerTaskPool.pool.RangeTasks(func(data *ent.HandlerTask, workerID int, status retrypool.TaskStatus) bool {
+		fmt.Println(data.ID, data, status, workerID)
+		return true
+	}))
 }
 
 func (tp *Tempolite) onHandlerTaskFailure(controller retrypool.WorkerController[*ent.HandlerTask], workerID int, worker retrypool.Worker[*ent.HandlerTask], task *retrypool.TaskWrapper[*ent.HandlerTask], err error) retrypool.DeadTaskAction {
 	log.Printf("Task failed: %v", err)
-	var parseErr error
-	var bytesErr []byte
 
-	if bytesErr, parseErr = json.Marshal(err); parseErr != nil {
-		log.Printf("Failed to marshal task error: %v", parseErr)
-		return retrypool.DeadTaskActionAddToDeadTasks
-	}
-
-	taskContext, err := tp.client.TaskContext.Query().Where(
-		taskcontext.ID(task.Data().Edges.TaskContext.ID),
-	).First(tp.ctx)
+	handlerExec, err := tp.client.HandlerExecution.Query().
+		Where(handlerexecution.HasTasksWith(handlertask.ID(task.Data().ID))).
+		Only(tp.ctx)
 	if err != nil {
-		log.Printf("Failed to get task context: %v", err)
+		log.Printf("Failed to get handler execution: %v", err)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	// TODO: test retry mechanism
-	// yup we need to make a better tracking of the retry branches
-	if taskContext.RetryCount < taskContext.MaxRetry {
-		if err = tp.client.
-			TaskContext.
-			Update().
-			SetRetryCount(taskContext.RetryCount + 1).
-			Where(taskcontext.ID(taskContext.ID)).
-			Exec(tp.ctx); err != nil {
-			log.Printf("Failed to update task context: %v", err)
+	if handlerExec.RetryCount < handlerExec.MaxRetries {
+		updatedHandlerExec, err := tp.client.HandlerExecution.
+			UpdateOne(handlerExec).
+			SetRetryCount(handlerExec.RetryCount + 1).
+			SetStatus(handlerexecution.StatusPending).
+			Save(tp.ctx)
+		if err != nil {
+			log.Printf("Failed to update handler execution: %v", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
+
+		newTask, err := tp.client.HandlerTask.
+			Create().
+			SetHandlerExecution(updatedHandlerExec).
+			SetHandlerName(task.Data().HandlerName).
+			SetPayload(task.Data().Payload).
+			SetStatus(handlertask.StatusPending).
+			SetCreatedAt(time.Now()).
+			Save(tp.ctx)
+		if err != nil {
+			log.Printf("Failed to create new task for retry: %v", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
+		log.Printf("Task %s scheduled for retry. Attempt %d/%d", newTask.ID, updatedHandlerExec.RetryCount, updatedHandlerExec.MaxRetries)
+
+		// Dispatch the new task
+		if err := tp.handlerTaskPool.pool.Dispatch(newTask); err != nil {
+			log.Printf("Failed to dispatch retry task: %v", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
 		return retrypool.DeadTaskActionForceRetry
 	}
 
-	if err = tp.client.
-		HandlerTask.
-		Update().
-		SetError(bytesErr).
-		SetStatus(handlertask.StatusFailed).
-		Where(handlertask.ID(task.Data().ID)).
-		Exec(tp.ctx); err != nil {
-		log.Printf("Failed to update task with ID %s: %v", task.Data().ID, err)
-		return retrypool.DeadTaskActionAddToDeadTasks
-	}
-
-	return retrypool.DeadTaskActionRetry
+	log.Printf("Task %s has reached max retries. Marked as failed.", task.Data().ID)
+	return retrypool.DeadTaskActionAddToDeadTasks
 }
 
-// Post failure, we retry the task
 func (tp *Tempolite) onHandlerTaskRetry(attempt int, err error, task *retrypool.TaskWrapper[*ent.HandlerTask]) {
-	// TODO: we need to create a new task on a new execution context??
 	log.Printf("Task retrying: %v", err)
 }
 
-// Notification of panic when failure
 func (tp *Tempolite) onHandlerTaskPanic(task *ent.HandlerTask, v interface{}, stackTrace string) {
 	log.Printf("Task panicked: %v", v)
 	log.Println(stackTrace)
 }
 
-// Notification of dead task, no retry anymore
 func (tp *Tempolite) onDeadHandlerTask(task *retrypool.DeadTask[*ent.HandlerTask]) {
 	log.Printf("Task is dead: %v", task)
 }

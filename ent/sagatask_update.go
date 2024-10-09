@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sagatask"
 )
@@ -28,34 +27,9 @@ func (stu *SagaTaskUpdate) Where(ps ...predicate.SagaTask) *SagaTaskUpdate {
 	return stu
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (stu *SagaTaskUpdate) SetNodeID(id string) *SagaTaskUpdate {
-	stu.mutation.SetNodeID(id)
-	return stu
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (stu *SagaTaskUpdate) SetNillableNodeID(id *string) *SagaTaskUpdate {
-	if id != nil {
-		stu = stu.SetNodeID(*id)
-	}
-	return stu
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (stu *SagaTaskUpdate) SetNode(n *Node) *SagaTaskUpdate {
-	return stu.SetNodeID(n.ID)
-}
-
 // Mutation returns the SagaTaskMutation object of the builder.
 func (stu *SagaTaskUpdate) Mutation() *SagaTaskMutation {
 	return stu.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (stu *SagaTaskUpdate) ClearNode() *SagaTaskUpdate {
-	stu.mutation.ClearNode()
-	return stu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -94,35 +68,6 @@ func (stu *SagaTaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			}
 		}
 	}
-	if stu.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sagatask.NodeTable,
-			Columns: []string{sagatask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := stu.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sagatask.NodeTable,
-			Columns: []string{sagatask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, stu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sagatask.Label}
@@ -143,34 +88,9 @@ type SagaTaskUpdateOne struct {
 	mutation *SagaTaskMutation
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (stuo *SagaTaskUpdateOne) SetNodeID(id string) *SagaTaskUpdateOne {
-	stuo.mutation.SetNodeID(id)
-	return stuo
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (stuo *SagaTaskUpdateOne) SetNillableNodeID(id *string) *SagaTaskUpdateOne {
-	if id != nil {
-		stuo = stuo.SetNodeID(*id)
-	}
-	return stuo
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (stuo *SagaTaskUpdateOne) SetNode(n *Node) *SagaTaskUpdateOne {
-	return stuo.SetNodeID(n.ID)
-}
-
 // Mutation returns the SagaTaskMutation object of the builder.
 func (stuo *SagaTaskUpdateOne) Mutation() *SagaTaskMutation {
 	return stuo.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (stuo *SagaTaskUpdateOne) ClearNode() *SagaTaskUpdateOne {
-	stuo.mutation.ClearNode()
-	return stuo
 }
 
 // Where appends a list predicates to the SagaTaskUpdate builder.
@@ -238,35 +158,6 @@ func (stuo *SagaTaskUpdateOne) sqlSave(ctx context.Context) (_node *SagaTask, er
 				ps[i](selector)
 			}
 		}
-	}
-	if stuo.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sagatask.NodeTable,
-			Columns: []string{sagatask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := stuo.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sagatask.NodeTable,
-			Columns: []string{sagatask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SagaTask{config: stuo.config}
 	_spec.Assign = _node.assignValues

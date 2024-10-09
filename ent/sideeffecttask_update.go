@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/node"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
 )
@@ -28,34 +27,9 @@ func (setu *SideEffectTaskUpdate) Where(ps ...predicate.SideEffectTask) *SideEff
 	return setu
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (setu *SideEffectTaskUpdate) SetNodeID(id string) *SideEffectTaskUpdate {
-	setu.mutation.SetNodeID(id)
-	return setu
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (setu *SideEffectTaskUpdate) SetNillableNodeID(id *string) *SideEffectTaskUpdate {
-	if id != nil {
-		setu = setu.SetNodeID(*id)
-	}
-	return setu
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (setu *SideEffectTaskUpdate) SetNode(n *Node) *SideEffectTaskUpdate {
-	return setu.SetNodeID(n.ID)
-}
-
 // Mutation returns the SideEffectTaskMutation object of the builder.
 func (setu *SideEffectTaskUpdate) Mutation() *SideEffectTaskMutation {
 	return setu.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (setu *SideEffectTaskUpdate) ClearNode() *SideEffectTaskUpdate {
-	setu.mutation.ClearNode()
-	return setu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -94,35 +68,6 @@ func (setu *SideEffectTaskUpdate) sqlSave(ctx context.Context) (n int, err error
 			}
 		}
 	}
-	if setu.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sideeffecttask.NodeTable,
-			Columns: []string{sideeffecttask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := setu.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sideeffecttask.NodeTable,
-			Columns: []string{sideeffecttask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, setu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sideeffecttask.Label}
@@ -143,34 +88,9 @@ type SideEffectTaskUpdateOne struct {
 	mutation *SideEffectTaskMutation
 }
 
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (setuo *SideEffectTaskUpdateOne) SetNodeID(id string) *SideEffectTaskUpdateOne {
-	setuo.mutation.SetNodeID(id)
-	return setuo
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (setuo *SideEffectTaskUpdateOne) SetNillableNodeID(id *string) *SideEffectTaskUpdateOne {
-	if id != nil {
-		setuo = setuo.SetNodeID(*id)
-	}
-	return setuo
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (setuo *SideEffectTaskUpdateOne) SetNode(n *Node) *SideEffectTaskUpdateOne {
-	return setuo.SetNodeID(n.ID)
-}
-
 // Mutation returns the SideEffectTaskMutation object of the builder.
 func (setuo *SideEffectTaskUpdateOne) Mutation() *SideEffectTaskMutation {
 	return setuo.mutation
-}
-
-// ClearNode clears the "node" edge to the Node entity.
-func (setuo *SideEffectTaskUpdateOne) ClearNode() *SideEffectTaskUpdateOne {
-	setuo.mutation.ClearNode()
-	return setuo
 }
 
 // Where appends a list predicates to the SideEffectTaskUpdate builder.
@@ -238,35 +158,6 @@ func (setuo *SideEffectTaskUpdateOne) sqlSave(ctx context.Context) (_node *SideE
 				ps[i](selector)
 			}
 		}
-	}
-	if setuo.mutation.NodeCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sideeffecttask.NodeTable,
-			Columns: []string{sideeffecttask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := setuo.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: true,
-			Table:   sideeffecttask.NodeTable,
-			Columns: []string{sideeffecttask.NodeColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SideEffectTask{config: setuo.config}
 	_spec.Assign = _node.assignValues

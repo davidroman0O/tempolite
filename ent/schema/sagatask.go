@@ -2,7 +2,6 @@ package schema
 
 import (
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 )
 
 // SagaTask holds the schema definition for the SagaTask entity.
@@ -17,9 +16,5 @@ func (SagaTask) Fields() []ent.Field {
 
 // Edges of the SagaTask.
 func (SagaTask) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("node", Node.Type).
-			Ref("saga_step_task").
-			Unique(),
-	}
+	return []ent.Edge{}
 }

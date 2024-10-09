@@ -6,13 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/node"
-	"github.com/davidroman0O/go-tempolite/ent/taskcontext"
 )
 
 // HandlerTaskCreate is the builder for creating a HandlerTask entity.
@@ -22,15 +21,9 @@ type HandlerTaskCreate struct {
 	hooks    []Hook
 }
 
-// SetHandlerName sets the "handlerName" field.
+// SetHandlerName sets the "handler_name" field.
 func (htc *HandlerTaskCreate) SetHandlerName(s string) *HandlerTaskCreate {
 	htc.mutation.SetHandlerName(s)
-	return htc
-}
-
-// SetStatus sets the "status" field.
-func (htc *HandlerTaskCreate) SetStatus(h handlertask.Status) *HandlerTaskCreate {
-	htc.mutation.SetStatus(h)
 	return htc
 }
 
@@ -52,15 +45,29 @@ func (htc *HandlerTaskCreate) SetError(b []byte) *HandlerTaskCreate {
 	return htc
 }
 
-// SetNumIn sets the "numIn" field.
-func (htc *HandlerTaskCreate) SetNumIn(i int) *HandlerTaskCreate {
-	htc.mutation.SetNumIn(i)
+// SetStatus sets the "status" field.
+func (htc *HandlerTaskCreate) SetStatus(h handlertask.Status) *HandlerTaskCreate {
+	htc.mutation.SetStatus(h)
 	return htc
 }
 
-// SetNumOut sets the "numOut" field.
-func (htc *HandlerTaskCreate) SetNumOut(i int) *HandlerTaskCreate {
-	htc.mutation.SetNumOut(i)
+// SetCreatedAt sets the "created_at" field.
+func (htc *HandlerTaskCreate) SetCreatedAt(t time.Time) *HandlerTaskCreate {
+	htc.mutation.SetCreatedAt(t)
+	return htc
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (htc *HandlerTaskCreate) SetCompletedAt(t time.Time) *HandlerTaskCreate {
+	htc.mutation.SetCompletedAt(t)
+	return htc
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (htc *HandlerTaskCreate) SetNillableCompletedAt(t *time.Time) *HandlerTaskCreate {
+	if t != nil {
+		htc.SetCompletedAt(*t)
+	}
 	return htc
 }
 
@@ -70,61 +77,23 @@ func (htc *HandlerTaskCreate) SetID(s string) *HandlerTaskCreate {
 	return htc
 }
 
-// SetTaskContextID sets the "task_context" edge to the TaskContext entity by ID.
-func (htc *HandlerTaskCreate) SetTaskContextID(id string) *HandlerTaskCreate {
-	htc.mutation.SetTaskContextID(id)
+// SetHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID.
+func (htc *HandlerTaskCreate) SetHandlerExecutionID(id string) *HandlerTaskCreate {
+	htc.mutation.SetHandlerExecutionID(id)
 	return htc
 }
 
-// SetNillableTaskContextID sets the "task_context" edge to the TaskContext entity by ID if the given value is not nil.
-func (htc *HandlerTaskCreate) SetNillableTaskContextID(id *string) *HandlerTaskCreate {
+// SetNillableHandlerExecutionID sets the "handler_execution" edge to the HandlerExecution entity by ID if the given value is not nil.
+func (htc *HandlerTaskCreate) SetNillableHandlerExecutionID(id *string) *HandlerTaskCreate {
 	if id != nil {
-		htc = htc.SetTaskContextID(*id)
+		htc = htc.SetHandlerExecutionID(*id)
 	}
 	return htc
 }
 
-// SetTaskContext sets the "task_context" edge to the TaskContext entity.
-func (htc *HandlerTaskCreate) SetTaskContext(t *TaskContext) *HandlerTaskCreate {
-	return htc.SetTaskContextID(t.ID)
-}
-
-// SetExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID.
-func (htc *HandlerTaskCreate) SetExecutionContextID(id string) *HandlerTaskCreate {
-	htc.mutation.SetExecutionContextID(id)
-	return htc
-}
-
-// SetNillableExecutionContextID sets the "execution_context" edge to the ExecutionContext entity by ID if the given value is not nil.
-func (htc *HandlerTaskCreate) SetNillableExecutionContextID(id *string) *HandlerTaskCreate {
-	if id != nil {
-		htc = htc.SetExecutionContextID(*id)
-	}
-	return htc
-}
-
-// SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
-func (htc *HandlerTaskCreate) SetExecutionContext(e *ExecutionContext) *HandlerTaskCreate {
-	return htc.SetExecutionContextID(e.ID)
-}
-
-// SetNodeID sets the "node" edge to the Node entity by ID.
-func (htc *HandlerTaskCreate) SetNodeID(id string) *HandlerTaskCreate {
-	htc.mutation.SetNodeID(id)
-	return htc
-}
-
-// SetNillableNodeID sets the "node" edge to the Node entity by ID if the given value is not nil.
-func (htc *HandlerTaskCreate) SetNillableNodeID(id *string) *HandlerTaskCreate {
-	if id != nil {
-		htc = htc.SetNodeID(*id)
-	}
-	return htc
-}
-
-// SetNode sets the "node" edge to the Node entity.
-func (htc *HandlerTaskCreate) SetNode(n *Node) *HandlerTaskCreate {
-	return htc.SetNodeID(n.ID)
+// SetHandlerExecution sets the "handler_execution" edge to the HandlerExecution entity.
+func (htc *HandlerTaskCreate) SetHandlerExecution(h *HandlerExecution) *HandlerTaskCreate {
+	return htc.SetHandlerExecutionID(h.ID)
 }
 
 // Mutation returns the HandlerTaskMutation object of the builder.
@@ -162,7 +131,10 @@ func (htc *HandlerTaskCreate) ExecX(ctx context.Context) {
 // check runs all checks and user-defined validators on the builder.
 func (htc *HandlerTaskCreate) check() error {
 	if _, ok := htc.mutation.HandlerName(); !ok {
-		return &ValidationError{Name: "handlerName", err: errors.New(`ent: missing required field "HandlerTask.handlerName"`)}
+		return &ValidationError{Name: "handler_name", err: errors.New(`ent: missing required field "HandlerTask.handler_name"`)}
+	}
+	if _, ok := htc.mutation.Payload(); !ok {
+		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "HandlerTask.payload"`)}
 	}
 	if _, ok := htc.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "HandlerTask.status"`)}
@@ -172,11 +144,8 @@ func (htc *HandlerTaskCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "HandlerTask.status": %w`, err)}
 		}
 	}
-	if _, ok := htc.mutation.NumIn(); !ok {
-		return &ValidationError{Name: "numIn", err: errors.New(`ent: missing required field "HandlerTask.numIn"`)}
-	}
-	if _, ok := htc.mutation.NumOut(); !ok {
-		return &ValidationError{Name: "numOut", err: errors.New(`ent: missing required field "HandlerTask.numOut"`)}
+	if _, ok := htc.mutation.CreatedAt(); !ok {
+		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "HandlerTask.created_at"`)}
 	}
 	return nil
 }
@@ -217,10 +186,6 @@ func (htc *HandlerTaskCreate) createSpec() (*HandlerTask, *sqlgraph.CreateSpec) 
 		_spec.SetField(handlertask.FieldHandlerName, field.TypeString, value)
 		_node.HandlerName = value
 	}
-	if value, ok := htc.mutation.Status(); ok {
-		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
-		_node.Status = value
-	}
 	if value, ok := htc.mutation.Payload(); ok {
 		_spec.SetField(handlertask.FieldPayload, field.TypeBytes, value)
 		_node.Payload = value
@@ -233,63 +198,33 @@ func (htc *HandlerTaskCreate) createSpec() (*HandlerTask, *sqlgraph.CreateSpec) 
 		_spec.SetField(handlertask.FieldError, field.TypeBytes, value)
 		_node.Error = value
 	}
-	if value, ok := htc.mutation.NumIn(); ok {
-		_spec.SetField(handlertask.FieldNumIn, field.TypeInt, value)
-		_node.NumIn = value
+	if value, ok := htc.mutation.Status(); ok {
+		_spec.SetField(handlertask.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
 	}
-	if value, ok := htc.mutation.NumOut(); ok {
-		_spec.SetField(handlertask.FieldNumOut, field.TypeInt, value)
-		_node.NumOut = value
+	if value, ok := htc.mutation.CreatedAt(); ok {
+		_spec.SetField(handlertask.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = value
 	}
-	if nodes := htc.mutation.TaskContextIDs(); len(nodes) > 0 {
+	if value, ok := htc.mutation.CompletedAt(); ok {
+		_spec.SetField(handlertask.FieldCompletedAt, field.TypeTime, value)
+		_node.CompletedAt = value
+	}
+	if nodes := htc.mutation.HandlerExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.TaskContextTable,
-			Columns: []string{handlertask.TaskContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(taskcontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.handler_task_task_context = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := htc.mutation.ExecutionContextIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   handlertask.ExecutionContextTable,
-			Columns: []string{handlertask.ExecutionContextColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.handler_task_execution_context = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := htc.mutation.NodeIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
 			Inverse: true,
-			Table:   handlertask.NodeTable,
-			Columns: []string{handlertask.NodeColumn},
+			Table:   handlertask.HandlerExecutionTable,
+			Columns: []string{handlertask.HandlerExecutionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(node.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.node_handler_task = &nodes[0]
+		_node.handler_execution_tasks = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

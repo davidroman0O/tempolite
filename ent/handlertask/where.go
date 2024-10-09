@@ -3,6 +3,8 @@
 package handlertask
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
@@ -63,7 +65,7 @@ func IDContainsFold(id string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldContainsFold(FieldID, id))
 }
 
-// HandlerName applies equality check predicate on the "handlerName" field. It's identical to HandlerNameEQ.
+// HandlerName applies equality check predicate on the "handler_name" field. It's identical to HandlerNameEQ.
 func HandlerName(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldEQ(FieldHandlerName, v))
 }
@@ -83,99 +85,79 @@ func Error(v []byte) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldEQ(FieldError, v))
 }
 
-// NumIn applies equality check predicate on the "numIn" field. It's identical to NumInEQ.
-func NumIn(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldEQ(FieldNumIn, v))
+// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
+func CreatedAt(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// NumOut applies equality check predicate on the "numOut" field. It's identical to NumOutEQ.
-func NumOut(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldEQ(FieldNumOut, v))
+// CompletedAt applies equality check predicate on the "completed_at" field. It's identical to CompletedAtEQ.
+func CompletedAt(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldEQ(FieldCompletedAt, v))
 }
 
-// HandlerNameEQ applies the EQ predicate on the "handlerName" field.
+// HandlerNameEQ applies the EQ predicate on the "handler_name" field.
 func HandlerNameEQ(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldEQ(FieldHandlerName, v))
 }
 
-// HandlerNameNEQ applies the NEQ predicate on the "handlerName" field.
+// HandlerNameNEQ applies the NEQ predicate on the "handler_name" field.
 func HandlerNameNEQ(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldNEQ(FieldHandlerName, v))
 }
 
-// HandlerNameIn applies the In predicate on the "handlerName" field.
+// HandlerNameIn applies the In predicate on the "handler_name" field.
 func HandlerNameIn(vs ...string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldIn(FieldHandlerName, vs...))
 }
 
-// HandlerNameNotIn applies the NotIn predicate on the "handlerName" field.
+// HandlerNameNotIn applies the NotIn predicate on the "handler_name" field.
 func HandlerNameNotIn(vs ...string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldNotIn(FieldHandlerName, vs...))
 }
 
-// HandlerNameGT applies the GT predicate on the "handlerName" field.
+// HandlerNameGT applies the GT predicate on the "handler_name" field.
 func HandlerNameGT(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldGT(FieldHandlerName, v))
 }
 
-// HandlerNameGTE applies the GTE predicate on the "handlerName" field.
+// HandlerNameGTE applies the GTE predicate on the "handler_name" field.
 func HandlerNameGTE(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldGTE(FieldHandlerName, v))
 }
 
-// HandlerNameLT applies the LT predicate on the "handlerName" field.
+// HandlerNameLT applies the LT predicate on the "handler_name" field.
 func HandlerNameLT(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldLT(FieldHandlerName, v))
 }
 
-// HandlerNameLTE applies the LTE predicate on the "handlerName" field.
+// HandlerNameLTE applies the LTE predicate on the "handler_name" field.
 func HandlerNameLTE(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldLTE(FieldHandlerName, v))
 }
 
-// HandlerNameContains applies the Contains predicate on the "handlerName" field.
+// HandlerNameContains applies the Contains predicate on the "handler_name" field.
 func HandlerNameContains(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldContains(FieldHandlerName, v))
 }
 
-// HandlerNameHasPrefix applies the HasPrefix predicate on the "handlerName" field.
+// HandlerNameHasPrefix applies the HasPrefix predicate on the "handler_name" field.
 func HandlerNameHasPrefix(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldHasPrefix(FieldHandlerName, v))
 }
 
-// HandlerNameHasSuffix applies the HasSuffix predicate on the "handlerName" field.
+// HandlerNameHasSuffix applies the HasSuffix predicate on the "handler_name" field.
 func HandlerNameHasSuffix(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldHasSuffix(FieldHandlerName, v))
 }
 
-// HandlerNameEqualFold applies the EqualFold predicate on the "handlerName" field.
+// HandlerNameEqualFold applies the EqualFold predicate on the "handler_name" field.
 func HandlerNameEqualFold(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldEqualFold(FieldHandlerName, v))
 }
 
-// HandlerNameContainsFold applies the ContainsFold predicate on the "handlerName" field.
+// HandlerNameContainsFold applies the ContainsFold predicate on the "handler_name" field.
 func HandlerNameContainsFold(v string) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldContainsFold(FieldHandlerName, v))
-}
-
-// StatusEQ applies the EQ predicate on the "status" field.
-func StatusEQ(v Status) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldEQ(FieldStatus, v))
-}
-
-// StatusNEQ applies the NEQ predicate on the "status" field.
-func StatusNEQ(v Status) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNEQ(FieldStatus, v))
-}
-
-// StatusIn applies the In predicate on the "status" field.
-func StatusIn(vs ...Status) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldIn(FieldStatus, vs...))
-}
-
-// StatusNotIn applies the NotIn predicate on the "status" field.
-func StatusNotIn(vs ...Status) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNotIn(FieldStatus, vs...))
 }
 
 // PayloadEQ applies the EQ predicate on the "payload" field.
@@ -216,16 +198,6 @@ func PayloadLT(v []byte) predicate.HandlerTask {
 // PayloadLTE applies the LTE predicate on the "payload" field.
 func PayloadLTE(v []byte) predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldLTE(FieldPayload, v))
-}
-
-// PayloadIsNil applies the IsNil predicate on the "payload" field.
-func PayloadIsNil() predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldIsNull(FieldPayload))
-}
-
-// PayloadNotNil applies the NotNil predicate on the "payload" field.
-func PayloadNotNil() predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNotNull(FieldPayload))
 }
 
 // ResultEQ applies the EQ predicate on the "result" field.
@@ -328,147 +300,131 @@ func ErrorNotNil() predicate.HandlerTask {
 	return predicate.HandlerTask(sql.FieldNotNull(FieldError))
 }
 
-// NumInEQ applies the EQ predicate on the "numIn" field.
-func NumInEQ(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldEQ(FieldNumIn, v))
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldEQ(FieldStatus, v))
 }
 
-// NumInNEQ applies the NEQ predicate on the "numIn" field.
-func NumInNEQ(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNEQ(FieldNumIn, v))
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNEQ(FieldStatus, v))
 }
 
-// NumInIn applies the In predicate on the "numIn" field.
-func NumInIn(vs ...int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldIn(FieldNumIn, vs...))
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldIn(FieldStatus, vs...))
 }
 
-// NumInNotIn applies the NotIn predicate on the "numIn" field.
-func NumInNotIn(vs ...int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNotIn(FieldNumIn, vs...))
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNotIn(FieldStatus, vs...))
 }
 
-// NumInGT applies the GT predicate on the "numIn" field.
-func NumInGT(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldGT(FieldNumIn, v))
+// CreatedAtEQ applies the EQ predicate on the "created_at" field.
+func CreatedAtEQ(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// NumInGTE applies the GTE predicate on the "numIn" field.
-func NumInGTE(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldGTE(FieldNumIn, v))
+// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
+func CreatedAtNEQ(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNEQ(FieldCreatedAt, v))
 }
 
-// NumInLT applies the LT predicate on the "numIn" field.
-func NumInLT(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldLT(FieldNumIn, v))
+// CreatedAtIn applies the In predicate on the "created_at" field.
+func CreatedAtIn(vs ...time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldIn(FieldCreatedAt, vs...))
 }
 
-// NumInLTE applies the LTE predicate on the "numIn" field.
-func NumInLTE(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldLTE(FieldNumIn, v))
+// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
+func CreatedAtNotIn(vs ...time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNotIn(FieldCreatedAt, vs...))
 }
 
-// NumOutEQ applies the EQ predicate on the "numOut" field.
-func NumOutEQ(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldEQ(FieldNumOut, v))
+// CreatedAtGT applies the GT predicate on the "created_at" field.
+func CreatedAtGT(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldGT(FieldCreatedAt, v))
 }
 
-// NumOutNEQ applies the NEQ predicate on the "numOut" field.
-func NumOutNEQ(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNEQ(FieldNumOut, v))
+// CreatedAtGTE applies the GTE predicate on the "created_at" field.
+func CreatedAtGTE(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldGTE(FieldCreatedAt, v))
 }
 
-// NumOutIn applies the In predicate on the "numOut" field.
-func NumOutIn(vs ...int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldIn(FieldNumOut, vs...))
+// CreatedAtLT applies the LT predicate on the "created_at" field.
+func CreatedAtLT(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldLT(FieldCreatedAt, v))
 }
 
-// NumOutNotIn applies the NotIn predicate on the "numOut" field.
-func NumOutNotIn(vs ...int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldNotIn(FieldNumOut, vs...))
+// CreatedAtLTE applies the LTE predicate on the "created_at" field.
+func CreatedAtLTE(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldLTE(FieldCreatedAt, v))
 }
 
-// NumOutGT applies the GT predicate on the "numOut" field.
-func NumOutGT(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldGT(FieldNumOut, v))
+// CompletedAtEQ applies the EQ predicate on the "completed_at" field.
+func CompletedAtEQ(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldEQ(FieldCompletedAt, v))
 }
 
-// NumOutGTE applies the GTE predicate on the "numOut" field.
-func NumOutGTE(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldGTE(FieldNumOut, v))
+// CompletedAtNEQ applies the NEQ predicate on the "completed_at" field.
+func CompletedAtNEQ(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNEQ(FieldCompletedAt, v))
 }
 
-// NumOutLT applies the LT predicate on the "numOut" field.
-func NumOutLT(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldLT(FieldNumOut, v))
+// CompletedAtIn applies the In predicate on the "completed_at" field.
+func CompletedAtIn(vs ...time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldIn(FieldCompletedAt, vs...))
 }
 
-// NumOutLTE applies the LTE predicate on the "numOut" field.
-func NumOutLTE(v int) predicate.HandlerTask {
-	return predicate.HandlerTask(sql.FieldLTE(FieldNumOut, v))
+// CompletedAtNotIn applies the NotIn predicate on the "completed_at" field.
+func CompletedAtNotIn(vs ...time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNotIn(FieldCompletedAt, vs...))
 }
 
-// HasTaskContext applies the HasEdge predicate on the "task_context" edge.
-func HasTaskContext() predicate.HandlerTask {
+// CompletedAtGT applies the GT predicate on the "completed_at" field.
+func CompletedAtGT(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldGT(FieldCompletedAt, v))
+}
+
+// CompletedAtGTE applies the GTE predicate on the "completed_at" field.
+func CompletedAtGTE(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldGTE(FieldCompletedAt, v))
+}
+
+// CompletedAtLT applies the LT predicate on the "completed_at" field.
+func CompletedAtLT(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldLT(FieldCompletedAt, v))
+}
+
+// CompletedAtLTE applies the LTE predicate on the "completed_at" field.
+func CompletedAtLTE(v time.Time) predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldLTE(FieldCompletedAt, v))
+}
+
+// CompletedAtIsNil applies the IsNil predicate on the "completed_at" field.
+func CompletedAtIsNil() predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldIsNull(FieldCompletedAt))
+}
+
+// CompletedAtNotNil applies the NotNil predicate on the "completed_at" field.
+func CompletedAtNotNil() predicate.HandlerTask {
+	return predicate.HandlerTask(sql.FieldNotNull(FieldCompletedAt))
+}
+
+// HasHandlerExecution applies the HasEdge predicate on the "handler_execution" edge.
+func HasHandlerExecution() predicate.HandlerTask {
 	return predicate.HandlerTask(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, TaskContextTable, TaskContextColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, HandlerExecutionTable, HandlerExecutionColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasTaskContextWith applies the HasEdge predicate on the "task_context" edge with a given conditions (other predicates).
-func HasTaskContextWith(preds ...predicate.TaskContext) predicate.HandlerTask {
+// HasHandlerExecutionWith applies the HasEdge predicate on the "handler_execution" edge with a given conditions (other predicates).
+func HasHandlerExecutionWith(preds ...predicate.HandlerExecution) predicate.HandlerTask {
 	return predicate.HandlerTask(func(s *sql.Selector) {
-		step := newTaskContextStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasExecutionContext applies the HasEdge predicate on the "execution_context" edge.
-func HasExecutionContext() predicate.HandlerTask {
-	return predicate.HandlerTask(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, ExecutionContextTable, ExecutionContextColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasExecutionContextWith applies the HasEdge predicate on the "execution_context" edge with a given conditions (other predicates).
-func HasExecutionContextWith(preds ...predicate.ExecutionContext) predicate.HandlerTask {
-	return predicate.HandlerTask(func(s *sql.Selector) {
-		step := newExecutionContextStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasNode applies the HasEdge predicate on the "node" edge.
-func HasNode() predicate.HandlerTask {
-	return predicate.HandlerTask(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, NodeTable, NodeColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasNodeWith applies the HasEdge predicate on the "node" edge with a given conditions (other predicates).
-func HasNodeWith(preds ...predicate.Node) predicate.HandlerTask {
-	return predicate.HandlerTask(func(s *sql.Selector) {
-		step := newNodeStep()
+		step := newHandlerExecutionStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

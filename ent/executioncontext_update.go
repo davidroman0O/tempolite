@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -27,9 +29,107 @@ func (ecu *ExecutionContextUpdate) Where(ps ...predicate.ExecutionContext) *Exec
 	return ecu
 }
 
+// SetCurrentRunID sets the "current_run_id" field.
+func (ecu *ExecutionContextUpdate) SetCurrentRunID(s string) *ExecutionContextUpdate {
+	ecu.mutation.SetCurrentRunID(s)
+	return ecu
+}
+
+// SetNillableCurrentRunID sets the "current_run_id" field if the given value is not nil.
+func (ecu *ExecutionContextUpdate) SetNillableCurrentRunID(s *string) *ExecutionContextUpdate {
+	if s != nil {
+		ecu.SetCurrentRunID(*s)
+	}
+	return ecu
+}
+
+// SetStatus sets the "status" field.
+func (ecu *ExecutionContextUpdate) SetStatus(e executioncontext.Status) *ExecutionContextUpdate {
+	ecu.mutation.SetStatus(e)
+	return ecu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (ecu *ExecutionContextUpdate) SetNillableStatus(e *executioncontext.Status) *ExecutionContextUpdate {
+	if e != nil {
+		ecu.SetStatus(*e)
+	}
+	return ecu
+}
+
+// SetStartTime sets the "start_time" field.
+func (ecu *ExecutionContextUpdate) SetStartTime(t time.Time) *ExecutionContextUpdate {
+	ecu.mutation.SetStartTime(t)
+	return ecu
+}
+
+// SetNillableStartTime sets the "start_time" field if the given value is not nil.
+func (ecu *ExecutionContextUpdate) SetNillableStartTime(t *time.Time) *ExecutionContextUpdate {
+	if t != nil {
+		ecu.SetStartTime(*t)
+	}
+	return ecu
+}
+
+// SetEndTime sets the "end_time" field.
+func (ecu *ExecutionContextUpdate) SetEndTime(t time.Time) *ExecutionContextUpdate {
+	ecu.mutation.SetEndTime(t)
+	return ecu
+}
+
+// SetNillableEndTime sets the "end_time" field if the given value is not nil.
+func (ecu *ExecutionContextUpdate) SetNillableEndTime(t *time.Time) *ExecutionContextUpdate {
+	if t != nil {
+		ecu.SetEndTime(*t)
+	}
+	return ecu
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (ecu *ExecutionContextUpdate) ClearEndTime() *ExecutionContextUpdate {
+	ecu.mutation.ClearEndTime()
+	return ecu
+}
+
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecu *ExecutionContextUpdate) AddHandlerExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.AddHandlerExecutionIDs(ids...)
+	return ecu
+}
+
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecu *ExecutionContextUpdate) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
+	}
+	return ecu.AddHandlerExecutionIDs(ids...)
+}
+
 // Mutation returns the ExecutionContextMutation object of the builder.
 func (ecu *ExecutionContextUpdate) Mutation() *ExecutionContextMutation {
 	return ecu.mutation
+}
+
+// ClearHandlerExecutions clears all "handler_executions" edges to the HandlerExecution entity.
+func (ecu *ExecutionContextUpdate) ClearHandlerExecutions() *ExecutionContextUpdate {
+	ecu.mutation.ClearHandlerExecutions()
+	return ecu
+}
+
+// RemoveHandlerExecutionIDs removes the "handler_executions" edge to HandlerExecution entities by IDs.
+func (ecu *ExecutionContextUpdate) RemoveHandlerExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.RemoveHandlerExecutionIDs(ids...)
+	return ecu
+}
+
+// RemoveHandlerExecutions removes "handler_executions" edges to HandlerExecution entities.
+func (ecu *ExecutionContextUpdate) RemoveHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
+	}
+	return ecu.RemoveHandlerExecutionIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -59,7 +159,20 @@ func (ecu *ExecutionContextUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (ecu *ExecutionContextUpdate) check() error {
+	if v, ok := ecu.mutation.Status(); ok {
+		if err := executioncontext.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ExecutionContext.status": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (ecu *ExecutionContextUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := ecu.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(executioncontext.Table, executioncontext.Columns, sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString))
 	if ps := ecu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -67,6 +180,66 @@ func (ecu *ExecutionContextUpdate) sqlSave(ctx context.Context) (n int, err erro
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := ecu.mutation.CurrentRunID(); ok {
+		_spec.SetField(executioncontext.FieldCurrentRunID, field.TypeString, value)
+	}
+	if value, ok := ecu.mutation.Status(); ok {
+		_spec.SetField(executioncontext.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := ecu.mutation.StartTime(); ok {
+		_spec.SetField(executioncontext.FieldStartTime, field.TypeTime, value)
+	}
+	if value, ok := ecu.mutation.EndTime(); ok {
+		_spec.SetField(executioncontext.FieldEndTime, field.TypeTime, value)
+	}
+	if ecu.mutation.EndTimeCleared() {
+		_spec.ClearField(executioncontext.FieldEndTime, field.TypeTime)
+	}
+	if ecu.mutation.HandlerExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.RemovedHandlerExecutionsIDs(); len(nodes) > 0 && !ecu.mutation.HandlerExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, ecu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -88,9 +261,107 @@ type ExecutionContextUpdateOne struct {
 	mutation *ExecutionContextMutation
 }
 
+// SetCurrentRunID sets the "current_run_id" field.
+func (ecuo *ExecutionContextUpdateOne) SetCurrentRunID(s string) *ExecutionContextUpdateOne {
+	ecuo.mutation.SetCurrentRunID(s)
+	return ecuo
+}
+
+// SetNillableCurrentRunID sets the "current_run_id" field if the given value is not nil.
+func (ecuo *ExecutionContextUpdateOne) SetNillableCurrentRunID(s *string) *ExecutionContextUpdateOne {
+	if s != nil {
+		ecuo.SetCurrentRunID(*s)
+	}
+	return ecuo
+}
+
+// SetStatus sets the "status" field.
+func (ecuo *ExecutionContextUpdateOne) SetStatus(e executioncontext.Status) *ExecutionContextUpdateOne {
+	ecuo.mutation.SetStatus(e)
+	return ecuo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (ecuo *ExecutionContextUpdateOne) SetNillableStatus(e *executioncontext.Status) *ExecutionContextUpdateOne {
+	if e != nil {
+		ecuo.SetStatus(*e)
+	}
+	return ecuo
+}
+
+// SetStartTime sets the "start_time" field.
+func (ecuo *ExecutionContextUpdateOne) SetStartTime(t time.Time) *ExecutionContextUpdateOne {
+	ecuo.mutation.SetStartTime(t)
+	return ecuo
+}
+
+// SetNillableStartTime sets the "start_time" field if the given value is not nil.
+func (ecuo *ExecutionContextUpdateOne) SetNillableStartTime(t *time.Time) *ExecutionContextUpdateOne {
+	if t != nil {
+		ecuo.SetStartTime(*t)
+	}
+	return ecuo
+}
+
+// SetEndTime sets the "end_time" field.
+func (ecuo *ExecutionContextUpdateOne) SetEndTime(t time.Time) *ExecutionContextUpdateOne {
+	ecuo.mutation.SetEndTime(t)
+	return ecuo
+}
+
+// SetNillableEndTime sets the "end_time" field if the given value is not nil.
+func (ecuo *ExecutionContextUpdateOne) SetNillableEndTime(t *time.Time) *ExecutionContextUpdateOne {
+	if t != nil {
+		ecuo.SetEndTime(*t)
+	}
+	return ecuo
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (ecuo *ExecutionContextUpdateOne) ClearEndTime() *ExecutionContextUpdateOne {
+	ecuo.mutation.ClearEndTime()
+	return ecuo
+}
+
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecuo *ExecutionContextUpdateOne) AddHandlerExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.AddHandlerExecutionIDs(ids...)
+	return ecuo
+}
+
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecuo *ExecutionContextUpdateOne) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
+	}
+	return ecuo.AddHandlerExecutionIDs(ids...)
+}
+
 // Mutation returns the ExecutionContextMutation object of the builder.
 func (ecuo *ExecutionContextUpdateOne) Mutation() *ExecutionContextMutation {
 	return ecuo.mutation
+}
+
+// ClearHandlerExecutions clears all "handler_executions" edges to the HandlerExecution entity.
+func (ecuo *ExecutionContextUpdateOne) ClearHandlerExecutions() *ExecutionContextUpdateOne {
+	ecuo.mutation.ClearHandlerExecutions()
+	return ecuo
+}
+
+// RemoveHandlerExecutionIDs removes the "handler_executions" edge to HandlerExecution entities by IDs.
+func (ecuo *ExecutionContextUpdateOne) RemoveHandlerExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.RemoveHandlerExecutionIDs(ids...)
+	return ecuo
+}
+
+// RemoveHandlerExecutions removes "handler_executions" edges to HandlerExecution entities.
+func (ecuo *ExecutionContextUpdateOne) RemoveHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
+	}
+	return ecuo.RemoveHandlerExecutionIDs(ids...)
 }
 
 // Where appends a list predicates to the ExecutionContextUpdate builder.
@@ -133,7 +404,20 @@ func (ecuo *ExecutionContextUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (ecuo *ExecutionContextUpdateOne) check() error {
+	if v, ok := ecuo.mutation.Status(); ok {
+		if err := executioncontext.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ExecutionContext.status": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (ecuo *ExecutionContextUpdateOne) sqlSave(ctx context.Context) (_node *ExecutionContext, err error) {
+	if err := ecuo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(executioncontext.Table, executioncontext.Columns, sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString))
 	id, ok := ecuo.mutation.ID()
 	if !ok {
@@ -158,6 +442,66 @@ func (ecuo *ExecutionContextUpdateOne) sqlSave(ctx context.Context) (_node *Exec
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := ecuo.mutation.CurrentRunID(); ok {
+		_spec.SetField(executioncontext.FieldCurrentRunID, field.TypeString, value)
+	}
+	if value, ok := ecuo.mutation.Status(); ok {
+		_spec.SetField(executioncontext.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := ecuo.mutation.StartTime(); ok {
+		_spec.SetField(executioncontext.FieldStartTime, field.TypeTime, value)
+	}
+	if value, ok := ecuo.mutation.EndTime(); ok {
+		_spec.SetField(executioncontext.FieldEndTime, field.TypeTime, value)
+	}
+	if ecuo.mutation.EndTimeCleared() {
+		_spec.ClearField(executioncontext.FieldEndTime, field.TypeTime)
+	}
+	if ecuo.mutation.HandlerExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.RemovedHandlerExecutionsIDs(); len(nodes) > 0 && !ecuo.mutation.HandlerExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ExecutionContext{config: ecuo.config}
 	_spec.Assign = _node.assignValues

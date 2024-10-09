@@ -14,69 +14,49 @@ const (
 	Label = "handler_task"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldHandlerName holds the string denoting the handlername field in the database.
+	// FieldHandlerName holds the string denoting the handler_name field in the database.
 	FieldHandlerName = "handler_name"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
 	// FieldResult holds the string denoting the result field in the database.
 	FieldResult = "result"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
-	// FieldNumIn holds the string denoting the numin field in the database.
-	FieldNumIn = "num_in"
-	// FieldNumOut holds the string denoting the numout field in the database.
-	FieldNumOut = "num_out"
-	// EdgeTaskContext holds the string denoting the task_context edge name in mutations.
-	EdgeTaskContext = "task_context"
-	// EdgeExecutionContext holds the string denoting the execution_context edge name in mutations.
-	EdgeExecutionContext = "execution_context"
-	// EdgeNode holds the string denoting the node edge name in mutations.
-	EdgeNode = "node"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
+	// FieldCreatedAt holds the string denoting the created_at field in the database.
+	FieldCreatedAt = "created_at"
+	// FieldCompletedAt holds the string denoting the completed_at field in the database.
+	FieldCompletedAt = "completed_at"
+	// EdgeHandlerExecution holds the string denoting the handler_execution edge name in mutations.
+	EdgeHandlerExecution = "handler_execution"
 	// Table holds the table name of the handlertask in the database.
 	Table = "handler_tasks"
-	// TaskContextTable is the table that holds the task_context relation/edge.
-	TaskContextTable = "handler_tasks"
-	// TaskContextInverseTable is the table name for the TaskContext entity.
-	// It exists in this package in order to avoid circular dependency with the "taskcontext" package.
-	TaskContextInverseTable = "task_contexts"
-	// TaskContextColumn is the table column denoting the task_context relation/edge.
-	TaskContextColumn = "handler_task_task_context"
-	// ExecutionContextTable is the table that holds the execution_context relation/edge.
-	ExecutionContextTable = "handler_tasks"
-	// ExecutionContextInverseTable is the table name for the ExecutionContext entity.
-	// It exists in this package in order to avoid circular dependency with the "executioncontext" package.
-	ExecutionContextInverseTable = "execution_contexts"
-	// ExecutionContextColumn is the table column denoting the execution_context relation/edge.
-	ExecutionContextColumn = "handler_task_execution_context"
-	// NodeTable is the table that holds the node relation/edge.
-	NodeTable = "handler_tasks"
-	// NodeInverseTable is the table name for the Node entity.
-	// It exists in this package in order to avoid circular dependency with the "node" package.
-	NodeInverseTable = "nodes"
-	// NodeColumn is the table column denoting the node relation/edge.
-	NodeColumn = "node_handler_task"
+	// HandlerExecutionTable is the table that holds the handler_execution relation/edge.
+	HandlerExecutionTable = "handler_tasks"
+	// HandlerExecutionInverseTable is the table name for the HandlerExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "handlerexecution" package.
+	HandlerExecutionInverseTable = "handler_executions"
+	// HandlerExecutionColumn is the table column denoting the handler_execution relation/edge.
+	HandlerExecutionColumn = "handler_execution_tasks"
 )
 
 // Columns holds all SQL columns for handlertask fields.
 var Columns = []string{
 	FieldID,
 	FieldHandlerName,
-	FieldStatus,
 	FieldPayload,
 	FieldResult,
 	FieldError,
-	FieldNumIn,
-	FieldNumOut,
+	FieldStatus,
+	FieldCreatedAt,
+	FieldCompletedAt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "handler_tasks"
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
-	"handler_task_task_context",
-	"handler_task_execution_context",
-	"node_handler_task",
+	"handler_execution_tasks",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -99,12 +79,10 @@ type Status string
 
 // Status values.
 const (
-	StatusPending    Status = "Pending"
-	StatusInProgress Status = "InProgress"
-	StatusCompleted  Status = "Completed"
-	StatusFailed     Status = "Failed"
-	StatusCancelled  Status = "Cancelled"
-	StatusTerminated Status = "Terminated"
+	StatusPending    Status = "pending"
+	StatusInProgress Status = "in_progress"
+	StatusCompleted  Status = "completed"
+	StatusFailed     Status = "failed"
 )
 
 func (s Status) String() string {
@@ -114,7 +92,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusInProgress, StatusCompleted, StatusFailed, StatusCancelled, StatusTerminated:
+	case StatusPending, StatusInProgress, StatusCompleted, StatusFailed:
 		return nil
 	default:
 		return fmt.Errorf("handlertask: invalid enum value for status field: %q", s)
@@ -129,7 +107,7 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByHandlerName orders the results by the handlerName field.
+// ByHandlerName orders the results by the handler_name field.
 func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
 }
@@ -139,54 +117,26 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByNumIn orders the results by the numIn field.
-func ByNumIn(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldNumIn, opts...).ToFunc()
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByNumOut orders the results by the numOut field.
-func ByNumOut(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldNumOut, opts...).ToFunc()
+// ByCompletedAt orders the results by the completed_at field.
+func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompletedAt, opts...).ToFunc()
 }
 
-// ByTaskContextField orders the results by task_context field.
-func ByTaskContextField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByHandlerExecutionField orders the results by handler_execution field.
+func ByHandlerExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newTaskContextStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborTerms(s, newHandlerExecutionStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByExecutionContextField orders the results by execution_context field.
-func ByExecutionContextField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newExecutionContextStep(), sql.OrderByField(field, opts...))
-	}
-}
-
-// ByNodeField orders the results by node field.
-func ByNodeField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newNodeStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newTaskContextStep() *sqlgraph.Step {
+func newHandlerExecutionStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(TaskContextInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, TaskContextTable, TaskContextColumn),
-	)
-}
-func newExecutionContextStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ExecutionContextInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, ExecutionContextTable, ExecutionContextColumn),
-	)
-}
-func newNodeStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(NodeInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2O, true, NodeTable, NodeColumn),
+		sqlgraph.To(HandlerExecutionInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, HandlerExecutionTable, HandlerExecutionColumn),
 	)
 }
