@@ -360,24 +360,28 @@ func (t *Tempolite) WaitFor(ctx context.Context, id string) (interface{}, error)
 				}
 				return handlerInfo.toInterface(taskEntity.Result)
 			case task.StatusFailed:
-				// Check if there's a retry
+				// Check if there's a retry task associated with the same ExecutionUnit
+				execUnitID, err := taskEntity.QueryExecutionUnit().OnlyID(dbCtx)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get execution unit ID: %w", err)
+				}
 				retryTask, err := t.client.Task.Query().
-					Where(task.HandlerNameEQ(taskEntity.HandlerName)).
 					Where(
-						task.Or(
-							task.StatusEQ(task.StatusPending),
-							task.StatusEQ(task.StatusInProgress),
-						),
+						task.HasExecutionUnitWith(executionunit.IDEQ(execUnitID)),
+						task.IDNEQ(taskEntity.ID),
+						task.CreatedAtGT(taskEntity.CreatedAt),
 					).
-					Where(task.CreatedAtGT(taskEntity.CreatedAt)).
 					Order(ent.Desc(task.FieldCreatedAt)).
 					First(dbCtx)
 				if err == nil {
 					// Found a retry, wait for it
 					return t.WaitFor(ctx, retryTask.ID)
+				} else if !ent.IsNotFound(err) {
+					return nil, fmt.Errorf("failed to query retry task: %w", err)
 				}
 				// No retry found, return the error
 				return nil, fmt.Errorf("task failed: %s", string(taskEntity.Error))
+
 			}
 		}
 	}
