@@ -12,6 +12,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/executionunit"
 	"github.com/davidroman0O/go-tempolite/ent/task"
 	"github.com/davidroman0O/retrypool"
+	"github.com/google/uuid"
 )
 
 type TaskPool struct {
@@ -122,7 +123,7 @@ func (w *TaskWorker) updateTaskFailure(ctx context.Context, job *ent.Task, execU
 	}
 
 	if execUnit != nil {
-		_, updateErr = tx.ExecutionUnit.UpdateOne(execUnit).
+		_, updateErr = tx.ExecutionUnit.UpdateOneID(execUnit.ID).
 			SetStatus(executionunit.StatusFailed).
 			SetEndTime(time.Now()).
 			Save(ctx)
@@ -201,7 +202,7 @@ func (p *TaskPool) onTaskFailure(controller retrypool.WorkerController[*ent.Task
 	}
 
 	if execUnit.RetryCount < execUnit.MaxRetries {
-		execUnit, err = tx.ExecutionUnit.UpdateOne(execUnit).
+		execUnit, err = tx.ExecutionUnit.UpdateOneID(execUnit.ID).
 			SetRetryCount(execUnit.RetryCount + 1).
 			SetStatus(executionunit.StatusPending).
 			Save(ctx)
@@ -212,6 +213,7 @@ func (p *TaskPool) onTaskFailure(controller retrypool.WorkerController[*ent.Task
 
 		newJob, err := tx.Task.
 			Create().
+			SetID(uuid.New().String()).
 			SetType(failedTask.Type).
 			SetHandlerName(failedTask.HandlerName).
 			SetPayload(failedTask.Payload).

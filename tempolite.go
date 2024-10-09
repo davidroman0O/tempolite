@@ -284,12 +284,9 @@ func (t *Tempolite) Enqueue(ctx context.Context, handler interface{}, params int
 	}
 
 	if opts.parentID != "" {
-		parentExec, err := tx.ExecutionUnit.Get(ctx, opts.parentID)
-		if err != nil {
-			return "", fmt.Errorf("failed to get parent execution unit: %w", err)
-		}
-		execUnit, err = tx.ExecutionUnit.UpdateOne(execUnit).
-			SetParent(parentExec).
+		parentExecID := opts.parentID
+		execUnit, err = tx.ExecutionUnit.UpdateOneID(execUnit.ID).
+			SetParentID(parentExecID).
 			Save(ctx)
 		if err != nil {
 			return "", fmt.Errorf("failed to set parent execution unit: %w", err)
