@@ -12,12 +12,11 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/go-tempolite/ent/compensationtask"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/sagatask"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffecttask"
+	"github.com/davidroman0O/go-tempolite/ent/executionunit"
+	"github.com/davidroman0O/go-tempolite/ent/sagacompensation"
+	"github.com/davidroman0O/go-tempolite/ent/sagatransaction"
+	"github.com/davidroman0O/go-tempolite/ent/task"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -78,12 +77,11 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			compensationtask.Table: compensationtask.ValidColumn,
 			executioncontext.Table: executioncontext.ValidColumn,
-			handlerexecution.Table: handlerexecution.ValidColumn,
-			handlertask.Table:      handlertask.ValidColumn,
-			sagatask.Table:         sagatask.ValidColumn,
-			sideeffecttask.Table:   sideeffecttask.ValidColumn,
+			executionunit.Table:    executionunit.ValidColumn,
+			sagacompensation.Table: sagacompensation.ValidColumn,
+			sagatransaction.Table:  sagatransaction.ValidColumn,
+			task.Table:             task.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

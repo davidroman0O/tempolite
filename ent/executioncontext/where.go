@@ -255,21 +255,21 @@ func EndTimeNotNil() predicate.ExecutionContext {
 	return predicate.ExecutionContext(sql.FieldNotNull(FieldEndTime))
 }
 
-// HasHandlerExecutions applies the HasEdge predicate on the "handler_executions" edge.
-func HasHandlerExecutions() predicate.ExecutionContext {
+// HasExecutionUnits applies the HasEdge predicate on the "execution_units" edge.
+func HasExecutionUnits() predicate.ExecutionContext {
 	return predicate.ExecutionContext(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, HandlerExecutionsTable, HandlerExecutionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, ExecutionUnitsTable, ExecutionUnitsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasHandlerExecutionsWith applies the HasEdge predicate on the "handler_executions" edge with a given conditions (other predicates).
-func HasHandlerExecutionsWith(preds ...predicate.HandlerExecution) predicate.ExecutionContext {
+// HasExecutionUnitsWith applies the HasEdge predicate on the "execution_units" edge with a given conditions (other predicates).
+func HasExecutionUnitsWith(preds ...predicate.ExecutionUnit) predicate.ExecutionContext {
 	return predicate.ExecutionContext(func(s *sql.Selector) {
-		step := newHandlerExecutionsStep()
+		step := newExecutionUnitsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

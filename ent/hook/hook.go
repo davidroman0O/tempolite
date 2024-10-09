@@ -9,18 +9,6 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent"
 )
 
-// The CompensationTaskFunc type is an adapter to allow the use of ordinary
-// function as CompensationTask mutator.
-type CompensationTaskFunc func(context.Context, *ent.CompensationTaskMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f CompensationTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.CompensationTaskMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CompensationTaskMutation", m)
-}
-
 // The ExecutionContextFunc type is an adapter to allow the use of ordinary
 // function as ExecutionContext mutator.
 type ExecutionContextFunc func(context.Context, *ent.ExecutionContextMutation) (ent.Value, error)
@@ -33,52 +21,52 @@ func (f ExecutionContextFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionContextMutation", m)
 }
 
-// The HandlerExecutionFunc type is an adapter to allow the use of ordinary
-// function as HandlerExecution mutator.
-type HandlerExecutionFunc func(context.Context, *ent.HandlerExecutionMutation) (ent.Value, error)
+// The ExecutionUnitFunc type is an adapter to allow the use of ordinary
+// function as ExecutionUnit mutator.
+type ExecutionUnitFunc func(context.Context, *ent.ExecutionUnitMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f HandlerExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.HandlerExecutionMutation); ok {
+func (f ExecutionUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExecutionUnitMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HandlerExecutionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionUnitMutation", m)
 }
 
-// The HandlerTaskFunc type is an adapter to allow the use of ordinary
-// function as HandlerTask mutator.
-type HandlerTaskFunc func(context.Context, *ent.HandlerTaskMutation) (ent.Value, error)
+// The SagaCompensationFunc type is an adapter to allow the use of ordinary
+// function as SagaCompensation mutator.
+type SagaCompensationFunc func(context.Context, *ent.SagaCompensationMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f HandlerTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.HandlerTaskMutation); ok {
+func (f SagaCompensationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SagaCompensationMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HandlerTaskMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaCompensationMutation", m)
 }
 
-// The SagaTaskFunc type is an adapter to allow the use of ordinary
-// function as SagaTask mutator.
-type SagaTaskFunc func(context.Context, *ent.SagaTaskMutation) (ent.Value, error)
+// The SagaTransactionFunc type is an adapter to allow the use of ordinary
+// function as SagaTransaction mutator.
+type SagaTransactionFunc func(context.Context, *ent.SagaTransactionMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f SagaTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SagaTaskMutation); ok {
+func (f SagaTransactionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SagaTransactionMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaTaskMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaTransactionMutation", m)
 }
 
-// The SideEffectTaskFunc type is an adapter to allow the use of ordinary
-// function as SideEffectTask mutator.
-type SideEffectTaskFunc func(context.Context, *ent.SideEffectTaskMutation) (ent.Value, error)
+// The TaskFunc type is an adapter to allow the use of ordinary
+// function as Task mutator.
+type TaskFunc func(context.Context, *ent.TaskMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f SideEffectTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SideEffectTaskMutation); ok {
+func (f TaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TaskMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SideEffectTaskMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TaskMutation", m)
 }
 
 // Condition is a hook condition function.

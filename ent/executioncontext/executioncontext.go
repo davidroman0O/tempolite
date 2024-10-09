@@ -22,17 +22,17 @@ const (
 	FieldStartTime = "start_time"
 	// FieldEndTime holds the string denoting the end_time field in the database.
 	FieldEndTime = "end_time"
-	// EdgeHandlerExecutions holds the string denoting the handler_executions edge name in mutations.
-	EdgeHandlerExecutions = "handler_executions"
+	// EdgeExecutionUnits holds the string denoting the execution_units edge name in mutations.
+	EdgeExecutionUnits = "execution_units"
 	// Table holds the table name of the executioncontext in the database.
 	Table = "execution_contexts"
-	// HandlerExecutionsTable is the table that holds the handler_executions relation/edge.
-	HandlerExecutionsTable = "handler_executions"
-	// HandlerExecutionsInverseTable is the table name for the HandlerExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "handlerexecution" package.
-	HandlerExecutionsInverseTable = "handler_executions"
-	// HandlerExecutionsColumn is the table column denoting the handler_executions relation/edge.
-	HandlerExecutionsColumn = "execution_context_handler_executions"
+	// ExecutionUnitsTable is the table that holds the execution_units relation/edge.
+	ExecutionUnitsTable = "execution_units"
+	// ExecutionUnitsInverseTable is the table name for the ExecutionUnit entity.
+	// It exists in this package in order to avoid circular dependency with the "executionunit" package.
+	ExecutionUnitsInverseTable = "execution_units"
+	// ExecutionUnitsColumn is the table column denoting the execution_units relation/edge.
+	ExecutionUnitsColumn = "execution_context_execution_units"
 )
 
 // Columns holds all SQL columns for executioncontext fields.
@@ -106,23 +106,23 @@ func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndTime, opts...).ToFunc()
 }
 
-// ByHandlerExecutionsCount orders the results by handler_executions count.
-func ByHandlerExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+// ByExecutionUnitsCount orders the results by execution_units count.
+func ByExecutionUnitsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newHandlerExecutionsStep(), opts...)
+		sqlgraph.OrderByNeighborsCount(s, newExecutionUnitsStep(), opts...)
 	}
 }
 
-// ByHandlerExecutions orders the results by handler_executions terms.
-func ByHandlerExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByExecutionUnits orders the results by execution_units terms.
+func ByExecutionUnits(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newHandlerExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newExecutionUnitsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-func newHandlerExecutionsStep() *sqlgraph.Step {
+func newExecutionUnitsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(HandlerExecutionsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, HandlerExecutionsTable, HandlerExecutionsColumn),
+		sqlgraph.To(ExecutionUnitsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionUnitsTable, ExecutionUnitsColumn),
 	)
 }

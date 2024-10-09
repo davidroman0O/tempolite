@@ -6,20 +6,17 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-// CompensationTask is the predicate function for compensationtask builders.
-type CompensationTask func(*sql.Selector)
-
 // ExecutionContext is the predicate function for executioncontext builders.
 type ExecutionContext func(*sql.Selector)
 
-// HandlerExecution is the predicate function for handlerexecution builders.
-type HandlerExecution func(*sql.Selector)
+// ExecutionUnit is the predicate function for executionunit builders.
+type ExecutionUnit func(*sql.Selector)
 
-// HandlerTask is the predicate function for handlertask builders.
-type HandlerTask func(*sql.Selector)
+// SagaCompensation is the predicate function for sagacompensation builders.
+type SagaCompensation func(*sql.Selector)
 
-// SagaTask is the predicate function for sagatask builders.
-type SagaTask func(*sql.Selector)
+// SagaTransaction is the predicate function for sagatransaction builders.
+type SagaTransaction func(*sql.Selector)
 
-// SideEffectTask is the predicate function for sideeffecttask builders.
-type SideEffectTask func(*sql.Selector)
+// Task is the predicate function for task builders.
+type Task func(*sql.Selector)

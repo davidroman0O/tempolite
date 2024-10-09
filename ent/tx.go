@@ -12,18 +12,16 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
-	// CompensationTask is the client for interacting with the CompensationTask builders.
-	CompensationTask *CompensationTaskClient
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
 	ExecutionContext *ExecutionContextClient
-	// HandlerExecution is the client for interacting with the HandlerExecution builders.
-	HandlerExecution *HandlerExecutionClient
-	// HandlerTask is the client for interacting with the HandlerTask builders.
-	HandlerTask *HandlerTaskClient
-	// SagaTask is the client for interacting with the SagaTask builders.
-	SagaTask *SagaTaskClient
-	// SideEffectTask is the client for interacting with the SideEffectTask builders.
-	SideEffectTask *SideEffectTaskClient
+	// ExecutionUnit is the client for interacting with the ExecutionUnit builders.
+	ExecutionUnit *ExecutionUnitClient
+	// SagaCompensation is the client for interacting with the SagaCompensation builders.
+	SagaCompensation *SagaCompensationClient
+	// SagaTransaction is the client for interacting with the SagaTransaction builders.
+	SagaTransaction *SagaTransactionClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
 
 	// lazily loaded.
 	client     *Client
@@ -155,12 +153,11 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
-	tx.CompensationTask = NewCompensationTaskClient(tx.config)
 	tx.ExecutionContext = NewExecutionContextClient(tx.config)
-	tx.HandlerExecution = NewHandlerExecutionClient(tx.config)
-	tx.HandlerTask = NewHandlerTaskClient(tx.config)
-	tx.SagaTask = NewSagaTaskClient(tx.config)
-	tx.SideEffectTask = NewSideEffectTaskClient(tx.config)
+	tx.ExecutionUnit = NewExecutionUnitClient(tx.config)
+	tx.SagaCompensation = NewSagaCompensationClient(tx.config)
+	tx.SagaTransaction = NewSagaTransactionClient(tx.config)
+	tx.Task = NewTaskClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
@@ -170,7 +167,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: CompensationTask.QueryXXX(), the query will be executed
+// applies a query, for example: ExecutionContext.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

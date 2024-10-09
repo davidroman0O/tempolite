@@ -13,18 +13,18 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionunit"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
 // ExecutionContextQuery is the builder for querying ExecutionContext entities.
 type ExecutionContextQuery struct {
 	config
-	ctx                   *QueryContext
-	order                 []executioncontext.OrderOption
-	inters                []Interceptor
-	predicates            []predicate.ExecutionContext
-	withHandlerExecutions *HandlerExecutionQuery
+	ctx                *QueryContext
+	order              []executioncontext.OrderOption
+	inters             []Interceptor
+	predicates         []predicate.ExecutionContext
+	withExecutionUnits *ExecutionUnitQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -61,9 +61,9 @@ func (ecq *ExecutionContextQuery) Order(o ...executioncontext.OrderOption) *Exec
 	return ecq
 }
 
-// QueryHandlerExecutions chains the current query on the "handler_executions" edge.
-func (ecq *ExecutionContextQuery) QueryHandlerExecutions() *HandlerExecutionQuery {
-	query := (&HandlerExecutionClient{config: ecq.config}).Query()
+// QueryExecutionUnits chains the current query on the "execution_units" edge.
+func (ecq *ExecutionContextQuery) QueryExecutionUnits() *ExecutionUnitQuery {
+	query := (&ExecutionUnitClient{config: ecq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := ecq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -74,8 +74,8 @@ func (ecq *ExecutionContextQuery) QueryHandlerExecutions() *HandlerExecutionQuer
 		}
 		step := sqlgraph.NewStep(
 			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, selector),
-			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.HandlerExecutionsTable, executioncontext.HandlerExecutionsColumn),
+			sqlgraph.To(executionunit.Table, executionunit.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.ExecutionUnitsTable, executioncontext.ExecutionUnitsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(ecq.driver.Dialect(), step)
 		return fromU, nil
@@ -270,26 +270,26 @@ func (ecq *ExecutionContextQuery) Clone() *ExecutionContextQuery {
 		return nil
 	}
 	return &ExecutionContextQuery{
-		config:                ecq.config,
-		ctx:                   ecq.ctx.Clone(),
-		order:                 append([]executioncontext.OrderOption{}, ecq.order...),
-		inters:                append([]Interceptor{}, ecq.inters...),
-		predicates:            append([]predicate.ExecutionContext{}, ecq.predicates...),
-		withHandlerExecutions: ecq.withHandlerExecutions.Clone(),
+		config:             ecq.config,
+		ctx:                ecq.ctx.Clone(),
+		order:              append([]executioncontext.OrderOption{}, ecq.order...),
+		inters:             append([]Interceptor{}, ecq.inters...),
+		predicates:         append([]predicate.ExecutionContext{}, ecq.predicates...),
+		withExecutionUnits: ecq.withExecutionUnits.Clone(),
 		// clone intermediate query.
 		sql:  ecq.sql.Clone(),
 		path: ecq.path,
 	}
 }
 
-// WithHandlerExecutions tells the query-builder to eager-load the nodes that are connected to
-// the "handler_executions" edge. The optional arguments are used to configure the query builder of the edge.
-func (ecq *ExecutionContextQuery) WithHandlerExecutions(opts ...func(*HandlerExecutionQuery)) *ExecutionContextQuery {
-	query := (&HandlerExecutionClient{config: ecq.config}).Query()
+// WithExecutionUnits tells the query-builder to eager-load the nodes that are connected to
+// the "execution_units" edge. The optional arguments are used to configure the query builder of the edge.
+func (ecq *ExecutionContextQuery) WithExecutionUnits(opts ...func(*ExecutionUnitQuery)) *ExecutionContextQuery {
+	query := (&ExecutionUnitClient{config: ecq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	ecq.withHandlerExecutions = query
+	ecq.withExecutionUnits = query
 	return ecq
 }
 
@@ -372,7 +372,7 @@ func (ecq *ExecutionContextQuery) sqlAll(ctx context.Context, hooks ...queryHook
 		nodes       = []*ExecutionContext{}
 		_spec       = ecq.querySpec()
 		loadedTypes = [1]bool{
-			ecq.withHandlerExecutions != nil,
+			ecq.withExecutionUnits != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -393,11 +393,11 @@ func (ecq *ExecutionContextQuery) sqlAll(ctx context.Context, hooks ...queryHook
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := ecq.withHandlerExecutions; query != nil {
-		if err := ecq.loadHandlerExecutions(ctx, query, nodes,
-			func(n *ExecutionContext) { n.Edges.HandlerExecutions = []*HandlerExecution{} },
-			func(n *ExecutionContext, e *HandlerExecution) {
-				n.Edges.HandlerExecutions = append(n.Edges.HandlerExecutions, e)
+	if query := ecq.withExecutionUnits; query != nil {
+		if err := ecq.loadExecutionUnits(ctx, query, nodes,
+			func(n *ExecutionContext) { n.Edges.ExecutionUnits = []*ExecutionUnit{} },
+			func(n *ExecutionContext, e *ExecutionUnit) {
+				n.Edges.ExecutionUnits = append(n.Edges.ExecutionUnits, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -405,7 +405,7 @@ func (ecq *ExecutionContextQuery) sqlAll(ctx context.Context, hooks ...queryHook
 	return nodes, nil
 }
 
-func (ecq *ExecutionContextQuery) loadHandlerExecutions(ctx context.Context, query *HandlerExecutionQuery, nodes []*ExecutionContext, init func(*ExecutionContext), assign func(*ExecutionContext, *HandlerExecution)) error {
+func (ecq *ExecutionContextQuery) loadExecutionUnits(ctx context.Context, query *ExecutionUnitQuery, nodes []*ExecutionContext, init func(*ExecutionContext), assign func(*ExecutionContext, *ExecutionUnit)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*ExecutionContext)
 	for i := range nodes {
@@ -416,21 +416,21 @@ func (ecq *ExecutionContextQuery) loadHandlerExecutions(ctx context.Context, que
 		}
 	}
 	query.withFKs = true
-	query.Where(predicate.HandlerExecution(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(executioncontext.HandlerExecutionsColumn), fks...))
+	query.Where(predicate.ExecutionUnit(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(executioncontext.ExecutionUnitsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.execution_context_handler_executions
+		fk := n.execution_context_execution_units
 		if fk == nil {
-			return fmt.Errorf(`foreign-key "execution_context_handler_executions" is nil for node %v`, n.ID)
+			return fmt.Errorf(`foreign-key "execution_context_execution_units" is nil for node %v`, n.ID)
 		}
 		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "execution_context_handler_executions" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "execution_context_execution_units" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

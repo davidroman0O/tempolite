@@ -11,7 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionunit"
 )
 
 // ExecutionContextCreate is the builder for creating a ExecutionContext entity.
@@ -59,19 +59,19 @@ func (ecc *ExecutionContextCreate) SetID(s string) *ExecutionContextCreate {
 	return ecc
 }
 
-// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
-func (ecc *ExecutionContextCreate) AddHandlerExecutionIDs(ids ...string) *ExecutionContextCreate {
-	ecc.mutation.AddHandlerExecutionIDs(ids...)
+// AddExecutionUnitIDs adds the "execution_units" edge to the ExecutionUnit entity by IDs.
+func (ecc *ExecutionContextCreate) AddExecutionUnitIDs(ids ...string) *ExecutionContextCreate {
+	ecc.mutation.AddExecutionUnitIDs(ids...)
 	return ecc
 }
 
-// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
-func (ecc *ExecutionContextCreate) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextCreate {
-	ids := make([]string, len(h))
-	for i := range h {
-		ids[i] = h[i].ID
+// AddExecutionUnits adds the "execution_units" edges to the ExecutionUnit entity.
+func (ecc *ExecutionContextCreate) AddExecutionUnits(e ...*ExecutionUnit) *ExecutionContextCreate {
+	ids := make([]string, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
 	}
-	return ecc.AddHandlerExecutionIDs(ids...)
+	return ecc.AddExecutionUnitIDs(ids...)
 }
 
 // Mutation returns the ExecutionContextMutation object of the builder.
@@ -173,15 +173,15 @@ func (ecc *ExecutionContextCreate) createSpec() (*ExecutionContext, *sqlgraph.Cr
 		_spec.SetField(executioncontext.FieldEndTime, field.TypeTime, value)
 		_node.EndTime = value
 	}
-	if nodes := ecc.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
+	if nodes := ecc.mutation.ExecutionUnitsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.HandlerExecutionsTable,
-			Columns: []string{executioncontext.HandlerExecutionsColumn},
+			Table:   executioncontext.ExecutionUnitsTable,
+			Columns: []string{executioncontext.ExecutionUnitsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

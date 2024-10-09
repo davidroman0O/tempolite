@@ -3,22 +3,18 @@ package tempolite
 import (
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 
 	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/go-tempolite/ent/executionunit"
+	"github.com/davidroman0O/go-tempolite/ent/task"
 )
 
-// Scheduler is responsible for pulling tasks from the database and dispatching them to the handler pool
 type Scheduler struct {
 	tp   *Tempolite
 	done chan struct{}
 }
 
-// NewScheduler creates a new Scheduler instance
 func NewScheduler(tp *Tempolite) *Scheduler {
 	s := &Scheduler{
 		tp:   tp,
@@ -30,84 +26,85 @@ func NewScheduler(tp *Tempolite) *Scheduler {
 	return s
 }
 
-// Close stops the scheduler
 func (s *Scheduler) Close() {
 	close(s.done)
 }
 
-// run is the main loop of the scheduler
 func (s *Scheduler) run() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-s.done:
 			return
-		default:
-			// Fetch and process pending tasks
+		case <-ticker.C:
 			if err := s.processPendingTasks(); err != nil {
 				log.Printf("Error processing pending tasks: %v", err)
 			}
-			runtime.Gosched() // Allow other goroutines to run
 		}
 	}
 }
 
-// processPendingTasks fetches pending tasks and dispatches them to the handler pool
 func (s *Scheduler) processPendingTasks() error {
+	ctx := s.tp.ctx
+
 	// Query for pending tasks
-	pendingTasks, err := s.tp.client.HandlerTask.
+	pendingTasks, err := s.tp.client.Task.
 		Query().
-		Where(handlertask.StatusEQ(handlertask.StatusPending)).
-		WithHandlerExecution().
-		Order(ent.Asc(handlertask.FieldCreatedAt)).
-		Limit(1).
-		All(s.tp.ctx)
+		Where(task.StatusEQ(task.StatusPending)).
+		WithExecutionUnit().
+		Order(ent.Asc(task.FieldCreatedAt)).
+		Limit(10).
+		All(ctx)
 
 	if err != nil {
-		return fmt.Errorf("error querying pending tasks: %v", err)
+		return fmt.Errorf("error querying pending tasks: %w", err)
 	}
 
-	for _, task := range pendingTasks {
-		if task.Edges.HandlerExecution == nil {
-			log.Printf("Task %s has no associated HandlerExecution", task.ID)
+	for _, taskPending := range pendingTasks {
+		if taskPending.Edges.ExecutionUnit == nil {
+			log.Printf("Task %s has no associated ExecutionUnit", taskPending.ID)
 			continue
 		}
 
 		// Check if the parent task (if any) has completed
-		if task.Edges.HandlerExecution.Edges.Parent != nil {
-			parentStatus := task.Edges.HandlerExecution.Edges.Parent.Status
-			if parentStatus != handlerexecution.StatusCompleted {
-				log.Printf("Parent task for %s is not completed. Current status: %s", task.ID, parentStatus)
+		if taskPending.Edges.ExecutionUnit.Edges.Parent != nil {
+			parentStatus := taskPending.Edges.ExecutionUnit.Edges.Parent.Status
+			if parentStatus != executionunit.StatusCompleted {
+				log.Printf("Parent task for %s is not completed. Current status: %s", taskPending.ID, parentStatus)
 				continue
 			}
 		}
 
-		// Dispatch the task to the handler pool
-		if err := s.tp.handlerTaskPool.pool.
-			Dispatch(
-				task,
-				retrypool.WithMaxDuration[*ent.HandlerTask](time.Minute*10), // 10m
-				retrypool.WithTimeLimit[*ent.HandlerTask](time.Minute*30),   // 30m
-				retrypool.WithImmediateRetry[*ent.HandlerTask](),            // failed track jobs will be retried immediately
-				// retrypool.WithPanicOnTimeout[*ent.HandlerTask](),
-			); err != nil {
-			log.Printf("Error dispatching task %s: %v", task.ID, err)
+		// Dispatch the task to the appropriate pool
+		var dispatchErr error
+		switch taskPending.Type {
+		case task.TypeHandler:
+			dispatchErr = s.tp.handlerTaskPool.Dispatch(taskPending)
+		case task.TypeSideEffect:
+			dispatchErr = s.tp.sideEffectTaskPool.Dispatch(taskPending)
+		case task.TypeSagaTransaction, task.TypeSagaCompensation:
+			dispatchErr = s.tp.sagaTaskPool.Dispatch(taskPending)
+		default:
+			log.Printf("Unknown task type for task %v: %v", taskPending.ID, taskPending.Type)
+			continue
+		}
+
+		if dispatchErr != nil {
+			log.Printf("Error dispatching task %v: %v", taskPending.ID, dispatchErr)
 			continue
 		}
 
 		// Update the task status to in progress
-		_, err := s.tp.client.HandlerTask.
-			UpdateOne(task).
-			SetStatus(handlertask.StatusInProgress).
-			Save(s.tp.ctx)
+		_, err := s.tp.client.Task.
+			UpdateOne(taskPending).
+			SetStatus(task.StatusInProgress).
+			Save(ctx)
 
 		if err != nil {
-			log.Printf("Error updating status for task %s: %v", task.ID, err)
+			log.Printf("Error updating status for task %v: %v", taskPending.ID, err)
 		}
-	}
-
-	// If no tasks were processed, sleep for a short duration to avoid tight looping
-	if len(pendingTasks) == 0 {
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil

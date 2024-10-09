@@ -3,7 +3,7 @@
 package ent
 
 import (
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionunit"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 )
 
@@ -11,14 +11,14 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
-	handlerexecutionFields := schema.HandlerExecution{}.Fields()
-	_ = handlerexecutionFields
-	// handlerexecutionDescRetryCount is the schema descriptor for retry_count field.
-	handlerexecutionDescRetryCount := handlerexecutionFields[6].Descriptor()
-	// handlerexecution.DefaultRetryCount holds the default value on creation for the retry_count field.
-	handlerexecution.DefaultRetryCount = handlerexecutionDescRetryCount.Default.(int)
-	// handlerexecutionDescMaxRetries is the schema descriptor for max_retries field.
-	handlerexecutionDescMaxRetries := handlerexecutionFields[7].Descriptor()
-	// handlerexecution.DefaultMaxRetries holds the default value on creation for the max_retries field.
-	handlerexecution.DefaultMaxRetries = handlerexecutionDescMaxRetries.Default.(int)
+	executionunitFields := schema.ExecutionUnit{}.Fields()
+	_ = executionunitFields
+	// executionunitDescRetryCount is the schema descriptor for retry_count field.
+	executionunitDescRetryCount := executionunitFields[5].Descriptor()
+	// executionunit.DefaultRetryCount holds the default value on creation for the retry_count field.
+	executionunit.DefaultRetryCount = executionunitDescRetryCount.Default.(int)
+	// executionunitDescMaxRetries is the schema descriptor for max_retries field.
+	executionunitDescMaxRetries := executionunitFields[6].Descriptor()
+	// executionunit.DefaultMaxRetries holds the default value on creation for the max_retries field.
+	executionunit.DefaultMaxRetries = executionunitDescMaxRetries.Default.(int)
 }

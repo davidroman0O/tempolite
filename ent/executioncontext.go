@@ -33,20 +33,20 @@ type ExecutionContext struct {
 
 // ExecutionContextEdges holds the relations/edges for other nodes in the graph.
 type ExecutionContextEdges struct {
-	// HandlerExecutions holds the value of the handler_executions edge.
-	HandlerExecutions []*HandlerExecution `json:"handler_executions,omitempty"`
+	// ExecutionUnits holds the value of the execution_units edge.
+	ExecutionUnits []*ExecutionUnit `json:"execution_units,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool
 }
 
-// HandlerExecutionsOrErr returns the HandlerExecutions value or an error if the edge
+// ExecutionUnitsOrErr returns the ExecutionUnits value or an error if the edge
 // was not loaded in eager-loading.
-func (e ExecutionContextEdges) HandlerExecutionsOrErr() ([]*HandlerExecution, error) {
+func (e ExecutionContextEdges) ExecutionUnitsOrErr() ([]*ExecutionUnit, error) {
 	if e.loadedTypes[0] {
-		return e.HandlerExecutions, nil
+		return e.ExecutionUnits, nil
 	}
-	return nil, &NotLoadedError{edge: "handler_executions"}
+	return nil, &NotLoadedError{edge: "execution_units"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -116,9 +116,9 @@ func (ec *ExecutionContext) Value(name string) (ent.Value, error) {
 	return ec.selectValues.Get(name)
 }
 
-// QueryHandlerExecutions queries the "handler_executions" edge of the ExecutionContext entity.
-func (ec *ExecutionContext) QueryHandlerExecutions() *HandlerExecutionQuery {
-	return NewExecutionContextClient(ec.config).QueryHandlerExecutions(ec)
+// QueryExecutionUnits queries the "execution_units" edge of the ExecutionContext entity.
+func (ec *ExecutionContext) QueryExecutionUnits() *ExecutionUnitQuery {
+	return NewExecutionContextClient(ec.config).QueryExecutionUnits(ec)
 }
 
 // Update returns a builder for updating this ExecutionContext.
