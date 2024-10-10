@@ -10,9 +10,10 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
@@ -30,16 +31,16 @@ func (seu *SagaExecutionUpdate) Where(ps ...predicate.SagaExecution) *SagaExecut
 	return seu
 }
 
-// SetExecutionContextID sets the "execution_context_id" field.
-func (seu *SagaExecutionUpdate) SetExecutionContextID(s string) *SagaExecutionUpdate {
-	seu.mutation.SetExecutionContextID(s)
+// SetRunID sets the "run_id" field.
+func (seu *SagaExecutionUpdate) SetRunID(s string) *SagaExecutionUpdate {
+	seu.mutation.SetRunID(s)
 	return seu
 }
 
-// SetNillableExecutionContextID sets the "execution_context_id" field if the given value is not nil.
-func (seu *SagaExecutionUpdate) SetNillableExecutionContextID(s *string) *SagaExecutionUpdate {
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableRunID(s *string) *SagaExecutionUpdate {
 	if s != nil {
-		seu.SetExecutionContextID(*s)
+		seu.SetRunID(*s)
 	}
 	return seu
 }
@@ -58,43 +59,74 @@ func (seu *SagaExecutionUpdate) SetNillableStatus(s *sagaexecution.Status) *Saga
 	return seu
 }
 
-// SetStartTime sets the "start_time" field.
-func (seu *SagaExecutionUpdate) SetStartTime(t time.Time) *SagaExecutionUpdate {
-	seu.mutation.SetStartTime(t)
+// SetAttempt sets the "attempt" field.
+func (seu *SagaExecutionUpdate) SetAttempt(i int) *SagaExecutionUpdate {
+	seu.mutation.ResetAttempt()
+	seu.mutation.SetAttempt(i)
 	return seu
 }
 
-// SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (seu *SagaExecutionUpdate) SetNillableStartTime(t *time.Time) *SagaExecutionUpdate {
-	if t != nil {
-		seu.SetStartTime(*t)
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableAttempt(i *int) *SagaExecutionUpdate {
+	if i != nil {
+		seu.SetAttempt(*i)
 	}
 	return seu
 }
 
-// SetEndTime sets the "end_time" field.
-func (seu *SagaExecutionUpdate) SetEndTime(t time.Time) *SagaExecutionUpdate {
-	seu.mutation.SetEndTime(t)
+// AddAttempt adds i to the "attempt" field.
+func (seu *SagaExecutionUpdate) AddAttempt(i int) *SagaExecutionUpdate {
+	seu.mutation.AddAttempt(i)
 	return seu
 }
 
-// SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (seu *SagaExecutionUpdate) SetNillableEndTime(t *time.Time) *SagaExecutionUpdate {
+// SetOutput sets the "output" field.
+func (seu *SagaExecutionUpdate) SetOutput(i []interface{}) *SagaExecutionUpdate {
+	seu.mutation.SetOutput(i)
+	return seu
+}
+
+// AppendOutput appends i to the "output" field.
+func (seu *SagaExecutionUpdate) AppendOutput(i []interface{}) *SagaExecutionUpdate {
+	seu.mutation.AppendOutput(i)
+	return seu
+}
+
+// ClearOutput clears the value of the "output" field.
+func (seu *SagaExecutionUpdate) ClearOutput() *SagaExecutionUpdate {
+	seu.mutation.ClearOutput()
+	return seu
+}
+
+// SetStartedAt sets the "started_at" field.
+func (seu *SagaExecutionUpdate) SetStartedAt(t time.Time) *SagaExecutionUpdate {
+	seu.mutation.SetStartedAt(t)
+	return seu
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableStartedAt(t *time.Time) *SagaExecutionUpdate {
 	if t != nil {
-		seu.SetEndTime(*t)
+		seu.SetStartedAt(*t)
 	}
 	return seu
 }
 
-// ClearEndTime clears the value of the "end_time" field.
-func (seu *SagaExecutionUpdate) ClearEndTime() *SagaExecutionUpdate {
-	seu.mutation.ClearEndTime()
+// SetUpdatedAt sets the "updated_at" field.
+func (seu *SagaExecutionUpdate) SetUpdatedAt(t time.Time) *SagaExecutionUpdate {
+	seu.mutation.SetUpdatedAt(t)
 	return seu
 }
 
-// SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
-func (seu *SagaExecutionUpdate) SetExecutionContext(e *ExecutionContext) *SagaExecutionUpdate {
-	return seu.SetExecutionContextID(e.ID)
+// SetSagaID sets the "saga" edge to the Saga entity by ID.
+func (seu *SagaExecutionUpdate) SetSagaID(id string) *SagaExecutionUpdate {
+	seu.mutation.SetSagaID(id)
+	return seu
+}
+
+// SetSaga sets the "saga" edge to the Saga entity.
+func (seu *SagaExecutionUpdate) SetSaga(s *Saga) *SagaExecutionUpdate {
+	return seu.SetSagaID(s.ID)
 }
 
 // AddStepIDs adds the "steps" edge to the SagaStepExecution entity by IDs.
@@ -117,9 +149,9 @@ func (seu *SagaExecutionUpdate) Mutation() *SagaExecutionMutation {
 	return seu.mutation
 }
 
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (seu *SagaExecutionUpdate) ClearExecutionContext() *SagaExecutionUpdate {
-	seu.mutation.ClearExecutionContext()
+// ClearSaga clears the "saga" edge to the Saga entity.
+func (seu *SagaExecutionUpdate) ClearSaga() *SagaExecutionUpdate {
+	seu.mutation.ClearSaga()
 	return seu
 }
 
@@ -146,6 +178,7 @@ func (seu *SagaExecutionUpdate) RemoveSteps(s ...*SagaStepExecution) *SagaExecut
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (seu *SagaExecutionUpdate) Save(ctx context.Context) (int, error) {
+	seu.defaults()
 	return withHooks(ctx, seu.sqlSave, seu.mutation, seu.hooks)
 }
 
@@ -171,6 +204,14 @@ func (seu *SagaExecutionUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (seu *SagaExecutionUpdate) defaults() {
+	if _, ok := seu.mutation.UpdatedAt(); !ok {
+		v := sagaexecution.UpdateDefaultUpdatedAt()
+		seu.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (seu *SagaExecutionUpdate) check() error {
 	if v, ok := seu.mutation.Status(); ok {
@@ -178,8 +219,8 @@ func (seu *SagaExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
 		}
 	}
-	if seu.mutation.ExecutionContextCleared() && len(seu.mutation.ExecutionContextIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "SagaExecution.execution_context"`)
+	if seu.mutation.SagaCleared() && len(seu.mutation.SagaIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SagaExecution.saga"`)
 	}
 	return nil
 }
@@ -196,40 +237,57 @@ func (seu *SagaExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) 
 			}
 		}
 	}
+	if value, ok := seu.mutation.RunID(); ok {
+		_spec.SetField(sagaexecution.FieldRunID, field.TypeString, value)
+	}
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := seu.mutation.StartTime(); ok {
-		_spec.SetField(sagaexecution.FieldStartTime, field.TypeTime, value)
+	if value, ok := seu.mutation.Attempt(); ok {
+		_spec.SetField(sagaexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if value, ok := seu.mutation.EndTime(); ok {
-		_spec.SetField(sagaexecution.FieldEndTime, field.TypeTime, value)
+	if value, ok := seu.mutation.AddedAttempt(); ok {
+		_spec.AddField(sagaexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if seu.mutation.EndTimeCleared() {
-		_spec.ClearField(sagaexecution.FieldEndTime, field.TypeTime)
+	if value, ok := seu.mutation.Output(); ok {
+		_spec.SetField(sagaexecution.FieldOutput, field.TypeJSON, value)
 	}
-	if seu.mutation.ExecutionContextCleared() {
+	if value, ok := seu.mutation.AppendedOutput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagaexecution.FieldOutput, value)
+		})
+	}
+	if seu.mutation.OutputCleared() {
+		_spec.ClearField(sagaexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := seu.mutation.StartedAt(); ok {
+		_spec.SetField(sagaexecution.FieldStartedAt, field.TypeTime, value)
+	}
+	if value, ok := seu.mutation.UpdatedAt(); ok {
+		_spec.SetField(sagaexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if seu.mutation.SagaCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   sagaexecution.ExecutionContextTable,
-			Columns: []string{sagaexecution.ExecutionContextColumn},
+			Table:   sagaexecution.SagaTable,
+			Columns: []string{sagaexecution.SagaColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := seu.mutation.ExecutionContextIDs(); len(nodes) > 0 {
+	if nodes := seu.mutation.SagaIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   sagaexecution.ExecutionContextTable,
-			Columns: []string{sagaexecution.ExecutionContextColumn},
+			Table:   sagaexecution.SagaTable,
+			Columns: []string{sagaexecution.SagaColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -302,16 +360,16 @@ type SagaExecutionUpdateOne struct {
 	mutation *SagaExecutionMutation
 }
 
-// SetExecutionContextID sets the "execution_context_id" field.
-func (seuo *SagaExecutionUpdateOne) SetExecutionContextID(s string) *SagaExecutionUpdateOne {
-	seuo.mutation.SetExecutionContextID(s)
+// SetRunID sets the "run_id" field.
+func (seuo *SagaExecutionUpdateOne) SetRunID(s string) *SagaExecutionUpdateOne {
+	seuo.mutation.SetRunID(s)
 	return seuo
 }
 
-// SetNillableExecutionContextID sets the "execution_context_id" field if the given value is not nil.
-func (seuo *SagaExecutionUpdateOne) SetNillableExecutionContextID(s *string) *SagaExecutionUpdateOne {
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableRunID(s *string) *SagaExecutionUpdateOne {
 	if s != nil {
-		seuo.SetExecutionContextID(*s)
+		seuo.SetRunID(*s)
 	}
 	return seuo
 }
@@ -330,43 +388,74 @@ func (seuo *SagaExecutionUpdateOne) SetNillableStatus(s *sagaexecution.Status) *
 	return seuo
 }
 
-// SetStartTime sets the "start_time" field.
-func (seuo *SagaExecutionUpdateOne) SetStartTime(t time.Time) *SagaExecutionUpdateOne {
-	seuo.mutation.SetStartTime(t)
+// SetAttempt sets the "attempt" field.
+func (seuo *SagaExecutionUpdateOne) SetAttempt(i int) *SagaExecutionUpdateOne {
+	seuo.mutation.ResetAttempt()
+	seuo.mutation.SetAttempt(i)
 	return seuo
 }
 
-// SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (seuo *SagaExecutionUpdateOne) SetNillableStartTime(t *time.Time) *SagaExecutionUpdateOne {
-	if t != nil {
-		seuo.SetStartTime(*t)
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableAttempt(i *int) *SagaExecutionUpdateOne {
+	if i != nil {
+		seuo.SetAttempt(*i)
 	}
 	return seuo
 }
 
-// SetEndTime sets the "end_time" field.
-func (seuo *SagaExecutionUpdateOne) SetEndTime(t time.Time) *SagaExecutionUpdateOne {
-	seuo.mutation.SetEndTime(t)
+// AddAttempt adds i to the "attempt" field.
+func (seuo *SagaExecutionUpdateOne) AddAttempt(i int) *SagaExecutionUpdateOne {
+	seuo.mutation.AddAttempt(i)
 	return seuo
 }
 
-// SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (seuo *SagaExecutionUpdateOne) SetNillableEndTime(t *time.Time) *SagaExecutionUpdateOne {
+// SetOutput sets the "output" field.
+func (seuo *SagaExecutionUpdateOne) SetOutput(i []interface{}) *SagaExecutionUpdateOne {
+	seuo.mutation.SetOutput(i)
+	return seuo
+}
+
+// AppendOutput appends i to the "output" field.
+func (seuo *SagaExecutionUpdateOne) AppendOutput(i []interface{}) *SagaExecutionUpdateOne {
+	seuo.mutation.AppendOutput(i)
+	return seuo
+}
+
+// ClearOutput clears the value of the "output" field.
+func (seuo *SagaExecutionUpdateOne) ClearOutput() *SagaExecutionUpdateOne {
+	seuo.mutation.ClearOutput()
+	return seuo
+}
+
+// SetStartedAt sets the "started_at" field.
+func (seuo *SagaExecutionUpdateOne) SetStartedAt(t time.Time) *SagaExecutionUpdateOne {
+	seuo.mutation.SetStartedAt(t)
+	return seuo
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableStartedAt(t *time.Time) *SagaExecutionUpdateOne {
 	if t != nil {
-		seuo.SetEndTime(*t)
+		seuo.SetStartedAt(*t)
 	}
 	return seuo
 }
 
-// ClearEndTime clears the value of the "end_time" field.
-func (seuo *SagaExecutionUpdateOne) ClearEndTime() *SagaExecutionUpdateOne {
-	seuo.mutation.ClearEndTime()
+// SetUpdatedAt sets the "updated_at" field.
+func (seuo *SagaExecutionUpdateOne) SetUpdatedAt(t time.Time) *SagaExecutionUpdateOne {
+	seuo.mutation.SetUpdatedAt(t)
 	return seuo
 }
 
-// SetExecutionContext sets the "execution_context" edge to the ExecutionContext entity.
-func (seuo *SagaExecutionUpdateOne) SetExecutionContext(e *ExecutionContext) *SagaExecutionUpdateOne {
-	return seuo.SetExecutionContextID(e.ID)
+// SetSagaID sets the "saga" edge to the Saga entity by ID.
+func (seuo *SagaExecutionUpdateOne) SetSagaID(id string) *SagaExecutionUpdateOne {
+	seuo.mutation.SetSagaID(id)
+	return seuo
+}
+
+// SetSaga sets the "saga" edge to the Saga entity.
+func (seuo *SagaExecutionUpdateOne) SetSaga(s *Saga) *SagaExecutionUpdateOne {
+	return seuo.SetSagaID(s.ID)
 }
 
 // AddStepIDs adds the "steps" edge to the SagaStepExecution entity by IDs.
@@ -389,9 +478,9 @@ func (seuo *SagaExecutionUpdateOne) Mutation() *SagaExecutionMutation {
 	return seuo.mutation
 }
 
-// ClearExecutionContext clears the "execution_context" edge to the ExecutionContext entity.
-func (seuo *SagaExecutionUpdateOne) ClearExecutionContext() *SagaExecutionUpdateOne {
-	seuo.mutation.ClearExecutionContext()
+// ClearSaga clears the "saga" edge to the Saga entity.
+func (seuo *SagaExecutionUpdateOne) ClearSaga() *SagaExecutionUpdateOne {
+	seuo.mutation.ClearSaga()
 	return seuo
 }
 
@@ -431,6 +520,7 @@ func (seuo *SagaExecutionUpdateOne) Select(field string, fields ...string) *Saga
 
 // Save executes the query and returns the updated SagaExecution entity.
 func (seuo *SagaExecutionUpdateOne) Save(ctx context.Context) (*SagaExecution, error) {
+	seuo.defaults()
 	return withHooks(ctx, seuo.sqlSave, seuo.mutation, seuo.hooks)
 }
 
@@ -456,6 +546,14 @@ func (seuo *SagaExecutionUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (seuo *SagaExecutionUpdateOne) defaults() {
+	if _, ok := seuo.mutation.UpdatedAt(); !ok {
+		v := sagaexecution.UpdateDefaultUpdatedAt()
+		seuo.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (seuo *SagaExecutionUpdateOne) check() error {
 	if v, ok := seuo.mutation.Status(); ok {
@@ -463,8 +561,8 @@ func (seuo *SagaExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
 		}
 	}
-	if seuo.mutation.ExecutionContextCleared() && len(seuo.mutation.ExecutionContextIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "SagaExecution.execution_context"`)
+	if seuo.mutation.SagaCleared() && len(seuo.mutation.SagaIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SagaExecution.saga"`)
 	}
 	return nil
 }
@@ -498,40 +596,57 @@ func (seuo *SagaExecutionUpdateOne) sqlSave(ctx context.Context) (_node *SagaExe
 			}
 		}
 	}
+	if value, ok := seuo.mutation.RunID(); ok {
+		_spec.SetField(sagaexecution.FieldRunID, field.TypeString, value)
+	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := seuo.mutation.StartTime(); ok {
-		_spec.SetField(sagaexecution.FieldStartTime, field.TypeTime, value)
+	if value, ok := seuo.mutation.Attempt(); ok {
+		_spec.SetField(sagaexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if value, ok := seuo.mutation.EndTime(); ok {
-		_spec.SetField(sagaexecution.FieldEndTime, field.TypeTime, value)
+	if value, ok := seuo.mutation.AddedAttempt(); ok {
+		_spec.AddField(sagaexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if seuo.mutation.EndTimeCleared() {
-		_spec.ClearField(sagaexecution.FieldEndTime, field.TypeTime)
+	if value, ok := seuo.mutation.Output(); ok {
+		_spec.SetField(sagaexecution.FieldOutput, field.TypeJSON, value)
 	}
-	if seuo.mutation.ExecutionContextCleared() {
+	if value, ok := seuo.mutation.AppendedOutput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagaexecution.FieldOutput, value)
+		})
+	}
+	if seuo.mutation.OutputCleared() {
+		_spec.ClearField(sagaexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := seuo.mutation.StartedAt(); ok {
+		_spec.SetField(sagaexecution.FieldStartedAt, field.TypeTime, value)
+	}
+	if value, ok := seuo.mutation.UpdatedAt(); ok {
+		_spec.SetField(sagaexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if seuo.mutation.SagaCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   sagaexecution.ExecutionContextTable,
-			Columns: []string{sagaexecution.ExecutionContextColumn},
+			Table:   sagaexecution.SagaTable,
+			Columns: []string{sagaexecution.SagaColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := seuo.mutation.ExecutionContextIDs(); len(nodes) > 0 {
+	if nodes := seuo.mutation.SagaIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   sagaexecution.ExecutionContextTable,
-			Columns: []string{sagaexecution.ExecutionContextColumn},
+			Table:   sagaexecution.SagaTable,
+			Columns: []string{sagaexecution.SagaColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executioncontext.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

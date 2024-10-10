@@ -10,8 +10,10 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
 
@@ -28,38 +30,31 @@ func (sseu *SagaStepExecutionUpdate) Where(ps ...predicate.SagaStepExecution) *S
 	return sseu
 }
 
-// SetSagaExecutionID sets the "saga_execution_id" field.
-func (sseu *SagaStepExecutionUpdate) SetSagaExecutionID(s string) *SagaStepExecutionUpdate {
-	sseu.mutation.SetSagaExecutionID(s)
+// SetHandlerName sets the "handler_name" field.
+func (sseu *SagaStepExecutionUpdate) SetHandlerName(s string) *SagaStepExecutionUpdate {
+	sseu.mutation.SetHandlerName(s)
 	return sseu
 }
 
-// SetNillableSagaExecutionID sets the "saga_execution_id" field if the given value is not nil.
-func (sseu *SagaStepExecutionUpdate) SetNillableSagaExecutionID(s *string) *SagaStepExecutionUpdate {
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
+func (sseu *SagaStepExecutionUpdate) SetNillableHandlerName(s *string) *SagaStepExecutionUpdate {
 	if s != nil {
-		sseu.SetSagaExecutionID(*s)
+		sseu.SetHandlerName(*s)
 	}
 	return sseu
 }
 
-// SetStepNumber sets the "step_number" field.
-func (sseu *SagaStepExecutionUpdate) SetStepNumber(i int) *SagaStepExecutionUpdate {
-	sseu.mutation.ResetStepNumber()
-	sseu.mutation.SetStepNumber(i)
+// SetStepType sets the "step_type" field.
+func (sseu *SagaStepExecutionUpdate) SetStepType(st sagastepexecution.StepType) *SagaStepExecutionUpdate {
+	sseu.mutation.SetStepType(st)
 	return sseu
 }
 
-// SetNillableStepNumber sets the "step_number" field if the given value is not nil.
-func (sseu *SagaStepExecutionUpdate) SetNillableStepNumber(i *int) *SagaStepExecutionUpdate {
-	if i != nil {
-		sseu.SetStepNumber(*i)
+// SetNillableStepType sets the "step_type" field if the given value is not nil.
+func (sseu *SagaStepExecutionUpdate) SetNillableStepType(st *sagastepexecution.StepType) *SagaStepExecutionUpdate {
+	if st != nil {
+		sseu.SetStepType(*st)
 	}
-	return sseu
-}
-
-// AddStepNumber adds i to the "step_number" field.
-func (sseu *SagaStepExecutionUpdate) AddStepNumber(i int) *SagaStepExecutionUpdate {
-	sseu.mutation.AddStepNumber(i)
 	return sseu
 }
 
@@ -77,44 +72,107 @@ func (sseu *SagaStepExecutionUpdate) SetNillableStatus(s *sagastepexecution.Stat
 	return sseu
 }
 
-// SetStartTime sets the "start_time" field.
-func (sseu *SagaStepExecutionUpdate) SetStartTime(t time.Time) *SagaStepExecutionUpdate {
-	sseu.mutation.SetStartTime(t)
+// SetSequence sets the "sequence" field.
+func (sseu *SagaStepExecutionUpdate) SetSequence(i int) *SagaStepExecutionUpdate {
+	sseu.mutation.ResetSequence()
+	sseu.mutation.SetSequence(i)
 	return sseu
 }
 
-// SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (sseu *SagaStepExecutionUpdate) SetNillableStartTime(t *time.Time) *SagaStepExecutionUpdate {
-	if t != nil {
-		sseu.SetStartTime(*t)
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (sseu *SagaStepExecutionUpdate) SetNillableSequence(i *int) *SagaStepExecutionUpdate {
+	if i != nil {
+		sseu.SetSequence(*i)
 	}
 	return sseu
 }
 
-// ClearStartTime clears the value of the "start_time" field.
-func (sseu *SagaStepExecutionUpdate) ClearStartTime() *SagaStepExecutionUpdate {
-	sseu.mutation.ClearStartTime()
+// AddSequence adds i to the "sequence" field.
+func (sseu *SagaStepExecutionUpdate) AddSequence(i int) *SagaStepExecutionUpdate {
+	sseu.mutation.AddSequence(i)
 	return sseu
 }
 
-// SetEndTime sets the "end_time" field.
-func (sseu *SagaStepExecutionUpdate) SetEndTime(t time.Time) *SagaStepExecutionUpdate {
-	sseu.mutation.SetEndTime(t)
+// SetAttempt sets the "attempt" field.
+func (sseu *SagaStepExecutionUpdate) SetAttempt(i int) *SagaStepExecutionUpdate {
+	sseu.mutation.ResetAttempt()
+	sseu.mutation.SetAttempt(i)
 	return sseu
 }
 
-// SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (sseu *SagaStepExecutionUpdate) SetNillableEndTime(t *time.Time) *SagaStepExecutionUpdate {
-	if t != nil {
-		sseu.SetEndTime(*t)
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (sseu *SagaStepExecutionUpdate) SetNillableAttempt(i *int) *SagaStepExecutionUpdate {
+	if i != nil {
+		sseu.SetAttempt(*i)
 	}
 	return sseu
 }
 
-// ClearEndTime clears the value of the "end_time" field.
-func (sseu *SagaStepExecutionUpdate) ClearEndTime() *SagaStepExecutionUpdate {
-	sseu.mutation.ClearEndTime()
+// AddAttempt adds i to the "attempt" field.
+func (sseu *SagaStepExecutionUpdate) AddAttempt(i int) *SagaStepExecutionUpdate {
+	sseu.mutation.AddAttempt(i)
 	return sseu
+}
+
+// SetInput sets the "input" field.
+func (sseu *SagaStepExecutionUpdate) SetInput(i []interface{}) *SagaStepExecutionUpdate {
+	sseu.mutation.SetInput(i)
+	return sseu
+}
+
+// AppendInput appends i to the "input" field.
+func (sseu *SagaStepExecutionUpdate) AppendInput(i []interface{}) *SagaStepExecutionUpdate {
+	sseu.mutation.AppendInput(i)
+	return sseu
+}
+
+// SetOutput sets the "output" field.
+func (sseu *SagaStepExecutionUpdate) SetOutput(i []interface{}) *SagaStepExecutionUpdate {
+	sseu.mutation.SetOutput(i)
+	return sseu
+}
+
+// AppendOutput appends i to the "output" field.
+func (sseu *SagaStepExecutionUpdate) AppendOutput(i []interface{}) *SagaStepExecutionUpdate {
+	sseu.mutation.AppendOutput(i)
+	return sseu
+}
+
+// ClearOutput clears the value of the "output" field.
+func (sseu *SagaStepExecutionUpdate) ClearOutput() *SagaStepExecutionUpdate {
+	sseu.mutation.ClearOutput()
+	return sseu
+}
+
+// SetStartedAt sets the "started_at" field.
+func (sseu *SagaStepExecutionUpdate) SetStartedAt(t time.Time) *SagaStepExecutionUpdate {
+	sseu.mutation.SetStartedAt(t)
+	return sseu
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (sseu *SagaStepExecutionUpdate) SetNillableStartedAt(t *time.Time) *SagaStepExecutionUpdate {
+	if t != nil {
+		sseu.SetStartedAt(*t)
+	}
+	return sseu
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (sseu *SagaStepExecutionUpdate) SetUpdatedAt(t time.Time) *SagaStepExecutionUpdate {
+	sseu.mutation.SetUpdatedAt(t)
+	return sseu
+}
+
+// SetSagaExecutionID sets the "saga_execution" edge to the SagaExecution entity by ID.
+func (sseu *SagaStepExecutionUpdate) SetSagaExecutionID(id string) *SagaStepExecutionUpdate {
+	sseu.mutation.SetSagaExecutionID(id)
+	return sseu
+}
+
+// SetSagaExecution sets the "saga_execution" edge to the SagaExecution entity.
+func (sseu *SagaStepExecutionUpdate) SetSagaExecution(s *SagaExecution) *SagaStepExecutionUpdate {
+	return sseu.SetSagaExecutionID(s.ID)
 }
 
 // Mutation returns the SagaStepExecutionMutation object of the builder.
@@ -122,8 +180,15 @@ func (sseu *SagaStepExecutionUpdate) Mutation() *SagaStepExecutionMutation {
 	return sseu.mutation
 }
 
+// ClearSagaExecution clears the "saga_execution" edge to the SagaExecution entity.
+func (sseu *SagaStepExecutionUpdate) ClearSagaExecution() *SagaStepExecutionUpdate {
+	sseu.mutation.ClearSagaExecution()
+	return sseu
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (sseu *SagaStepExecutionUpdate) Save(ctx context.Context) (int, error) {
+	sseu.defaults()
 	return withHooks(ctx, sseu.sqlSave, sseu.mutation, sseu.hooks)
 }
 
@@ -149,12 +214,38 @@ func (sseu *SagaStepExecutionUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (sseu *SagaStepExecutionUpdate) defaults() {
+	if _, ok := sseu.mutation.UpdatedAt(); !ok {
+		v := sagastepexecution.UpdateDefaultUpdatedAt()
+		sseu.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (sseu *SagaStepExecutionUpdate) check() error {
+	if v, ok := sseu.mutation.HandlerName(); ok {
+		if err := sagastepexecution.HandlerNameValidator(v); err != nil {
+			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.handler_name": %w`, err)}
+		}
+	}
+	if v, ok := sseu.mutation.StepType(); ok {
+		if err := sagastepexecution.StepTypeValidator(v); err != nil {
+			return &ValidationError{Name: "step_type", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.step_type": %w`, err)}
+		}
+	}
 	if v, ok := sseu.mutation.Status(); ok {
 		if err := sagastepexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.status": %w`, err)}
 		}
+	}
+	if v, ok := sseu.mutation.Sequence(); ok {
+		if err := sagastepexecution.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.sequence": %w`, err)}
+		}
+	}
+	if sseu.mutation.SagaExecutionCleared() && len(sseu.mutation.SagaExecutionIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SagaStepExecution.saga_execution"`)
 	}
 	return nil
 }
@@ -171,29 +262,80 @@ func (sseu *SagaStepExecutionUpdate) sqlSave(ctx context.Context) (n int, err er
 			}
 		}
 	}
-	if value, ok := sseu.mutation.SagaExecutionID(); ok {
-		_spec.SetField(sagastepexecution.FieldSagaExecutionID, field.TypeString, value)
+	if value, ok := sseu.mutation.HandlerName(); ok {
+		_spec.SetField(sagastepexecution.FieldHandlerName, field.TypeString, value)
 	}
-	if value, ok := sseu.mutation.StepNumber(); ok {
-		_spec.SetField(sagastepexecution.FieldStepNumber, field.TypeInt, value)
-	}
-	if value, ok := sseu.mutation.AddedStepNumber(); ok {
-		_spec.AddField(sagastepexecution.FieldStepNumber, field.TypeInt, value)
+	if value, ok := sseu.mutation.StepType(); ok {
+		_spec.SetField(sagastepexecution.FieldStepType, field.TypeEnum, value)
 	}
 	if value, ok := sseu.mutation.Status(); ok {
 		_spec.SetField(sagastepexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := sseu.mutation.StartTime(); ok {
-		_spec.SetField(sagastepexecution.FieldStartTime, field.TypeTime, value)
+	if value, ok := sseu.mutation.Sequence(); ok {
+		_spec.SetField(sagastepexecution.FieldSequence, field.TypeInt, value)
 	}
-	if sseu.mutation.StartTimeCleared() {
-		_spec.ClearField(sagastepexecution.FieldStartTime, field.TypeTime)
+	if value, ok := sseu.mutation.AddedSequence(); ok {
+		_spec.AddField(sagastepexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := sseu.mutation.EndTime(); ok {
-		_spec.SetField(sagastepexecution.FieldEndTime, field.TypeTime, value)
+	if value, ok := sseu.mutation.Attempt(); ok {
+		_spec.SetField(sagastepexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if sseu.mutation.EndTimeCleared() {
-		_spec.ClearField(sagastepexecution.FieldEndTime, field.TypeTime)
+	if value, ok := sseu.mutation.AddedAttempt(); ok {
+		_spec.AddField(sagastepexecution.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := sseu.mutation.Input(); ok {
+		_spec.SetField(sagastepexecution.FieldInput, field.TypeJSON, value)
+	}
+	if value, ok := sseu.mutation.AppendedInput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagastepexecution.FieldInput, value)
+		})
+	}
+	if value, ok := sseu.mutation.Output(); ok {
+		_spec.SetField(sagastepexecution.FieldOutput, field.TypeJSON, value)
+	}
+	if value, ok := sseu.mutation.AppendedOutput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagastepexecution.FieldOutput, value)
+		})
+	}
+	if sseu.mutation.OutputCleared() {
+		_spec.ClearField(sagastepexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := sseu.mutation.StartedAt(); ok {
+		_spec.SetField(sagastepexecution.FieldStartedAt, field.TypeTime, value)
+	}
+	if value, ok := sseu.mutation.UpdatedAt(); ok {
+		_spec.SetField(sagastepexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if sseu.mutation.SagaExecutionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   sagastepexecution.SagaExecutionTable,
+			Columns: []string{sagastepexecution.SagaExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sseu.mutation.SagaExecutionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   sagastepexecution.SagaExecutionTable,
+			Columns: []string{sagastepexecution.SagaExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, sseu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -215,38 +357,31 @@ type SagaStepExecutionUpdateOne struct {
 	mutation *SagaStepExecutionMutation
 }
 
-// SetSagaExecutionID sets the "saga_execution_id" field.
-func (sseuo *SagaStepExecutionUpdateOne) SetSagaExecutionID(s string) *SagaStepExecutionUpdateOne {
-	sseuo.mutation.SetSagaExecutionID(s)
+// SetHandlerName sets the "handler_name" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetHandlerName(s string) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetHandlerName(s)
 	return sseuo
 }
 
-// SetNillableSagaExecutionID sets the "saga_execution_id" field if the given value is not nil.
-func (sseuo *SagaStepExecutionUpdateOne) SetNillableSagaExecutionID(s *string) *SagaStepExecutionUpdateOne {
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
+func (sseuo *SagaStepExecutionUpdateOne) SetNillableHandlerName(s *string) *SagaStepExecutionUpdateOne {
 	if s != nil {
-		sseuo.SetSagaExecutionID(*s)
+		sseuo.SetHandlerName(*s)
 	}
 	return sseuo
 }
 
-// SetStepNumber sets the "step_number" field.
-func (sseuo *SagaStepExecutionUpdateOne) SetStepNumber(i int) *SagaStepExecutionUpdateOne {
-	sseuo.mutation.ResetStepNumber()
-	sseuo.mutation.SetStepNumber(i)
+// SetStepType sets the "step_type" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetStepType(st sagastepexecution.StepType) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetStepType(st)
 	return sseuo
 }
 
-// SetNillableStepNumber sets the "step_number" field if the given value is not nil.
-func (sseuo *SagaStepExecutionUpdateOne) SetNillableStepNumber(i *int) *SagaStepExecutionUpdateOne {
-	if i != nil {
-		sseuo.SetStepNumber(*i)
+// SetNillableStepType sets the "step_type" field if the given value is not nil.
+func (sseuo *SagaStepExecutionUpdateOne) SetNillableStepType(st *sagastepexecution.StepType) *SagaStepExecutionUpdateOne {
+	if st != nil {
+		sseuo.SetStepType(*st)
 	}
-	return sseuo
-}
-
-// AddStepNumber adds i to the "step_number" field.
-func (sseuo *SagaStepExecutionUpdateOne) AddStepNumber(i int) *SagaStepExecutionUpdateOne {
-	sseuo.mutation.AddStepNumber(i)
 	return sseuo
 }
 
@@ -264,49 +399,118 @@ func (sseuo *SagaStepExecutionUpdateOne) SetNillableStatus(s *sagastepexecution.
 	return sseuo
 }
 
-// SetStartTime sets the "start_time" field.
-func (sseuo *SagaStepExecutionUpdateOne) SetStartTime(t time.Time) *SagaStepExecutionUpdateOne {
-	sseuo.mutation.SetStartTime(t)
+// SetSequence sets the "sequence" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetSequence(i int) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.ResetSequence()
+	sseuo.mutation.SetSequence(i)
 	return sseuo
 }
 
-// SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (sseuo *SagaStepExecutionUpdateOne) SetNillableStartTime(t *time.Time) *SagaStepExecutionUpdateOne {
-	if t != nil {
-		sseuo.SetStartTime(*t)
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (sseuo *SagaStepExecutionUpdateOne) SetNillableSequence(i *int) *SagaStepExecutionUpdateOne {
+	if i != nil {
+		sseuo.SetSequence(*i)
 	}
 	return sseuo
 }
 
-// ClearStartTime clears the value of the "start_time" field.
-func (sseuo *SagaStepExecutionUpdateOne) ClearStartTime() *SagaStepExecutionUpdateOne {
-	sseuo.mutation.ClearStartTime()
+// AddSequence adds i to the "sequence" field.
+func (sseuo *SagaStepExecutionUpdateOne) AddSequence(i int) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.AddSequence(i)
 	return sseuo
 }
 
-// SetEndTime sets the "end_time" field.
-func (sseuo *SagaStepExecutionUpdateOne) SetEndTime(t time.Time) *SagaStepExecutionUpdateOne {
-	sseuo.mutation.SetEndTime(t)
+// SetAttempt sets the "attempt" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetAttempt(i int) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.ResetAttempt()
+	sseuo.mutation.SetAttempt(i)
 	return sseuo
 }
 
-// SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (sseuo *SagaStepExecutionUpdateOne) SetNillableEndTime(t *time.Time) *SagaStepExecutionUpdateOne {
-	if t != nil {
-		sseuo.SetEndTime(*t)
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (sseuo *SagaStepExecutionUpdateOne) SetNillableAttempt(i *int) *SagaStepExecutionUpdateOne {
+	if i != nil {
+		sseuo.SetAttempt(*i)
 	}
 	return sseuo
 }
 
-// ClearEndTime clears the value of the "end_time" field.
-func (sseuo *SagaStepExecutionUpdateOne) ClearEndTime() *SagaStepExecutionUpdateOne {
-	sseuo.mutation.ClearEndTime()
+// AddAttempt adds i to the "attempt" field.
+func (sseuo *SagaStepExecutionUpdateOne) AddAttempt(i int) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.AddAttempt(i)
 	return sseuo
+}
+
+// SetInput sets the "input" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetInput(i []interface{}) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetInput(i)
+	return sseuo
+}
+
+// AppendInput appends i to the "input" field.
+func (sseuo *SagaStepExecutionUpdateOne) AppendInput(i []interface{}) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.AppendInput(i)
+	return sseuo
+}
+
+// SetOutput sets the "output" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetOutput(i []interface{}) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetOutput(i)
+	return sseuo
+}
+
+// AppendOutput appends i to the "output" field.
+func (sseuo *SagaStepExecutionUpdateOne) AppendOutput(i []interface{}) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.AppendOutput(i)
+	return sseuo
+}
+
+// ClearOutput clears the value of the "output" field.
+func (sseuo *SagaStepExecutionUpdateOne) ClearOutput() *SagaStepExecutionUpdateOne {
+	sseuo.mutation.ClearOutput()
+	return sseuo
+}
+
+// SetStartedAt sets the "started_at" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetStartedAt(t time.Time) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetStartedAt(t)
+	return sseuo
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (sseuo *SagaStepExecutionUpdateOne) SetNillableStartedAt(t *time.Time) *SagaStepExecutionUpdateOne {
+	if t != nil {
+		sseuo.SetStartedAt(*t)
+	}
+	return sseuo
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (sseuo *SagaStepExecutionUpdateOne) SetUpdatedAt(t time.Time) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetUpdatedAt(t)
+	return sseuo
+}
+
+// SetSagaExecutionID sets the "saga_execution" edge to the SagaExecution entity by ID.
+func (sseuo *SagaStepExecutionUpdateOne) SetSagaExecutionID(id string) *SagaStepExecutionUpdateOne {
+	sseuo.mutation.SetSagaExecutionID(id)
+	return sseuo
+}
+
+// SetSagaExecution sets the "saga_execution" edge to the SagaExecution entity.
+func (sseuo *SagaStepExecutionUpdateOne) SetSagaExecution(s *SagaExecution) *SagaStepExecutionUpdateOne {
+	return sseuo.SetSagaExecutionID(s.ID)
 }
 
 // Mutation returns the SagaStepExecutionMutation object of the builder.
 func (sseuo *SagaStepExecutionUpdateOne) Mutation() *SagaStepExecutionMutation {
 	return sseuo.mutation
+}
+
+// ClearSagaExecution clears the "saga_execution" edge to the SagaExecution entity.
+func (sseuo *SagaStepExecutionUpdateOne) ClearSagaExecution() *SagaStepExecutionUpdateOne {
+	sseuo.mutation.ClearSagaExecution()
+	return sseuo
 }
 
 // Where appends a list predicates to the SagaStepExecutionUpdate builder.
@@ -324,6 +528,7 @@ func (sseuo *SagaStepExecutionUpdateOne) Select(field string, fields ...string) 
 
 // Save executes the query and returns the updated SagaStepExecution entity.
 func (sseuo *SagaStepExecutionUpdateOne) Save(ctx context.Context) (*SagaStepExecution, error) {
+	sseuo.defaults()
 	return withHooks(ctx, sseuo.sqlSave, sseuo.mutation, sseuo.hooks)
 }
 
@@ -349,12 +554,38 @@ func (sseuo *SagaStepExecutionUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (sseuo *SagaStepExecutionUpdateOne) defaults() {
+	if _, ok := sseuo.mutation.UpdatedAt(); !ok {
+		v := sagastepexecution.UpdateDefaultUpdatedAt()
+		sseuo.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (sseuo *SagaStepExecutionUpdateOne) check() error {
+	if v, ok := sseuo.mutation.HandlerName(); ok {
+		if err := sagastepexecution.HandlerNameValidator(v); err != nil {
+			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.handler_name": %w`, err)}
+		}
+	}
+	if v, ok := sseuo.mutation.StepType(); ok {
+		if err := sagastepexecution.StepTypeValidator(v); err != nil {
+			return &ValidationError{Name: "step_type", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.step_type": %w`, err)}
+		}
+	}
 	if v, ok := sseuo.mutation.Status(); ok {
 		if err := sagastepexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.status": %w`, err)}
 		}
+	}
+	if v, ok := sseuo.mutation.Sequence(); ok {
+		if err := sagastepexecution.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaStepExecution.sequence": %w`, err)}
+		}
+	}
+	if sseuo.mutation.SagaExecutionCleared() && len(sseuo.mutation.SagaExecutionIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SagaStepExecution.saga_execution"`)
 	}
 	return nil
 }
@@ -388,29 +619,80 @@ func (sseuo *SagaStepExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Sa
 			}
 		}
 	}
-	if value, ok := sseuo.mutation.SagaExecutionID(); ok {
-		_spec.SetField(sagastepexecution.FieldSagaExecutionID, field.TypeString, value)
+	if value, ok := sseuo.mutation.HandlerName(); ok {
+		_spec.SetField(sagastepexecution.FieldHandlerName, field.TypeString, value)
 	}
-	if value, ok := sseuo.mutation.StepNumber(); ok {
-		_spec.SetField(sagastepexecution.FieldStepNumber, field.TypeInt, value)
-	}
-	if value, ok := sseuo.mutation.AddedStepNumber(); ok {
-		_spec.AddField(sagastepexecution.FieldStepNumber, field.TypeInt, value)
+	if value, ok := sseuo.mutation.StepType(); ok {
+		_spec.SetField(sagastepexecution.FieldStepType, field.TypeEnum, value)
 	}
 	if value, ok := sseuo.mutation.Status(); ok {
 		_spec.SetField(sagastepexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := sseuo.mutation.StartTime(); ok {
-		_spec.SetField(sagastepexecution.FieldStartTime, field.TypeTime, value)
+	if value, ok := sseuo.mutation.Sequence(); ok {
+		_spec.SetField(sagastepexecution.FieldSequence, field.TypeInt, value)
 	}
-	if sseuo.mutation.StartTimeCleared() {
-		_spec.ClearField(sagastepexecution.FieldStartTime, field.TypeTime)
+	if value, ok := sseuo.mutation.AddedSequence(); ok {
+		_spec.AddField(sagastepexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := sseuo.mutation.EndTime(); ok {
-		_spec.SetField(sagastepexecution.FieldEndTime, field.TypeTime, value)
+	if value, ok := sseuo.mutation.Attempt(); ok {
+		_spec.SetField(sagastepexecution.FieldAttempt, field.TypeInt, value)
 	}
-	if sseuo.mutation.EndTimeCleared() {
-		_spec.ClearField(sagastepexecution.FieldEndTime, field.TypeTime)
+	if value, ok := sseuo.mutation.AddedAttempt(); ok {
+		_spec.AddField(sagastepexecution.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := sseuo.mutation.Input(); ok {
+		_spec.SetField(sagastepexecution.FieldInput, field.TypeJSON, value)
+	}
+	if value, ok := sseuo.mutation.AppendedInput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagastepexecution.FieldInput, value)
+		})
+	}
+	if value, ok := sseuo.mutation.Output(); ok {
+		_spec.SetField(sagastepexecution.FieldOutput, field.TypeJSON, value)
+	}
+	if value, ok := sseuo.mutation.AppendedOutput(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sagastepexecution.FieldOutput, value)
+		})
+	}
+	if sseuo.mutation.OutputCleared() {
+		_spec.ClearField(sagastepexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := sseuo.mutation.StartedAt(); ok {
+		_spec.SetField(sagastepexecution.FieldStartedAt, field.TypeTime, value)
+	}
+	if value, ok := sseuo.mutation.UpdatedAt(); ok {
+		_spec.SetField(sagastepexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if sseuo.mutation.SagaExecutionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   sagastepexecution.SagaExecutionTable,
+			Columns: []string{sagastepexecution.SagaExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sseuo.mutation.SagaExecutionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   sagastepexecution.SagaExecutionTable,
+			Columns: []string{sagastepexecution.SagaExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SagaStepExecution{config: sseuo.config}
 	_spec.Assign = _node.assignValues

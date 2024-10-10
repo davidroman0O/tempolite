@@ -12,17 +12,19 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
 
 // SagaStepExecutionQuery is the builder for querying SagaStepExecution entities.
 type SagaStepExecutionQuery struct {
 	config
-	ctx        *QueryContext
-	order      []sagastepexecution.OrderOption
-	inters     []Interceptor
-	predicates []predicate.SagaStepExecution
-	withFKs    bool
+	ctx               *QueryContext
+	order             []sagastepexecution.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.SagaStepExecution
+	withSagaExecution *SagaExecutionQuery
+	withFKs           bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -57,6 +59,28 @@ func (sseq *SagaStepExecutionQuery) Unique(unique bool) *SagaStepExecutionQuery 
 func (sseq *SagaStepExecutionQuery) Order(o ...sagastepexecution.OrderOption) *SagaStepExecutionQuery {
 	sseq.order = append(sseq.order, o...)
 	return sseq
+}
+
+// QuerySagaExecution chains the current query on the "saga_execution" edge.
+func (sseq *SagaStepExecutionQuery) QuerySagaExecution() *SagaExecutionQuery {
+	query := (&SagaExecutionClient{config: sseq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sseq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sseq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sagastepexecution.Table, sagastepexecution.FieldID, selector),
+			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sagastepexecution.SagaExecutionTable, sagastepexecution.SagaExecutionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sseq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first SagaStepExecution entity from the query.
@@ -246,15 +270,27 @@ func (sseq *SagaStepExecutionQuery) Clone() *SagaStepExecutionQuery {
 		return nil
 	}
 	return &SagaStepExecutionQuery{
-		config:     sseq.config,
-		ctx:        sseq.ctx.Clone(),
-		order:      append([]sagastepexecution.OrderOption{}, sseq.order...),
-		inters:     append([]Interceptor{}, sseq.inters...),
-		predicates: append([]predicate.SagaStepExecution{}, sseq.predicates...),
+		config:            sseq.config,
+		ctx:               sseq.ctx.Clone(),
+		order:             append([]sagastepexecution.OrderOption{}, sseq.order...),
+		inters:            append([]Interceptor{}, sseq.inters...),
+		predicates:        append([]predicate.SagaStepExecution{}, sseq.predicates...),
+		withSagaExecution: sseq.withSagaExecution.Clone(),
 		// clone intermediate query.
 		sql:  sseq.sql.Clone(),
 		path: sseq.path,
 	}
+}
+
+// WithSagaExecution tells the query-builder to eager-load the nodes that are connected to
+// the "saga_execution" edge. The optional arguments are used to configure the query builder of the edge.
+func (sseq *SagaStepExecutionQuery) WithSagaExecution(opts ...func(*SagaExecutionQuery)) *SagaStepExecutionQuery {
+	query := (&SagaExecutionClient{config: sseq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sseq.withSagaExecution = query
+	return sseq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -263,12 +299,12 @@ func (sseq *SagaStepExecutionQuery) Clone() *SagaStepExecutionQuery {
 // Example:
 //
 //	var v []struct {
-//		SagaExecutionID string `json:"saga_execution_id,omitempty"`
+//		HandlerName string `json:"handler_name,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SagaStepExecution.Query().
-//		GroupBy(sagastepexecution.FieldSagaExecutionID).
+//		GroupBy(sagastepexecution.FieldHandlerName).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (sseq *SagaStepExecutionQuery) GroupBy(field string, fields ...string) *SagaStepExecutionGroupBy {
@@ -286,11 +322,11 @@ func (sseq *SagaStepExecutionQuery) GroupBy(field string, fields ...string) *Sag
 // Example:
 //
 //	var v []struct {
-//		SagaExecutionID string `json:"saga_execution_id,omitempty"`
+//		HandlerName string `json:"handler_name,omitempty"`
 //	}
 //
 //	client.SagaStepExecution.Query().
-//		Select(sagastepexecution.FieldSagaExecutionID).
+//		Select(sagastepexecution.FieldHandlerName).
 //		Scan(ctx, &v)
 func (sseq *SagaStepExecutionQuery) Select(fields ...string) *SagaStepExecutionSelect {
 	sseq.ctx.Fields = append(sseq.ctx.Fields, fields...)
@@ -333,10 +369,16 @@ func (sseq *SagaStepExecutionQuery) prepareQuery(ctx context.Context) error {
 
 func (sseq *SagaStepExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SagaStepExecution, error) {
 	var (
-		nodes   = []*SagaStepExecution{}
-		withFKs = sseq.withFKs
-		_spec   = sseq.querySpec()
+		nodes       = []*SagaStepExecution{}
+		withFKs     = sseq.withFKs
+		_spec       = sseq.querySpec()
+		loadedTypes = [1]bool{
+			sseq.withSagaExecution != nil,
+		}
 	)
+	if sseq.withSagaExecution != nil {
+		withFKs = true
+	}
 	if withFKs {
 		_spec.Node.Columns = append(_spec.Node.Columns, sagastepexecution.ForeignKeys...)
 	}
@@ -346,6 +388,7 @@ func (sseq *SagaStepExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHo
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &SagaStepExecution{config: sseq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -357,7 +400,46 @@ func (sseq *SagaStepExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHo
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := sseq.withSagaExecution; query != nil {
+		if err := sseq.loadSagaExecution(ctx, query, nodes, nil,
+			func(n *SagaStepExecution, e *SagaExecution) { n.Edges.SagaExecution = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (sseq *SagaStepExecutionQuery) loadSagaExecution(ctx context.Context, query *SagaExecutionQuery, nodes []*SagaStepExecution, init func(*SagaStepExecution), assign func(*SagaStepExecution, *SagaExecution)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*SagaStepExecution)
+	for i := range nodes {
+		if nodes[i].saga_execution_steps == nil {
+			continue
+		}
+		fk := *nodes[i].saga_execution_steps
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(sagaexecution.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "saga_execution_steps" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (sseq *SagaStepExecutionQuery) sqlCount(ctx context.Context) (int, error) {

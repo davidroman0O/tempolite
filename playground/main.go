@@ -962,6 +962,8 @@ func main() {
 		chn <- "data"
 		close(chn) // if closed, then the SignalConsumerChannel/SignalProducerChannel channel store on a sync.Map will be closed too
 	}()
+
+	_, _ = tp.EnqueueWorkflow(Workflow1, "hello", 42)
 }
 
 func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
@@ -1017,7 +1019,7 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 	return taskID, nil
 }
 
-func (tp *Tempolite) EnqueueWorkflow(longName HandlerIdentity, params ...interface{}) (string, error) {
+func (tp *Tempolite) EnqueueWorkflow(workfow interface{}, params ...interface{}) (string, error) {
 	return "", nil
 }
 

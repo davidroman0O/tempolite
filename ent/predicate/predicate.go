@@ -6,14 +6,17 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-// ExecutionContext is the predicate function for executioncontext builders.
-type ExecutionContext func(*sql.Selector)
+// Activity is the predicate function for activity builders.
+type Activity func(*sql.Selector)
 
-// HandlerExecution is the predicate function for handlerexecution builders.
-type HandlerExecution func(*sql.Selector)
+// ActivityExecution is the predicate function for activityexecution builders.
+type ActivityExecution func(*sql.Selector)
 
-// HandlerTask is the predicate function for handlertask builders.
-type HandlerTask func(*sql.Selector)
+// Run is the predicate function for run builders.
+type Run func(*sql.Selector)
+
+// Saga is the predicate function for saga builders.
+type Saga func(*sql.Selector)
 
 // SagaExecution is the predicate function for sagaexecution builders.
 type SagaExecution func(*sql.Selector)
@@ -21,5 +24,17 @@ type SagaExecution func(*sql.Selector)
 // SagaStepExecution is the predicate function for sagastepexecution builders.
 type SagaStepExecution func(*sql.Selector)
 
-// SideEffectResult is the predicate function for sideeffectresult builders.
-type SideEffectResult func(*sql.Selector)
+// SideEffect is the predicate function for sideeffect builders.
+type SideEffect func(*sql.Selector)
+
+// SideEffectExecution is the predicate function for sideeffectexecution builders.
+type SideEffectExecution func(*sql.Selector)
+
+// Signal is the predicate function for signal builders.
+type Signal func(*sql.Selector)
+
+// Workflow is the predicate function for workflow builders.
+type Workflow func(*sql.Selector)
+
+// WorkflowExecution is the predicate function for workflowexecution builders.
+type WorkflowExecution func(*sql.Selector)

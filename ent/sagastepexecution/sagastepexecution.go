@@ -4,8 +4,10 @@ package sagastepexecution
 
 import (
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -13,28 +15,49 @@ const (
 	Label = "saga_step_execution"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldSagaExecutionID holds the string denoting the saga_execution_id field in the database.
-	FieldSagaExecutionID = "saga_execution_id"
-	// FieldStepNumber holds the string denoting the step_number field in the database.
-	FieldStepNumber = "step_number"
+	// FieldHandlerName holds the string denoting the handler_name field in the database.
+	FieldHandlerName = "handler_name"
+	// FieldStepType holds the string denoting the step_type field in the database.
+	FieldStepType = "step_type"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldStartTime holds the string denoting the start_time field in the database.
-	FieldStartTime = "start_time"
-	// FieldEndTime holds the string denoting the end_time field in the database.
-	FieldEndTime = "end_time"
+	// FieldSequence holds the string denoting the sequence field in the database.
+	FieldSequence = "sequence"
+	// FieldAttempt holds the string denoting the attempt field in the database.
+	FieldAttempt = "attempt"
+	// FieldInput holds the string denoting the input field in the database.
+	FieldInput = "input"
+	// FieldOutput holds the string denoting the output field in the database.
+	FieldOutput = "output"
+	// FieldStartedAt holds the string denoting the started_at field in the database.
+	FieldStartedAt = "started_at"
+	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
+	FieldUpdatedAt = "updated_at"
+	// EdgeSagaExecution holds the string denoting the saga_execution edge name in mutations.
+	EdgeSagaExecution = "saga_execution"
 	// Table holds the table name of the sagastepexecution in the database.
 	Table = "saga_step_executions"
+	// SagaExecutionTable is the table that holds the saga_execution relation/edge.
+	SagaExecutionTable = "saga_step_executions"
+	// SagaExecutionInverseTable is the table name for the SagaExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "sagaexecution" package.
+	SagaExecutionInverseTable = "saga_executions"
+	// SagaExecutionColumn is the table column denoting the saga_execution relation/edge.
+	SagaExecutionColumn = "saga_execution_steps"
 )
 
 // Columns holds all SQL columns for sagastepexecution fields.
 var Columns = []string{
 	FieldID,
-	FieldSagaExecutionID,
-	FieldStepNumber,
+	FieldHandlerName,
+	FieldStepType,
 	FieldStatus,
-	FieldStartTime,
-	FieldEndTime,
+	FieldSequence,
+	FieldAttempt,
+	FieldInput,
+	FieldOutput,
+	FieldStartedAt,
+	FieldUpdatedAt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "saga_step_executions"
@@ -58,16 +81,57 @@ func ValidColumn(column string) bool {
 	return false
 }
 
+var (
+	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
+	HandlerNameValidator func(string) error
+	// SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	SequenceValidator func(int) error
+	// DefaultAttempt holds the default value on creation for the "attempt" field.
+	DefaultAttempt int
+	// DefaultStartedAt holds the default value on creation for the "started_at" field.
+	DefaultStartedAt func() time.Time
+	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
+	DefaultUpdatedAt func() time.Time
+	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
+	UpdateDefaultUpdatedAt func() time.Time
+)
+
+// StepType defines the type for the "step_type" enum field.
+type StepType string
+
+// StepType values.
+const (
+	StepTypeTransaction  StepType = "Transaction"
+	StepTypeCompensation StepType = "Compensation"
+)
+
+func (st StepType) String() string {
+	return string(st)
+}
+
+// StepTypeValidator is a validator for the "step_type" field enum values. It is called by the builders before save.
+func StepTypeValidator(st StepType) error {
+	switch st {
+	case StepTypeTransaction, StepTypeCompensation:
+		return nil
+	default:
+		return fmt.Errorf("sagastepexecution: invalid enum value for step_type field: %q", st)
+	}
+}
+
 // Status defines the type for the "status" enum field.
 type Status string
 
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
+
 // Status values.
 const (
-	StatusPending     Status = "pending"
-	StatusInProgress  Status = "in_progress"
-	StatusCompleted   Status = "completed"
-	StatusFailed      Status = "failed"
-	StatusCompensated Status = "compensated"
+	StatusPending     Status = "Pending"
+	StatusRunning     Status = "Running"
+	StatusCompleted   Status = "Completed"
+	StatusFailed      Status = "Failed"
+	StatusCompensated Status = "Compensated"
 )
 
 func (s Status) String() string {
@@ -77,7 +141,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusInProgress, StatusCompleted, StatusFailed, StatusCompensated:
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusCompensated:
 		return nil
 	default:
 		return fmt.Errorf("sagastepexecution: invalid enum value for status field: %q", s)
@@ -92,14 +156,14 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// BySagaExecutionID orders the results by the saga_execution_id field.
-func BySagaExecutionID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSagaExecutionID, opts...).ToFunc()
+// ByHandlerName orders the results by the handler_name field.
+func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
 }
 
-// ByStepNumber orders the results by the step_number field.
-func ByStepNumber(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStepNumber, opts...).ToFunc()
+// ByStepType orders the results by the step_type field.
+func ByStepType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStepType, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
@@ -107,12 +171,36 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByStartTime orders the results by the start_time field.
-func ByStartTime(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStartTime, opts...).ToFunc()
+// BySequence orders the results by the sequence field.
+func BySequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSequence, opts...).ToFunc()
 }
 
-// ByEndTime orders the results by the end_time field.
-func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEndTime, opts...).ToFunc()
+// ByAttempt orders the results by the attempt field.
+func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
+}
+
+// ByStartedAt orders the results by the started_at field.
+func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartedAt, opts...).ToFunc()
+}
+
+// ByUpdatedAt orders the results by the updated_at field.
+func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// BySagaExecutionField orders the results by saga_execution field.
+func BySagaExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSagaExecutionStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newSagaExecutionStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SagaExecutionInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, SagaExecutionTable, SagaExecutionColumn),
+	)
 }

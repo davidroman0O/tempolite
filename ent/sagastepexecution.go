@@ -3,12 +3,14 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
 
@@ -17,18 +19,49 @@ type SagaStepExecution struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
-	// SagaExecutionID holds the value of the "saga_execution_id" field.
-	SagaExecutionID string `json:"saga_execution_id,omitempty"`
-	// StepNumber holds the value of the "step_number" field.
-	StepNumber int `json:"step_number,omitempty"`
+	// HandlerName holds the value of the "handler_name" field.
+	HandlerName string `json:"handler_name,omitempty"`
+	// StepType holds the value of the "step_type" field.
+	StepType sagastepexecution.StepType `json:"step_type,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sagastepexecution.Status `json:"status,omitempty"`
-	// StartTime holds the value of the "start_time" field.
-	StartTime time.Time `json:"start_time,omitempty"`
-	// EndTime holds the value of the "end_time" field.
-	EndTime              time.Time `json:"end_time,omitempty"`
+	// Sequence holds the value of the "sequence" field.
+	Sequence int `json:"sequence,omitempty"`
+	// Attempt holds the value of the "attempt" field.
+	Attempt int `json:"attempt,omitempty"`
+	// Input holds the value of the "input" field.
+	Input []interface{} `json:"input,omitempty"`
+	// Output holds the value of the "output" field.
+	Output []interface{} `json:"output,omitempty"`
+	// StartedAt holds the value of the "started_at" field.
+	StartedAt time.Time `json:"started_at,omitempty"`
+	// UpdatedAt holds the value of the "updated_at" field.
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SagaStepExecutionQuery when eager-loading is set.
+	Edges                SagaStepExecutionEdges `json:"edges"`
 	saga_execution_steps *string
 	selectValues         sql.SelectValues
+}
+
+// SagaStepExecutionEdges holds the relations/edges for other nodes in the graph.
+type SagaStepExecutionEdges struct {
+	// SagaExecution holds the value of the saga_execution edge.
+	SagaExecution *SagaExecution `json:"saga_execution,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// SagaExecutionOrErr returns the SagaExecution value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SagaStepExecutionEdges) SagaExecutionOrErr() (*SagaExecution, error) {
+	if e.SagaExecution != nil {
+		return e.SagaExecution, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: sagaexecution.Label}
+	}
+	return nil, &NotLoadedError{edge: "saga_execution"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -36,11 +69,13 @@ func (*SagaStepExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sagastepexecution.FieldStepNumber:
+		case sagastepexecution.FieldInput, sagastepexecution.FieldOutput:
+			values[i] = new([]byte)
+		case sagastepexecution.FieldSequence, sagastepexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case sagastepexecution.FieldID, sagastepexecution.FieldSagaExecutionID, sagastepexecution.FieldStatus:
+		case sagastepexecution.FieldID, sagastepexecution.FieldHandlerName, sagastepexecution.FieldStepType, sagastepexecution.FieldStatus:
 			values[i] = new(sql.NullString)
-		case sagastepexecution.FieldStartTime, sagastepexecution.FieldEndTime:
+		case sagastepexecution.FieldStartedAt, sagastepexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		case sagastepexecution.ForeignKeys[0]: // saga_execution_steps
 			values[i] = new(sql.NullString)
@@ -65,17 +100,17 @@ func (sse *SagaStepExecution) assignValues(columns []string, values []any) error
 			} else if value.Valid {
 				sse.ID = value.String
 			}
-		case sagastepexecution.FieldSagaExecutionID:
+		case sagastepexecution.FieldHandlerName:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field saga_execution_id", values[i])
+				return fmt.Errorf("unexpected type %T for field handler_name", values[i])
 			} else if value.Valid {
-				sse.SagaExecutionID = value.String
+				sse.HandlerName = value.String
 			}
-		case sagastepexecution.FieldStepNumber:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field step_number", values[i])
+		case sagastepexecution.FieldStepType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field step_type", values[i])
 			} else if value.Valid {
-				sse.StepNumber = int(value.Int64)
+				sse.StepType = sagastepexecution.StepType(value.String)
 			}
 		case sagastepexecution.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -83,17 +118,45 @@ func (sse *SagaStepExecution) assignValues(columns []string, values []any) error
 			} else if value.Valid {
 				sse.Status = sagastepexecution.Status(value.String)
 			}
-		case sagastepexecution.FieldStartTime:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field start_time", values[i])
+		case sagastepexecution.FieldSequence:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sequence", values[i])
 			} else if value.Valid {
-				sse.StartTime = value.Time
+				sse.Sequence = int(value.Int64)
 			}
-		case sagastepexecution.FieldEndTime:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field end_time", values[i])
+		case sagastepexecution.FieldAttempt:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempt", values[i])
 			} else if value.Valid {
-				sse.EndTime = value.Time
+				sse.Attempt = int(value.Int64)
+			}
+		case sagastepexecution.FieldInput:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field input", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &sse.Input); err != nil {
+					return fmt.Errorf("unmarshal field input: %w", err)
+				}
+			}
+		case sagastepexecution.FieldOutput:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field output", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &sse.Output); err != nil {
+					return fmt.Errorf("unmarshal field output: %w", err)
+				}
+			}
+		case sagastepexecution.FieldStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field started_at", values[i])
+			} else if value.Valid {
+				sse.StartedAt = value.Time
+			}
+		case sagastepexecution.FieldUpdatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
+			} else if value.Valid {
+				sse.UpdatedAt = value.Time
 			}
 		case sagastepexecution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -113,6 +176,11 @@ func (sse *SagaStepExecution) assignValues(columns []string, values []any) error
 // This includes values selected through modifiers, order, etc.
 func (sse *SagaStepExecution) Value(name string) (ent.Value, error) {
 	return sse.selectValues.Get(name)
+}
+
+// QuerySagaExecution queries the "saga_execution" edge of the SagaStepExecution entity.
+func (sse *SagaStepExecution) QuerySagaExecution() *SagaExecutionQuery {
+	return NewSagaStepExecutionClient(sse.config).QuerySagaExecution(sse)
 }
 
 // Update returns a builder for updating this SagaStepExecution.
@@ -138,20 +206,32 @@ func (sse *SagaStepExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("SagaStepExecution(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", sse.ID))
-	builder.WriteString("saga_execution_id=")
-	builder.WriteString(sse.SagaExecutionID)
+	builder.WriteString("handler_name=")
+	builder.WriteString(sse.HandlerName)
 	builder.WriteString(", ")
-	builder.WriteString("step_number=")
-	builder.WriteString(fmt.Sprintf("%v", sse.StepNumber))
+	builder.WriteString("step_type=")
+	builder.WriteString(fmt.Sprintf("%v", sse.StepType))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", sse.Status))
 	builder.WriteString(", ")
-	builder.WriteString("start_time=")
-	builder.WriteString(sse.StartTime.Format(time.ANSIC))
+	builder.WriteString("sequence=")
+	builder.WriteString(fmt.Sprintf("%v", sse.Sequence))
 	builder.WriteString(", ")
-	builder.WriteString("end_time=")
-	builder.WriteString(sse.EndTime.Format(time.ANSIC))
+	builder.WriteString("attempt=")
+	builder.WriteString(fmt.Sprintf("%v", sse.Attempt))
+	builder.WriteString(", ")
+	builder.WriteString("input=")
+	builder.WriteString(fmt.Sprintf("%v", sse.Input))
+	builder.WriteString(", ")
+	builder.WriteString("output=")
+	builder.WriteString(fmt.Sprintf("%v", sse.Output))
+	builder.WriteString(", ")
+	builder.WriteString("started_at=")
+	builder.WriteString(sse.StartedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(sse.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

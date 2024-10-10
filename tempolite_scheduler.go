@@ -4,110 +4,95 @@ import (
 	"fmt"
 	"log"
 	"runtime"
-	"time"
 
 	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
-// Scheduler is responsible for pulling tasks from the database and dispatching them to the handler pool
-type Scheduler struct {
-	tp   *Tempolite
-	done chan struct{}
-}
-
-// NewScheduler creates a new Scheduler instance
-func NewScheduler(tp *Tempolite) *Scheduler {
-	s := &Scheduler{
-		tp:   tp,
-		done: make(chan struct{}),
-	}
-
-	go s.run()
-
-	return s
-}
-
-// Close stops the scheduler
-func (s *Scheduler) Close() {
-	close(s.done)
-}
-
-// run is the main loop of the scheduler
-func (s *Scheduler) run() {
+func (tp *Tempolite) schedulerExeutionWorkflow() {
+	defer close(tp.schedulerExecutionWorkflowDone)
 	for {
 		select {
-		case <-s.done:
+		case <-tp.ctx.Done():
 			return
 		default:
-			// Fetch and process pending tasks
-			if err := s.processPendingTasks(); err != nil {
-				log.Printf("Error processing pending tasks: %v", err)
-			}
-			runtime.Gosched() // Allow other goroutines to run
-		}
-	}
-}
 
-// processPendingTasks fetches pending tasks and dispatches them to the handler pool
-func (s *Scheduler) processPendingTasks() error {
-	// Query for pending tasks
-	pendingTasks, err := s.tp.client.HandlerTask.
-		Query().
-		Where(handlertask.StatusEQ(handlertask.StatusPending)).
-		WithHandlerExecution().
-		Order(ent.Asc(handlertask.FieldCreatedAt)).
-		Limit(1).
-		All(s.tp.ctx)
-
-	if err != nil {
-		return fmt.Errorf("error querying pending tasks: %v", err)
-	}
-
-	for _, task := range pendingTasks {
-		if task.Edges.HandlerExecution == nil {
-			log.Printf("Task %s has no associated HandlerExecution", task.ID)
-			continue
-		}
-
-		// Check if the parent task (if any) has completed
-		if task.Edges.HandlerExecution.Edges.Parent != nil {
-			parentStatus := task.Edges.HandlerExecution.Edges.Parent.Status
-			if parentStatus != handlerexecution.StatusCompleted {
-				log.Printf("Parent task for %s is not completed. Current status: %s", task.ID, parentStatus)
+			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
+				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
+				Order(ent.Asc(workflowexecution.FieldStartedAt)).WithWorkflow().
+				Limit(1).All(tp.ctx)
+			if err != nil {
+				log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
 				continue
 			}
-		}
 
-		// Dispatch the task to the handler pool
-		if err := s.tp.handlerTaskPool.pool.
-			Dispatch(
-				task,
-				retrypool.WithMaxDuration[*ent.HandlerTask](time.Minute*10), // 10m
-				retrypool.WithTimeLimit[*ent.HandlerTask](time.Minute*30),   // 30m
-				retrypool.WithImmediateRetry[*ent.HandlerTask](),            // failed track jobs will be retried immediately
-			); err != nil {
-			log.Printf("Error dispatching task %s: %v", task.ID, err)
-			continue
-		}
+			if len(pendingWorkflows) == 0 {
+				continue
+			}
 
-		// Update the task status to in progress
-		_, err := s.tp.client.HandlerTask.
-			UpdateOne(task).
-			SetStatus(handlertask.StatusInProgress).
-			Save(s.tp.ctx)
+			var value any
+			var ok bool
 
-		if err != nil {
-			log.Printf("Error updating status for task %s: %v", task.ID, err)
+			for _, wkflw := range pendingWorkflows {
+
+				var workflowEntity *ent.Workflow
+				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, wkflw.Edges.Workflow.ID); err != nil {
+					// todo: maybe we can tag the execution as not executable
+					log.Printf("scheduler: Workflow.Get failed: %v", err)
+					continue
+				}
+
+				fmt.Println("workflowEntity: ", workflowEntity)
+
+				if value, ok = tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
+					var workflowHandlerInfo Workflow
+					if workflowHandlerInfo, ok = value.(Workflow); !ok {
+						// could be development bug
+						log.Printf("scheduler: workflow %s is not handler info", workflowEntity.HandlerName)
+						continue
+					}
+
+					inputs := []interface{}{}
+
+					// TODO: we can probably parallelize this
+					for idx, rawInput := range workflowEntity.Input {
+						inputType := workflowHandlerInfo.ParamTypes[idx]
+						inputKind := workflowHandlerInfo.ParamsKinds[idx]
+
+						realInput, err := convertInput(rawInput, inputType, inputKind)
+						if err != nil {
+							log.Printf("scheduler: convertInput failed: %v", err)
+							continue
+						}
+
+						inputs = append(inputs, realInput)
+					}
+
+					task := &workflowTask{
+						handlerName: workflowHandlerInfo.HandlerLongName,
+						handler:     workflowHandlerInfo.Handler,
+						params:      inputs,
+					}
+
+					log.Printf("scheduler: Dispatching workflow %s with params: %v", workflowEntity.HandlerName, workflowEntity.Input)
+					if err := tp.workflowPool.Dispatch(task); err != nil {
+						log.Printf("scheduler: Dispatch failed: %v", err)
+						continue
+					}
+
+					if _, err = tp.client.WorkflowExecution.UpdateOneID(wkflw.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
+						// TODO: could be a problem if not really dispatched
+						log.Printf("scheduler: WorkflowExecution.UpdateOneID failed: %v", err)
+						continue
+					}
+
+				} else {
+					log.Printf("scheduler: Workflow %s not found", wkflw.Edges.Workflow.HandlerName)
+					continue
+				}
+			}
+
+			runtime.Gosched()
 		}
 	}
-
-	// If no tasks were processed, sleep for a short duration to avoid tight looping
-	if len(pendingTasks) == 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return nil
 }

@@ -9,40 +9,52 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent"
 )
 
-// The ExecutionContextFunc type is an adapter to allow the use of ordinary
-// function as ExecutionContext mutator.
-type ExecutionContextFunc func(context.Context, *ent.ExecutionContextMutation) (ent.Value, error)
+// The ActivityFunc type is an adapter to allow the use of ordinary
+// function as Activity mutator.
+type ActivityFunc func(context.Context, *ent.ActivityMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f ExecutionContextFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ExecutionContextMutation); ok {
+func (f ActivityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionContextMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityMutation", m)
 }
 
-// The HandlerExecutionFunc type is an adapter to allow the use of ordinary
-// function as HandlerExecution mutator.
-type HandlerExecutionFunc func(context.Context, *ent.HandlerExecutionMutation) (ent.Value, error)
+// The ActivityExecutionFunc type is an adapter to allow the use of ordinary
+// function as ActivityExecution mutator.
+type ActivityExecutionFunc func(context.Context, *ent.ActivityExecutionMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f HandlerExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.HandlerExecutionMutation); ok {
+func (f ActivityExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityExecutionMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HandlerExecutionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityExecutionMutation", m)
 }
 
-// The HandlerTaskFunc type is an adapter to allow the use of ordinary
-// function as HandlerTask mutator.
-type HandlerTaskFunc func(context.Context, *ent.HandlerTaskMutation) (ent.Value, error)
+// The RunFunc type is an adapter to allow the use of ordinary
+// function as Run mutator.
+type RunFunc func(context.Context, *ent.RunMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f HandlerTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.HandlerTaskMutation); ok {
+func (f RunFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RunMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HandlerTaskMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RunMutation", m)
+}
+
+// The SagaFunc type is an adapter to allow the use of ordinary
+// function as Saga mutator.
+type SagaFunc func(context.Context, *ent.SagaMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SagaFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SagaMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaMutation", m)
 }
 
 // The SagaExecutionFunc type is an adapter to allow the use of ordinary
@@ -69,16 +81,64 @@ func (f SagaStepExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaStepExecutionMutation", m)
 }
 
-// The SideEffectResultFunc type is an adapter to allow the use of ordinary
-// function as SideEffectResult mutator.
-type SideEffectResultFunc func(context.Context, *ent.SideEffectResultMutation) (ent.Value, error)
+// The SideEffectFunc type is an adapter to allow the use of ordinary
+// function as SideEffect mutator.
+type SideEffectFunc func(context.Context, *ent.SideEffectMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f SideEffectResultFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SideEffectResultMutation); ok {
+func (f SideEffectFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SideEffectMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SideEffectResultMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SideEffectMutation", m)
+}
+
+// The SideEffectExecutionFunc type is an adapter to allow the use of ordinary
+// function as SideEffectExecution mutator.
+type SideEffectExecutionFunc func(context.Context, *ent.SideEffectExecutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SideEffectExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SideEffectExecutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SideEffectExecutionMutation", m)
+}
+
+// The SignalFunc type is an adapter to allow the use of ordinary
+// function as Signal mutator.
+type SignalFunc func(context.Context, *ent.SignalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SignalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SignalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SignalMutation", m)
+}
+
+// The WorkflowFunc type is an adapter to allow the use of ordinary
+// function as Workflow mutator.
+type WorkflowFunc func(context.Context, *ent.WorkflowMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WorkflowFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WorkflowMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowMutation", m)
+}
+
+// The WorkflowExecutionFunc type is an adapter to allow the use of ordinary
+// function as WorkflowExecution mutator.
+type WorkflowExecutionFunc func(context.Context, *ent.WorkflowExecutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WorkflowExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WorkflowExecutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowExecutionMutation", m)
 }
 
 // Condition is a hook condition function.

@@ -12,18 +12,28 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
-	// ExecutionContext is the client for interacting with the ExecutionContext builders.
-	ExecutionContext *ExecutionContextClient
-	// HandlerExecution is the client for interacting with the HandlerExecution builders.
-	HandlerExecution *HandlerExecutionClient
-	// HandlerTask is the client for interacting with the HandlerTask builders.
-	HandlerTask *HandlerTaskClient
+	// Activity is the client for interacting with the Activity builders.
+	Activity *ActivityClient
+	// ActivityExecution is the client for interacting with the ActivityExecution builders.
+	ActivityExecution *ActivityExecutionClient
+	// Run is the client for interacting with the Run builders.
+	Run *RunClient
+	// Saga is the client for interacting with the Saga builders.
+	Saga *SagaClient
 	// SagaExecution is the client for interacting with the SagaExecution builders.
 	SagaExecution *SagaExecutionClient
 	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
 	SagaStepExecution *SagaStepExecutionClient
-	// SideEffectResult is the client for interacting with the SideEffectResult builders.
-	SideEffectResult *SideEffectResultClient
+	// SideEffect is the client for interacting with the SideEffect builders.
+	SideEffect *SideEffectClient
+	// SideEffectExecution is the client for interacting with the SideEffectExecution builders.
+	SideEffectExecution *SideEffectExecutionClient
+	// Signal is the client for interacting with the Signal builders.
+	Signal *SignalClient
+	// Workflow is the client for interacting with the Workflow builders.
+	Workflow *WorkflowClient
+	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
+	WorkflowExecution *WorkflowExecutionClient
 
 	// lazily loaded.
 	client     *Client
@@ -155,12 +165,17 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
-	tx.ExecutionContext = NewExecutionContextClient(tx.config)
-	tx.HandlerExecution = NewHandlerExecutionClient(tx.config)
-	tx.HandlerTask = NewHandlerTaskClient(tx.config)
+	tx.Activity = NewActivityClient(tx.config)
+	tx.ActivityExecution = NewActivityExecutionClient(tx.config)
+	tx.Run = NewRunClient(tx.config)
+	tx.Saga = NewSagaClient(tx.config)
 	tx.SagaExecution = NewSagaExecutionClient(tx.config)
 	tx.SagaStepExecution = NewSagaStepExecutionClient(tx.config)
-	tx.SideEffectResult = NewSideEffectResultClient(tx.config)
+	tx.SideEffect = NewSideEffectClient(tx.config)
+	tx.SideEffectExecution = NewSideEffectExecutionClient(tx.config)
+	tx.Signal = NewSignalClient(tx.config)
+	tx.Workflow = NewWorkflowClient(tx.config)
+	tx.WorkflowExecution = NewWorkflowExecutionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
@@ -170,7 +185,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: ExecutionContext.QueryXXX(), the query will be executed
+// applies a query, for example: Activity.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

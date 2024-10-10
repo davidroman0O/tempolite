@@ -15,12 +15,17 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
+	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // Client is the client that holds all ent builders.
@@ -28,18 +33,28 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
-	// ExecutionContext is the client for interacting with the ExecutionContext builders.
-	ExecutionContext *ExecutionContextClient
-	// HandlerExecution is the client for interacting with the HandlerExecution builders.
-	HandlerExecution *HandlerExecutionClient
-	// HandlerTask is the client for interacting with the HandlerTask builders.
-	HandlerTask *HandlerTaskClient
+	// Activity is the client for interacting with the Activity builders.
+	Activity *ActivityClient
+	// ActivityExecution is the client for interacting with the ActivityExecution builders.
+	ActivityExecution *ActivityExecutionClient
+	// Run is the client for interacting with the Run builders.
+	Run *RunClient
+	// Saga is the client for interacting with the Saga builders.
+	Saga *SagaClient
 	// SagaExecution is the client for interacting with the SagaExecution builders.
 	SagaExecution *SagaExecutionClient
 	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
 	SagaStepExecution *SagaStepExecutionClient
-	// SideEffectResult is the client for interacting with the SideEffectResult builders.
-	SideEffectResult *SideEffectResultClient
+	// SideEffect is the client for interacting with the SideEffect builders.
+	SideEffect *SideEffectClient
+	// SideEffectExecution is the client for interacting with the SideEffectExecution builders.
+	SideEffectExecution *SideEffectExecutionClient
+	// Signal is the client for interacting with the Signal builders.
+	Signal *SignalClient
+	// Workflow is the client for interacting with the Workflow builders.
+	Workflow *WorkflowClient
+	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
+	WorkflowExecution *WorkflowExecutionClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -51,12 +66,17 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
-	c.ExecutionContext = NewExecutionContextClient(c.config)
-	c.HandlerExecution = NewHandlerExecutionClient(c.config)
-	c.HandlerTask = NewHandlerTaskClient(c.config)
+	c.Activity = NewActivityClient(c.config)
+	c.ActivityExecution = NewActivityExecutionClient(c.config)
+	c.Run = NewRunClient(c.config)
+	c.Saga = NewSagaClient(c.config)
 	c.SagaExecution = NewSagaExecutionClient(c.config)
 	c.SagaStepExecution = NewSagaStepExecutionClient(c.config)
-	c.SideEffectResult = NewSideEffectResultClient(c.config)
+	c.SideEffect = NewSideEffectClient(c.config)
+	c.SideEffectExecution = NewSideEffectExecutionClient(c.config)
+	c.Signal = NewSignalClient(c.config)
+	c.Workflow = NewWorkflowClient(c.config)
+	c.WorkflowExecution = NewWorkflowExecutionClient(c.config)
 }
 
 type (
@@ -147,14 +167,19 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		ExecutionContext:  NewExecutionContextClient(cfg),
-		HandlerExecution:  NewHandlerExecutionClient(cfg),
-		HandlerTask:       NewHandlerTaskClient(cfg),
-		SagaExecution:     NewSagaExecutionClient(cfg),
-		SagaStepExecution: NewSagaStepExecutionClient(cfg),
-		SideEffectResult:  NewSideEffectResultClient(cfg),
+		ctx:                 ctx,
+		config:              cfg,
+		Activity:            NewActivityClient(cfg),
+		ActivityExecution:   NewActivityExecutionClient(cfg),
+		Run:                 NewRunClient(cfg),
+		Saga:                NewSagaClient(cfg),
+		SagaExecution:       NewSagaExecutionClient(cfg),
+		SagaStepExecution:   NewSagaStepExecutionClient(cfg),
+		SideEffect:          NewSideEffectClient(cfg),
+		SideEffectExecution: NewSideEffectExecutionClient(cfg),
+		Signal:              NewSignalClient(cfg),
+		Workflow:            NewWorkflowClient(cfg),
+		WorkflowExecution:   NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
@@ -172,21 +197,26 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		ExecutionContext:  NewExecutionContextClient(cfg),
-		HandlerExecution:  NewHandlerExecutionClient(cfg),
-		HandlerTask:       NewHandlerTaskClient(cfg),
-		SagaExecution:     NewSagaExecutionClient(cfg),
-		SagaStepExecution: NewSagaStepExecutionClient(cfg),
-		SideEffectResult:  NewSideEffectResultClient(cfg),
+		ctx:                 ctx,
+		config:              cfg,
+		Activity:            NewActivityClient(cfg),
+		ActivityExecution:   NewActivityExecutionClient(cfg),
+		Run:                 NewRunClient(cfg),
+		Saga:                NewSagaClient(cfg),
+		SagaExecution:       NewSagaExecutionClient(cfg),
+		SagaStepExecution:   NewSagaStepExecutionClient(cfg),
+		SideEffect:          NewSideEffectClient(cfg),
+		SideEffectExecution: NewSideEffectExecutionClient(cfg),
+		Signal:              NewSignalClient(cfg),
+		Workflow:            NewWorkflowClient(cfg),
+		WorkflowExecution:   NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		ExecutionContext.
+//		Activity.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -209,8 +239,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.ExecutionContext, c.HandlerExecution, c.HandlerTask, c.SagaExecution,
-		c.SagaStepExecution, c.SideEffectResult,
+		c.Activity, c.ActivityExecution, c.Run, c.Saga, c.SagaExecution,
+		c.SagaStepExecution, c.SideEffect, c.SideEffectExecution, c.Signal, c.Workflow,
+		c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -220,8 +251,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.ExecutionContext, c.HandlerExecution, c.HandlerTask, c.SagaExecution,
-		c.SagaStepExecution, c.SideEffectResult,
+		c.Activity, c.ActivityExecution, c.Run, c.Saga, c.SagaExecution,
+		c.SagaStepExecution, c.SideEffect, c.SideEffectExecution, c.Signal, c.Workflow,
+		c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -230,124 +262,134 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
-	case *ExecutionContextMutation:
-		return c.ExecutionContext.mutate(ctx, m)
-	case *HandlerExecutionMutation:
-		return c.HandlerExecution.mutate(ctx, m)
-	case *HandlerTaskMutation:
-		return c.HandlerTask.mutate(ctx, m)
+	case *ActivityMutation:
+		return c.Activity.mutate(ctx, m)
+	case *ActivityExecutionMutation:
+		return c.ActivityExecution.mutate(ctx, m)
+	case *RunMutation:
+		return c.Run.mutate(ctx, m)
+	case *SagaMutation:
+		return c.Saga.mutate(ctx, m)
 	case *SagaExecutionMutation:
 		return c.SagaExecution.mutate(ctx, m)
 	case *SagaStepExecutionMutation:
 		return c.SagaStepExecution.mutate(ctx, m)
-	case *SideEffectResultMutation:
-		return c.SideEffectResult.mutate(ctx, m)
+	case *SideEffectMutation:
+		return c.SideEffect.mutate(ctx, m)
+	case *SideEffectExecutionMutation:
+		return c.SideEffectExecution.mutate(ctx, m)
+	case *SignalMutation:
+		return c.Signal.mutate(ctx, m)
+	case *WorkflowMutation:
+		return c.Workflow.mutate(ctx, m)
+	case *WorkflowExecutionMutation:
+		return c.WorkflowExecution.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
 }
 
-// ExecutionContextClient is a client for the ExecutionContext schema.
-type ExecutionContextClient struct {
+// ActivityClient is a client for the Activity schema.
+type ActivityClient struct {
 	config
 }
 
-// NewExecutionContextClient returns a client for the ExecutionContext from the given config.
-func NewExecutionContextClient(c config) *ExecutionContextClient {
-	return &ExecutionContextClient{config: c}
+// NewActivityClient returns a client for the Activity from the given config.
+func NewActivityClient(c config) *ActivityClient {
+	return &ActivityClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `executioncontext.Hooks(f(g(h())))`.
-func (c *ExecutionContextClient) Use(hooks ...Hook) {
-	c.hooks.ExecutionContext = append(c.hooks.ExecutionContext, hooks...)
+// A call to `Use(f, g, h)` equals to `activity.Hooks(f(g(h())))`.
+func (c *ActivityClient) Use(hooks ...Hook) {
+	c.hooks.Activity = append(c.hooks.Activity, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `executioncontext.Intercept(f(g(h())))`.
-func (c *ExecutionContextClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ExecutionContext = append(c.inters.ExecutionContext, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `activity.Intercept(f(g(h())))`.
+func (c *ActivityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Activity = append(c.inters.Activity, interceptors...)
 }
 
-// Create returns a builder for creating a ExecutionContext entity.
-func (c *ExecutionContextClient) Create() *ExecutionContextCreate {
-	mutation := newExecutionContextMutation(c.config, OpCreate)
-	return &ExecutionContextCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a Activity entity.
+func (c *ActivityClient) Create() *ActivityCreate {
+	mutation := newActivityMutation(c.config, OpCreate)
+	return &ActivityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of ExecutionContext entities.
-func (c *ExecutionContextClient) CreateBulk(builders ...*ExecutionContextCreate) *ExecutionContextCreateBulk {
-	return &ExecutionContextCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of Activity entities.
+func (c *ActivityClient) CreateBulk(builders ...*ActivityCreate) *ActivityCreateBulk {
+	return &ActivityCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *ExecutionContextClient) MapCreateBulk(slice any, setFunc func(*ExecutionContextCreate, int)) *ExecutionContextCreateBulk {
+func (c *ActivityClient) MapCreateBulk(slice any, setFunc func(*ActivityCreate, int)) *ActivityCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &ExecutionContextCreateBulk{err: fmt.Errorf("calling to ExecutionContextClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &ActivityCreateBulk{err: fmt.Errorf("calling to ActivityClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*ExecutionContextCreate, rv.Len())
+	builders := make([]*ActivityCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &ExecutionContextCreateBulk{config: c.config, builders: builders}
+	return &ActivityCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for ExecutionContext.
-func (c *ExecutionContextClient) Update() *ExecutionContextUpdate {
-	mutation := newExecutionContextMutation(c.config, OpUpdate)
-	return &ExecutionContextUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for Activity.
+func (c *ActivityClient) Update() *ActivityUpdate {
+	mutation := newActivityMutation(c.config, OpUpdate)
+	return &ActivityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *ExecutionContextClient) UpdateOne(ec *ExecutionContext) *ExecutionContextUpdateOne {
-	mutation := newExecutionContextMutation(c.config, OpUpdateOne, withExecutionContext(ec))
-	return &ExecutionContextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *ActivityClient) UpdateOne(a *Activity) *ActivityUpdateOne {
+	mutation := newActivityMutation(c.config, OpUpdateOne, withActivity(a))
+	return &ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *ExecutionContextClient) UpdateOneID(id string) *ExecutionContextUpdateOne {
-	mutation := newExecutionContextMutation(c.config, OpUpdateOne, withExecutionContextID(id))
-	return &ExecutionContextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *ActivityClient) UpdateOneID(id string) *ActivityUpdateOne {
+	mutation := newActivityMutation(c.config, OpUpdateOne, withActivityID(id))
+	return &ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for ExecutionContext.
-func (c *ExecutionContextClient) Delete() *ExecutionContextDelete {
-	mutation := newExecutionContextMutation(c.config, OpDelete)
-	return &ExecutionContextDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for Activity.
+func (c *ActivityClient) Delete() *ActivityDelete {
+	mutation := newActivityMutation(c.config, OpDelete)
+	return &ActivityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *ExecutionContextClient) DeleteOne(ec *ExecutionContext) *ExecutionContextDeleteOne {
-	return c.DeleteOneID(ec.ID)
+func (c *ActivityClient) DeleteOne(a *Activity) *ActivityDeleteOne {
+	return c.DeleteOneID(a.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ExecutionContextClient) DeleteOneID(id string) *ExecutionContextDeleteOne {
-	builder := c.Delete().Where(executioncontext.ID(id))
+func (c *ActivityClient) DeleteOneID(id string) *ActivityDeleteOne {
+	builder := c.Delete().Where(activity.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &ExecutionContextDeleteOne{builder}
+	return &ActivityDeleteOne{builder}
 }
 
-// Query returns a query builder for ExecutionContext.
-func (c *ExecutionContextClient) Query() *ExecutionContextQuery {
-	return &ExecutionContextQuery{
+// Query returns a query builder for Activity.
+func (c *ActivityClient) Query() *ActivityQuery {
+	return &ActivityQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeExecutionContext},
+		ctx:    &QueryContext{Type: TypeActivity},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a ExecutionContext entity by its id.
-func (c *ExecutionContextClient) Get(ctx context.Context, id string) (*ExecutionContext, error) {
-	return c.Query().Where(executioncontext.ID(id)).Only(ctx)
+// Get returns a Activity entity by its id.
+func (c *ActivityClient) Get(ctx context.Context, id string) (*Activity, error) {
+	return c.Query().Where(activity.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *ExecutionContextClient) GetX(ctx context.Context, id string) *ExecutionContext {
+func (c *ActivityClient) GetX(ctx context.Context, id string) *Activity {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -355,438 +397,603 @@ func (c *ExecutionContextClient) GetX(ctx context.Context, id string) *Execution
 	return obj
 }
 
-// QueryHandlerExecutions queries the handler_executions edge of a ExecutionContext.
-func (c *ExecutionContextClient) QueryHandlerExecutions(ec *ExecutionContext) *HandlerExecutionQuery {
-	query := (&HandlerExecutionClient{config: c.config}).Query()
+// QueryExecutions queries the executions edge of a Activity.
+func (c *ActivityClient) QueryExecutions(a *Activity) *ActivityExecutionQuery {
+	query := (&ActivityExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ec.ID
+		id := a.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
-			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.HandlerExecutionsTable, executioncontext.HandlerExecutionsColumn),
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activity.ExecutionsTable, activity.ExecutionsColumn),
 		)
-		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QuerySideEffectResults queries the side_effect_results edge of a ExecutionContext.
-func (c *ExecutionContextClient) QuerySideEffectResults(ec *ExecutionContext) *SideEffectResultQuery {
-	query := (&SideEffectResultClient{config: c.config}).Query()
+// QueryWorkflow queries the workflow edge of a Activity.
+func (c *ActivityClient) QueryWorkflow(a *Activity) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ec.ID
+		id := a.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
-			sqlgraph.To(sideeffectresult.Table, sideeffectresult.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.SideEffectResultsTable, executioncontext.SideEffectResultsColumn),
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activity.WorkflowTable, activity.WorkflowColumn),
 		)
-		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QuerySagaExecutions queries the saga_executions edge of a ExecutionContext.
-func (c *ExecutionContextClient) QuerySagaExecutions(ec *ExecutionContext) *SagaExecutionQuery {
+// QuerySagas queries the sagas edge of a Activity.
+func (c *ActivityClient) QuerySagas(a *Activity) *SagaQuery {
+	query := (&SagaClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(saga.Table, saga.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activity.SagasTable, activity.SagasColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySideEffects queries the side_effects edge of a Activity.
+func (c *ActivityClient) QuerySideEffects(a *Activity) *SideEffectQuery {
+	query := (&SideEffectClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(sideeffect.Table, sideeffect.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activity.SideEffectsTable, activity.SideEffectsColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityClient) Hooks() []Hook {
+	return c.hooks.Activity
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityClient) Interceptors() []Interceptor {
+	return c.inters.Activity
+}
+
+func (c *ActivityClient) mutate(ctx context.Context, m *ActivityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Activity mutation op: %q", m.Op())
+	}
+}
+
+// ActivityExecutionClient is a client for the ActivityExecution schema.
+type ActivityExecutionClient struct {
+	config
+}
+
+// NewActivityExecutionClient returns a client for the ActivityExecution from the given config.
+func NewActivityExecutionClient(c config) *ActivityExecutionClient {
+	return &ActivityExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activityexecution.Hooks(f(g(h())))`.
+func (c *ActivityExecutionClient) Use(hooks ...Hook) {
+	c.hooks.ActivityExecution = append(c.hooks.ActivityExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activityexecution.Intercept(f(g(h())))`.
+func (c *ActivityExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ActivityExecution = append(c.inters.ActivityExecution, interceptors...)
+}
+
+// Create returns a builder for creating a ActivityExecution entity.
+func (c *ActivityExecutionClient) Create() *ActivityExecutionCreate {
+	mutation := newActivityExecutionMutation(c.config, OpCreate)
+	return &ActivityExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ActivityExecution entities.
+func (c *ActivityExecutionClient) CreateBulk(builders ...*ActivityExecutionCreate) *ActivityExecutionCreateBulk {
+	return &ActivityExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityExecutionClient) MapCreateBulk(slice any, setFunc func(*ActivityExecutionCreate, int)) *ActivityExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityExecutionCreateBulk{err: fmt.Errorf("calling to ActivityExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ActivityExecution.
+func (c *ActivityExecutionClient) Update() *ActivityExecutionUpdate {
+	mutation := newActivityExecutionMutation(c.config, OpUpdate)
+	return &ActivityExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityExecutionClient) UpdateOne(ae *ActivityExecution) *ActivityExecutionUpdateOne {
+	mutation := newActivityExecutionMutation(c.config, OpUpdateOne, withActivityExecution(ae))
+	return &ActivityExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityExecutionClient) UpdateOneID(id string) *ActivityExecutionUpdateOne {
+	mutation := newActivityExecutionMutation(c.config, OpUpdateOne, withActivityExecutionID(id))
+	return &ActivityExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ActivityExecution.
+func (c *ActivityExecutionClient) Delete() *ActivityExecutionDelete {
+	mutation := newActivityExecutionMutation(c.config, OpDelete)
+	return &ActivityExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityExecutionClient) DeleteOne(ae *ActivityExecution) *ActivityExecutionDeleteOne {
+	return c.DeleteOneID(ae.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityExecutionClient) DeleteOneID(id string) *ActivityExecutionDeleteOne {
+	builder := c.Delete().Where(activityexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for ActivityExecution.
+func (c *ActivityExecutionClient) Query() *ActivityExecutionQuery {
+	return &ActivityExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivityExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ActivityExecution entity by its id.
+func (c *ActivityExecutionClient) Get(ctx context.Context, id string) (*ActivityExecution, error) {
+	return c.Query().Where(activityexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityExecutionClient) GetX(ctx context.Context, id string) *ActivityExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryActivity queries the activity edge of a ActivityExecution.
+func (c *ActivityExecutionClient) QueryActivity(ae *ActivityExecution) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ae.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityexecution.ActivityTable, activityexecution.ActivityColumn),
+		)
+		fromV = sqlgraph.Neighbors(ae.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflowExecution queries the workflow_execution edge of a ActivityExecution.
+func (c *ActivityExecutionClient) QueryWorkflowExecution(ae *ActivityExecution) *WorkflowExecutionQuery {
+	query := (&WorkflowExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ae.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, id),
+			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityexecution.WorkflowExecutionTable, activityexecution.WorkflowExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(ae.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySideEffectExecutions queries the side_effect_executions edge of a ActivityExecution.
+func (c *ActivityExecutionClient) QuerySideEffectExecutions(ae *ActivityExecution) *SideEffectExecutionQuery {
+	query := (&SideEffectExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ae.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, id),
+			sqlgraph.To(sideeffectexecution.Table, sideeffectexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activityexecution.SideEffectExecutionsTable, activityexecution.SideEffectExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(ae.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityExecutionClient) Hooks() []Hook {
+	return c.hooks.ActivityExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityExecutionClient) Interceptors() []Interceptor {
+	return c.inters.ActivityExecution
+}
+
+func (c *ActivityExecutionClient) mutate(ctx context.Context, m *ActivityExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ActivityExecution mutation op: %q", m.Op())
+	}
+}
+
+// RunClient is a client for the Run schema.
+type RunClient struct {
+	config
+}
+
+// NewRunClient returns a client for the Run from the given config.
+func NewRunClient(c config) *RunClient {
+	return &RunClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `run.Hooks(f(g(h())))`.
+func (c *RunClient) Use(hooks ...Hook) {
+	c.hooks.Run = append(c.hooks.Run, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `run.Intercept(f(g(h())))`.
+func (c *RunClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Run = append(c.inters.Run, interceptors...)
+}
+
+// Create returns a builder for creating a Run entity.
+func (c *RunClient) Create() *RunCreate {
+	mutation := newRunMutation(c.config, OpCreate)
+	return &RunCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Run entities.
+func (c *RunClient) CreateBulk(builders ...*RunCreate) *RunCreateBulk {
+	return &RunCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RunClient) MapCreateBulk(slice any, setFunc func(*RunCreate, int)) *RunCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RunCreateBulk{err: fmt.Errorf("calling to RunClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RunCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RunCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Run.
+func (c *RunClient) Update() *RunUpdate {
+	mutation := newRunMutation(c.config, OpUpdate)
+	return &RunUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RunClient) UpdateOne(r *Run) *RunUpdateOne {
+	mutation := newRunMutation(c.config, OpUpdateOne, withRun(r))
+	return &RunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RunClient) UpdateOneID(id string) *RunUpdateOne {
+	mutation := newRunMutation(c.config, OpUpdateOne, withRunID(id))
+	return &RunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Run.
+func (c *RunClient) Delete() *RunDelete {
+	mutation := newRunMutation(c.config, OpDelete)
+	return &RunDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RunClient) DeleteOne(r *Run) *RunDeleteOne {
+	return c.DeleteOneID(r.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RunClient) DeleteOneID(id string) *RunDeleteOne {
+	builder := c.Delete().Where(run.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RunDeleteOne{builder}
+}
+
+// Query returns a query builder for Run.
+func (c *RunClient) Query() *RunQuery {
+	return &RunQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRun},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Run entity by its id.
+func (c *RunClient) Get(ctx context.Context, id string) (*Run, error) {
+	return c.Query().Where(run.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RunClient) GetX(ctx context.Context, id string) *Run {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkflow queries the workflow edge of a Run.
+func (c *RunClient) QueryWorkflow(r *Run) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := r.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(run.Table, run.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.WorkflowTable, run.WorkflowColumn),
+		)
+		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivities queries the activities edge of a Run.
+func (c *RunClient) QueryActivities(r *Run) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := r.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(run.Table, run.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.ActivitiesTable, run.ActivitiesColumn),
+		)
+		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RunClient) Hooks() []Hook {
+	return c.hooks.Run
+}
+
+// Interceptors returns the client interceptors.
+func (c *RunClient) Interceptors() []Interceptor {
+	return c.inters.Run
+}
+
+func (c *RunClient) mutate(ctx context.Context, m *RunMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RunCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RunUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RunDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Run mutation op: %q", m.Op())
+	}
+}
+
+// SagaClient is a client for the Saga schema.
+type SagaClient struct {
+	config
+}
+
+// NewSagaClient returns a client for the Saga from the given config.
+func NewSagaClient(c config) *SagaClient {
+	return &SagaClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `saga.Hooks(f(g(h())))`.
+func (c *SagaClient) Use(hooks ...Hook) {
+	c.hooks.Saga = append(c.hooks.Saga, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `saga.Intercept(f(g(h())))`.
+func (c *SagaClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Saga = append(c.inters.Saga, interceptors...)
+}
+
+// Create returns a builder for creating a Saga entity.
+func (c *SagaClient) Create() *SagaCreate {
+	mutation := newSagaMutation(c.config, OpCreate)
+	return &SagaCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Saga entities.
+func (c *SagaClient) CreateBulk(builders ...*SagaCreate) *SagaCreateBulk {
+	return &SagaCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SagaClient) MapCreateBulk(slice any, setFunc func(*SagaCreate, int)) *SagaCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SagaCreateBulk{err: fmt.Errorf("calling to SagaClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SagaCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SagaCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Saga.
+func (c *SagaClient) Update() *SagaUpdate {
+	mutation := newSagaMutation(c.config, OpUpdate)
+	return &SagaUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SagaClient) UpdateOne(s *Saga) *SagaUpdateOne {
+	mutation := newSagaMutation(c.config, OpUpdateOne, withSaga(s))
+	return &SagaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SagaClient) UpdateOneID(id string) *SagaUpdateOne {
+	mutation := newSagaMutation(c.config, OpUpdateOne, withSagaID(id))
+	return &SagaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Saga.
+func (c *SagaClient) Delete() *SagaDelete {
+	mutation := newSagaMutation(c.config, OpDelete)
+	return &SagaDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SagaClient) DeleteOne(s *Saga) *SagaDeleteOne {
+	return c.DeleteOneID(s.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SagaClient) DeleteOneID(id string) *SagaDeleteOne {
+	builder := c.Delete().Where(saga.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SagaDeleteOne{builder}
+}
+
+// Query returns a query builder for Saga.
+func (c *SagaClient) Query() *SagaQuery {
+	return &SagaQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSaga},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Saga entity by its id.
+func (c *SagaClient) Get(ctx context.Context, id string) (*Saga, error) {
+	return c.Query().Where(saga.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SagaClient) GetX(ctx context.Context, id string) *Saga {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutions queries the executions edge of a Saga.
+func (c *SagaClient) QueryExecutions(s *Saga) *SagaExecutionQuery {
 	query := (&SagaExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ec.ID
+		id := s.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
+			sqlgraph.From(saga.Table, saga.FieldID, id),
 			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.SagaExecutionsTable, executioncontext.SagaExecutionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, saga.ExecutionsTable, saga.ExecutionsColumn),
 		)
-		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivity queries the activity edge of a Saga.
+func (c *SagaClient) QueryActivity(s *Saga) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(saga.Table, saga.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, saga.ActivityTable, saga.ActivityColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
 // Hooks returns the client hooks.
-func (c *ExecutionContextClient) Hooks() []Hook {
-	return c.hooks.ExecutionContext
+func (c *SagaClient) Hooks() []Hook {
+	return c.hooks.Saga
 }
 
 // Interceptors returns the client interceptors.
-func (c *ExecutionContextClient) Interceptors() []Interceptor {
-	return c.inters.ExecutionContext
+func (c *SagaClient) Interceptors() []Interceptor {
+	return c.inters.Saga
 }
 
-func (c *ExecutionContextClient) mutate(ctx context.Context, m *ExecutionContextMutation) (Value, error) {
+func (c *SagaClient) mutate(ctx context.Context, m *SagaMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&ExecutionContextCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&ExecutionContextUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&ExecutionContextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&ExecutionContextDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&SagaDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown ExecutionContext mutation op: %q", m.Op())
-	}
-}
-
-// HandlerExecutionClient is a client for the HandlerExecution schema.
-type HandlerExecutionClient struct {
-	config
-}
-
-// NewHandlerExecutionClient returns a client for the HandlerExecution from the given config.
-func NewHandlerExecutionClient(c config) *HandlerExecutionClient {
-	return &HandlerExecutionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `handlerexecution.Hooks(f(g(h())))`.
-func (c *HandlerExecutionClient) Use(hooks ...Hook) {
-	c.hooks.HandlerExecution = append(c.hooks.HandlerExecution, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `handlerexecution.Intercept(f(g(h())))`.
-func (c *HandlerExecutionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.HandlerExecution = append(c.inters.HandlerExecution, interceptors...)
-}
-
-// Create returns a builder for creating a HandlerExecution entity.
-func (c *HandlerExecutionClient) Create() *HandlerExecutionCreate {
-	mutation := newHandlerExecutionMutation(c.config, OpCreate)
-	return &HandlerExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of HandlerExecution entities.
-func (c *HandlerExecutionClient) CreateBulk(builders ...*HandlerExecutionCreate) *HandlerExecutionCreateBulk {
-	return &HandlerExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *HandlerExecutionClient) MapCreateBulk(slice any, setFunc func(*HandlerExecutionCreate, int)) *HandlerExecutionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &HandlerExecutionCreateBulk{err: fmt.Errorf("calling to HandlerExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*HandlerExecutionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &HandlerExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for HandlerExecution.
-func (c *HandlerExecutionClient) Update() *HandlerExecutionUpdate {
-	mutation := newHandlerExecutionMutation(c.config, OpUpdate)
-	return &HandlerExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *HandlerExecutionClient) UpdateOne(he *HandlerExecution) *HandlerExecutionUpdateOne {
-	mutation := newHandlerExecutionMutation(c.config, OpUpdateOne, withHandlerExecution(he))
-	return &HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *HandlerExecutionClient) UpdateOneID(id string) *HandlerExecutionUpdateOne {
-	mutation := newHandlerExecutionMutation(c.config, OpUpdateOne, withHandlerExecutionID(id))
-	return &HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for HandlerExecution.
-func (c *HandlerExecutionClient) Delete() *HandlerExecutionDelete {
-	mutation := newHandlerExecutionMutation(c.config, OpDelete)
-	return &HandlerExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *HandlerExecutionClient) DeleteOne(he *HandlerExecution) *HandlerExecutionDeleteOne {
-	return c.DeleteOneID(he.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *HandlerExecutionClient) DeleteOneID(id string) *HandlerExecutionDeleteOne {
-	builder := c.Delete().Where(handlerexecution.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &HandlerExecutionDeleteOne{builder}
-}
-
-// Query returns a query builder for HandlerExecution.
-func (c *HandlerExecutionClient) Query() *HandlerExecutionQuery {
-	return &HandlerExecutionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeHandlerExecution},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a HandlerExecution entity by its id.
-func (c *HandlerExecutionClient) Get(ctx context.Context, id string) (*HandlerExecution, error) {
-	return c.Query().Where(handlerexecution.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *HandlerExecutionClient) GetX(ctx context.Context, id string) *HandlerExecution {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryExecutionContext queries the execution_context edge of a HandlerExecution.
-func (c *HandlerExecutionClient) QueryExecutionContext(he *HandlerExecution) *ExecutionContextQuery {
-	query := (&ExecutionContextClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := he.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
-			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, handlerexecution.ExecutionContextTable, handlerexecution.ExecutionContextColumn),
-		)
-		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryParent queries the parent edge of a HandlerExecution.
-func (c *HandlerExecutionClient) QueryParent(he *HandlerExecution) *HandlerExecutionQuery {
-	query := (&HandlerExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := he.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
-			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, handlerexecution.ParentTable, handlerexecution.ParentColumn),
-		)
-		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryChildren queries the children edge of a HandlerExecution.
-func (c *HandlerExecutionClient) QueryChildren(he *HandlerExecution) *HandlerExecutionQuery {
-	query := (&HandlerExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := he.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
-			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, handlerexecution.ChildrenTable, handlerexecution.ChildrenColumn),
-		)
-		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTasks queries the tasks edge of a HandlerExecution.
-func (c *HandlerExecutionClient) QueryTasks(he *HandlerExecution) *HandlerTaskQuery {
-	query := (&HandlerTaskClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := he.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
-			sqlgraph.To(handlertask.Table, handlertask.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, handlerexecution.TasksTable, handlerexecution.TasksColumn),
-		)
-		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySagaStepExecution queries the saga_step_execution edge of a HandlerExecution.
-func (c *HandlerExecutionClient) QuerySagaStepExecution(he *HandlerExecution) *SagaStepExecutionQuery {
-	query := (&SagaStepExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := he.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
-			sqlgraph.To(sagastepexecution.Table, sagastepexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, handlerexecution.SagaStepExecutionTable, handlerexecution.SagaStepExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *HandlerExecutionClient) Hooks() []Hook {
-	return c.hooks.HandlerExecution
-}
-
-// Interceptors returns the client interceptors.
-func (c *HandlerExecutionClient) Interceptors() []Interceptor {
-	return c.inters.HandlerExecution
-}
-
-func (c *HandlerExecutionClient) mutate(ctx context.Context, m *HandlerExecutionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&HandlerExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&HandlerExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&HandlerExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown HandlerExecution mutation op: %q", m.Op())
-	}
-}
-
-// HandlerTaskClient is a client for the HandlerTask schema.
-type HandlerTaskClient struct {
-	config
-}
-
-// NewHandlerTaskClient returns a client for the HandlerTask from the given config.
-func NewHandlerTaskClient(c config) *HandlerTaskClient {
-	return &HandlerTaskClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `handlertask.Hooks(f(g(h())))`.
-func (c *HandlerTaskClient) Use(hooks ...Hook) {
-	c.hooks.HandlerTask = append(c.hooks.HandlerTask, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `handlertask.Intercept(f(g(h())))`.
-func (c *HandlerTaskClient) Intercept(interceptors ...Interceptor) {
-	c.inters.HandlerTask = append(c.inters.HandlerTask, interceptors...)
-}
-
-// Create returns a builder for creating a HandlerTask entity.
-func (c *HandlerTaskClient) Create() *HandlerTaskCreate {
-	mutation := newHandlerTaskMutation(c.config, OpCreate)
-	return &HandlerTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of HandlerTask entities.
-func (c *HandlerTaskClient) CreateBulk(builders ...*HandlerTaskCreate) *HandlerTaskCreateBulk {
-	return &HandlerTaskCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *HandlerTaskClient) MapCreateBulk(slice any, setFunc func(*HandlerTaskCreate, int)) *HandlerTaskCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &HandlerTaskCreateBulk{err: fmt.Errorf("calling to HandlerTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*HandlerTaskCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &HandlerTaskCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for HandlerTask.
-func (c *HandlerTaskClient) Update() *HandlerTaskUpdate {
-	mutation := newHandlerTaskMutation(c.config, OpUpdate)
-	return &HandlerTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *HandlerTaskClient) UpdateOne(ht *HandlerTask) *HandlerTaskUpdateOne {
-	mutation := newHandlerTaskMutation(c.config, OpUpdateOne, withHandlerTask(ht))
-	return &HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *HandlerTaskClient) UpdateOneID(id string) *HandlerTaskUpdateOne {
-	mutation := newHandlerTaskMutation(c.config, OpUpdateOne, withHandlerTaskID(id))
-	return &HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for HandlerTask.
-func (c *HandlerTaskClient) Delete() *HandlerTaskDelete {
-	mutation := newHandlerTaskMutation(c.config, OpDelete)
-	return &HandlerTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *HandlerTaskClient) DeleteOne(ht *HandlerTask) *HandlerTaskDeleteOne {
-	return c.DeleteOneID(ht.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *HandlerTaskClient) DeleteOneID(id string) *HandlerTaskDeleteOne {
-	builder := c.Delete().Where(handlertask.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &HandlerTaskDeleteOne{builder}
-}
-
-// Query returns a query builder for HandlerTask.
-func (c *HandlerTaskClient) Query() *HandlerTaskQuery {
-	return &HandlerTaskQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeHandlerTask},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a HandlerTask entity by its id.
-func (c *HandlerTaskClient) Get(ctx context.Context, id string) (*HandlerTask, error) {
-	return c.Query().Where(handlertask.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *HandlerTaskClient) GetX(ctx context.Context, id string) *HandlerTask {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryHandlerExecution queries the handler_execution edge of a HandlerTask.
-func (c *HandlerTaskClient) QueryHandlerExecution(ht *HandlerTask) *HandlerExecutionQuery {
-	query := (&HandlerExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ht.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(handlertask.Table, handlertask.FieldID, id),
-			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, handlertask.HandlerExecutionTable, handlertask.HandlerExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(ht.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *HandlerTaskClient) Hooks() []Hook {
-	return c.hooks.HandlerTask
-}
-
-// Interceptors returns the client interceptors.
-func (c *HandlerTaskClient) Interceptors() []Interceptor {
-	return c.inters.HandlerTask
-}
-
-func (c *HandlerTaskClient) mutate(ctx context.Context, m *HandlerTaskMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&HandlerTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&HandlerTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&HandlerTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown HandlerTask mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown Saga mutation op: %q", m.Op())
 	}
 }
 
@@ -898,15 +1105,15 @@ func (c *SagaExecutionClient) GetX(ctx context.Context, id string) *SagaExecutio
 	return obj
 }
 
-// QueryExecutionContext queries the execution_context edge of a SagaExecution.
-func (c *SagaExecutionClient) QueryExecutionContext(se *SagaExecution) *ExecutionContextQuery {
-	query := (&ExecutionContextClient{config: c.config}).Query()
+// QuerySaga queries the saga edge of a SagaExecution.
+func (c *SagaExecutionClient) QuerySaga(se *SagaExecution) *SagaQuery {
+	query := (&SagaClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := se.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(sagaexecution.Table, sagaexecution.FieldID, id),
-			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sagaexecution.ExecutionContextTable, sagaexecution.ExecutionContextColumn),
+			sqlgraph.To(saga.Table, saga.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sagaexecution.SagaTable, sagaexecution.SagaColumn),
 		)
 		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
 		return fromV, nil
@@ -1063,6 +1270,22 @@ func (c *SagaStepExecutionClient) GetX(ctx context.Context, id string) *SagaStep
 	return obj
 }
 
+// QuerySagaExecution queries the saga_execution edge of a SagaStepExecution.
+func (c *SagaStepExecutionClient) QuerySagaExecution(sse *SagaStepExecution) *SagaExecutionQuery {
+	query := (&SagaExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := sse.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sagastepexecution.Table, sagastepexecution.FieldID, id),
+			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sagastepexecution.SagaExecutionTable, sagastepexecution.SagaExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(sse.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SagaStepExecutionClient) Hooks() []Hook {
 	return c.hooks.SagaStepExecution
@@ -1088,107 +1311,107 @@ func (c *SagaStepExecutionClient) mutate(ctx context.Context, m *SagaStepExecuti
 	}
 }
 
-// SideEffectResultClient is a client for the SideEffectResult schema.
-type SideEffectResultClient struct {
+// SideEffectClient is a client for the SideEffect schema.
+type SideEffectClient struct {
 	config
 }
 
-// NewSideEffectResultClient returns a client for the SideEffectResult from the given config.
-func NewSideEffectResultClient(c config) *SideEffectResultClient {
-	return &SideEffectResultClient{config: c}
+// NewSideEffectClient returns a client for the SideEffect from the given config.
+func NewSideEffectClient(c config) *SideEffectClient {
+	return &SideEffectClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `sideeffectresult.Hooks(f(g(h())))`.
-func (c *SideEffectResultClient) Use(hooks ...Hook) {
-	c.hooks.SideEffectResult = append(c.hooks.SideEffectResult, hooks...)
+// A call to `Use(f, g, h)` equals to `sideeffect.Hooks(f(g(h())))`.
+func (c *SideEffectClient) Use(hooks ...Hook) {
+	c.hooks.SideEffect = append(c.hooks.SideEffect, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `sideeffectresult.Intercept(f(g(h())))`.
-func (c *SideEffectResultClient) Intercept(interceptors ...Interceptor) {
-	c.inters.SideEffectResult = append(c.inters.SideEffectResult, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `sideeffect.Intercept(f(g(h())))`.
+func (c *SideEffectClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SideEffect = append(c.inters.SideEffect, interceptors...)
 }
 
-// Create returns a builder for creating a SideEffectResult entity.
-func (c *SideEffectResultClient) Create() *SideEffectResultCreate {
-	mutation := newSideEffectResultMutation(c.config, OpCreate)
-	return &SideEffectResultCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a SideEffect entity.
+func (c *SideEffectClient) Create() *SideEffectCreate {
+	mutation := newSideEffectMutation(c.config, OpCreate)
+	return &SideEffectCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of SideEffectResult entities.
-func (c *SideEffectResultClient) CreateBulk(builders ...*SideEffectResultCreate) *SideEffectResultCreateBulk {
-	return &SideEffectResultCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of SideEffect entities.
+func (c *SideEffectClient) CreateBulk(builders ...*SideEffectCreate) *SideEffectCreateBulk {
+	return &SideEffectCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *SideEffectResultClient) MapCreateBulk(slice any, setFunc func(*SideEffectResultCreate, int)) *SideEffectResultCreateBulk {
+func (c *SideEffectClient) MapCreateBulk(slice any, setFunc func(*SideEffectCreate, int)) *SideEffectCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &SideEffectResultCreateBulk{err: fmt.Errorf("calling to SideEffectResultClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &SideEffectCreateBulk{err: fmt.Errorf("calling to SideEffectClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*SideEffectResultCreate, rv.Len())
+	builders := make([]*SideEffectCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &SideEffectResultCreateBulk{config: c.config, builders: builders}
+	return &SideEffectCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for SideEffectResult.
-func (c *SideEffectResultClient) Update() *SideEffectResultUpdate {
-	mutation := newSideEffectResultMutation(c.config, OpUpdate)
-	return &SideEffectResultUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for SideEffect.
+func (c *SideEffectClient) Update() *SideEffectUpdate {
+	mutation := newSideEffectMutation(c.config, OpUpdate)
+	return &SideEffectUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *SideEffectResultClient) UpdateOne(ser *SideEffectResult) *SideEffectResultUpdateOne {
-	mutation := newSideEffectResultMutation(c.config, OpUpdateOne, withSideEffectResult(ser))
-	return &SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SideEffectClient) UpdateOne(se *SideEffect) *SideEffectUpdateOne {
+	mutation := newSideEffectMutation(c.config, OpUpdateOne, withSideEffect(se))
+	return &SideEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *SideEffectResultClient) UpdateOneID(id string) *SideEffectResultUpdateOne {
-	mutation := newSideEffectResultMutation(c.config, OpUpdateOne, withSideEffectResultID(id))
-	return &SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SideEffectClient) UpdateOneID(id string) *SideEffectUpdateOne {
+	mutation := newSideEffectMutation(c.config, OpUpdateOne, withSideEffectID(id))
+	return &SideEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for SideEffectResult.
-func (c *SideEffectResultClient) Delete() *SideEffectResultDelete {
-	mutation := newSideEffectResultMutation(c.config, OpDelete)
-	return &SideEffectResultDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for SideEffect.
+func (c *SideEffectClient) Delete() *SideEffectDelete {
+	mutation := newSideEffectMutation(c.config, OpDelete)
+	return &SideEffectDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *SideEffectResultClient) DeleteOne(ser *SideEffectResult) *SideEffectResultDeleteOne {
-	return c.DeleteOneID(ser.ID)
+func (c *SideEffectClient) DeleteOne(se *SideEffect) *SideEffectDeleteOne {
+	return c.DeleteOneID(se.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SideEffectResultClient) DeleteOneID(id string) *SideEffectResultDeleteOne {
-	builder := c.Delete().Where(sideeffectresult.ID(id))
+func (c *SideEffectClient) DeleteOneID(id string) *SideEffectDeleteOne {
+	builder := c.Delete().Where(sideeffect.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &SideEffectResultDeleteOne{builder}
+	return &SideEffectDeleteOne{builder}
 }
 
-// Query returns a query builder for SideEffectResult.
-func (c *SideEffectResultClient) Query() *SideEffectResultQuery {
-	return &SideEffectResultQuery{
+// Query returns a query builder for SideEffect.
+func (c *SideEffectClient) Query() *SideEffectQuery {
+	return &SideEffectQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeSideEffectResult},
+		ctx:    &QueryContext{Type: TypeSideEffect},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a SideEffectResult entity by its id.
-func (c *SideEffectResultClient) Get(ctx context.Context, id string) (*SideEffectResult, error) {
-	return c.Query().Where(sideeffectresult.ID(id)).Only(ctx)
+// Get returns a SideEffect entity by its id.
+func (c *SideEffectClient) Get(ctx context.Context, id string) (*SideEffect, error) {
+	return c.Query().Where(sideeffect.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *SideEffectResultClient) GetX(ctx context.Context, id string) *SideEffectResult {
+func (c *SideEffectClient) GetX(ctx context.Context, id string) *SideEffect {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -1196,39 +1419,732 @@ func (c *SideEffectResultClient) GetX(ctx context.Context, id string) *SideEffec
 	return obj
 }
 
+// QueryExecutions queries the executions edge of a SideEffect.
+func (c *SideEffectClient) QueryExecutions(se *SideEffect) *SideEffectExecutionQuery {
+	query := (&SideEffectExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := se.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffect.Table, sideeffect.FieldID, id),
+			sqlgraph.To(sideeffectexecution.Table, sideeffectexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, sideeffect.ExecutionsTable, sideeffect.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivity queries the activity edge of a SideEffect.
+func (c *SideEffectClient) QueryActivity(se *SideEffect) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := se.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffect.Table, sideeffect.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sideeffect.ActivityTable, sideeffect.ActivityColumn),
+		)
+		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
-func (c *SideEffectResultClient) Hooks() []Hook {
-	return c.hooks.SideEffectResult
+func (c *SideEffectClient) Hooks() []Hook {
+	return c.hooks.SideEffect
 }
 
 // Interceptors returns the client interceptors.
-func (c *SideEffectResultClient) Interceptors() []Interceptor {
-	return c.inters.SideEffectResult
+func (c *SideEffectClient) Interceptors() []Interceptor {
+	return c.inters.SideEffect
 }
 
-func (c *SideEffectResultClient) mutate(ctx context.Context, m *SideEffectResultMutation) (Value, error) {
+func (c *SideEffectClient) mutate(ctx context.Context, m *SideEffectMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&SideEffectResultCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SideEffectCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&SideEffectResultUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SideEffectUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SideEffectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&SideEffectResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&SideEffectDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown SideEffectResult mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown SideEffect mutation op: %q", m.Op())
+	}
+}
+
+// SideEffectExecutionClient is a client for the SideEffectExecution schema.
+type SideEffectExecutionClient struct {
+	config
+}
+
+// NewSideEffectExecutionClient returns a client for the SideEffectExecution from the given config.
+func NewSideEffectExecutionClient(c config) *SideEffectExecutionClient {
+	return &SideEffectExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sideeffectexecution.Hooks(f(g(h())))`.
+func (c *SideEffectExecutionClient) Use(hooks ...Hook) {
+	c.hooks.SideEffectExecution = append(c.hooks.SideEffectExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sideeffectexecution.Intercept(f(g(h())))`.
+func (c *SideEffectExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SideEffectExecution = append(c.inters.SideEffectExecution, interceptors...)
+}
+
+// Create returns a builder for creating a SideEffectExecution entity.
+func (c *SideEffectExecutionClient) Create() *SideEffectExecutionCreate {
+	mutation := newSideEffectExecutionMutation(c.config, OpCreate)
+	return &SideEffectExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SideEffectExecution entities.
+func (c *SideEffectExecutionClient) CreateBulk(builders ...*SideEffectExecutionCreate) *SideEffectExecutionCreateBulk {
+	return &SideEffectExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SideEffectExecutionClient) MapCreateBulk(slice any, setFunc func(*SideEffectExecutionCreate, int)) *SideEffectExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SideEffectExecutionCreateBulk{err: fmt.Errorf("calling to SideEffectExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SideEffectExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SideEffectExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SideEffectExecution.
+func (c *SideEffectExecutionClient) Update() *SideEffectExecutionUpdate {
+	mutation := newSideEffectExecutionMutation(c.config, OpUpdate)
+	return &SideEffectExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SideEffectExecutionClient) UpdateOne(see *SideEffectExecution) *SideEffectExecutionUpdateOne {
+	mutation := newSideEffectExecutionMutation(c.config, OpUpdateOne, withSideEffectExecution(see))
+	return &SideEffectExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SideEffectExecutionClient) UpdateOneID(id string) *SideEffectExecutionUpdateOne {
+	mutation := newSideEffectExecutionMutation(c.config, OpUpdateOne, withSideEffectExecutionID(id))
+	return &SideEffectExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SideEffectExecution.
+func (c *SideEffectExecutionClient) Delete() *SideEffectExecutionDelete {
+	mutation := newSideEffectExecutionMutation(c.config, OpDelete)
+	return &SideEffectExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SideEffectExecutionClient) DeleteOne(see *SideEffectExecution) *SideEffectExecutionDeleteOne {
+	return c.DeleteOneID(see.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SideEffectExecutionClient) DeleteOneID(id string) *SideEffectExecutionDeleteOne {
+	builder := c.Delete().Where(sideeffectexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SideEffectExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for SideEffectExecution.
+func (c *SideEffectExecutionClient) Query() *SideEffectExecutionQuery {
+	return &SideEffectExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSideEffectExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SideEffectExecution entity by its id.
+func (c *SideEffectExecutionClient) Get(ctx context.Context, id string) (*SideEffectExecution, error) {
+	return c.Query().Where(sideeffectexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SideEffectExecutionClient) GetX(ctx context.Context, id string) *SideEffectExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySideEffect queries the side_effect edge of a SideEffectExecution.
+func (c *SideEffectExecutionClient) QuerySideEffect(see *SideEffectExecution) *SideEffectQuery {
+	query := (&SideEffectClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := see.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffectexecution.Table, sideeffectexecution.FieldID, id),
+			sqlgraph.To(sideeffect.Table, sideeffect.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sideeffectexecution.SideEffectTable, sideeffectexecution.SideEffectColumn),
+		)
+		fromV = sqlgraph.Neighbors(see.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivityExecution queries the activity_execution edge of a SideEffectExecution.
+func (c *SideEffectExecutionClient) QueryActivityExecution(see *SideEffectExecution) *ActivityExecutionQuery {
+	query := (&ActivityExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := see.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sideeffectexecution.Table, sideeffectexecution.FieldID, id),
+			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sideeffectexecution.ActivityExecutionTable, sideeffectexecution.ActivityExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(see.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SideEffectExecutionClient) Hooks() []Hook {
+	return c.hooks.SideEffectExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *SideEffectExecutionClient) Interceptors() []Interceptor {
+	return c.inters.SideEffectExecution
+}
+
+func (c *SideEffectExecutionClient) mutate(ctx context.Context, m *SideEffectExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SideEffectExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SideEffectExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SideEffectExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SideEffectExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SideEffectExecution mutation op: %q", m.Op())
+	}
+}
+
+// SignalClient is a client for the Signal schema.
+type SignalClient struct {
+	config
+}
+
+// NewSignalClient returns a client for the Signal from the given config.
+func NewSignalClient(c config) *SignalClient {
+	return &SignalClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `signal.Hooks(f(g(h())))`.
+func (c *SignalClient) Use(hooks ...Hook) {
+	c.hooks.Signal = append(c.hooks.Signal, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `signal.Intercept(f(g(h())))`.
+func (c *SignalClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Signal = append(c.inters.Signal, interceptors...)
+}
+
+// Create returns a builder for creating a Signal entity.
+func (c *SignalClient) Create() *SignalCreate {
+	mutation := newSignalMutation(c.config, OpCreate)
+	return &SignalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Signal entities.
+func (c *SignalClient) CreateBulk(builders ...*SignalCreate) *SignalCreateBulk {
+	return &SignalCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SignalClient) MapCreateBulk(slice any, setFunc func(*SignalCreate, int)) *SignalCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SignalCreateBulk{err: fmt.Errorf("calling to SignalClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SignalCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SignalCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Signal.
+func (c *SignalClient) Update() *SignalUpdate {
+	mutation := newSignalMutation(c.config, OpUpdate)
+	return &SignalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SignalClient) UpdateOne(s *Signal) *SignalUpdateOne {
+	mutation := newSignalMutation(c.config, OpUpdateOne, withSignal(s))
+	return &SignalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SignalClient) UpdateOneID(id string) *SignalUpdateOne {
+	mutation := newSignalMutation(c.config, OpUpdateOne, withSignalID(id))
+	return &SignalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Signal.
+func (c *SignalClient) Delete() *SignalDelete {
+	mutation := newSignalMutation(c.config, OpDelete)
+	return &SignalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SignalClient) DeleteOne(s *Signal) *SignalDeleteOne {
+	return c.DeleteOneID(s.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SignalClient) DeleteOneID(id string) *SignalDeleteOne {
+	builder := c.Delete().Where(signal.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SignalDeleteOne{builder}
+}
+
+// Query returns a query builder for Signal.
+func (c *SignalClient) Query() *SignalQuery {
+	return &SignalQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSignal},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Signal entity by its id.
+func (c *SignalClient) Get(ctx context.Context, id string) (*Signal, error) {
+	return c.Query().Where(signal.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SignalClient) GetX(ctx context.Context, id string) *Signal {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkflowExecution queries the workflow_execution edge of a Signal.
+func (c *SignalClient) QueryWorkflowExecution(s *Signal) *WorkflowExecutionQuery {
+	query := (&WorkflowExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(signal.Table, signal.FieldID, id),
+			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, signal.WorkflowExecutionTable, signal.WorkflowExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SignalClient) Hooks() []Hook {
+	return c.hooks.Signal
+}
+
+// Interceptors returns the client interceptors.
+func (c *SignalClient) Interceptors() []Interceptor {
+	return c.inters.Signal
+}
+
+func (c *SignalClient) mutate(ctx context.Context, m *SignalMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SignalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SignalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SignalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SignalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Signal mutation op: %q", m.Op())
+	}
+}
+
+// WorkflowClient is a client for the Workflow schema.
+type WorkflowClient struct {
+	config
+}
+
+// NewWorkflowClient returns a client for the Workflow from the given config.
+func NewWorkflowClient(c config) *WorkflowClient {
+	return &WorkflowClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workflow.Hooks(f(g(h())))`.
+func (c *WorkflowClient) Use(hooks ...Hook) {
+	c.hooks.Workflow = append(c.hooks.Workflow, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workflow.Intercept(f(g(h())))`.
+func (c *WorkflowClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Workflow = append(c.inters.Workflow, interceptors...)
+}
+
+// Create returns a builder for creating a Workflow entity.
+func (c *WorkflowClient) Create() *WorkflowCreate {
+	mutation := newWorkflowMutation(c.config, OpCreate)
+	return &WorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Workflow entities.
+func (c *WorkflowClient) CreateBulk(builders ...*WorkflowCreate) *WorkflowCreateBulk {
+	return &WorkflowCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkflowClient) MapCreateBulk(slice any, setFunc func(*WorkflowCreate, int)) *WorkflowCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkflowCreateBulk{err: fmt.Errorf("calling to WorkflowClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkflowCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkflowCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Workflow.
+func (c *WorkflowClient) Update() *WorkflowUpdate {
+	mutation := newWorkflowMutation(c.config, OpUpdate)
+	return &WorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkflowClient) UpdateOne(w *Workflow) *WorkflowUpdateOne {
+	mutation := newWorkflowMutation(c.config, OpUpdateOne, withWorkflow(w))
+	return &WorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WorkflowClient) UpdateOneID(id string) *WorkflowUpdateOne {
+	mutation := newWorkflowMutation(c.config, OpUpdateOne, withWorkflowID(id))
+	return &WorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Workflow.
+func (c *WorkflowClient) Delete() *WorkflowDelete {
+	mutation := newWorkflowMutation(c.config, OpDelete)
+	return &WorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WorkflowClient) DeleteOne(w *Workflow) *WorkflowDeleteOne {
+	return c.DeleteOneID(w.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WorkflowClient) DeleteOneID(id string) *WorkflowDeleteOne {
+	builder := c.Delete().Where(workflow.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WorkflowDeleteOne{builder}
+}
+
+// Query returns a query builder for Workflow.
+func (c *WorkflowClient) Query() *WorkflowQuery {
+	return &WorkflowQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkflow},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Workflow entity by its id.
+func (c *WorkflowClient) Get(ctx context.Context, id string) (*Workflow, error) {
+	return c.Query().Where(workflow.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WorkflowClient) GetX(ctx context.Context, id string) *Workflow {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecutions queries the executions edge of a Workflow.
+func (c *WorkflowClient) QueryExecutions(w *Workflow) *WorkflowExecutionQuery {
+	query := (&WorkflowExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ExecutionsTable, workflow.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivities queries the activities edge of a Workflow.
+func (c *WorkflowClient) QueryActivities(w *Workflow) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ActivitiesTable, workflow.ActivitiesColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *WorkflowClient) Hooks() []Hook {
+	return c.hooks.Workflow
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkflowClient) Interceptors() []Interceptor {
+	return c.inters.Workflow
+}
+
+func (c *WorkflowClient) mutate(ctx context.Context, m *WorkflowMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Workflow mutation op: %q", m.Op())
+	}
+}
+
+// WorkflowExecutionClient is a client for the WorkflowExecution schema.
+type WorkflowExecutionClient struct {
+	config
+}
+
+// NewWorkflowExecutionClient returns a client for the WorkflowExecution from the given config.
+func NewWorkflowExecutionClient(c config) *WorkflowExecutionClient {
+	return &WorkflowExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workflowexecution.Hooks(f(g(h())))`.
+func (c *WorkflowExecutionClient) Use(hooks ...Hook) {
+	c.hooks.WorkflowExecution = append(c.hooks.WorkflowExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workflowexecution.Intercept(f(g(h())))`.
+func (c *WorkflowExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WorkflowExecution = append(c.inters.WorkflowExecution, interceptors...)
+}
+
+// Create returns a builder for creating a WorkflowExecution entity.
+func (c *WorkflowExecutionClient) Create() *WorkflowExecutionCreate {
+	mutation := newWorkflowExecutionMutation(c.config, OpCreate)
+	return &WorkflowExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WorkflowExecution entities.
+func (c *WorkflowExecutionClient) CreateBulk(builders ...*WorkflowExecutionCreate) *WorkflowExecutionCreateBulk {
+	return &WorkflowExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkflowExecutionClient) MapCreateBulk(slice any, setFunc func(*WorkflowExecutionCreate, int)) *WorkflowExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkflowExecutionCreateBulk{err: fmt.Errorf("calling to WorkflowExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkflowExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkflowExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WorkflowExecution.
+func (c *WorkflowExecutionClient) Update() *WorkflowExecutionUpdate {
+	mutation := newWorkflowExecutionMutation(c.config, OpUpdate)
+	return &WorkflowExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkflowExecutionClient) UpdateOne(we *WorkflowExecution) *WorkflowExecutionUpdateOne {
+	mutation := newWorkflowExecutionMutation(c.config, OpUpdateOne, withWorkflowExecution(we))
+	return &WorkflowExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WorkflowExecutionClient) UpdateOneID(id string) *WorkflowExecutionUpdateOne {
+	mutation := newWorkflowExecutionMutation(c.config, OpUpdateOne, withWorkflowExecutionID(id))
+	return &WorkflowExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WorkflowExecution.
+func (c *WorkflowExecutionClient) Delete() *WorkflowExecutionDelete {
+	mutation := newWorkflowExecutionMutation(c.config, OpDelete)
+	return &WorkflowExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WorkflowExecutionClient) DeleteOne(we *WorkflowExecution) *WorkflowExecutionDeleteOne {
+	return c.DeleteOneID(we.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WorkflowExecutionClient) DeleteOneID(id string) *WorkflowExecutionDeleteOne {
+	builder := c.Delete().Where(workflowexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WorkflowExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for WorkflowExecution.
+func (c *WorkflowExecutionClient) Query() *WorkflowExecutionQuery {
+	return &WorkflowExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkflowExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WorkflowExecution entity by its id.
+func (c *WorkflowExecutionClient) Get(ctx context.Context, id string) (*WorkflowExecution, error) {
+	return c.Query().Where(workflowexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WorkflowExecutionClient) GetX(ctx context.Context, id string) *WorkflowExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkflow queries the workflow edge of a WorkflowExecution.
+func (c *WorkflowExecutionClient) QueryWorkflow(we *WorkflowExecution) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := we.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, workflowexecution.WorkflowTable, workflowexecution.WorkflowColumn),
+		)
+		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActivityExecutions queries the activity_executions edge of a WorkflowExecution.
+func (c *WorkflowExecutionClient) QueryActivityExecutions(we *WorkflowExecution) *ActivityExecutionQuery {
+	query := (&ActivityExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := we.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
+			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflowexecution.ActivityExecutionsTable, workflowexecution.ActivityExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySignals queries the signals edge of a WorkflowExecution.
+func (c *WorkflowExecutionClient) QuerySignals(we *WorkflowExecution) *SignalQuery {
+	query := (&SignalClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := we.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
+			sqlgraph.To(signal.Table, signal.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflowexecution.SignalsTable, workflowexecution.SignalsColumn),
+		)
+		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *WorkflowExecutionClient) Hooks() []Hook {
+	return c.hooks.WorkflowExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkflowExecutionClient) Interceptors() []Interceptor {
+	return c.inters.WorkflowExecution
+}
+
+func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkflowExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkflowExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkflowExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkflowExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WorkflowExecution mutation op: %q", m.Op())
 	}
 }
 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		ExecutionContext, HandlerExecution, HandlerTask, SagaExecution,
-		SagaStepExecution, SideEffectResult []ent.Hook
+		Activity, ActivityExecution, Run, Saga, SagaExecution, SagaStepExecution,
+		SideEffect, SideEffectExecution, Signal, Workflow, WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		ExecutionContext, HandlerExecution, HandlerTask, SagaExecution,
-		SagaStepExecution, SideEffectResult []ent.Interceptor
+		Activity, ActivityExecution, Run, Saga, SagaExecution, SagaStepExecution,
+		SideEffect, SideEffectExecution, Signal, Workflow,
+		WorkflowExecution []ent.Interceptor
 	}
 )

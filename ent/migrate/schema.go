@@ -8,83 +8,109 @@ import (
 )
 
 var (
-	// ExecutionContextsColumns holds the columns for the "execution_contexts" table.
-	ExecutionContextsColumns = []*schema.Column{
+	// ActivitiesColumns holds the columns for the "activities" table.
+	ActivitiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "current_run_id", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "completed", "failed"}},
-		{Name: "start_time", Type: field.TypeTime},
-		{Name: "end_time", Type: field.TypeTime, Nullable: true},
-	}
-	// ExecutionContextsTable holds the schema information for the "execution_contexts" table.
-	ExecutionContextsTable = &schema.Table{
-		Name:       "execution_contexts",
-		Columns:    ExecutionContextsColumns,
-		PrimaryKey: []*schema.Column{ExecutionContextsColumns[0]},
-	}
-	// HandlerExecutionsColumns holds the columns for the "handler_executions" table.
-	HandlerExecutionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "run_id", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed"}},
-		{Name: "start_time", Type: field.TypeTime},
-		{Name: "end_time", Type: field.TypeTime, Nullable: true},
-		{Name: "retry_count", Type: field.TypeInt, Default: 0},
-		{Name: "max_retries", Type: field.TypeInt, Default: 3},
-		{Name: "execution_context_handler_executions", Type: field.TypeString},
-		{Name: "handler_execution_children", Type: field.TypeString, Nullable: true},
-		{Name: "handler_execution_saga_step_execution", Type: field.TypeString, Nullable: true},
+		{Name: "input", Type: field.TypeJSON},
+		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "timeout", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "run_workflow", Type: field.TypeString, Nullable: true},
+		{Name: "run_activities", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_activities", Type: field.TypeString, Nullable: true},
 	}
-	// HandlerExecutionsTable holds the schema information for the "handler_executions" table.
-	HandlerExecutionsTable = &schema.Table{
-		Name:       "handler_executions",
-		Columns:    HandlerExecutionsColumns,
-		PrimaryKey: []*schema.Column{HandlerExecutionsColumns[0]},
+	// ActivitiesTable holds the schema information for the "activities" table.
+	ActivitiesTable = &schema.Table{
+		Name:       "activities",
+		Columns:    ActivitiesColumns,
+		PrimaryKey: []*schema.Column{ActivitiesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "handler_executions_execution_contexts_handler_executions",
-				Columns:    []*schema.Column{HandlerExecutionsColumns[8]},
-				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "handler_executions_handler_executions_children",
-				Columns:    []*schema.Column{HandlerExecutionsColumns[9]},
-				RefColumns: []*schema.Column{HandlerExecutionsColumns[0]},
+				Symbol:     "activities_runs_workflow",
+				Columns:    []*schema.Column{ActivitiesColumns[6]},
+				RefColumns: []*schema.Column{RunsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "handler_executions_saga_step_executions_saga_step_execution",
-				Columns:    []*schema.Column{HandlerExecutionsColumns[10]},
-				RefColumns: []*schema.Column{SagaStepExecutionsColumns[0]},
+				Symbol:     "activities_runs_activities",
+				Columns:    []*schema.Column{ActivitiesColumns[7]},
+				RefColumns: []*schema.Column{RunsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "activities_workflows_activities",
+				Columns:    []*schema.Column{ActivitiesColumns[8]},
+				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
 	}
-	// HandlerTasksColumns holds the columns for the "handler_tasks" table.
-	HandlerTasksColumns = []*schema.Column{
+	// ActivityExecutionsColumns holds the columns for the "activity_executions" table.
+	ActivityExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "task_type", Type: field.TypeEnum, Enums: []string{"handler", "side_effect", "transaction", "compensation"}, Default: "handler"},
-		{Name: "handler_name", Type: field.TypeString},
-		{Name: "payload", Type: field.TypeBytes, Nullable: true},
-		{Name: "result", Type: field.TypeBytes, Nullable: true},
-		{Name: "error", Type: field.TypeBytes, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "in_progress", "completed", "failed"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "handler_execution_tasks", Type: field.TypeString, Nullable: true},
+		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "activity_executions", Type: field.TypeString},
+		{Name: "workflow_execution_activity_executions", Type: field.TypeString, Nullable: true},
 	}
-	// HandlerTasksTable holds the schema information for the "handler_tasks" table.
-	HandlerTasksTable = &schema.Table{
-		Name:       "handler_tasks",
-		Columns:    HandlerTasksColumns,
-		PrimaryKey: []*schema.Column{HandlerTasksColumns[0]},
+	// ActivityExecutionsTable holds the schema information for the "activity_executions" table.
+	ActivityExecutionsTable = &schema.Table{
+		Name:       "activity_executions",
+		Columns:    ActivityExecutionsColumns,
+		PrimaryKey: []*schema.Column{ActivityExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "handler_tasks_handler_executions_tasks",
-				Columns:    []*schema.Column{HandlerTasksColumns[9]},
-				RefColumns: []*schema.Column{HandlerExecutionsColumns[0]},
+				Symbol:     "activity_executions_activities_executions",
+				Columns:    []*schema.Column{ActivityExecutionsColumns[7]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "activity_executions_workflow_executions_activity_executions",
+				Columns:    []*schema.Column{ActivityExecutionsColumns[8]},
+				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// RunsColumns holds the columns for the "runs" table.
+	RunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"workflow", "activity"}},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// RunsTable holds the schema information for the "runs" table.
+	RunsTable = &schema.Table{
+		Name:       "runs",
+		Columns:    RunsColumns,
+		PrimaryKey: []*schema.Column{RunsColumns[0]},
+	}
+	// SagasColumns holds the columns for the "sagas" table.
+	SagasColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "input", Type: field.TypeJSON},
+		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "timeout", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "activity_sagas", Type: field.TypeString, Nullable: true},
+	}
+	// SagasTable holds the schema information for the "sagas" table.
+	SagasTable = &schema.Table{
+		Name:       "sagas",
+		Columns:    SagasColumns,
+		PrimaryKey: []*schema.Column{SagasColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sagas_activities_sagas",
+				Columns:    []*schema.Column{SagasColumns[6]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -92,10 +118,13 @@ var (
 	// SagaExecutionsColumns holds the columns for the "saga_executions" table.
 	SagaExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "completed", "failed"}},
-		{Name: "start_time", Type: field.TypeTime},
-		{Name: "end_time", Type: field.TypeTime, Nullable: true},
-		{Name: "execution_context_id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensating", "Compensated"}, Default: "Pending"},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "saga_executions", Type: field.TypeString},
 	}
 	// SagaExecutionsTable holds the schema information for the "saga_executions" table.
 	SagaExecutionsTable = &schema.Table{
@@ -104,9 +133,9 @@ var (
 		PrimaryKey: []*schema.Column{SagaExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "saga_executions_execution_contexts_saga_executions",
-				Columns:    []*schema.Column{SagaExecutionsColumns[4]},
-				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
+				Symbol:     "saga_executions_sagas_executions",
+				Columns:    []*schema.Column{SagaExecutionsColumns[7]},
+				RefColumns: []*schema.Column{SagasColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
@@ -114,12 +143,16 @@ var (
 	// SagaStepExecutionsColumns holds the columns for the "saga_step_executions" table.
 	SagaStepExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "saga_execution_id", Type: field.TypeString},
-		{Name: "step_number", Type: field.TypeInt},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "in_progress", "completed", "failed", "compensated"}},
-		{Name: "start_time", Type: field.TypeTime, Nullable: true},
-		{Name: "end_time", Type: field.TypeTime, Nullable: true},
-		{Name: "saga_execution_steps", Type: field.TypeString, Nullable: true},
+		{Name: "handler_name", Type: field.TypeString},
+		{Name: "step_type", Type: field.TypeEnum, Enums: []string{"Transaction", "Compensation"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensated"}, Default: "Pending"},
+		{Name: "sequence", Type: field.TypeInt},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "input", Type: field.TypeJSON},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "saga_execution_steps", Type: field.TypeString},
 	}
 	// SagaStepExecutionsTable holds the schema information for the "saga_step_executions" table.
 	SagaStepExecutionsTable = &schema.Table{
@@ -129,51 +162,161 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "saga_step_executions_saga_executions_steps",
-				Columns:    []*schema.Column{SagaStepExecutionsColumns[6]},
+				Columns:    []*schema.Column{SagaStepExecutionsColumns[10]},
 				RefColumns: []*schema.Column{SagaExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// SideEffectsColumns holds the columns for the "side_effects" table.
+	SideEffectsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "handler_name", Type: field.TypeString},
+		{Name: "input", Type: field.TypeJSON},
+		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "timeout", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "activity_side_effects", Type: field.TypeString, Nullable: true},
+	}
+	// SideEffectsTable holds the schema information for the "side_effects" table.
+	SideEffectsTable = &schema.Table{
+		Name:       "side_effects",
+		Columns:    SideEffectsColumns,
+		PrimaryKey: []*schema.Column{SideEffectsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "side_effects_activities_side_effects",
+				Columns:    []*schema.Column{SideEffectsColumns[6]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
 	}
-	// SideEffectResultsColumns holds the columns for the "side_effect_results" table.
-	SideEffectResultsColumns = []*schema.Column{
+	// SideEffectExecutionsColumns holds the columns for the "side_effect_executions" table.
+	SideEffectExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "execution_context_id", Type: field.TypeString},
-		{Name: "name", Type: field.TypeString},
-		{Name: "result", Type: field.TypeBytes},
-		{Name: "execution_context_side_effect_results", Type: field.TypeString, Nullable: true},
+		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "activity_execution_side_effect_executions", Type: field.TypeString, Nullable: true},
+		{Name: "side_effect_executions", Type: field.TypeString},
 	}
-	// SideEffectResultsTable holds the schema information for the "side_effect_results" table.
-	SideEffectResultsTable = &schema.Table{
-		Name:       "side_effect_results",
-		Columns:    SideEffectResultsColumns,
-		PrimaryKey: []*schema.Column{SideEffectResultsColumns[0]},
+	// SideEffectExecutionsTable holds the schema information for the "side_effect_executions" table.
+	SideEffectExecutionsTable = &schema.Table{
+		Name:       "side_effect_executions",
+		Columns:    SideEffectExecutionsColumns,
+		PrimaryKey: []*schema.Column{SideEffectExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "side_effect_results_execution_contexts_side_effect_results",
-				Columns:    []*schema.Column{SideEffectResultsColumns[4]},
-				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
+				Symbol:     "side_effect_executions_activity_executions_side_effect_executions",
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
+				RefColumns: []*schema.Column{ActivityExecutionsColumns[0]},
 				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "side_effect_executions_side_effects_executions",
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[8]},
+				RefColumns: []*schema.Column{SideEffectsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// SignalsColumns holds the columns for the "signals" table.
+	SignalsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "data", Type: field.TypeJSON, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Received", "Processed"}, Default: "Pending"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "workflow_execution_signals", Type: field.TypeString, Nullable: true},
+	}
+	// SignalsTable holds the schema information for the "signals" table.
+	SignalsTable = &schema.Table{
+		Name:       "signals",
+		Columns:    SignalsColumns,
+		PrimaryKey: []*schema.Column{SignalsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "signals_workflow_executions_signals",
+				Columns:    []*schema.Column{SignalsColumns[6]},
+				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// WorkflowsColumns holds the columns for the "workflows" table.
+	WorkflowsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "identity", Type: field.TypeString},
+		{Name: "handler_name", Type: field.TypeString},
+		{Name: "input", Type: field.TypeJSON},
+		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "timeout", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// WorkflowsTable holds the schema information for the "workflows" table.
+	WorkflowsTable = &schema.Table{
+		Name:       "workflows",
+		Columns:    WorkflowsColumns,
+		PrimaryKey: []*schema.Column{WorkflowsColumns[0]},
+	}
+	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
+	WorkflowExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Cancelled"}, Default: "Pending"},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "workflow_executions", Type: field.TypeString},
+	}
+	// WorkflowExecutionsTable holds the schema information for the "workflow_executions" table.
+	WorkflowExecutionsTable = &schema.Table{
+		Name:       "workflow_executions",
+		Columns:    WorkflowExecutionsColumns,
+		PrimaryKey: []*schema.Column{WorkflowExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "workflow_executions_workflows_executions",
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[7]},
+				RefColumns: []*schema.Column{WorkflowsColumns[0]},
+				OnDelete:   schema.NoAction,
 			},
 		},
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
-		ExecutionContextsTable,
-		HandlerExecutionsTable,
-		HandlerTasksTable,
+		ActivitiesTable,
+		ActivityExecutionsTable,
+		RunsTable,
+		SagasTable,
 		SagaExecutionsTable,
 		SagaStepExecutionsTable,
-		SideEffectResultsTable,
+		SideEffectsTable,
+		SideEffectExecutionsTable,
+		SignalsTable,
+		WorkflowsTable,
+		WorkflowExecutionsTable,
 	}
 )
 
 func init() {
-	HandlerExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
-	HandlerExecutionsTable.ForeignKeys[1].RefTable = HandlerExecutionsTable
-	HandlerExecutionsTable.ForeignKeys[2].RefTable = SagaStepExecutionsTable
-	HandlerTasksTable.ForeignKeys[0].RefTable = HandlerExecutionsTable
-	SagaExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
+	ActivitiesTable.ForeignKeys[0].RefTable = RunsTable
+	ActivitiesTable.ForeignKeys[1].RefTable = RunsTable
+	ActivitiesTable.ForeignKeys[2].RefTable = WorkflowsTable
+	ActivityExecutionsTable.ForeignKeys[0].RefTable = ActivitiesTable
+	ActivityExecutionsTable.ForeignKeys[1].RefTable = WorkflowExecutionsTable
+	SagasTable.ForeignKeys[0].RefTable = ActivitiesTable
+	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
 	SagaStepExecutionsTable.ForeignKeys[0].RefTable = SagaExecutionsTable
-	SideEffectResultsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
+	SideEffectsTable.ForeignKeys[0].RefTable = ActivitiesTable
+	SideEffectExecutionsTable.ForeignKeys[0].RefTable = ActivityExecutionsTable
+	SideEffectExecutionsTable.ForeignKeys[1].RefTable = SideEffectsTable
+	SignalsTable.ForeignKeys[0].RefTable = WorkflowExecutionsTable
+	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

@@ -2,11 +2,11 @@ package tempolite
 
 import (
 	"context"
-	dbSQL "database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sync"
@@ -14,582 +14,322 @@ import (
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
+	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
+
+	dbSQL "database/sql"
 )
 
 type Tempolite struct {
-	ctx context.Context
+	db     *dbSQL.DB
+	client *ent.Client
 
-	db              *dbSQL.DB
-	client          *ent.Client
-	handlers        sync.Map
-	handlerTaskPool *HandlerTaskPool
-	scheduler       *Scheduler
+	workflows    sync.Map
+	activities   sync.Map
+	sideEffects  sync.Map
+	sagas        sync.Map
+	sagaBuilders sync.Map
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	workflowPool *retrypool.Pool[*workflowTask]
+
+	schedulerExecutionWorkflowDone chan struct{}
 }
 
-type TempoliteConfig struct {
+type tempoliteConfig struct {
 	path        *string
 	destructive bool
 }
 
-type TempoliteOption func(*TempoliteConfig)
+type tempoliteOption func(*tempoliteConfig)
 
-func WithPath(path string) TempoliteOption {
-	return func(c *TempoliteConfig) {
+func WithPath(path string) tempoliteOption {
+	return func(c *tempoliteConfig) {
 		c.path = &path
 	}
 }
 
-func WithMemory() TempoliteOption {
-	return func(c *TempoliteConfig) {
+func WithMemory() tempoliteOption {
+	return func(c *tempoliteConfig) {
 		c.path = nil
 	}
 }
 
-func WithDestructive() TempoliteOption {
-	return func(c *TempoliteConfig) {
+func WithDestructive() tempoliteOption {
+	return func(c *tempoliteConfig) {
 		c.destructive = true
 	}
 }
 
-func New(ctx context.Context, db *dbSQL.DB, opts ...TempoliteOption) (*Tempolite, error) {
-	cfg := TempoliteConfig{}
+func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
+	cfg := tempoliteConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
+	optsComfy := []comfylite3.ComfyOption{
+		comfylite3.WithBuffer(77777),
+	}
+
+	var firstTime bool
+	if cfg.path != nil {
+		info, err := os.Stat(*cfg.path)
+		if err == nil && !info.IsDir() {
+			firstTime = false
+		} else {
+			firstTime = true
+		}
+		if cfg.destructive {
+			os.Remove(*cfg.path)
+		}
+		if err := os.MkdirAll(filepath.Dir(*cfg.path), os.ModePerm); err != nil {
+			return nil, err
+		}
+		optsComfy = append(optsComfy, comfylite3.WithPath(*cfg.path))
+	} else {
+		optsComfy = append(optsComfy, comfylite3.WithMemory())
+	}
+
+	comfy, err := comfylite3.New(optsComfy...)
+	if err != nil {
+		return nil, err
+	}
+
+	db := comfylite3.OpenDB(
+		comfy,
+		comfylite3.WithOption("_fk=1"),
+		comfylite3.WithOption("cache=shared"),
+		comfylite3.WithOption("mode=rwc"),
+		comfylite3.WithForeignKeys(),
+	)
+
 	client := ent.NewClient(ent.Driver(sql.OpenDB(dialect.SQLite, db)))
 
-	if cfg.destructive {
-		if err := client.Schema.Create(ctx); err != nil {
+	if firstTime || (cfg.destructive && cfg.path != nil) {
+		if err = client.Schema.Create(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	t := &Tempolite{
+	tp := &Tempolite{
 		ctx:    ctx,
 		db:     db,
 		client: client,
+		cancel: cancel,
 	}
 
-	t.handlerTaskPool = NewHandlerTaskPool(t, 5)
-	t.scheduler = NewScheduler(t)
+	tp.workflowPool = tp.createWorkflowPool()
 
-	return t, nil
+	go tp.schedulerExeutionWorkflow()
+
+	return tp, nil
 }
 
-func (tp *Tempolite) Close() error {
-	var closeErr error
-	tp.scheduler.Close()
-	if err := tp.db.Close(); err != nil {
-		closeErr = errors.New("error closing database")
-	}
-	if err := tp.client.Close(); err != nil {
-		if closeErr != nil {
-			closeErr = fmt.Errorf("%v; %v", closeErr, errors.New("error closing client"))
-		} else {
-			closeErr = errors.New("error closing client")
-		}
-	}
-	return closeErr
+func (tp *Tempolite) Close() {
+	tp.cancel() // it will stops other systems
+	tp.workflowPool.Close()
 }
 
-func (tp *Tempolite) RegisterHandler(handler interface{}) error {
-	handlerType := reflect.TypeOf(handler)
-	log.Printf("Registering handler of type %v", handlerType)
-
-	if handlerType.Kind() != reflect.Func {
-		return errors.New("Handler must be a function")
-	}
-
-	if handlerType.NumIn() != 2 {
-		return errors.New("Handler must have two input parameters")
-	}
-
-	if !handlerType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
-		return errors.New("First parameter of handler must implement context.Context")
-	}
-
-	var returnType reflect.Type
-	if handlerType.NumOut() == 2 {
-		if !handlerType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-			return errors.New("Second return value of handler must be error")
-		}
-		returnType = handlerType.Out(0)
-	} else if handlerType.NumOut() == 1 {
-		if !handlerType.Out(0).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-			return errors.New("Return value of handler must be error")
-		}
-	} else {
-		return errors.New("Handler must have either one or two return values")
-	}
-
-	name := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
-	log.Printf("Handler registered with name %s", name)
-
-	tp.setHandler(name, handler, handlerType.In(1), returnType, handlerType.NumIn(), handlerType.NumOut())
-
-	return nil
+func (tp *Tempolite) Wait() error {
+	<-time.After(1 * time.Second)
+	return tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+		log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+	}, time.Second)
 }
 
-func (t *Tempolite) setHandler(name string, handler interface{}, paramType reflect.Type, returnType reflect.Type, numIn int, numOut int) {
-	t.handlers.Store(name, HandlerInfo{
-		Handler:    handler,
-		ParamType:  paramType,
-		ReturnType: returnType,
-		NumIn:      numIn,
-		NumOut:     numOut,
-	})
+// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
+// Saga only accepts one type of input
+func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo, error) {
+	// todo: implement
+	return nil, nil
 }
 
-func (t *Tempolite) getHandler(name string) (HandlerInfo, bool) {
-	handler, ok := t.handlers.Load(name)
+func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, input ...interface{}) (*workflowWorker, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) enqueueActivty(ctx TempoliteContext, input ...interface{}) (*ActivityInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, input ...interface{}) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getActivity(id string) (*ActivityInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getWorkflow(id string) (*WorkflowInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
+	// whatever happen here, we have to create a channel that will then send the data to the other channel used by the consumer ON the correct type!!!
+	return make(chan interface{}, 1)
+}
+
+func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...interface{}) (string, error) {
+	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
+	handlerIdentity := HandlerIdentity(funcName)
+	return tp.EnqueueActivity(handlerIdentity, params...)
+}
+
+func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interface{}) (string, error) {
+	// The whole implementation will be totally different, it's just for fun here
+	// The real implementation will be with ActivityTask save on a db, then fetched from a scheduler to be sent to a pool.
+	handlerInterface, ok := tp.activities.Load(longName)
 	if !ok {
-		return HandlerInfo{}, false
-	}
-	return handler.(HandlerInfo), true
-}
-
-func (tp *Tempolite) Enqueue(ctx context.Context, handler interface{}, params interface{}, options ...EnqueueOption) (string, error) {
-	return tp.enqueueTask(ctx, handler, params, "handler", options...)
-}
-
-func (tp *Tempolite) EnqueueSaga(ctx context.Context, saga SagaDefinition, params interface{}, options ...EnqueueOption) (string, error) {
-	return tp.enqueueSaga(ctx, saga, options...)
-}
-
-func (tp *Tempolite) enqueueTask(ctx context.Context, handler interface{}, params interface{}, taskType string, options ...EnqueueOption) (string, error) {
-	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
-	log.Printf("Enqueuing task with handler %s", handlerName)
-
-	_, exists := tp.getHandler(handlerName)
-	if !exists {
-		return "", fmt.Errorf("no handler registered with name: %s", handlerName)
+		return "", fmt.Errorf("activity %s not found", longName)
 	}
 
-	opts := enqueueOptions{
-		maxRetries: 3, // Default value
-	}
-	for _, option := range options {
-		option(&opts)
+	activity := handlerInterface.(Activity)
+
+	if len(params) != activity.NumIn {
+		return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", activity.NumIn, len(params))
 	}
 
-	var payloadBytes []byte
-	if params != nil {
-		var err error
-		payloadBytes, err = json.Marshal(params)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal task parameters: %v", err)
-		}
-	}
-
-	tx, err := tp.client.Tx(ctx)
+	// Serialize parameters
+	payloadBytes, err := json.Marshal(params)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal task parameters: %v", err)
 	}
-	defer tx.Rollback()
 
-	var execCtx *ent.ExecutionContext
-	if opts.executionContextID == nil {
-		execCtx, err = tx.ExecutionContext.
+	// Enqueue the activity task (implementation depends on your task queue system)
+	taskID := "task-id" // Generate or obtain a unique task ID
+	log.Printf("Enqueued activity %s with payload: %s", longName, string(payloadBytes))
+
+	// values := []reflect.Value{
+	// 	reflect.ValueOf(ActivityContext{}),
+	// }
+	// for _, param := range params {
+	// 	values = append(values, reflect.ValueOf(param))
+	// }
+
+	// reflect.ValueOf(activity.Handler).Call(values)
+
+	return taskID, nil
+}
+
+func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (string, error) {
+	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
+	handlerIdentity := HandlerIdentity(funcName)
+	var value any
+	var ok bool
+	var err error
+
+	if value, ok = tp.workflows.Load(handlerIdentity); ok {
+		var workflowHandlerInfo Workflow
+		if workflowHandlerInfo, ok = value.(Workflow); !ok {
+			// could be development bug
+			return "", fmt.Errorf("workflow %s is not handler info", handlerIdentity)
+		}
+
+		if len(params) != workflowHandlerInfo.NumIn {
+			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", workflowHandlerInfo.NumIn, len(params))
+		}
+
+		for idx, param := range params {
+			if reflect.TypeOf(param) != workflowHandlerInfo.ParamTypes[idx] {
+				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", workflowHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
+			}
+		}
+
+		var runEntity *ent.Run
+		// root Run entity that anchored the workflow entity despite retries
+		if runEntity, err = tp.
+			client.
+			Run.
 			Create().
-			SetID(uuid.New().String()).
-			SetCurrentRunID(uuid.New().String()).
-			SetStatus(executioncontext.StatusRunning).
-			SetStartTime(time.Now()).
-			Save(ctx)
+			SetID(uuid.NewString()).    // immutable
+			SetRunID(uuid.NewString()). // can change if that flow change due to a retry
+			SetType(run.TypeWorkflow).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created run entity %s for %s with params: %v", runEntity.ID, handlerIdentity, params)
+
+		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
+		var workflowEntity *ent.Workflow
+		if workflowEntity, err = tp.client.Workflow.
+			Create().
+			SetID(runEntity.RunID).
+			SetIdentity(string(handlerIdentity)).
+			SetHandlerName(workflowHandlerInfo.HandlerName).
+			SetInput(params).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created workflow entity %s for %s with params: %v", workflowEntity.ID, handlerIdentity, params)
+
+		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
+		var workflowExecution *ent.WorkflowExecution
+		if workflowExecution, err = tp.client.WorkflowExecution.
+			Create().
+			SetID(uuid.NewString()).
+			SetRunID(runEntity.RunID).
+			SetWorkflow(workflowEntity).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created workflow execution %s for %s with params: %v", workflowExecution.ID, handlerIdentity, params)
+
+		return runEntity.ID, nil
 	} else {
-		execCtx, err = tx.ExecutionContext.Get(ctx, *opts.executionContextID)
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to get or create execution context: %v", err)
-	}
-
-	handlerExec, err := tx.HandlerExecution.
-		Create().
-		SetID(uuid.New().String()).
-		SetRunID(execCtx.CurrentRunID).
-		SetHandlerName(handlerName).
-		SetStatus(handlerexecution.StatusPending).
-		SetStartTime(time.Now()).
-		SetMaxRetries(opts.maxRetries).
-		SetExecutionContext(execCtx).
-		Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create handler execution: %v", err)
-	}
-
-	if opts.parentID != nil {
-		parentExec, err := tx.HandlerExecution.Get(ctx, *opts.parentID)
-		if err != nil {
-			return "", fmt.Errorf("failed to get parent execution: %v", err)
-		}
-		_, err = tx.HandlerExecution.UpdateOne(handlerExec).
-			SetParent(parentExec).
-			Save(ctx)
-		if err != nil {
-			return "", fmt.Errorf("failed to set parent execution: %v", err)
-		}
-	}
-
-	handlerTask, err := tx.HandlerTask.
-		Create().
-		SetID(uuid.New().String()).
-		SetTaskType(taskType).
-		SetHandlerName(handlerName).
-		SetPayload(payloadBytes).
-		SetStatus(handlertask.StatusPending).
-		SetCreatedAt(time.Now()).
-		SetHandlerExecution(handlerExec).
-		Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create handler task: %v", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("failed to commit transaction: %v", err)
-	}
-
-	return handlerTask.ID, nil
-}
-
-func (tp *Tempolite) enqueueSaga(ctx context.Context, saga SagaDefinition, options ...EnqueueOption) (string, error) {
-	opts := enqueueOptions{
-		maxRetries: 3, // Default value
-	}
-	for _, option := range options {
-		option(&opts)
-	}
-
-	tx, err := tp.client.Tx(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-
-	var execCtx *ent.ExecutionContext
-	if opts.executionContextID == nil {
-		execCtx, err = tx.ExecutionContext.
-			Create().
-			SetID(uuid.New().String()).
-			SetCurrentRunID(uuid.New().String()).
-			SetStatus(executioncontext.StatusRunning).
-			SetStartTime(time.Now()).
-			Save(ctx)
-	} else {
-		execCtx, err = tx.ExecutionContext.Get(ctx, *opts.executionContextID)
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to get or create execution context: %v", err)
-	}
-
-	sagaExec, err := tx.SagaExecution.
-		Create().
-		SetID(uuid.New().String()).
-		SetExecutionContextID(execCtx.ID).
-		SetStatus("running").
-		SetStartTime(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create saga execution: %v", err)
-	}
-
-	// Store the saga steps in the database and in-memory registry
-	for i, step := range saga.Steps {
-		stepID := uuid.New().String()
-		_, err := tx.SagaStepExecution.
-			Create().
-			SetID(stepID).
-			SetSagaExecutionID(sagaExec.ID).
-			SetStepNumber(i).
-			SetStatus("pending").
-			Save(ctx)
-		if err != nil {
-			return "", fmt.Errorf("failed to create saga step execution: %v", err)
-		}
-
-		transactionHandlerName := fmt.Sprintf("%s_transaction_%d", sagaExec.ID, i)
-		compensationHandlerName := fmt.Sprintf("%s_compensation_%d", sagaExec.ID, i)
-		tp.setHandler(transactionHandlerName, step.Transaction, nil, nil, 0, 0)
-		tp.setHandler(compensationHandlerName, step.Compensation, nil, nil, 0, 0)
-	}
-
-	// Enqueue the first transaction step
-	firstStepHandlerName := fmt.Sprintf("%s_transaction_%d", sagaExec.ID, 0)
-	handlerExec, err := tx.HandlerExecution.
-		Create().
-		SetID(uuid.New().String()).
-		SetRunID(execCtx.CurrentRunID).
-		SetHandlerName(firstStepHandlerName).
-		SetStatus(handlerexecution.StatusPending).
-		SetStartTime(time.Now()).
-		SetMaxRetries(opts.maxRetries).
-		SetExecutionContext(execCtx).
-		Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create handler execution: %v", err)
-	}
-
-	handlerTask, err := tx.HandlerTask.
-		Create().
-		SetID(uuid.New().String()).
-		SetTaskType("transaction").
-		SetHandlerName(firstStepHandlerName).
-		SetStatus(handlertask.StatusPending).
-		SetCreatedAt(time.Now()).
-		SetHandlerExecution(handlerExec).
-		Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create handler task: %v", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("failed to commit transaction: %v", err)
-	}
-
-	return handlerTask.ID, nil
-}
-
-func (tp *Tempolite) WaitFor(ctx context.Context, id string) (interface{}, error) {
-	ticker := time.NewTicker(time.Second / 16)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
-			task, err := tp.client.HandlerTask.Get(ctx, id)
-			if err != nil {
-				if ent.IsNotFound(err) {
-					continue
-				}
-				return nil, err
-			}
-
-			switch task.Status {
-			case handlertask.StatusCompleted:
-				handlerExec, err := task.QueryHandlerExecution().Only(ctx)
-				if err != nil {
-					return nil, err
-				}
-				handlerInfo, exists := tp.getHandler(handlerExec.HandlerName)
-				if !exists {
-					return nil, fmt.Errorf("no handler registered with name %s", handlerExec.HandlerName)
-				}
-				return handlerInfo.ToInterface(task.Result)
-			}
-		}
+		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}
 }
 
-type HandlerContext struct {
-	context.Context
-	tp                 *Tempolite
-	handlerExecutionID string
-	executionContextID string
+func (tp *Tempolite) RemoveWorkflow(id string) (string, error) {
+	return "", nil
 }
 
-func (c *HandlerContext) Enqueue(handler interface{}, params interface{}, options ...EnqueueOption) (string, error) {
-	opts := []EnqueueOption{
-		WithParentID(c.handlerExecutionID),
-		WithExecutionContextID(c.executionContextID),
-	}
-	opts = append(opts, options...)
-	return c.tp.Enqueue(c, handler, params, opts...)
+func (tp *Tempolite) PauseWorkflow(id string) (string, error) {
+	return "", nil
 }
 
-func (c *HandlerContext) EnqueueSaga(saga SagaDefinition, options ...EnqueueOption) (string, error) {
-	opts := []EnqueueOption{
-		WithParentID(c.handlerExecutionID),
-		WithExecutionContextID(c.executionContextID),
-	}
-	opts = append(opts, options...)
-	return c.tp.EnqueueSaga(c, saga, opts...)
+func (tp *Tempolite) ResumeWorkflow(id string) (string, error) {
+	return "", nil
 }
 
-func (c *HandlerContext) SideEffect(name string, sideEffect SideEffect, options ...EnqueueOption) (interface{}, error) {
-	// Check if side effect result already exists
-	result, err := c.tp.getSideEffectResult(c.executionContextID, name)
-	if err == nil {
-		return result, nil
-	}
-	// Enqueue side effect task
-	taskID, err := c.tp.enqueueSideEffect(c, sideEffect, name, options...)
-	if err != nil {
-		return nil, err
-	}
-	// Wait for side effect to complete
-	return c.tp.WaitFor(c, taskID)
+func (tp *Tempolite) GetWorkflow(id string) (*WorkflowInfo, error) {
+	return tp.getWorkflow(id)
 }
 
-func (c *HandlerContext) WaitFor(id string) (interface{}, error) {
-	return c.tp.WaitFor(c, id)
+func (tp *Tempolite) GetActivity(id string) (*ActivityInfo, error) {
+	return tp.getActivity(id)
 }
 
-type SideEffectContext struct {
-	context.Context
-	tp                 *Tempolite
-	handlerExecutionID string
-	executionContextID string
+func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
+	return tp.getSideEffect(id)
 }
 
-type TransactionContext struct {
-	context.Context
-	tp                 *Tempolite
-	handlerExecutionID string
-	executionContextID string
-}
-
-type CompensationContext struct {
-	context.Context
-	tp                 *Tempolite
-	handlerExecutionID string
-	executionContextID string
-}
-
-type HandlerInfo struct {
-	Handler    interface{}
-	ParamType  reflect.Type
-	ReturnType reflect.Type
-	NumIn      int
-	NumOut     int
-}
-
-func (hi HandlerInfo) GetFn() reflect.Value {
-	return reflect.ValueOf(hi.Handler)
-}
-
-func (hi HandlerInfo) ToInterface(data []byte) (interface{}, error) {
-	if hi.ReturnType == nil {
-		return nil, nil
-	}
-	param := reflect.New(hi.ReturnType).Interface()
-	err := json.Unmarshal(data, &param)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result: %v", err)
-	}
-	return param, nil
-}
-
-type EnqueueOption func(*enqueueOptions)
-
-type enqueueOptions struct {
-	executionContextID *string
-	parentID           *string
-	maxRetries         int
-}
-
-func WithExecutionContextID(id string) EnqueueOption {
-	return func(o *enqueueOptions) {
-		o.executionContextID = &id
-	}
-}
-
-func WithParentID(id string) EnqueueOption {
-	return func(o *enqueueOptions) {
-		o.parentID = &id
-	}
-}
-
-func WithMaxRetries(maxRetries int) EnqueueOption {
-	return func(o *enqueueOptions) {
-		o.maxRetries = maxRetries
-	}
-}
-
-func (tp *Tempolite) Wait(condition func(TempoliteInfo) bool, interval time.Duration) error {
-	log.Printf("Starting wait loop with interval %v", interval)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-tp.ctx.Done():
-			log.Printf("Context done during wait loop")
-			return tp.ctx.Err()
-		case <-ticker.C:
-			info := tp.getInfo()
-			if condition(info) {
-				log.Printf("Wait condition satisfied")
-				return nil
-			}
-		}
-	}
-}
-
-func (tp *Tempolite) getInfo() TempoliteInfo {
-	log.Printf("Getting pool stats")
-	return TempoliteInfo{
-		Tasks:           tp.handlerTaskPool.pool.QueueSize(),
-		DeadTasks:       tp.handlerTaskPool.pool.DeadTaskCount(),
-		ProcessingTasks: tp.handlerTaskPool.pool.ProcessingCount(),
-	}
-}
-
-type TempoliteInfo struct {
-	Tasks           int
-	DeadTasks       int
-	ProcessingTasks int
-}
-
-func (tpi TempoliteInfo) IsCompleted() bool {
-	return tpi.Tasks == 0 && tpi.ProcessingTasks == 0 && tpi.DeadTasks == 0
-}
-
-// Interfaces
-
-type Handler interface {
-	Run(ctx HandlerContext, data interface{}) (interface{}, error)
-}
-
-type SideEffect interface {
-	Run(ctx SideEffectContext) (interface{}, error)
-}
-
-type SagaStep interface {
-	Transaction(ctx TransactionContext) (interface{}, error)
-	Compensation(ctx CompensationContext) (interface{}, error)
-}
-
-type SagaDefinition struct {
-	Steps []SagaStep
-}
-
-// SideEffect related methods
-
-func (tp *Tempolite) getSideEffectResult(executionContextID string, name string) (interface{}, error) {
-	// Query SideEffectResult
-	res, err := tp.client.SideEffectResult.
-		Query().
-		Where(
-			sideeffectresult.ExecutionContextID(executionContextID),
-			sideeffectresult.Name(name),
-		).
-		Only(tp.ctx)
-	if err != nil {
-		return nil, err
-	}
-	var result interface{}
-	err = json.Unmarshal(res.Result, &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (tp *Tempolite) enqueueSideEffect(ctx context.Context, sideEffect SideEffect, name string, options ...EnqueueOption) (string, error) {
-	// Similar to Enqueue, but task_type is "side_effect"
-	handlerName := name // Use the name as handlerName for side effect
-	// Need to store the side effect function in the handler registry
-	// So we can execute it later
-	tp.setHandler(handlerName, sideEffect, nil, nil, 0, 0) // paramType and returnType are nil for now
-
-	// Enqueue the side effect task
-	return tp.enqueueTask(ctx, sideEffect, nil, "side_effect", options...)
+func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
+	return tp.getSaga(id)
 }

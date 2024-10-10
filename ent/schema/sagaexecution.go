@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -16,23 +18,30 @@ func (SagaExecution) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
-		field.String("execution_context_id"),
+		field.String("run_id").
+			Unique(),
 		field.Enum("status").
-			Values("running", "completed", "failed"),
-		field.Time("start_time"),
-		field.Time("end_time").
+			Values("Pending", "Running", "Completed", "Failed", "Compensating", "Compensated").
+			Default("Pending"),
+		field.Int("attempt").
+			Default(1),
+		field.JSON("output", []interface{}{}).
 			Optional(),
+		field.Time("started_at").
+			Default(time.Now),
+		field.Time("updated_at").
+			Default(time.Now).
+			UpdateDefault(time.Now),
 	}
 }
 
 // Edges of the SagaExecution.
 func (SagaExecution) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("execution_context", ExecutionContext.Type).
-			Ref("saga_executions").
-			Field("execution_context_id").
+		edge.From("saga", Saga.Type).
+			Ref("executions").
 			Unique().
-			Required(), // Added Required() to match the non-optional foreign key field
+			Required(),
 		edge.To("steps", SagaStepExecution.Type),
 	}
 }

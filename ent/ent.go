@@ -12,12 +12,17 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
-	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
+	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -78,12 +83,17 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			executioncontext.Table:  executioncontext.ValidColumn,
-			handlerexecution.Table:  handlerexecution.ValidColumn,
-			handlertask.Table:       handlertask.ValidColumn,
-			sagaexecution.Table:     sagaexecution.ValidColumn,
-			sagastepexecution.Table: sagastepexecution.ValidColumn,
-			sideeffectresult.Table:  sideeffectresult.ValidColumn,
+			activity.Table:            activity.ValidColumn,
+			activityexecution.Table:   activityexecution.ValidColumn,
+			run.Table:                 run.ValidColumn,
+			saga.Table:                saga.ValidColumn,
+			sagaexecution.Table:       sagaexecution.ValidColumn,
+			sagastepexecution.Table:   sagastepexecution.ValidColumn,
+			sideeffect.Table:          sideeffect.ValidColumn,
+			sideeffectexecution.Table: sideeffectexecution.ValidColumn,
+			signal.Table:              signal.ValidColumn,
+			workflow.Table:            workflow.ValidColumn,
+			workflowexecution.Table:   workflowexecution.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)
