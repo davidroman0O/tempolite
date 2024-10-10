@@ -23,9 +23,15 @@ func TestWorkflowSimple(t *testing.T) {
 		Message string
 	}
 
+	failed := false
+
 	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
 		fmt.Println("localWrkflw: ", input, msg)
-		return fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
+		if !failed {
+			failed = true
+			return fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
+		}
+		return nil
 	}
 
 	if err := tp.RegisterWorkflow(localWrkflw); err != nil {

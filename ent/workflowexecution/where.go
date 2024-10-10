@@ -70,11 +70,6 @@ func RunID(v string) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldEQ(FieldRunID, v))
 }
 
-// Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
-func Attempt(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldEQ(FieldAttempt, v))
-}
-
 // StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
 func StartedAt(v time.Time) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldEQ(FieldStartedAt, v))
@@ -168,46 +163,6 @@ func StatusIn(vs ...Status) predicate.WorkflowExecution {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldNotIn(FieldStatus, vs...))
-}
-
-// AttemptEQ applies the EQ predicate on the "attempt" field.
-func AttemptEQ(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldEQ(FieldAttempt, v))
-}
-
-// AttemptNEQ applies the NEQ predicate on the "attempt" field.
-func AttemptNEQ(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldNEQ(FieldAttempt, v))
-}
-
-// AttemptIn applies the In predicate on the "attempt" field.
-func AttemptIn(vs ...int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldIn(FieldAttempt, vs...))
-}
-
-// AttemptNotIn applies the NotIn predicate on the "attempt" field.
-func AttemptNotIn(vs ...int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldNotIn(FieldAttempt, vs...))
-}
-
-// AttemptGT applies the GT predicate on the "attempt" field.
-func AttemptGT(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldGT(FieldAttempt, v))
-}
-
-// AttemptGTE applies the GTE predicate on the "attempt" field.
-func AttemptGTE(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldGTE(FieldAttempt, v))
-}
-
-// AttemptLT applies the LT predicate on the "attempt" field.
-func AttemptLT(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldLT(FieldAttempt, v))
-}
-
-// AttemptLTE applies the LTE predicate on the "attempt" field.
-func AttemptLTE(v int) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(sql.FieldLTE(FieldAttempt, v))
 }
 
 // OutputIsNil applies the IsNil predicate on the "output" field.

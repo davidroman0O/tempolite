@@ -7,6 +7,7 @@ import (
 
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/google/uuid"
 )
 
 func (tp *Tempolite) schedulerExeutionWorkflow() {
@@ -69,10 +70,50 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 					}
 
 					task := &workflowTask{
+						executionID: wkflw.ID,
 						handlerName: workflowHandlerInfo.HandlerLongName,
 						handler:     workflowHandlerInfo.Handler,
 						params:      inputs,
+						maxRetry:    workflowEntity.RetryPolicy.MaximumAttempts,
+						retryCount:  0,
 					}
+
+					retryIt := func() error {
+						var runEntity *ent.Run
+						if runEntity, err = tp.client.Run.Get(tp.ctx, wkflw.RunID); err != nil {
+							return err
+						}
+						// create a new execution for the same workflow
+						var workflowExecution *ent.WorkflowExecution
+						if workflowExecution, err = tp.client.WorkflowExecution.
+							Create().
+							SetID(uuid.NewString()).
+							SetRunID(runEntity.RunID).
+							SetWorkflow(workflowEntity).
+							Save(tp.ctx); err != nil {
+							return err
+						}
+						task.executionID = workflowExecution.ID
+						task.retryCount++
+
+						if err := tp.workflowPool.Dispatch(task); err != nil {
+							log.Printf("scheduler: Dispatch failed: %v", err)
+							return err
+						}
+
+						return nil
+					}
+
+					task.retry = retryIt
+
+					// // query the count of how many workflow execution exists related to the workflowEntity
+					// total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(workflowEntity.ID))).Count(tp.ctx)
+					// if err != nil {
+					// 	log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
+					// 	continue
+					// }
+
+					// task.retryCount = total
 
 					log.Printf("scheduler: Dispatching workflow %s with params: %v", workflowEntity.HandlerName, workflowEntity.Input)
 					if err := tp.workflowPool.Dispatch(task); err != nil {

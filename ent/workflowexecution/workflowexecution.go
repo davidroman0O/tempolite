@@ -19,8 +19,6 @@ const (
 	FieldRunID = "run_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldAttempt holds the string denoting the attempt field in the database.
-	FieldAttempt = "attempt"
 	// FieldOutput holds the string denoting the output field in the database.
 	FieldOutput = "output"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
@@ -63,7 +61,6 @@ var Columns = []string{
 	FieldID,
 	FieldRunID,
 	FieldStatus,
-	FieldAttempt,
 	FieldOutput,
 	FieldStartedAt,
 	FieldUpdatedAt,
@@ -91,8 +88,6 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// DefaultAttempt holds the default value on creation for the "attempt" field.
-	DefaultAttempt int
 	// DefaultStartedAt holds the default value on creation for the "started_at" field.
 	DefaultStartedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -114,6 +109,7 @@ const (
 	StatusCompleted Status = "Completed"
 	StatusFailed    Status = "Failed"
 	StatusPaused    Status = "Paused"
+	StatusRetried   Status = "Retried"
 	StatusCancelled Status = "Cancelled"
 )
 
@@ -124,7 +120,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusCancelled:
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusRetried, StatusCancelled:
 		return nil
 	default:
 		return fmt.Errorf("workflowexecution: invalid enum value for status field: %q", s)
@@ -147,11 +143,6 @@ func ByRunID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByAttempt orders the results by the attempt field.
-func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
 }
 
 // ByStartedAt orders the results by the started_at field.

@@ -268,8 +268,7 @@ var (
 	WorkflowExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "run_id", Type: field.TypeString, Unique: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Cancelled"}, Default: "Pending"},
-		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -283,7 +282,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_executions_workflows_executions",
-				Columns:    []*schema.Column{WorkflowExecutionsColumns[7]},
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[6]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

@@ -21,10 +21,8 @@ func (WorkflowExecution) Fields() []ent.Field {
 		field.String("run_id").
 			Unique(),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Paused", "Cancelled").
+			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),
-		field.Int("attempt").
-			Default(1),
 		field.JSON("output", []interface{}{}).
 			Optional(),
 		field.Time("started_at").

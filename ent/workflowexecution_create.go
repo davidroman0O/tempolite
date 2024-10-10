@@ -43,20 +43,6 @@ func (wec *WorkflowExecutionCreate) SetNillableStatus(w *workflowexecution.Statu
 	return wec
 }
 
-// SetAttempt sets the "attempt" field.
-func (wec *WorkflowExecutionCreate) SetAttempt(i int) *WorkflowExecutionCreate {
-	wec.mutation.SetAttempt(i)
-	return wec
-}
-
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (wec *WorkflowExecutionCreate) SetNillableAttempt(i *int) *WorkflowExecutionCreate {
-	if i != nil {
-		wec.SetAttempt(*i)
-	}
-	return wec
-}
-
 // SetOutput sets the "output" field.
 func (wec *WorkflowExecutionCreate) SetOutput(i []interface{}) *WorkflowExecutionCreate {
 	wec.mutation.SetOutput(i)
@@ -177,10 +163,6 @@ func (wec *WorkflowExecutionCreate) defaults() {
 		v := workflowexecution.DefaultStatus
 		wec.mutation.SetStatus(v)
 	}
-	if _, ok := wec.mutation.Attempt(); !ok {
-		v := workflowexecution.DefaultAttempt
-		wec.mutation.SetAttempt(v)
-	}
 	if _, ok := wec.mutation.StartedAt(); !ok {
 		v := workflowexecution.DefaultStartedAt()
 		wec.mutation.SetStartedAt(v)
@@ -203,9 +185,6 @@ func (wec *WorkflowExecutionCreate) check() error {
 		if err := workflowexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.status": %w`, err)}
 		}
-	}
-	if _, ok := wec.mutation.Attempt(); !ok {
-		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "WorkflowExecution.attempt"`)}
 	}
 	if _, ok := wec.mutation.StartedAt(); !ok {
 		return &ValidationError{Name: "started_at", err: errors.New(`ent: missing required field "WorkflowExecution.started_at"`)}
@@ -258,10 +237,6 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 	if value, ok := wec.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
-	}
-	if value, ok := wec.mutation.Attempt(); ok {
-		_spec.SetField(workflowexecution.FieldAttempt, field.TypeInt, value)
-		_node.Attempt = value
 	}
 	if value, ok := wec.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)

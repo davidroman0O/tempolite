@@ -17,6 +17,7 @@ import (
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
 
@@ -281,6 +282,9 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
+			SetRetryPolicy(schema.RetryPolicy{
+				MaximumAttempts: 3,
+			}).
 			Save(tp.ctx); err != nil {
 			return "", err
 		}
@@ -292,7 +296,7 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 		if workflowExecution, err = tp.client.WorkflowExecution.
 			Create().
 			SetID(uuid.NewString()).
-			SetRunID(runEntity.RunID).
+			SetRunID(runEntity.ID).
 			SetWorkflow(workflowEntity).
 			Save(tp.ctx); err != nil {
 			return "", err

@@ -8073,8 +8073,6 @@ type WorkflowExecutionMutation struct {
 	id                         *string
 	run_id                     *string
 	status                     *workflowexecution.Status
-	attempt                    *int
-	addattempt                 *int
 	output                     *[]interface{}
 	appendoutput               []interface{}
 	started_at                 *time.Time
@@ -8267,62 +8265,6 @@ func (m *WorkflowExecutionMutation) OldStatus(ctx context.Context) (v workflowex
 // ResetStatus resets all changes to the "status" field.
 func (m *WorkflowExecutionMutation) ResetStatus() {
 	m.status = nil
-}
-
-// SetAttempt sets the "attempt" field.
-func (m *WorkflowExecutionMutation) SetAttempt(i int) {
-	m.attempt = &i
-	m.addattempt = nil
-}
-
-// Attempt returns the value of the "attempt" field in the mutation.
-func (m *WorkflowExecutionMutation) Attempt() (r int, exists bool) {
-	v := m.attempt
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAttempt returns the old "attempt" field's value of the WorkflowExecution entity.
-// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionMutation) OldAttempt(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAttempt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAttempt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAttempt: %w", err)
-	}
-	return oldValue.Attempt, nil
-}
-
-// AddAttempt adds i to the "attempt" field.
-func (m *WorkflowExecutionMutation) AddAttempt(i int) {
-	if m.addattempt != nil {
-		*m.addattempt += i
-	} else {
-		m.addattempt = &i
-	}
-}
-
-// AddedAttempt returns the value that was added to the "attempt" field in this mutation.
-func (m *WorkflowExecutionMutation) AddedAttempt() (r int, exists bool) {
-	v := m.addattempt
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetAttempt resets all changes to the "attempt" field.
-func (m *WorkflowExecutionMutation) ResetAttempt() {
-	m.attempt = nil
-	m.addattempt = nil
 }
 
 // SetOutput sets the "output" field.
@@ -8643,15 +8585,12 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 5)
 	if m.run_id != nil {
 		fields = append(fields, workflowexecution.FieldRunID)
 	}
 	if m.status != nil {
 		fields = append(fields, workflowexecution.FieldStatus)
-	}
-	if m.attempt != nil {
-		fields = append(fields, workflowexecution.FieldAttempt)
 	}
 	if m.output != nil {
 		fields = append(fields, workflowexecution.FieldOutput)
@@ -8674,8 +8613,6 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.RunID()
 	case workflowexecution.FieldStatus:
 		return m.Status()
-	case workflowexecution.FieldAttempt:
-		return m.Attempt()
 	case workflowexecution.FieldOutput:
 		return m.Output()
 	case workflowexecution.FieldStartedAt:
@@ -8695,8 +8632,6 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldRunID(ctx)
 	case workflowexecution.FieldStatus:
 		return m.OldStatus(ctx)
-	case workflowexecution.FieldAttempt:
-		return m.OldAttempt(ctx)
 	case workflowexecution.FieldOutput:
 		return m.OldOutput(ctx)
 	case workflowexecution.FieldStartedAt:
@@ -8726,13 +8661,6 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetStatus(v)
 		return nil
-	case workflowexecution.FieldAttempt:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAttempt(v)
-		return nil
 	case workflowexecution.FieldOutput:
 		v, ok := value.([]interface{})
 		if !ok {
@@ -8761,21 +8689,13 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *WorkflowExecutionMutation) AddedFields() []string {
-	var fields []string
-	if m.addattempt != nil {
-		fields = append(fields, workflowexecution.FieldAttempt)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *WorkflowExecutionMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case workflowexecution.FieldAttempt:
-		return m.AddedAttempt()
-	}
 	return nil, false
 }
 
@@ -8784,13 +8704,6 @@ func (m *WorkflowExecutionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *WorkflowExecutionMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case workflowexecution.FieldAttempt:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddAttempt(v)
-		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecution numeric field %s", name)
 }
@@ -8832,9 +8745,6 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 		return nil
 	case workflowexecution.FieldStatus:
 		m.ResetStatus()
-		return nil
-	case workflowexecution.FieldAttempt:
-		m.ResetAttempt()
 		return nil
 	case workflowexecution.FieldOutput:
 		m.ResetOutput()

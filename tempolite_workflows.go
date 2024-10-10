@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"reflect"
 
@@ -10,14 +11,19 @@ import (
 )
 
 type workflowTask struct {
+	executionID string
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
+	retryCount  int
+	maxRetry    int
+	retry       func() error
 }
 
 func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 
 	opts := []retrypool.Option[*workflowTask]{
+		retrypool.WithAttempts[*workflowTask](1),
 		retrypool.WithOnTaskSuccess(tp.workflowOnSuccess),
 		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
 	}
@@ -33,17 +39,39 @@ func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 }
 
 func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask]) {
+
 	log.Printf("workflowOnSuccess: %d", workerID)
-	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusCompleted).Save(tp.ctx); err != nil {
+
+	if _, err := tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(task.Data().executionID)).SetStatus(workflowexecution.StatusCompleted).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
 	}
 }
 
 func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
+
+	// Simple retry mechanism
+	// We know in advance the config and the retry value, we can manage in-memory
+	if task.Data().retryCount < task.Data().maxRetry {
+		task.Data().retryCount++
+		fmt.Println("retry it the task: ", err)
+		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
+		if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
+			log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
+		}
+		if err := task.Data().retry(); err != nil {
+			log.Printf("workflowOnFailure: retry failed: %v", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+		return retrypool.DeadTaskActionDoNothing
+	}
+
 	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
 	}
-	return retrypool.DeadTaskActionAddToDeadTasks
+
+	fmt.Println("remove it the task: ", err)
+
+	return retrypool.DeadTaskActionDoNothing
 }
 
 type workflowWorker struct {
@@ -59,9 +87,11 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 	}
 
 	values := []reflect.Value{reflect.ValueOf(contextWorkflow)}
+
 	for _, v := range data.params {
 		values = append(values, reflect.ValueOf(v))
 	}
+
 	returnedValues := reflect.ValueOf(data.handler).Call(values)
 
 	var res []interface{}

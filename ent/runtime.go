@@ -163,16 +163,12 @@ func init() {
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()
 	_ = workflowexecutionFields
-	// workflowexecutionDescAttempt is the schema descriptor for attempt field.
-	workflowexecutionDescAttempt := workflowexecutionFields[3].Descriptor()
-	// workflowexecution.DefaultAttempt holds the default value on creation for the attempt field.
-	workflowexecution.DefaultAttempt = workflowexecutionDescAttempt.Default.(int)
 	// workflowexecutionDescStartedAt is the schema descriptor for started_at field.
-	workflowexecutionDescStartedAt := workflowexecutionFields[5].Descriptor()
+	workflowexecutionDescStartedAt := workflowexecutionFields[4].Descriptor()
 	// workflowexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	workflowexecution.DefaultStartedAt = workflowexecutionDescStartedAt.Default.(func() time.Time)
 	// workflowexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowexecutionDescUpdatedAt := workflowexecutionFields[6].Descriptor()
+	workflowexecutionDescUpdatedAt := workflowexecutionFields[5].Descriptor()
 	// workflowexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	workflowexecution.DefaultUpdatedAt = workflowexecutionDescUpdatedAt.Default.(func() time.Time)
 	// workflowexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

@@ -23,8 +23,6 @@ type WorkflowExecution struct {
 	RunID string `json:"run_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status workflowexecution.Status `json:"status,omitempty"`
-	// Attempt holds the value of the "attempt" field.
-	Attempt int `json:"attempt,omitempty"`
 	// Output holds the value of the "output" field.
 	Output []interface{} `json:"output,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
@@ -87,8 +85,6 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflowexecution.FieldOutput:
 			values[i] = new([]byte)
-		case workflowexecution.FieldAttempt:
-			values[i] = new(sql.NullInt64)
 		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus:
 			values[i] = new(sql.NullString)
 		case workflowexecution.FieldStartedAt, workflowexecution.FieldUpdatedAt:
@@ -127,12 +123,6 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				we.Status = workflowexecution.Status(value.String)
-			}
-		case workflowexecution.FieldAttempt:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field attempt", values[i])
-			} else if value.Valid {
-				we.Attempt = int(value.Int64)
 			}
 		case workflowexecution.FieldOutput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -217,9 +207,6 @@ func (we *WorkflowExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", we.Status))
-	builder.WriteString(", ")
-	builder.WriteString("attempt=")
-	builder.WriteString(fmt.Sprintf("%v", we.Attempt))
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", we.Output))

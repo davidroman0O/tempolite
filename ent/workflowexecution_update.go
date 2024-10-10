@@ -60,27 +60,6 @@ func (weu *WorkflowExecutionUpdate) SetNillableStatus(w *workflowexecution.Statu
 	return weu
 }
 
-// SetAttempt sets the "attempt" field.
-func (weu *WorkflowExecutionUpdate) SetAttempt(i int) *WorkflowExecutionUpdate {
-	weu.mutation.ResetAttempt()
-	weu.mutation.SetAttempt(i)
-	return weu
-}
-
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableAttempt(i *int) *WorkflowExecutionUpdate {
-	if i != nil {
-		weu.SetAttempt(*i)
-	}
-	return weu
-}
-
-// AddAttempt adds i to the "attempt" field.
-func (weu *WorkflowExecutionUpdate) AddAttempt(i int) *WorkflowExecutionUpdate {
-	weu.mutation.AddAttempt(i)
-	return weu
-}
-
 // SetOutput sets the "output" field.
 func (weu *WorkflowExecutionUpdate) SetOutput(i []interface{}) *WorkflowExecutionUpdate {
 	weu.mutation.SetOutput(i)
@@ -280,12 +259,6 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	if value, ok := weu.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := weu.mutation.Attempt(); ok {
-		_spec.SetField(workflowexecution.FieldAttempt, field.TypeInt, value)
-	}
-	if value, ok := weu.mutation.AddedAttempt(); ok {
-		_spec.AddField(workflowexecution.FieldAttempt, field.TypeInt, value)
-	}
 	if value, ok := weu.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)
 	}
@@ -467,27 +440,6 @@ func (weuo *WorkflowExecutionUpdateOne) SetNillableStatus(w *workflowexecution.S
 	if w != nil {
 		weuo.SetStatus(*w)
 	}
-	return weuo
-}
-
-// SetAttempt sets the "attempt" field.
-func (weuo *WorkflowExecutionUpdateOne) SetAttempt(i int) *WorkflowExecutionUpdateOne {
-	weuo.mutation.ResetAttempt()
-	weuo.mutation.SetAttempt(i)
-	return weuo
-}
-
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableAttempt(i *int) *WorkflowExecutionUpdateOne {
-	if i != nil {
-		weuo.SetAttempt(*i)
-	}
-	return weuo
-}
-
-// AddAttempt adds i to the "attempt" field.
-func (weuo *WorkflowExecutionUpdateOne) AddAttempt(i int) *WorkflowExecutionUpdateOne {
-	weuo.mutation.AddAttempt(i)
 	return weuo
 }
 
@@ -719,12 +671,6 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 	}
 	if value, ok := weuo.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
-	}
-	if value, ok := weuo.mutation.Attempt(); ok {
-		_spec.SetField(workflowexecution.FieldAttempt, field.TypeInt, value)
-	}
-	if value, ok := weuo.mutation.AddedAttempt(); ok {
-		_spec.AddField(workflowexecution.FieldAttempt, field.TypeInt, value)
 	}
 	if value, ok := weuo.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)
