@@ -80,8 +80,6 @@ var Columns = []string{
 // ForeignKeys holds the SQL foreign-keys that are owned by the "activities"
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
-	"run_workflow",
-	"run_activities",
 	"workflow_activities",
 }
 

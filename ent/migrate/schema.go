@@ -17,8 +17,6 @@ var (
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "run_workflow", Type: field.TypeString, Nullable: true},
-		{Name: "run_activities", Type: field.TypeString, Nullable: true},
 		{Name: "workflow_activities", Type: field.TypeString, Nullable: true},
 	}
 	// ActivitiesTable holds the schema information for the "activities" table.
@@ -28,20 +26,8 @@ var (
 		PrimaryKey: []*schema.Column{ActivitiesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "activities_runs_workflow",
-				Columns:    []*schema.Column{ActivitiesColumns[7]},
-				RefColumns: []*schema.Column{RunsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "activities_runs_activities",
-				Columns:    []*schema.Column{ActivitiesColumns[8]},
-				RefColumns: []*schema.Column{RunsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
 				Symbol:     "activities_workflows_activities",
-				Columns:    []*schema.Column{ActivitiesColumns[9]},
+				Columns:    []*schema.Column{ActivitiesColumns[7]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -54,6 +40,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried"}, Default: "Pending"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "activity_executions", Type: field.TypeString},
@@ -67,13 +54,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_executions_activities_executions",
-				Columns:    []*schema.Column{ActivityExecutionsColumns[7]},
+				Columns:    []*schema.Column{ActivityExecutionsColumns[8]},
 				RefColumns: []*schema.Column{ActivitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "activity_executions_workflow_executions_activity_executions",
-				Columns:    []*schema.Column{ActivityExecutionsColumns[8]},
+				Columns:    []*schema.Column{ActivityExecutionsColumns[9]},
 				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -85,12 +72,28 @@ var (
 		{Name: "run_id", Type: field.TypeString, Unique: true},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"workflow", "activity"}},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "run_workflow", Type: field.TypeString, Nullable: true},
+		{Name: "run_activity", Type: field.TypeString, Nullable: true},
 	}
 	// RunsTable holds the schema information for the "runs" table.
 	RunsTable = &schema.Table{
 		Name:       "runs",
 		Columns:    RunsColumns,
 		PrimaryKey: []*schema.Column{RunsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "runs_workflows_workflow",
+				Columns:    []*schema.Column{RunsColumns[4]},
+				RefColumns: []*schema.Column{WorkflowsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "runs_activities_activity",
+				Columns:    []*schema.Column{RunsColumns[5]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 	}
 	// SagasColumns holds the columns for the "sagas" table.
 	SagasColumns = []*schema.Column{
@@ -272,6 +275,7 @@ var (
 		{Name: "run_id", Type: field.TypeString, Unique: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "workflow_executions", Type: field.TypeString},
@@ -284,7 +288,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_executions_workflows_executions",
-				Columns:    []*schema.Column{WorkflowExecutionsColumns[6]},
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[7]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -307,11 +311,11 @@ var (
 )
 
 func init() {
-	ActivitiesTable.ForeignKeys[0].RefTable = RunsTable
-	ActivitiesTable.ForeignKeys[1].RefTable = RunsTable
-	ActivitiesTable.ForeignKeys[2].RefTable = WorkflowsTable
+	ActivitiesTable.ForeignKeys[0].RefTable = WorkflowsTable
 	ActivityExecutionsTable.ForeignKeys[0].RefTable = ActivitiesTable
 	ActivityExecutionsTable.ForeignKeys[1].RefTable = WorkflowExecutionsTable
+	RunsTable.ForeignKeys[0].RefTable = WorkflowsTable
+	RunsTable.ForeignKeys[1].RefTable = ActivitiesTable
 	SagasTable.ForeignKeys[0].RefTable = ActivitiesTable
 	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
 	SagaStepExecutionsTable.ForeignKeys[0].RefTable = SagaExecutionsTable

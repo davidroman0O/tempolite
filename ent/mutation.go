@@ -1037,6 +1037,7 @@ type ActivityExecutionMutation struct {
 	addattempt                    *int
 	output                        *[]interface{}
 	appendoutput                  []interface{}
+	error                         *string
 	started_at                    *time.Time
 	updated_at                    *time.Time
 	clearedFields                 map[string]struct{}
@@ -1349,6 +1350,55 @@ func (m *ActivityExecutionMutation) ResetOutput() {
 	delete(m.clearedFields, activityexecution.FieldOutput)
 }
 
+// SetError sets the "error" field.
+func (m *ActivityExecutionMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *ActivityExecutionMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the ActivityExecution entity.
+// If the ActivityExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityExecutionMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *ActivityExecutionMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[activityexecution.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *ActivityExecutionMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[activityexecution.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *ActivityExecutionMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, activityexecution.FieldError)
+}
+
 // SetStartedAt sets the "started_at" field.
 func (m *ActivityExecutionMutation) SetStartedAt(t time.Time) {
 	m.started_at = &t
@@ -1587,7 +1637,7 @@ func (m *ActivityExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.run_id != nil {
 		fields = append(fields, activityexecution.FieldRunID)
 	}
@@ -1599,6 +1649,9 @@ func (m *ActivityExecutionMutation) Fields() []string {
 	}
 	if m.output != nil {
 		fields = append(fields, activityexecution.FieldOutput)
+	}
+	if m.error != nil {
+		fields = append(fields, activityexecution.FieldError)
 	}
 	if m.started_at != nil {
 		fields = append(fields, activityexecution.FieldStartedAt)
@@ -1622,6 +1675,8 @@ func (m *ActivityExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Attempt()
 	case activityexecution.FieldOutput:
 		return m.Output()
+	case activityexecution.FieldError:
+		return m.Error()
 	case activityexecution.FieldStartedAt:
 		return m.StartedAt()
 	case activityexecution.FieldUpdatedAt:
@@ -1643,6 +1698,8 @@ func (m *ActivityExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldAttempt(ctx)
 	case activityexecution.FieldOutput:
 		return m.OldOutput(ctx)
+	case activityexecution.FieldError:
+		return m.OldError(ctx)
 	case activityexecution.FieldStartedAt:
 		return m.OldStartedAt(ctx)
 	case activityexecution.FieldUpdatedAt:
@@ -1683,6 +1740,13 @@ func (m *ActivityExecutionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOutput(v)
+		return nil
+	case activityexecution.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
 		return nil
 	case activityexecution.FieldStartedAt:
 		v, ok := value.(time.Time)
@@ -1746,6 +1810,9 @@ func (m *ActivityExecutionMutation) ClearedFields() []string {
 	if m.FieldCleared(activityexecution.FieldOutput) {
 		fields = append(fields, activityexecution.FieldOutput)
 	}
+	if m.FieldCleared(activityexecution.FieldError) {
+		fields = append(fields, activityexecution.FieldError)
+	}
 	return fields
 }
 
@@ -1762,6 +1829,9 @@ func (m *ActivityExecutionMutation) ClearField(name string) error {
 	switch name {
 	case activityexecution.FieldOutput:
 		m.ClearOutput()
+		return nil
+	case activityexecution.FieldError:
+		m.ClearError()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution nullable field %s", name)
@@ -1782,6 +1852,9 @@ func (m *ActivityExecutionMutation) ResetField(name string) error {
 		return nil
 	case activityexecution.FieldOutput:
 		m.ResetOutput()
+		return nil
+	case activityexecution.FieldError:
+		m.ResetError()
 		return nil
 	case activityexecution.FieldStartedAt:
 		m.ResetStartedAt()
@@ -1916,22 +1989,20 @@ func (m *ActivityExecutionMutation) ResetEdge(name string) error {
 // RunMutation represents an operation that mutates the Run nodes in the graph.
 type RunMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *string
-	run_id            *string
-	_type             *run.Type
-	created_at        *time.Time
-	clearedFields     map[string]struct{}
-	workflow          map[string]struct{}
-	removedworkflow   map[string]struct{}
-	clearedworkflow   bool
-	activities        map[string]struct{}
-	removedactivities map[string]struct{}
-	clearedactivities bool
-	done              bool
-	oldValue          func(context.Context) (*Run, error)
-	predicates        []predicate.Run
+	op              Op
+	typ             string
+	id              *string
+	run_id          *string
+	_type           *run.Type
+	created_at      *time.Time
+	clearedFields   map[string]struct{}
+	workflow        *string
+	clearedworkflow bool
+	activity        *string
+	clearedactivity bool
+	done            bool
+	oldValue        func(context.Context) (*Run, error)
+	predicates      []predicate.Run
 }
 
 var _ ent.Mutation = (*RunMutation)(nil)
@@ -2146,49 +2217,35 @@ func (m *RunMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
-// AddWorkflowIDs adds the "workflow" edge to the Activity entity by ids.
-func (m *RunMutation) AddWorkflowIDs(ids ...string) {
-	if m.workflow == nil {
-		m.workflow = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.workflow[ids[i]] = struct{}{}
-	}
+// SetWorkflowID sets the "workflow" edge to the Workflow entity by id.
+func (m *RunMutation) SetWorkflowID(id string) {
+	m.workflow = &id
 }
 
-// ClearWorkflow clears the "workflow" edge to the Activity entity.
+// ClearWorkflow clears the "workflow" edge to the Workflow entity.
 func (m *RunMutation) ClearWorkflow() {
 	m.clearedworkflow = true
 }
 
-// WorkflowCleared reports if the "workflow" edge to the Activity entity was cleared.
+// WorkflowCleared reports if the "workflow" edge to the Workflow entity was cleared.
 func (m *RunMutation) WorkflowCleared() bool {
 	return m.clearedworkflow
 }
 
-// RemoveWorkflowIDs removes the "workflow" edge to the Activity entity by IDs.
-func (m *RunMutation) RemoveWorkflowIDs(ids ...string) {
-	if m.removedworkflow == nil {
-		m.removedworkflow = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.workflow, ids[i])
-		m.removedworkflow[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedWorkflow returns the removed IDs of the "workflow" edge to the Activity entity.
-func (m *RunMutation) RemovedWorkflowIDs() (ids []string) {
-	for id := range m.removedworkflow {
-		ids = append(ids, id)
+// WorkflowID returns the "workflow" edge ID in the mutation.
+func (m *RunMutation) WorkflowID() (id string, exists bool) {
+	if m.workflow != nil {
+		return *m.workflow, true
 	}
 	return
 }
 
 // WorkflowIDs returns the "workflow" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkflowID instead. It exists only for internal usage by the builders.
 func (m *RunMutation) WorkflowIDs() (ids []string) {
-	for id := range m.workflow {
-		ids = append(ids, id)
+	if id := m.workflow; id != nil {
+		ids = append(ids, *id)
 	}
 	return
 }
@@ -2197,61 +2254,45 @@ func (m *RunMutation) WorkflowIDs() (ids []string) {
 func (m *RunMutation) ResetWorkflow() {
 	m.workflow = nil
 	m.clearedworkflow = false
-	m.removedworkflow = nil
 }
 
-// AddActivityIDs adds the "activities" edge to the Activity entity by ids.
-func (m *RunMutation) AddActivityIDs(ids ...string) {
-	if m.activities == nil {
-		m.activities = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.activities[ids[i]] = struct{}{}
-	}
+// SetActivityID sets the "activity" edge to the Activity entity by id.
+func (m *RunMutation) SetActivityID(id string) {
+	m.activity = &id
 }
 
-// ClearActivities clears the "activities" edge to the Activity entity.
-func (m *RunMutation) ClearActivities() {
-	m.clearedactivities = true
+// ClearActivity clears the "activity" edge to the Activity entity.
+func (m *RunMutation) ClearActivity() {
+	m.clearedactivity = true
 }
 
-// ActivitiesCleared reports if the "activities" edge to the Activity entity was cleared.
-func (m *RunMutation) ActivitiesCleared() bool {
-	return m.clearedactivities
+// ActivityCleared reports if the "activity" edge to the Activity entity was cleared.
+func (m *RunMutation) ActivityCleared() bool {
+	return m.clearedactivity
 }
 
-// RemoveActivityIDs removes the "activities" edge to the Activity entity by IDs.
-func (m *RunMutation) RemoveActivityIDs(ids ...string) {
-	if m.removedactivities == nil {
-		m.removedactivities = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.activities, ids[i])
-		m.removedactivities[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedActivities returns the removed IDs of the "activities" edge to the Activity entity.
-func (m *RunMutation) RemovedActivitiesIDs() (ids []string) {
-	for id := range m.removedactivities {
-		ids = append(ids, id)
+// ActivityID returns the "activity" edge ID in the mutation.
+func (m *RunMutation) ActivityID() (id string, exists bool) {
+	if m.activity != nil {
+		return *m.activity, true
 	}
 	return
 }
 
-// ActivitiesIDs returns the "activities" edge IDs in the mutation.
-func (m *RunMutation) ActivitiesIDs() (ids []string) {
-	for id := range m.activities {
-		ids = append(ids, id)
+// ActivityIDs returns the "activity" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ActivityID instead. It exists only for internal usage by the builders.
+func (m *RunMutation) ActivityIDs() (ids []string) {
+	if id := m.activity; id != nil {
+		ids = append(ids, *id)
 	}
 	return
 }
 
-// ResetActivities resets all changes to the "activities" edge.
-func (m *RunMutation) ResetActivities() {
-	m.activities = nil
-	m.clearedactivities = false
-	m.removedactivities = nil
+// ResetActivity resets all changes to the "activity" edge.
+func (m *RunMutation) ResetActivity() {
+	m.activity = nil
+	m.clearedactivity = false
 }
 
 // Where appends a list predicates to the RunMutation builder.
@@ -2425,8 +2466,8 @@ func (m *RunMutation) AddedEdges() []string {
 	if m.workflow != nil {
 		edges = append(edges, run.EdgeWorkflow)
 	}
-	if m.activities != nil {
-		edges = append(edges, run.EdgeActivities)
+	if m.activity != nil {
+		edges = append(edges, run.EdgeActivity)
 	}
 	return edges
 }
@@ -2436,17 +2477,13 @@ func (m *RunMutation) AddedEdges() []string {
 func (m *RunMutation) AddedIDs(name string) []ent.Value {
 	switch name {
 	case run.EdgeWorkflow:
-		ids := make([]ent.Value, 0, len(m.workflow))
-		for id := range m.workflow {
-			ids = append(ids, id)
+		if id := m.workflow; id != nil {
+			return []ent.Value{*id}
 		}
-		return ids
-	case run.EdgeActivities:
-		ids := make([]ent.Value, 0, len(m.activities))
-		for id := range m.activities {
-			ids = append(ids, id)
+	case run.EdgeActivity:
+		if id := m.activity; id != nil {
+			return []ent.Value{*id}
 		}
-		return ids
 	}
 	return nil
 }
@@ -2454,32 +2491,12 @@ func (m *RunMutation) AddedIDs(name string) []ent.Value {
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RunMutation) RemovedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.removedworkflow != nil {
-		edges = append(edges, run.EdgeWorkflow)
-	}
-	if m.removedactivities != nil {
-		edges = append(edges, run.EdgeActivities)
-	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *RunMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case run.EdgeWorkflow:
-		ids := make([]ent.Value, 0, len(m.removedworkflow))
-		for id := range m.removedworkflow {
-			ids = append(ids, id)
-		}
-		return ids
-	case run.EdgeActivities:
-		ids := make([]ent.Value, 0, len(m.removedactivities))
-		for id := range m.removedactivities {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
@@ -2489,8 +2506,8 @@ func (m *RunMutation) ClearedEdges() []string {
 	if m.clearedworkflow {
 		edges = append(edges, run.EdgeWorkflow)
 	}
-	if m.clearedactivities {
-		edges = append(edges, run.EdgeActivities)
+	if m.clearedactivity {
+		edges = append(edges, run.EdgeActivity)
 	}
 	return edges
 }
@@ -2501,8 +2518,8 @@ func (m *RunMutation) EdgeCleared(name string) bool {
 	switch name {
 	case run.EdgeWorkflow:
 		return m.clearedworkflow
-	case run.EdgeActivities:
-		return m.clearedactivities
+	case run.EdgeActivity:
+		return m.clearedactivity
 	}
 	return false
 }
@@ -2511,6 +2528,12 @@ func (m *RunMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *RunMutation) ClearEdge(name string) error {
 	switch name {
+	case run.EdgeWorkflow:
+		m.ClearWorkflow()
+		return nil
+	case run.EdgeActivity:
+		m.ClearActivity()
+		return nil
 	}
 	return fmt.Errorf("unknown Run unique edge %s", name)
 }
@@ -2522,8 +2545,8 @@ func (m *RunMutation) ResetEdge(name string) error {
 	case run.EdgeWorkflow:
 		m.ResetWorkflow()
 		return nil
-	case run.EdgeActivities:
-		m.ResetActivities()
+	case run.EdgeActivity:
+		m.ResetActivity()
 		return nil
 	}
 	return fmt.Errorf("unknown Run edge %s", name)
@@ -8183,6 +8206,7 @@ type WorkflowExecutionMutation struct {
 	status                     *workflowexecution.Status
 	output                     *[]interface{}
 	appendoutput               []interface{}
+	error                      *string
 	started_at                 *time.Time
 	updated_at                 *time.Time
 	clearedFields              map[string]struct{}
@@ -8440,6 +8464,55 @@ func (m *WorkflowExecutionMutation) ResetOutput() {
 	delete(m.clearedFields, workflowexecution.FieldOutput)
 }
 
+// SetError sets the "error" field.
+func (m *WorkflowExecutionMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *WorkflowExecutionMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *WorkflowExecutionMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[workflowexecution.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *WorkflowExecutionMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, workflowexecution.FieldError)
+}
+
 // SetStartedAt sets the "started_at" field.
 func (m *WorkflowExecutionMutation) SetStartedAt(t time.Time) {
 	m.started_at = &t
@@ -8693,7 +8766,7 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.run_id != nil {
 		fields = append(fields, workflowexecution.FieldRunID)
 	}
@@ -8702,6 +8775,9 @@ func (m *WorkflowExecutionMutation) Fields() []string {
 	}
 	if m.output != nil {
 		fields = append(fields, workflowexecution.FieldOutput)
+	}
+	if m.error != nil {
+		fields = append(fields, workflowexecution.FieldError)
 	}
 	if m.started_at != nil {
 		fields = append(fields, workflowexecution.FieldStartedAt)
@@ -8723,6 +8799,8 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case workflowexecution.FieldOutput:
 		return m.Output()
+	case workflowexecution.FieldError:
+		return m.Error()
 	case workflowexecution.FieldStartedAt:
 		return m.StartedAt()
 	case workflowexecution.FieldUpdatedAt:
@@ -8742,6 +8820,8 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldStatus(ctx)
 	case workflowexecution.FieldOutput:
 		return m.OldOutput(ctx)
+	case workflowexecution.FieldError:
+		return m.OldError(ctx)
 	case workflowexecution.FieldStartedAt:
 		return m.OldStartedAt(ctx)
 	case workflowexecution.FieldUpdatedAt:
@@ -8775,6 +8855,13 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOutput(v)
+		return nil
+	case workflowexecution.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
 		return nil
 	case workflowexecution.FieldStartedAt:
 		v, ok := value.(time.Time)
@@ -8823,6 +8910,9 @@ func (m *WorkflowExecutionMutation) ClearedFields() []string {
 	if m.FieldCleared(workflowexecution.FieldOutput) {
 		fields = append(fields, workflowexecution.FieldOutput)
 	}
+	if m.FieldCleared(workflowexecution.FieldError) {
+		fields = append(fields, workflowexecution.FieldError)
+	}
 	return fields
 }
 
@@ -8840,6 +8930,9 @@ func (m *WorkflowExecutionMutation) ClearField(name string) error {
 	case workflowexecution.FieldOutput:
 		m.ClearOutput()
 		return nil
+	case workflowexecution.FieldError:
+		m.ClearError()
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecution nullable field %s", name)
 }
@@ -8856,6 +8949,9 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 		return nil
 	case workflowexecution.FieldOutput:
 		m.ResetOutput()
+		return nil
+	case workflowexecution.FieldError:
+		m.ResetError()
 		return nil
 	case workflowexecution.FieldStartedAt:
 		m.ResetStartedAt()

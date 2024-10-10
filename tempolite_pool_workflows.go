@@ -65,11 +65,9 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 		return retrypool.DeadTaskActionDoNothing
 	}
 
-	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).Save(tp.ctx); err != nil {
+	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
 	}
-
-	fmt.Println("remove it the task: ", err)
 
 	return retrypool.DeadTaskActionDoNothing
 }
@@ -101,8 +99,10 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		}
 	}
 
-	if _, err := w.tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(data.ctx.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
+	fmt.Println("output to save", res)
+	if _, err := w.tp.client.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("workflowWorker: WorkflowExecution.Update failed: %v", err)
+		return err
 	}
 
 	return errRes

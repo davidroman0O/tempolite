@@ -1,11 +1,57 @@
 package tempolite
 
-import "context"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"runtime"
+	"time"
 
-type WorkflowInfo struct{}
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+)
+
+type WorkflowInfo struct {
+	tp          *Tempolite
+	ID          string
+	RunID       string
+	ExecutionID string
+}
 
 func (i *WorkflowInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
-	return nil, nil
+	// TODO: make a utilities
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+	var value any
+	var ok bool
+	var workflowHandlerInfo Workflow
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			exec, err := i.tp.client.WorkflowExecution.Query().Where(workflowexecution.IDEQ(i.ExecutionID)).WithWorkflow().Only(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if value, ok = i.tp.workflows.Load(HandlerIdentity(exec.Edges.Workflow.Identity)); ok {
+				if workflowHandlerInfo, ok = value.(Workflow); !ok {
+					log.Printf("scheduler: workflow %s is not handler info", i.ExecutionID)
+					return nil, errors.New("workflow is not handler info")
+				}
+				switch exec.Status {
+				case workflowexecution.StatusCompleted:
+					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), exec.Output)
+
+				case workflowexecution.StatusCancelled:
+					return nil, fmt.Errorf("workflow %s was cancelled", i.ID)
+				case workflowexecution.StatusFailed:
+					return nil, errors.New(exec.Error)
+				}
+			}
+			runtime.Gosched()
+		}
+	}
 }
 
 func (i *WorkflowInfo) Cancel() error {
@@ -68,8 +114,7 @@ func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, values ...any) error
 }
 
 func (w WorkflowContext) GetWorkflow(id string) (*WorkflowInfo, error) {
-	// todo: implement
-	return nil, nil
+	return w.tp.GetWorkflow(id)
 }
 
 func (w WorkflowContext) ExecuteWorkflow(name HandlerIdentity, inputs ...any) (*WorkflowInfo, error) {

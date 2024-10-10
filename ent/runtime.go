@@ -44,11 +44,11 @@ func init() {
 	// activityexecution.DefaultAttempt holds the default value on creation for the attempt field.
 	activityexecution.DefaultAttempt = activityexecutionDescAttempt.Default.(int)
 	// activityexecutionDescStartedAt is the schema descriptor for started_at field.
-	activityexecutionDescStartedAt := activityexecutionFields[5].Descriptor()
+	activityexecutionDescStartedAt := activityexecutionFields[6].Descriptor()
 	// activityexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	activityexecution.DefaultStartedAt = activityexecutionDescStartedAt.Default.(func() time.Time)
 	// activityexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	activityexecutionDescUpdatedAt := activityexecutionFields[6].Descriptor()
+	activityexecutionDescUpdatedAt := activityexecutionFields[7].Descriptor()
 	// activityexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	activityexecution.DefaultUpdatedAt = activityexecutionDescUpdatedAt.Default.(func() time.Time)
 	// activityexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -172,11 +172,11 @@ func init() {
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()
 	_ = workflowexecutionFields
 	// workflowexecutionDescStartedAt is the schema descriptor for started_at field.
-	workflowexecutionDescStartedAt := workflowexecutionFields[4].Descriptor()
+	workflowexecutionDescStartedAt := workflowexecutionFields[5].Descriptor()
 	// workflowexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	workflowexecution.DefaultStartedAt = workflowexecutionDescStartedAt.Default.(func() time.Time)
 	// workflowexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowexecutionDescUpdatedAt := workflowexecutionFields[5].Descriptor()
+	workflowexecutionDescUpdatedAt := workflowexecutionFields[6].Descriptor()
 	// workflowexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	workflowexecution.DefaultUpdatedAt = workflowexecutionDescUpdatedAt.Default.(func() time.Time)
 	// workflowexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

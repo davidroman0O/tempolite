@@ -28,6 +28,8 @@ type ActivityExecution struct {
 	Attempt int `json:"attempt,omitempty"`
 	// Output holds the value of the "output" field.
 	Output []interface{} `json:"output,omitempty"`
+	// Error holds the value of the "error" field.
+	Error string `json:"error,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt time.Time `json:"started_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -93,7 +95,7 @@ func (*ActivityExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case activityexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case activityexecution.FieldID, activityexecution.FieldRunID, activityexecution.FieldStatus:
+		case activityexecution.FieldID, activityexecution.FieldRunID, activityexecution.FieldStatus, activityexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case activityexecution.FieldStartedAt, activityexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -147,6 +149,12 @@ func (ae *ActivityExecution) assignValues(columns []string, values []any) error 
 				if err := json.Unmarshal(*value, &ae.Output); err != nil {
 					return fmt.Errorf("unmarshal field output: %w", err)
 				}
+			}
+		case activityexecution.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				ae.Error = value.String
 			}
 		case activityexecution.FieldStartedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -236,6 +244,9 @@ func (ae *ActivityExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", ae.Output))
+	builder.WriteString(", ")
+	builder.WriteString("error=")
+	builder.WriteString(ae.Error)
 	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(ae.StartedAt.Format(time.ANSIC))

@@ -776,14 +776,14 @@ func (c *RunClient) GetX(ctx context.Context, id string) *Run {
 }
 
 // QueryWorkflow queries the workflow edge of a Run.
-func (c *RunClient) QueryWorkflow(r *Run) *ActivityQuery {
-	query := (&ActivityClient{config: c.config}).Query()
+func (c *RunClient) QueryWorkflow(r *Run) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := r.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, id),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.WorkflowTable, run.WorkflowColumn),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, run.WorkflowTable, run.WorkflowColumn),
 		)
 		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
 		return fromV, nil
@@ -791,15 +791,15 @@ func (c *RunClient) QueryWorkflow(r *Run) *ActivityQuery {
 	return query
 }
 
-// QueryActivities queries the activities edge of a Run.
-func (c *RunClient) QueryActivities(r *Run) *ActivityQuery {
+// QueryActivity queries the activity edge of a Run.
+func (c *RunClient) QueryActivity(r *Run) *ActivityQuery {
 	query := (&ActivityClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := r.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, id),
 			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.ActivitiesTable, run.ActivitiesColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, run.ActivityTable, run.ActivityColumn),
 		)
 		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
 		return fromV, nil

@@ -9,7 +9,9 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // Run is the model entity for the Run schema.
@@ -26,36 +28,42 @@ type Run struct {
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the RunQuery when eager-loading is set.
 	Edges        RunEdges `json:"edges"`
+	run_workflow *string
+	run_activity *string
 	selectValues sql.SelectValues
 }
 
 // RunEdges holds the relations/edges for other nodes in the graph.
 type RunEdges struct {
-	// Workflow holds the value of the workflow edge.
-	Workflow []*Activity `json:"workflow,omitempty"`
-	// Activities holds the value of the activities edge.
-	Activities []*Activity `json:"activities,omitempty"`
+	// A run can be connected to a workflow or an activity, not both.
+	Workflow *Workflow `json:"workflow,omitempty"`
+	// A run can be connected to a workflow or an activity, not both.
+	Activity *Activity `json:"activity,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [2]bool
 }
 
 // WorkflowOrErr returns the Workflow value or an error if the edge
-// was not loaded in eager-loading.
-func (e RunEdges) WorkflowOrErr() ([]*Activity, error) {
-	if e.loadedTypes[0] {
+// was not loaded in eager-loading, or loaded but was not found.
+func (e RunEdges) WorkflowOrErr() (*Workflow, error) {
+	if e.Workflow != nil {
 		return e.Workflow, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: workflow.Label}
 	}
 	return nil, &NotLoadedError{edge: "workflow"}
 }
 
-// ActivitiesOrErr returns the Activities value or an error if the edge
-// was not loaded in eager-loading.
-func (e RunEdges) ActivitiesOrErr() ([]*Activity, error) {
-	if e.loadedTypes[1] {
-		return e.Activities, nil
+// ActivityOrErr returns the Activity value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e RunEdges) ActivityOrErr() (*Activity, error) {
+	if e.Activity != nil {
+		return e.Activity, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: activity.Label}
 	}
-	return nil, &NotLoadedError{edge: "activities"}
+	return nil, &NotLoadedError{edge: "activity"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -67,6 +75,10 @@ func (*Run) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case run.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
+		case run.ForeignKeys[0]: // run_workflow
+			values[i] = new(sql.NullString)
+		case run.ForeignKeys[1]: // run_activity
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -106,6 +118,20 @@ func (r *Run) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				r.CreatedAt = value.Time
 			}
+		case run.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field run_workflow", values[i])
+			} else if value.Valid {
+				r.run_workflow = new(string)
+				*r.run_workflow = value.String
+			}
+		case run.ForeignKeys[1]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field run_activity", values[i])
+			} else if value.Valid {
+				r.run_activity = new(string)
+				*r.run_activity = value.String
+			}
 		default:
 			r.selectValues.Set(columns[i], values[i])
 		}
@@ -120,13 +146,13 @@ func (r *Run) Value(name string) (ent.Value, error) {
 }
 
 // QueryWorkflow queries the "workflow" edge of the Run entity.
-func (r *Run) QueryWorkflow() *ActivityQuery {
+func (r *Run) QueryWorkflow() *WorkflowQuery {
 	return NewRunClient(r.config).QueryWorkflow(r)
 }
 
-// QueryActivities queries the "activities" edge of the Run entity.
-func (r *Run) QueryActivities() *ActivityQuery {
-	return NewRunClient(r.config).QueryActivities(r)
+// QueryActivity queries the "activity" edge of the Run entity.
+func (r *Run) QueryActivity() *ActivityQuery {
+	return NewRunClient(r.config).QueryActivity(r)
 }
 
 // Update returns a builder for updating this Run.

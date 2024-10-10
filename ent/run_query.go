@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -15,17 +14,19 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // RunQuery is the builder for querying Run entities.
 type RunQuery struct {
 	config
-	ctx            *QueryContext
-	order          []run.OrderOption
-	inters         []Interceptor
-	predicates     []predicate.Run
-	withWorkflow   *ActivityQuery
-	withActivities *ActivityQuery
+	ctx          *QueryContext
+	order        []run.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.Run
+	withWorkflow *WorkflowQuery
+	withActivity *ActivityQuery
+	withFKs      bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -63,8 +64,8 @@ func (rq *RunQuery) Order(o ...run.OrderOption) *RunQuery {
 }
 
 // QueryWorkflow chains the current query on the "workflow" edge.
-func (rq *RunQuery) QueryWorkflow() *ActivityQuery {
-	query := (&ActivityClient{config: rq.config}).Query()
+func (rq *RunQuery) QueryWorkflow() *WorkflowQuery {
+	query := (&WorkflowClient{config: rq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := rq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -75,8 +76,8 @@ func (rq *RunQuery) QueryWorkflow() *ActivityQuery {
 		}
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, selector),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.WorkflowTable, run.WorkflowColumn),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, run.WorkflowTable, run.WorkflowColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -84,8 +85,8 @@ func (rq *RunQuery) QueryWorkflow() *ActivityQuery {
 	return query
 }
 
-// QueryActivities chains the current query on the "activities" edge.
-func (rq *RunQuery) QueryActivities() *ActivityQuery {
+// QueryActivity chains the current query on the "activity" edge.
+func (rq *RunQuery) QueryActivity() *ActivityQuery {
 	query := (&ActivityClient{config: rq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := rq.prepareQuery(ctx); err != nil {
@@ -98,7 +99,7 @@ func (rq *RunQuery) QueryActivities() *ActivityQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, selector),
 			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.ActivitiesTable, run.ActivitiesColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, run.ActivityTable, run.ActivityColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -293,13 +294,13 @@ func (rq *RunQuery) Clone() *RunQuery {
 		return nil
 	}
 	return &RunQuery{
-		config:         rq.config,
-		ctx:            rq.ctx.Clone(),
-		order:          append([]run.OrderOption{}, rq.order...),
-		inters:         append([]Interceptor{}, rq.inters...),
-		predicates:     append([]predicate.Run{}, rq.predicates...),
-		withWorkflow:   rq.withWorkflow.Clone(),
-		withActivities: rq.withActivities.Clone(),
+		config:       rq.config,
+		ctx:          rq.ctx.Clone(),
+		order:        append([]run.OrderOption{}, rq.order...),
+		inters:       append([]Interceptor{}, rq.inters...),
+		predicates:   append([]predicate.Run{}, rq.predicates...),
+		withWorkflow: rq.withWorkflow.Clone(),
+		withActivity: rq.withActivity.Clone(),
 		// clone intermediate query.
 		sql:  rq.sql.Clone(),
 		path: rq.path,
@@ -308,8 +309,8 @@ func (rq *RunQuery) Clone() *RunQuery {
 
 // WithWorkflow tells the query-builder to eager-load the nodes that are connected to
 // the "workflow" edge. The optional arguments are used to configure the query builder of the edge.
-func (rq *RunQuery) WithWorkflow(opts ...func(*ActivityQuery)) *RunQuery {
-	query := (&ActivityClient{config: rq.config}).Query()
+func (rq *RunQuery) WithWorkflow(opts ...func(*WorkflowQuery)) *RunQuery {
+	query := (&WorkflowClient{config: rq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
@@ -317,14 +318,14 @@ func (rq *RunQuery) WithWorkflow(opts ...func(*ActivityQuery)) *RunQuery {
 	return rq
 }
 
-// WithActivities tells the query-builder to eager-load the nodes that are connected to
-// the "activities" edge. The optional arguments are used to configure the query builder of the edge.
-func (rq *RunQuery) WithActivities(opts ...func(*ActivityQuery)) *RunQuery {
+// WithActivity tells the query-builder to eager-load the nodes that are connected to
+// the "activity" edge. The optional arguments are used to configure the query builder of the edge.
+func (rq *RunQuery) WithActivity(opts ...func(*ActivityQuery)) *RunQuery {
 	query := (&ActivityClient{config: rq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	rq.withActivities = query
+	rq.withActivity = query
 	return rq
 }
 
@@ -405,12 +406,19 @@ func (rq *RunQuery) prepareQuery(ctx context.Context) error {
 func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, error) {
 	var (
 		nodes       = []*Run{}
+		withFKs     = rq.withFKs
 		_spec       = rq.querySpec()
 		loadedTypes = [2]bool{
 			rq.withWorkflow != nil,
-			rq.withActivities != nil,
+			rq.withActivity != nil,
 		}
 	)
+	if rq.withWorkflow != nil || rq.withActivity != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, run.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Run).scanValues(nil, columns)
 	}
@@ -430,81 +438,81 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 		return nodes, nil
 	}
 	if query := rq.withWorkflow; query != nil {
-		if err := rq.loadWorkflow(ctx, query, nodes,
-			func(n *Run) { n.Edges.Workflow = []*Activity{} },
-			func(n *Run, e *Activity) { n.Edges.Workflow = append(n.Edges.Workflow, e) }); err != nil {
+		if err := rq.loadWorkflow(ctx, query, nodes, nil,
+			func(n *Run, e *Workflow) { n.Edges.Workflow = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := rq.withActivities; query != nil {
-		if err := rq.loadActivities(ctx, query, nodes,
-			func(n *Run) { n.Edges.Activities = []*Activity{} },
-			func(n *Run, e *Activity) { n.Edges.Activities = append(n.Edges.Activities, e) }); err != nil {
+	if query := rq.withActivity; query != nil {
+		if err := rq.loadActivity(ctx, query, nodes, nil,
+			func(n *Run, e *Activity) { n.Edges.Activity = e }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (rq *RunQuery) loadWorkflow(ctx context.Context, query *ActivityQuery, nodes []*Run, init func(*Run), assign func(*Run, *Activity)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Run)
+func (rq *RunQuery) loadWorkflow(ctx context.Context, query *WorkflowQuery, nodes []*Run, init func(*Run), assign func(*Run, *Workflow)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Run)
 	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
+		if nodes[i].run_workflow == nil {
+			continue
 		}
+		fk := *nodes[i].run_workflow
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
-	query.withFKs = true
-	query.Where(predicate.Activity(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(run.WorkflowColumn), fks...))
-	}))
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(workflow.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.run_workflow
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "run_workflow" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "run_workflow" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "run_workflow" returned %v`, n.ID)
 		}
-		assign(node, n)
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
 	}
 	return nil
 }
-func (rq *RunQuery) loadActivities(ctx context.Context, query *ActivityQuery, nodes []*Run, init func(*Run), assign func(*Run, *Activity)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Run)
+func (rq *RunQuery) loadActivity(ctx context.Context, query *ActivityQuery, nodes []*Run, init func(*Run), assign func(*Run, *Activity)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Run)
 	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
+		if nodes[i].run_activity == nil {
+			continue
 		}
+		fk := *nodes[i].run_activity
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
-	query.withFKs = true
-	query.Where(predicate.Activity(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(run.ActivitiesColumn), fks...))
-	}))
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(activity.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.run_activities
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "run_activities" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "run_activities" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "run_activity" returned %v`, n.ID)
 		}
-		assign(node, n)
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
 	}
 	return nil
 }

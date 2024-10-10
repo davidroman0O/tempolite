@@ -25,6 +25,8 @@ type WorkflowExecution struct {
 	Status workflowexecution.Status `json:"status,omitempty"`
 	// Output holds the value of the "output" field.
 	Output []interface{} `json:"output,omitempty"`
+	// Error holds the value of the "error" field.
+	Error string `json:"error,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt time.Time `json:"started_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -85,7 +87,7 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflowexecution.FieldOutput:
 			values[i] = new([]byte)
-		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus:
+		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus, workflowexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case workflowexecution.FieldStartedAt, workflowexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -131,6 +133,12 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 				if err := json.Unmarshal(*value, &we.Output); err != nil {
 					return fmt.Errorf("unmarshal field output: %w", err)
 				}
+			}
+		case workflowexecution.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				we.Error = value.String
 			}
 		case workflowexecution.FieldStartedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -210,6 +218,9 @@ func (we *WorkflowExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", we.Output))
+	builder.WriteString(", ")
+	builder.WriteString("error=")
+	builder.WriteString(we.Error)
 	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(we.StartedAt.Format(time.ANSIC))

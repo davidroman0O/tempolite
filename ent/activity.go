@@ -35,8 +35,6 @@ type Activity struct {
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityQuery when eager-loading is set.
 	Edges               ActivityEdges `json:"edges"`
-	run_workflow        *string
-	run_activities      *string
 	workflow_activities *string
 	selectValues        sql.SelectValues
 }
@@ -105,11 +103,7 @@ func (*Activity) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case activity.FieldTimeout, activity.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case activity.ForeignKeys[0]: // run_workflow
-			values[i] = new(sql.NullString)
-		case activity.ForeignKeys[1]: // run_activities
-			values[i] = new(sql.NullString)
-		case activity.ForeignKeys[2]: // workflow_activities
+		case activity.ForeignKeys[0]: // workflow_activities
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -173,20 +167,6 @@ func (a *Activity) assignValues(columns []string, values []any) error {
 				a.CreatedAt = value.Time
 			}
 		case activity.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field run_workflow", values[i])
-			} else if value.Valid {
-				a.run_workflow = new(string)
-				*a.run_workflow = value.String
-			}
-		case activity.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field run_activities", values[i])
-			} else if value.Valid {
-				a.run_activities = new(string)
-				*a.run_activities = value.String
-			}
-		case activity.ForeignKeys[2]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field workflow_activities", values[i])
 			} else if value.Valid {

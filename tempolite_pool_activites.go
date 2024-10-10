@@ -61,11 +61,9 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 		return retrypool.DeadTaskActionDoNothing
 	}
 
-	if _, err := tp.client.ActivityExecution.Update().SetStatus(activityexecution.StatusFailed).Save(tp.ctx); err != nil {
+	if _, err := tp.client.ActivityExecution.Update().SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 		log.Printf("activityOnFailure: ActivityExecution.Update failed: %v", err)
 	}
-
-	fmt.Println("remove it the task: ", err)
 
 	return retrypool.DeadTaskActionDoNothing
 }

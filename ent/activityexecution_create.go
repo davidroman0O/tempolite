@@ -63,6 +63,20 @@ func (aec *ActivityExecutionCreate) SetOutput(i []interface{}) *ActivityExecutio
 	return aec
 }
 
+// SetError sets the "error" field.
+func (aec *ActivityExecutionCreate) SetError(s string) *ActivityExecutionCreate {
+	aec.mutation.SetError(s)
+	return aec
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (aec *ActivityExecutionCreate) SetNillableError(s *string) *ActivityExecutionCreate {
+	if s != nil {
+		aec.SetError(*s)
+	}
+	return aec
+}
+
 // SetStartedAt sets the "started_at" field.
 func (aec *ActivityExecutionCreate) SetStartedAt(t time.Time) *ActivityExecutionCreate {
 	aec.mutation.SetStartedAt(t)
@@ -270,6 +284,10 @@ func (aec *ActivityExecutionCreate) createSpec() (*ActivityExecution, *sqlgraph.
 	if value, ok := aec.mutation.Output(); ok {
 		_spec.SetField(activityexecution.FieldOutput, field.TypeJSON, value)
 		_node.Output = value
+	}
+	if value, ok := aec.mutation.Error(); ok {
+		_spec.SetField(activityexecution.FieldError, field.TypeString, value)
+		_node.Error = value
 	}
 	if value, ok := aec.mutation.StartedAt(); ok {
 		_spec.SetField(activityexecution.FieldStartedAt, field.TypeTime, value)

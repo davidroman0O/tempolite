@@ -23,24 +23,24 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
 	EdgeWorkflow = "workflow"
-	// EdgeActivities holds the string denoting the activities edge name in mutations.
-	EdgeActivities = "activities"
+	// EdgeActivity holds the string denoting the activity edge name in mutations.
+	EdgeActivity = "activity"
 	// Table holds the table name of the run in the database.
 	Table = "runs"
 	// WorkflowTable is the table that holds the workflow relation/edge.
-	WorkflowTable = "activities"
-	// WorkflowInverseTable is the table name for the Activity entity.
-	// It exists in this package in order to avoid circular dependency with the "activity" package.
-	WorkflowInverseTable = "activities"
+	WorkflowTable = "runs"
+	// WorkflowInverseTable is the table name for the Workflow entity.
+	// It exists in this package in order to avoid circular dependency with the "workflow" package.
+	WorkflowInverseTable = "workflows"
 	// WorkflowColumn is the table column denoting the workflow relation/edge.
 	WorkflowColumn = "run_workflow"
-	// ActivitiesTable is the table that holds the activities relation/edge.
-	ActivitiesTable = "activities"
-	// ActivitiesInverseTable is the table name for the Activity entity.
+	// ActivityTable is the table that holds the activity relation/edge.
+	ActivityTable = "runs"
+	// ActivityInverseTable is the table name for the Activity entity.
 	// It exists in this package in order to avoid circular dependency with the "activity" package.
-	ActivitiesInverseTable = "activities"
-	// ActivitiesColumn is the table column denoting the activities relation/edge.
-	ActivitiesColumn = "run_activities"
+	ActivityInverseTable = "activities"
+	// ActivityColumn is the table column denoting the activity relation/edge.
+	ActivityColumn = "run_activity"
 )
 
 // Columns holds all SQL columns for run fields.
@@ -51,10 +51,22 @@ var Columns = []string{
 	FieldCreatedAt,
 }
 
+// ForeignKeys holds the SQL foreign-keys that are owned by the "runs"
+// table and are not defined as standalone fields in the schema.
+var ForeignKeys = []string{
+	"run_workflow",
+	"run_activity",
+}
+
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
+			return true
+		}
+	}
+	for i := range ForeignKeys {
+		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -112,44 +124,30 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByWorkflowCount orders the results by workflow count.
-func ByWorkflowCount(opts ...sql.OrderTermOption) OrderOption {
+// ByWorkflowField orders the results by workflow field.
+func ByWorkflowField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newWorkflowStep(), opts...)
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), sql.OrderByField(field, opts...))
 	}
 }
 
-// ByWorkflow orders the results by workflow terms.
-func ByWorkflow(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByActivityField orders the results by activity field.
+func ByActivityField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByActivitiesCount orders the results by activities count.
-func ByActivitiesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newActivitiesStep(), opts...)
-	}
-}
-
-// ByActivities orders the results by activities terms.
-func ByActivities(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newActivitiesStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newActivityStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newWorkflowStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(WorkflowInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, WorkflowTable, WorkflowColumn),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkflowTable, WorkflowColumn),
 	)
 }
-func newActivitiesStep() *sqlgraph.Step {
+func newActivityStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ActivitiesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ActivitiesTable, ActivitiesColumn),
+		sqlgraph.To(ActivityInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, ActivityTable, ActivityColumn),
 	)
 }

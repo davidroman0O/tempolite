@@ -205,14 +205,14 @@ func HasWorkflow() predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, WorkflowTable, WorkflowColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, WorkflowTable, WorkflowColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
 // HasWorkflowWith applies the HasEdge predicate on the "workflow" edge with a given conditions (other predicates).
-func HasWorkflowWith(preds ...predicate.Activity) predicate.Run {
+func HasWorkflowWith(preds ...predicate.Workflow) predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
 		step := newWorkflowStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
@@ -223,21 +223,21 @@ func HasWorkflowWith(preds ...predicate.Activity) predicate.Run {
 	})
 }
 
-// HasActivities applies the HasEdge predicate on the "activities" edge.
-func HasActivities() predicate.Run {
+// HasActivity applies the HasEdge predicate on the "activity" edge.
+func HasActivity() predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ActivitiesTable, ActivitiesColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, ActivityTable, ActivityColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasActivitiesWith applies the HasEdge predicate on the "activities" edge with a given conditions (other predicates).
-func HasActivitiesWith(preds ...predicate.Activity) predicate.Run {
+// HasActivityWith applies the HasEdge predicate on the "activity" edge with a given conditions (other predicates).
+func HasActivityWith(preds ...predicate.Activity) predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
-		step := newActivitiesStep()
+		step := newActivityStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

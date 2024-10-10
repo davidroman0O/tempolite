@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // RunCreate is the builder for creating a Run entity.
@@ -53,34 +54,42 @@ func (rc *RunCreate) SetID(s string) *RunCreate {
 	return rc
 }
 
-// AddWorkflowIDs adds the "workflow" edge to the Activity entity by IDs.
-func (rc *RunCreate) AddWorkflowIDs(ids ...string) *RunCreate {
-	rc.mutation.AddWorkflowIDs(ids...)
+// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
+func (rc *RunCreate) SetWorkflowID(id string) *RunCreate {
+	rc.mutation.SetWorkflowID(id)
 	return rc
 }
 
-// AddWorkflow adds the "workflow" edges to the Activity entity.
-func (rc *RunCreate) AddWorkflow(a ...*Activity) *RunCreate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
+func (rc *RunCreate) SetNillableWorkflowID(id *string) *RunCreate {
+	if id != nil {
+		rc = rc.SetWorkflowID(*id)
 	}
-	return rc.AddWorkflowIDs(ids...)
-}
-
-// AddActivityIDs adds the "activities" edge to the Activity entity by IDs.
-func (rc *RunCreate) AddActivityIDs(ids ...string) *RunCreate {
-	rc.mutation.AddActivityIDs(ids...)
 	return rc
 }
 
-// AddActivities adds the "activities" edges to the Activity entity.
-func (rc *RunCreate) AddActivities(a ...*Activity) *RunCreate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetWorkflow sets the "workflow" edge to the Workflow entity.
+func (rc *RunCreate) SetWorkflow(w *Workflow) *RunCreate {
+	return rc.SetWorkflowID(w.ID)
+}
+
+// SetActivityID sets the "activity" edge to the Activity entity by ID.
+func (rc *RunCreate) SetActivityID(id string) *RunCreate {
+	rc.mutation.SetActivityID(id)
+	return rc
+}
+
+// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
+func (rc *RunCreate) SetNillableActivityID(id *string) *RunCreate {
+	if id != nil {
+		rc = rc.SetActivityID(*id)
 	}
-	return rc.AddActivityIDs(ids...)
+	return rc
+}
+
+// SetActivity sets the "activity" edge to the Activity entity.
+func (rc *RunCreate) SetActivity(a *Activity) *RunCreate {
+	return rc.SetActivityID(a.ID)
 }
 
 // Mutation returns the RunMutation object of the builder.
@@ -189,26 +198,27 @@ func (rc *RunCreate) createSpec() (*Run, *sqlgraph.CreateSpec) {
 	}
 	if nodes := rc.mutation.WorkflowIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
 			Table:   run.WorkflowTable,
 			Columns: []string{run.WorkflowColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_node.run_workflow = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := rc.mutation.ActivitiesIDs(); len(nodes) > 0 {
+	if nodes := rc.mutation.ActivityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
+			Table:   run.ActivityTable,
+			Columns: []string{run.ActivityColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
@@ -217,6 +227,7 @@ func (rc *RunCreate) createSpec() (*Run, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_node.run_activity = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

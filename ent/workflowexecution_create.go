@@ -49,6 +49,20 @@ func (wec *WorkflowExecutionCreate) SetOutput(i []interface{}) *WorkflowExecutio
 	return wec
 }
 
+// SetError sets the "error" field.
+func (wec *WorkflowExecutionCreate) SetError(s string) *WorkflowExecutionCreate {
+	wec.mutation.SetError(s)
+	return wec
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableError(s *string) *WorkflowExecutionCreate {
+	if s != nil {
+		wec.SetError(*s)
+	}
+	return wec
+}
+
 // SetStartedAt sets the "started_at" field.
 func (wec *WorkflowExecutionCreate) SetStartedAt(t time.Time) *WorkflowExecutionCreate {
 	wec.mutation.SetStartedAt(t)
@@ -241,6 +255,10 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 	if value, ok := wec.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)
 		_node.Output = value
+	}
+	if value, ok := wec.mutation.Error(); ok {
+		_spec.SetField(workflowexecution.FieldError, field.TypeString, value)
+		_node.Error = value
 	}
 	if value, ok := wec.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)

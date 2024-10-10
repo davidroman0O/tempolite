@@ -21,6 +21,8 @@ const (
 	FieldStatus = "status"
 	// FieldOutput holds the string denoting the output field in the database.
 	FieldOutput = "output"
+	// FieldError holds the string denoting the error field in the database.
+	FieldError = "error"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
 	FieldStartedAt = "started_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -62,6 +64,7 @@ var Columns = []string{
 	FieldRunID,
 	FieldStatus,
 	FieldOutput,
+	FieldError,
 	FieldStartedAt,
 	FieldUpdatedAt,
 }
@@ -143,6 +146,11 @@ func ByRunID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByError orders the results by the error field.
+func ByError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldError, opts...).ToFunc()
 }
 
 // ByStartedAt orders the results by the started_at field.

@@ -99,6 +99,26 @@ func (aeu *ActivityExecutionUpdate) ClearOutput() *ActivityExecutionUpdate {
 	return aeu
 }
 
+// SetError sets the "error" field.
+func (aeu *ActivityExecutionUpdate) SetError(s string) *ActivityExecutionUpdate {
+	aeu.mutation.SetError(s)
+	return aeu
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (aeu *ActivityExecutionUpdate) SetNillableError(s *string) *ActivityExecutionUpdate {
+	if s != nil {
+		aeu.SetError(*s)
+	}
+	return aeu
+}
+
+// ClearError clears the value of the "error" field.
+func (aeu *ActivityExecutionUpdate) ClearError() *ActivityExecutionUpdate {
+	aeu.mutation.ClearError()
+	return aeu
+}
+
 // SetStartedAt sets the "started_at" field.
 func (aeu *ActivityExecutionUpdate) SetStartedAt(t time.Time) *ActivityExecutionUpdate {
 	aeu.mutation.SetStartedAt(t)
@@ -285,6 +305,12 @@ func (aeu *ActivityExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if aeu.mutation.OutputCleared() {
 		_spec.ClearField(activityexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := aeu.mutation.Error(); ok {
+		_spec.SetField(activityexecution.FieldError, field.TypeString, value)
+	}
+	if aeu.mutation.ErrorCleared() {
+		_spec.ClearField(activityexecution.FieldError, field.TypeString)
 	}
 	if value, ok := aeu.mutation.StartedAt(); ok {
 		_spec.SetField(activityexecution.FieldStartedAt, field.TypeTime, value)
@@ -479,6 +505,26 @@ func (aeuo *ActivityExecutionUpdateOne) AppendOutput(i []interface{}) *ActivityE
 // ClearOutput clears the value of the "output" field.
 func (aeuo *ActivityExecutionUpdateOne) ClearOutput() *ActivityExecutionUpdateOne {
 	aeuo.mutation.ClearOutput()
+	return aeuo
+}
+
+// SetError sets the "error" field.
+func (aeuo *ActivityExecutionUpdateOne) SetError(s string) *ActivityExecutionUpdateOne {
+	aeuo.mutation.SetError(s)
+	return aeuo
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (aeuo *ActivityExecutionUpdateOne) SetNillableError(s *string) *ActivityExecutionUpdateOne {
+	if s != nil {
+		aeuo.SetError(*s)
+	}
+	return aeuo
+}
+
+// ClearError clears the value of the "error" field.
+func (aeuo *ActivityExecutionUpdateOne) ClearError() *ActivityExecutionUpdateOne {
+	aeuo.mutation.ClearError()
 	return aeuo
 }
 
@@ -698,6 +744,12 @@ func (aeuo *ActivityExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Act
 	}
 	if aeuo.mutation.OutputCleared() {
 		_spec.ClearField(activityexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := aeuo.mutation.Error(); ok {
+		_spec.SetField(activityexecution.FieldError, field.TypeString, value)
+	}
+	if aeuo.mutation.ErrorCleared() {
+		_spec.ClearField(activityexecution.FieldError, field.TypeString)
 	}
 	if value, ok := aeuo.mutation.StartedAt(); ok {
 		_spec.SetField(activityexecution.FieldStartedAt, field.TypeTime, value)

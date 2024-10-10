@@ -14,6 +14,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // RunUpdate is the builder for updating Run entities.
@@ -71,34 +72,42 @@ func (ru *RunUpdate) SetNillableCreatedAt(t *time.Time) *RunUpdate {
 	return ru
 }
 
-// AddWorkflowIDs adds the "workflow" edge to the Activity entity by IDs.
-func (ru *RunUpdate) AddWorkflowIDs(ids ...string) *RunUpdate {
-	ru.mutation.AddWorkflowIDs(ids...)
+// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
+func (ru *RunUpdate) SetWorkflowID(id string) *RunUpdate {
+	ru.mutation.SetWorkflowID(id)
 	return ru
 }
 
-// AddWorkflow adds the "workflow" edges to the Activity entity.
-func (ru *RunUpdate) AddWorkflow(a ...*Activity) *RunUpdate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
+func (ru *RunUpdate) SetNillableWorkflowID(id *string) *RunUpdate {
+	if id != nil {
+		ru = ru.SetWorkflowID(*id)
 	}
-	return ru.AddWorkflowIDs(ids...)
-}
-
-// AddActivityIDs adds the "activities" edge to the Activity entity by IDs.
-func (ru *RunUpdate) AddActivityIDs(ids ...string) *RunUpdate {
-	ru.mutation.AddActivityIDs(ids...)
 	return ru
 }
 
-// AddActivities adds the "activities" edges to the Activity entity.
-func (ru *RunUpdate) AddActivities(a ...*Activity) *RunUpdate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetWorkflow sets the "workflow" edge to the Workflow entity.
+func (ru *RunUpdate) SetWorkflow(w *Workflow) *RunUpdate {
+	return ru.SetWorkflowID(w.ID)
+}
+
+// SetActivityID sets the "activity" edge to the Activity entity by ID.
+func (ru *RunUpdate) SetActivityID(id string) *RunUpdate {
+	ru.mutation.SetActivityID(id)
+	return ru
+}
+
+// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
+func (ru *RunUpdate) SetNillableActivityID(id *string) *RunUpdate {
+	if id != nil {
+		ru = ru.SetActivityID(*id)
 	}
-	return ru.AddActivityIDs(ids...)
+	return ru
+}
+
+// SetActivity sets the "activity" edge to the Activity entity.
+func (ru *RunUpdate) SetActivity(a *Activity) *RunUpdate {
+	return ru.SetActivityID(a.ID)
 }
 
 // Mutation returns the RunMutation object of the builder.
@@ -106,46 +115,16 @@ func (ru *RunUpdate) Mutation() *RunMutation {
 	return ru.mutation
 }
 
-// ClearWorkflow clears all "workflow" edges to the Activity entity.
+// ClearWorkflow clears the "workflow" edge to the Workflow entity.
 func (ru *RunUpdate) ClearWorkflow() *RunUpdate {
 	ru.mutation.ClearWorkflow()
 	return ru
 }
 
-// RemoveWorkflowIDs removes the "workflow" edge to Activity entities by IDs.
-func (ru *RunUpdate) RemoveWorkflowIDs(ids ...string) *RunUpdate {
-	ru.mutation.RemoveWorkflowIDs(ids...)
+// ClearActivity clears the "activity" edge to the Activity entity.
+func (ru *RunUpdate) ClearActivity() *RunUpdate {
+	ru.mutation.ClearActivity()
 	return ru
-}
-
-// RemoveWorkflow removes "workflow" edges to Activity entities.
-func (ru *RunUpdate) RemoveWorkflow(a ...*Activity) *RunUpdate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return ru.RemoveWorkflowIDs(ids...)
-}
-
-// ClearActivities clears all "activities" edges to the Activity entity.
-func (ru *RunUpdate) ClearActivities() *RunUpdate {
-	ru.mutation.ClearActivities()
-	return ru
-}
-
-// RemoveActivityIDs removes the "activities" edge to Activity entities by IDs.
-func (ru *RunUpdate) RemoveActivityIDs(ids ...string) *RunUpdate {
-	ru.mutation.RemoveActivityIDs(ids...)
-	return ru
-}
-
-// RemoveActivities removes "activities" edges to Activity entities.
-func (ru *RunUpdate) RemoveActivities(a ...*Activity) *RunUpdate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return ru.RemoveActivityIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -208,42 +187,26 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if ru.mutation.WorkflowCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
 			Table:   run.WorkflowTable,
 			Columns: []string{run.WorkflowColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ru.mutation.RemovedWorkflowIDs(); len(nodes) > 0 && !ru.mutation.WorkflowCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   run.WorkflowTable,
-			Columns: []string{run.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
 	if nodes := ru.mutation.WorkflowIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
 			Table:   run.WorkflowTable,
 			Columns: []string{run.WorkflowColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -251,12 +214,12 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if ru.mutation.ActivitiesCleared() {
+	if ru.mutation.ActivityCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
+			Table:   run.ActivityTable,
+			Columns: []string{run.ActivityColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
@@ -264,28 +227,12 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ru.mutation.RemovedActivitiesIDs(); len(nodes) > 0 && !ru.mutation.ActivitiesCleared() {
+	if nodes := ru.mutation.ActivityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ru.mutation.ActivitiesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
+			Table:   run.ActivityTable,
+			Columns: []string{run.ActivityColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
@@ -358,34 +305,42 @@ func (ruo *RunUpdateOne) SetNillableCreatedAt(t *time.Time) *RunUpdateOne {
 	return ruo
 }
 
-// AddWorkflowIDs adds the "workflow" edge to the Activity entity by IDs.
-func (ruo *RunUpdateOne) AddWorkflowIDs(ids ...string) *RunUpdateOne {
-	ruo.mutation.AddWorkflowIDs(ids...)
+// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
+func (ruo *RunUpdateOne) SetWorkflowID(id string) *RunUpdateOne {
+	ruo.mutation.SetWorkflowID(id)
 	return ruo
 }
 
-// AddWorkflow adds the "workflow" edges to the Activity entity.
-func (ruo *RunUpdateOne) AddWorkflow(a ...*Activity) *RunUpdateOne {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
+func (ruo *RunUpdateOne) SetNillableWorkflowID(id *string) *RunUpdateOne {
+	if id != nil {
+		ruo = ruo.SetWorkflowID(*id)
 	}
-	return ruo.AddWorkflowIDs(ids...)
-}
-
-// AddActivityIDs adds the "activities" edge to the Activity entity by IDs.
-func (ruo *RunUpdateOne) AddActivityIDs(ids ...string) *RunUpdateOne {
-	ruo.mutation.AddActivityIDs(ids...)
 	return ruo
 }
 
-// AddActivities adds the "activities" edges to the Activity entity.
-func (ruo *RunUpdateOne) AddActivities(a ...*Activity) *RunUpdateOne {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
+// SetWorkflow sets the "workflow" edge to the Workflow entity.
+func (ruo *RunUpdateOne) SetWorkflow(w *Workflow) *RunUpdateOne {
+	return ruo.SetWorkflowID(w.ID)
+}
+
+// SetActivityID sets the "activity" edge to the Activity entity by ID.
+func (ruo *RunUpdateOne) SetActivityID(id string) *RunUpdateOne {
+	ruo.mutation.SetActivityID(id)
+	return ruo
+}
+
+// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
+func (ruo *RunUpdateOne) SetNillableActivityID(id *string) *RunUpdateOne {
+	if id != nil {
+		ruo = ruo.SetActivityID(*id)
 	}
-	return ruo.AddActivityIDs(ids...)
+	return ruo
+}
+
+// SetActivity sets the "activity" edge to the Activity entity.
+func (ruo *RunUpdateOne) SetActivity(a *Activity) *RunUpdateOne {
+	return ruo.SetActivityID(a.ID)
 }
 
 // Mutation returns the RunMutation object of the builder.
@@ -393,46 +348,16 @@ func (ruo *RunUpdateOne) Mutation() *RunMutation {
 	return ruo.mutation
 }
 
-// ClearWorkflow clears all "workflow" edges to the Activity entity.
+// ClearWorkflow clears the "workflow" edge to the Workflow entity.
 func (ruo *RunUpdateOne) ClearWorkflow() *RunUpdateOne {
 	ruo.mutation.ClearWorkflow()
 	return ruo
 }
 
-// RemoveWorkflowIDs removes the "workflow" edge to Activity entities by IDs.
-func (ruo *RunUpdateOne) RemoveWorkflowIDs(ids ...string) *RunUpdateOne {
-	ruo.mutation.RemoveWorkflowIDs(ids...)
+// ClearActivity clears the "activity" edge to the Activity entity.
+func (ruo *RunUpdateOne) ClearActivity() *RunUpdateOne {
+	ruo.mutation.ClearActivity()
 	return ruo
-}
-
-// RemoveWorkflow removes "workflow" edges to Activity entities.
-func (ruo *RunUpdateOne) RemoveWorkflow(a ...*Activity) *RunUpdateOne {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return ruo.RemoveWorkflowIDs(ids...)
-}
-
-// ClearActivities clears all "activities" edges to the Activity entity.
-func (ruo *RunUpdateOne) ClearActivities() *RunUpdateOne {
-	ruo.mutation.ClearActivities()
-	return ruo
-}
-
-// RemoveActivityIDs removes the "activities" edge to Activity entities by IDs.
-func (ruo *RunUpdateOne) RemoveActivityIDs(ids ...string) *RunUpdateOne {
-	ruo.mutation.RemoveActivityIDs(ids...)
-	return ruo
-}
-
-// RemoveActivities removes "activities" edges to Activity entities.
-func (ruo *RunUpdateOne) RemoveActivities(a ...*Activity) *RunUpdateOne {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return ruo.RemoveActivityIDs(ids...)
 }
 
 // Where appends a list predicates to the RunUpdate builder.
@@ -525,42 +450,26 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 	}
 	if ruo.mutation.WorkflowCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
 			Table:   run.WorkflowTable,
 			Columns: []string{run.WorkflowColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ruo.mutation.RemovedWorkflowIDs(); len(nodes) > 0 && !ruo.mutation.WorkflowCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   run.WorkflowTable,
-			Columns: []string{run.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
 	if nodes := ruo.mutation.WorkflowIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
 			Table:   run.WorkflowTable,
 			Columns: []string{run.WorkflowColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -568,12 +477,12 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if ruo.mutation.ActivitiesCleared() {
+	if ruo.mutation.ActivityCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
+			Table:   run.ActivityTable,
+			Columns: []string{run.ActivityColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
@@ -581,28 +490,12 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ruo.mutation.RemovedActivitiesIDs(); len(nodes) > 0 && !ruo.mutation.ActivitiesCleared() {
+	if nodes := ruo.mutation.ActivityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := ruo.mutation.ActivitiesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   run.ActivitiesTable,
-			Columns: []string{run.ActivitiesColumn},
+			Table:   run.ActivityTable,
+			Columns: []string{run.ActivityColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),

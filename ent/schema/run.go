@@ -29,7 +29,11 @@ func (Run) Fields() []ent.Field {
 
 func (Run) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("workflow", Activity.Type),
-		edge.To("activities", Activity.Type),
+		edge.To("workflow", Workflow.Type).
+			Unique().
+			Comment("A run can be connected to a workflow or an activity, not both."),
+		edge.To("activity", Activity.Type).
+			Unique().
+			Comment("A run can be connected to a workflow or an activity, not both."),
 	}
 }

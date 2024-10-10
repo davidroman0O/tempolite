@@ -75,6 +75,11 @@ func Attempt(v int) predicate.ActivityExecution {
 	return predicate.ActivityExecution(sql.FieldEQ(FieldAttempt, v))
 }
 
+// Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
+func Error(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldEQ(FieldError, v))
+}
+
 // StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
 func StartedAt(v time.Time) predicate.ActivityExecution {
 	return predicate.ActivityExecution(sql.FieldEQ(FieldStartedAt, v))
@@ -218,6 +223,81 @@ func OutputIsNil() predicate.ActivityExecution {
 // OutputNotNil applies the NotNil predicate on the "output" field.
 func OutputNotNil() predicate.ActivityExecution {
 	return predicate.ActivityExecution(sql.FieldNotNull(FieldOutput))
+}
+
+// ErrorEQ applies the EQ predicate on the "error" field.
+func ErrorEQ(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldEQ(FieldError, v))
+}
+
+// ErrorNEQ applies the NEQ predicate on the "error" field.
+func ErrorNEQ(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldNEQ(FieldError, v))
+}
+
+// ErrorIn applies the In predicate on the "error" field.
+func ErrorIn(vs ...string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldIn(FieldError, vs...))
+}
+
+// ErrorNotIn applies the NotIn predicate on the "error" field.
+func ErrorNotIn(vs ...string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldNotIn(FieldError, vs...))
+}
+
+// ErrorGT applies the GT predicate on the "error" field.
+func ErrorGT(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldGT(FieldError, v))
+}
+
+// ErrorGTE applies the GTE predicate on the "error" field.
+func ErrorGTE(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldGTE(FieldError, v))
+}
+
+// ErrorLT applies the LT predicate on the "error" field.
+func ErrorLT(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldLT(FieldError, v))
+}
+
+// ErrorLTE applies the LTE predicate on the "error" field.
+func ErrorLTE(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldLTE(FieldError, v))
+}
+
+// ErrorContains applies the Contains predicate on the "error" field.
+func ErrorContains(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldContains(FieldError, v))
+}
+
+// ErrorHasPrefix applies the HasPrefix predicate on the "error" field.
+func ErrorHasPrefix(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldHasPrefix(FieldError, v))
+}
+
+// ErrorHasSuffix applies the HasSuffix predicate on the "error" field.
+func ErrorHasSuffix(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldHasSuffix(FieldError, v))
+}
+
+// ErrorIsNil applies the IsNil predicate on the "error" field.
+func ErrorIsNil() predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldIsNull(FieldError))
+}
+
+// ErrorNotNil applies the NotNil predicate on the "error" field.
+func ErrorNotNil() predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldNotNull(FieldError))
+}
+
+// ErrorEqualFold applies the EqualFold predicate on the "error" field.
+func ErrorEqualFold(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldEqualFold(FieldError, v))
+}
+
+// ErrorContainsFold applies the ContainsFold predicate on the "error" field.
+func ErrorContainsFold(v string) predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldContainsFold(FieldError, v))
 }
 
 // StartedAtEQ applies the EQ predicate on the "started_at" field.

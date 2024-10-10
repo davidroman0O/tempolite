@@ -142,6 +142,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 }
 
 func (tp *Tempolite) Close() {
+	fmt.Println("CANCEL EVERYTHING")
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
 }
@@ -152,6 +153,22 @@ func (tp *Tempolite) Wait() error {
 		log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
 		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
 	}, time.Second)
+}
+
+func (tp *Tempolite) convertBackResults(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+	outputs := []interface{}{}
+	// TODO: we can probably parallelize this
+	for idx, rawOutput := range executionOutput {
+		inputType := handlerInfo.ParamTypes[idx]
+		inputKind := handlerInfo.ParamsKinds[idx]
+		realInput, err := convertInput(rawOutput, inputType, inputKind)
+		if err != nil {
+			log.Printf("get: convertInput failed: %v", err)
+			return nil, err
+		}
+		outputs = append(outputs, realInput)
+	}
+	return outputs, nil
 }
 
 // TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
@@ -187,8 +204,23 @@ func (tp *Tempolite) getActivity(id string) (*ActivityInfo, error) {
 }
 
 func (tp *Tempolite) getWorkflow(id string) (*WorkflowInfo, error) {
-	// todo: implement
-	return nil, nil
+	log.Printf("getWorkflow - looking for workflow execution %s", id)
+	run, err := tp.client.Run.Query().
+		Where(run.IDEQ(id)).
+		WithWorkflow(func(q *ent.WorkflowQuery) {
+			q.WithExecutions()
+		}).
+		First(tp.ctx)
+	if err != nil {
+		return nil, err
+	}
+	info := WorkflowInfo{
+		tp:          tp,
+		ID:          run.Edges.Workflow.ID,
+		RunID:       run.ID,
+		ExecutionID: run.Edges.Workflow.Edges.Executions[len(run.Edges.Workflow.Edges.Executions)-1].ID,
+	}
+	return &info, nil
 }
 
 func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
@@ -272,6 +304,10 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 			return "", err
 		}
 
+		if _, err = tp.client.Run.UpdateOneID(runEntity.ID).SetActivity(activityEntity).Save(tp.ctx); err != nil {
+			return "", err
+		}
+
 		log.Printf("EnqueueActivity - created activity execution %s for %s with params: %v", activityExecution.ID, longName, params)
 		return runEntity.ID, nil
 	} else {
@@ -343,6 +379,10 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 			SetRunID(runEntity.ID).
 			SetWorkflow(workflowEntity).
 			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		if _, err = tp.client.Run.UpdateOneID(runEntity.ID).SetWorkflow(workflowEntity).Save(tp.ctx); err != nil {
 			return "", err
 		}
 

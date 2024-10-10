@@ -78,6 +78,26 @@ func (weu *WorkflowExecutionUpdate) ClearOutput() *WorkflowExecutionUpdate {
 	return weu
 }
 
+// SetError sets the "error" field.
+func (weu *WorkflowExecutionUpdate) SetError(s string) *WorkflowExecutionUpdate {
+	weu.mutation.SetError(s)
+	return weu
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (weu *WorkflowExecutionUpdate) SetNillableError(s *string) *WorkflowExecutionUpdate {
+	if s != nil {
+		weu.SetError(*s)
+	}
+	return weu
+}
+
+// ClearError clears the value of the "error" field.
+func (weu *WorkflowExecutionUpdate) ClearError() *WorkflowExecutionUpdate {
+	weu.mutation.ClearError()
+	return weu
+}
+
 // SetStartedAt sets the "started_at" field.
 func (weu *WorkflowExecutionUpdate) SetStartedAt(t time.Time) *WorkflowExecutionUpdate {
 	weu.mutation.SetStartedAt(t)
@@ -270,6 +290,12 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	if weu.mutation.OutputCleared() {
 		_spec.ClearField(workflowexecution.FieldOutput, field.TypeJSON)
 	}
+	if value, ok := weu.mutation.Error(); ok {
+		_spec.SetField(workflowexecution.FieldError, field.TypeString, value)
+	}
+	if weu.mutation.ErrorCleared() {
+		_spec.ClearField(workflowexecution.FieldError, field.TypeString)
+	}
 	if value, ok := weu.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)
 	}
@@ -458,6 +484,26 @@ func (weuo *WorkflowExecutionUpdateOne) AppendOutput(i []interface{}) *WorkflowE
 // ClearOutput clears the value of the "output" field.
 func (weuo *WorkflowExecutionUpdateOne) ClearOutput() *WorkflowExecutionUpdateOne {
 	weuo.mutation.ClearOutput()
+	return weuo
+}
+
+// SetError sets the "error" field.
+func (weuo *WorkflowExecutionUpdateOne) SetError(s string) *WorkflowExecutionUpdateOne {
+	weuo.mutation.SetError(s)
+	return weuo
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (weuo *WorkflowExecutionUpdateOne) SetNillableError(s *string) *WorkflowExecutionUpdateOne {
+	if s != nil {
+		weuo.SetError(*s)
+	}
+	return weuo
+}
+
+// ClearError clears the value of the "error" field.
+func (weuo *WorkflowExecutionUpdateOne) ClearError() *WorkflowExecutionUpdateOne {
+	weuo.mutation.ClearError()
 	return weuo
 }
 
@@ -682,6 +728,12 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 	}
 	if weuo.mutation.OutputCleared() {
 		_spec.ClearField(workflowexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := weuo.mutation.Error(); ok {
+		_spec.SetField(workflowexecution.FieldError, field.TypeString, value)
+	}
+	if weuo.mutation.ErrorCleared() {
+		_spec.ClearField(workflowexecution.FieldError, field.TypeString)
 	}
 	if value, ok := weuo.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)

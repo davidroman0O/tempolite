@@ -25,6 +25,8 @@ func (WorkflowExecution) Fields() []ent.Field {
 			Default("Pending"),
 		field.JSON("output", []interface{}{}).
 			Optional(),
+		field.String("error").
+			Optional(),
 		field.Time("started_at").
 			Default(time.Now),
 		field.Time("updated_at").
