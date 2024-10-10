@@ -11,7 +11,7 @@ import (
 )
 
 type workflowTask struct {
-	executionID string
+	ctx         WorkflowContext
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -42,7 +42,7 @@ func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*wo
 
 	log.Printf("workflowOnSuccess: %d", workerID)
 
-	if _, err := tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(task.Data().executionID)).SetStatus(workflowexecution.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(task.Data().ctx.executionID)).SetStatus(workflowexecution.StatusCompleted).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
 	}
 }
@@ -81,12 +81,7 @@ type workflowWorker struct {
 func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 	log.Printf("workflowWorker: %s, %v", data.handlerName, data.params)
 
-	contextWorkflow := WorkflowContext{
-		TempoliteContext: ctx,
-		tp:               w.tp,
-	}
-
-	values := []reflect.Value{reflect.ValueOf(contextWorkflow)}
+	values := []reflect.Value{reflect.ValueOf(data.ctx)}
 
 	for _, v := range data.params {
 		values = append(values, reflect.ValueOf(v))
@@ -106,7 +101,7 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		}
 	}
 
-	if _, err := w.tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(data.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
+	if _, err := w.tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(data.ctx.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("workflowWorker: WorkflowExecution.Update failed: %v", err)
 	}
 

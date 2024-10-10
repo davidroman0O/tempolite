@@ -70,8 +70,16 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 						inputs = append(inputs, realInput)
 					}
 
+					contextActivity := ActivityContext{
+						TempoliteContext: tp.ctx,
+						tp:               tp,
+						activityID:       activityEntity.ID,
+						executionID:      act.ID,
+						runID:            act.RunID,
+					}
+
 					task := &activityTask{
-						executionID: act.ID,
+						ctx:         contextActivity,
 						handlerName: activityHandlerInfo.HandlerLongName,
 						handler:     activityHandlerInfo.Handler,
 						params:      inputs,
@@ -85,6 +93,7 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 						if runEntity, err = tp.client.Run.Get(tp.ctx, act.RunID); err != nil {
 							return err
 						}
+
 						// create a new execution for the same activity
 						var activityExecution *ent.ActivityExecution
 						if activityExecution, err = tp.client.ActivityExecution.
@@ -95,7 +104,9 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 							Save(tp.ctx); err != nil {
 							return err
 						}
-						task.executionID = activityExecution.ID
+
+						// update the current execution id
+						task.ctx.executionID = activityExecution.ID
 						task.retryCount++
 
 						if err := tp.activityPool.Dispatch(task); err != nil {
@@ -202,8 +213,16 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 						inputs = append(inputs, realInput)
 					}
 
+					contextWorkflow := WorkflowContext{
+						TempoliteContext: tp.ctx,
+						tp:               tp,
+						workflowID:       workflowEntity.ID,
+						executionID:      wkflw.ID,
+						runID:            wkflw.RunID,
+					}
+
 					task := &workflowTask{
-						executionID: wkflw.ID,
+						ctx:         contextWorkflow,
 						handlerName: workflowHandlerInfo.HandlerLongName,
 						handler:     workflowHandlerInfo.Handler,
 						params:      inputs,
@@ -226,7 +245,8 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 							Save(tp.ctx); err != nil {
 							return err
 						}
-						task.executionID = workflowExecution.ID
+
+						task.ctx.executionID = workflowExecution.ID
 						task.retryCount++
 
 						if err := tp.workflowPool.Dispatch(task); err != nil {

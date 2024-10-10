@@ -11,7 +11,7 @@ import (
 )
 
 type activityTask struct {
-	executionID string
+	ctx         ActivityContext
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -38,7 +38,7 @@ func (tp *Tempolite) createActivityPool() *retrypool.Pool[*activityTask] {
 
 func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask]) {
 	log.Printf("activityOnSuccess: %d", workerID)
-	if _, err := tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(task.Data().executionID)).SetStatus(activityexecution.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(task.Data().ctx.executionID)).SetStatus(activityexecution.StatusCompleted).Save(tp.ctx); err != nil {
 		log.Printf("activityOnSuccess: ActivityExecution.Update failed: %v", err)
 	}
 }
@@ -77,12 +77,7 @@ type activityWorker struct {
 func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
 	log.Printf("activityWorker: %s, %v", data.handlerName, data.params)
 
-	contextActivity := ActivityContext{
-		TempoliteContext: ctx,
-		tp:               w.tp,
-	}
-
-	values := []reflect.Value{reflect.ValueOf(contextActivity)}
+	values := []reflect.Value{reflect.ValueOf(data.ctx)}
 
 	for _, v := range data.params {
 		values = append(values, reflect.ValueOf(v))
@@ -102,7 +97,7 @@ func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
 		}
 	}
 
-	if _, err := w.tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(data.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
+	if _, err := w.tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(data.ctx.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("activityworker: ActivityExecution.Update failed: %v", err)
 	}
 

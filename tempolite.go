@@ -92,6 +92,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 			os.Remove(*cfg.path)
 		}
 		if err := os.MkdirAll(filepath.Dir(*cfg.path), os.ModePerm); err != nil {
+			cancel()
 			return nil, err
 		}
 		optsComfy = append(optsComfy, comfylite3.WithPath(*cfg.path))
@@ -101,6 +102,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 
 	comfy, err := comfylite3.New(optsComfy...)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
@@ -116,6 +118,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 
 	if firstTime || (cfg.destructive && cfg.path != nil) {
 		if err = client.Schema.Create(ctx); err != nil {
+			cancel()
 			return nil, err
 		}
 	}

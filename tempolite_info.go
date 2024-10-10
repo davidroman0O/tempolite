@@ -50,7 +50,10 @@ type TempoliteContext interface {
 
 type WorkflowContext struct {
 	TempoliteContext
-	tp *Tempolite
+	tp          *Tempolite
+	workflowID  string
+	executionID string
+	runID       string
 }
 
 // Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
@@ -91,7 +94,10 @@ func (w WorkflowContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) 
 
 type ActivityContext struct {
 	TempoliteContext
-	tp *Tempolite
+	tp          *Tempolite
+	activityID  string
+	executionID string
+	runID       string
 }
 
 func (w ActivityContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
