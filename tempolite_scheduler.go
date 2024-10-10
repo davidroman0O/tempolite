@@ -233,7 +233,7 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 					// On retry, we will have to create a new workflow exection
 					retryIt := func() error {
 
-						fmt.Println("\t Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
+						fmt.Println("\t ==Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
 
 						// create a new execution for the same workflow
 						var workflowExecution *ent.WorkflowExecution
@@ -248,13 +248,6 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 
 						task.ctx.executionID = workflowExecution.ID
 						task.retryCount++
-
-						fmt.Printf("retrying workflow %s (%v) with params: %v\n", workflowEntity.HandlerName, task.retryCount, workflowEntity.Input)
-
-						if err := tp.workflowPool.Dispatch(task); err != nil {
-							log.Printf("scheduler: Dispatch failed: %v", err)
-							return err
-						}
 
 						// now we notify the workflow enity that we're working
 						if _, err = tp.client.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {

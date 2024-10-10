@@ -137,11 +137,11 @@ func TestWorkflowSimpleSubWorkflowInfoGet(t *testing.T) {
 		fmt.Println("anotherWrk")
 		// If we fail here, then the the info.Get will fail and the parent workflow, will also fail
 		// but does that mean, we should be retried?
-		if !failed {
-			failed = true
-			fmt.Println("failed on purpose: ", failed)
-			return fmt.Errorf("on purpose")
-		}
+		// if !failed {
+		// 	failed = true
+		// 	fmt.Println("failed on purpose: ", failed)
+		// 	return fmt.Errorf("on purpose")
+		// }
 		return nil
 	}
 
@@ -160,11 +160,11 @@ func TestWorkflowSimpleSubWorkflowInfoGet(t *testing.T) {
 			return -1, err
 		}
 
-		// if !failed {
-		// 	failed = true
-		// 	fmt.Println("failed on purpose: ", failed)
-		// 	return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
-		// }
+		if !failed {
+			failed = true
+			fmt.Println("failed on purpose: ", failed)
+			return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
+		}
 		return 420, nil
 	}
 

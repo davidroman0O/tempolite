@@ -355,8 +355,7 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 			return "", err
 		}
 
-		fmt.Println("===CREATE SUB WORKFLOW")
-		fmt.Println(ctx.RunID(), ctx.EntityID(), ctx.ExecutionID())
+		fmt.Println("===CREATE SUB WORKFLOW", ctx.ExecutionID(), ctx.RunID(), ctx.EntityID())
 
 		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
 		var workflowEntity *ent.Workflow

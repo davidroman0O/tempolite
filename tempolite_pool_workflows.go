@@ -55,10 +55,7 @@ func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*wo
 
 	log.Printf("workflowOnSuccess workflow %v - %v: %d", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID)
 
-	if _, err := tp.client.WorkflowExecution.
-		Update().
-		Where(workflowexecution.IDEQ(task.Data().ctx.executionID)).
-		SetStatus(workflowexecution.StatusCompleted).
+	if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusCompleted).
 		Save(tp.ctx); err != nil {
 		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
 	}
@@ -79,7 +76,7 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 		task.Data().retryCount++
 		fmt.Println("retry it the task: ", err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
-		if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
+		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
 			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
 		}
 
@@ -91,12 +88,13 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 			log.Printf("workflowOnFailure: retry failed: %v", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
+
 		return retrypool.DeadTaskActionDoNothing
 	}
 
 	log.Printf("workflowOnFailure workflow %v - %v: %d", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID)
 
-	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+	if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
 	}
 	if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {

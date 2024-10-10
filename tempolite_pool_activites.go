@@ -42,7 +42,7 @@ func (tp *Tempolite) createActivityPool() *retrypool.Pool[*activityTask] {
 
 func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask]) {
 	log.Printf("activityOnSuccess: %d", workerID)
-	if _, err := tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(task.Data().ctx.executionID)).SetStatus(activityexecution.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).Save(tp.ctx); err != nil {
 		log.Printf("activityOnSuccess: ActivityExecution.Update failed: %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 		task.Data().retryCount++
 		fmt.Println("retry it the task: ", err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
-		if _, err := tp.client.ActivityExecution.Update().SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
+		if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.activityID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
 			log.Printf("activityOnFailure: ActivityExecution.Update failed: %v", err)
 		}
 		if err := task.Data().retry(); err != nil {
@@ -65,7 +65,7 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 		return retrypool.DeadTaskActionDoNothing
 	}
 
-	if _, err := tp.client.ActivityExecution.Update().SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.activityID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 		log.Printf("activityOnFailure: ActivityExecution.Update failed: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
 		}
 	}
 
-	if _, err := w.tp.client.ActivityExecution.Update().Where(activityexecution.IDEQ(data.ctx.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
+	if _, err := w.tp.client.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("activityworker: ActivityExecution.Update failed: %v", err)
 	}
 
