@@ -7367,6 +7367,7 @@ type WorkflowMutation struct {
 	op                Op
 	typ               string
 	id                *string
+	status            *workflow.Status
 	identity          *string
 	handler_name      *string
 	input             *[]interface{}
@@ -7488,6 +7489,42 @@ func (m *WorkflowMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetStatus sets the "status" field.
+func (m *WorkflowMutation) SetStatus(w workflow.Status) {
+	m.status = &w
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *WorkflowMutation) Status() (r workflow.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldStatus(ctx context.Context) (v workflow.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *WorkflowMutation) ResetStatus() {
+	m.status = nil
 }
 
 // SetIdentity sets the "identity" field.
@@ -7889,7 +7926,10 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
+	if m.status != nil {
+		fields = append(fields, workflow.FieldStatus)
+	}
 	if m.identity != nil {
 		fields = append(fields, workflow.FieldIdentity)
 	}
@@ -7916,6 +7956,8 @@ func (m *WorkflowMutation) Fields() []string {
 // schema.
 func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case workflow.FieldStatus:
+		return m.Status()
 	case workflow.FieldIdentity:
 		return m.Identity()
 	case workflow.FieldHandlerName:
@@ -7937,6 +7979,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case workflow.FieldStatus:
+		return m.OldStatus(ctx)
 	case workflow.FieldIdentity:
 		return m.OldIdentity(ctx)
 	case workflow.FieldHandlerName:
@@ -7958,6 +8002,13 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case workflow.FieldStatus:
+		v, ok := value.(workflow.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
 	case workflow.FieldIdentity:
 		v, ok := value.(string)
 		if !ok {
@@ -8064,6 +8115,9 @@ func (m *WorkflowMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowMutation) ResetField(name string) error {
 	switch name {
+	case workflow.FieldStatus:
+		m.ResetStatus()
+		return nil
 	case workflow.FieldIdentity:
 		m.ResetIdentity()
 		return nil

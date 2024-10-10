@@ -3,6 +3,7 @@
 package workflow
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -14,6 +15,8 @@ const (
 	Label = "workflow"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
 	// FieldIdentity holds the string denoting the identity field in the database.
 	FieldIdentity = "identity"
 	// FieldHandlerName holds the string denoting the handler_name field in the database.
@@ -51,6 +54,7 @@ const (
 // Columns holds all SQL columns for workflow fields.
 var Columns = []string{
 	FieldID,
+	FieldStatus,
 	FieldIdentity,
 	FieldHandlerName,
 	FieldInput,
@@ -78,12 +82,48 @@ var (
 	DefaultCreatedAt func() time.Time
 )
 
+// Status defines the type for the "status" enum field.
+type Status string
+
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
+
+// Status values.
+const (
+	StatusPending   Status = "Pending"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+	StatusPaused    Status = "Paused"
+	StatusRetried   Status = "Retried"
+	StatusCancelled Status = "Cancelled"
+)
+
+func (s Status) String() string {
+	return string(s)
+}
+
+// StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
+func StatusValidator(s Status) error {
+	switch s {
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusRetried, StatusCancelled:
+		return nil
+	default:
+		return fmt.Errorf("workflow: invalid enum value for status field: %q", s)
+	}
+}
+
 // OrderOption defines the ordering options for the Workflow queries.
 type OrderOption func(*sql.Selector)
 
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
 // ByIdentity orders the results by the identity field.

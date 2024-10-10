@@ -335,12 +335,12 @@ func (wq *WorkflowQuery) WithActivities(opts ...func(*ActivityQuery)) *WorkflowQ
 // Example:
 //
 //	var v []struct {
-//		Identity string `json:"identity,omitempty"`
+//		Status workflow.Status `json:"status,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Workflow.Query().
-//		GroupBy(workflow.FieldIdentity).
+//		GroupBy(workflow.FieldStatus).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (wq *WorkflowQuery) GroupBy(field string, fields ...string) *WorkflowGroupBy {
@@ -358,11 +358,11 @@ func (wq *WorkflowQuery) GroupBy(field string, fields ...string) *WorkflowGroupB
 // Example:
 //
 //	var v []struct {
-//		Identity string `json:"identity,omitempty"`
+//		Status workflow.Status `json:"status,omitempty"`
 //	}
 //
 //	client.Workflow.Query().
-//		Select(workflow.FieldIdentity).
+//		Select(workflow.FieldStatus).
 //		Scan(ctx, &v)
 func (wq *WorkflowQuery) Select(fields ...string) *WorkflowSelect {
 	wq.ctx.Fields = append(wq.ctx.Fields, fields...)

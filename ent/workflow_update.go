@@ -32,6 +32,20 @@ func (wu *WorkflowUpdate) Where(ps ...predicate.Workflow) *WorkflowUpdate {
 	return wu
 }
 
+// SetStatus sets the "status" field.
+func (wu *WorkflowUpdate) SetStatus(w workflow.Status) *WorkflowUpdate {
+	wu.mutation.SetStatus(w)
+	return wu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableStatus(w *workflow.Status) *WorkflowUpdate {
+	if w != nil {
+		wu.SetStatus(*w)
+	}
+	return wu
+}
+
 // SetIdentity sets the "identity" field.
 func (wu *WorkflowUpdate) SetIdentity(s string) *WorkflowUpdate {
 	wu.mutation.SetIdentity(s)
@@ -232,6 +246,11 @@ func (wu *WorkflowUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (wu *WorkflowUpdate) check() error {
+	if v, ok := wu.mutation.Status(); ok {
+		if err := workflow.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Workflow.status": %w`, err)}
+		}
+	}
 	if v, ok := wu.mutation.Identity(); ok {
 		if err := workflow.IdentityValidator(v); err != nil {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Workflow.identity": %w`, err)}
@@ -256,6 +275,9 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := wu.mutation.Status(); ok {
+		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := wu.mutation.Identity(); ok {
 		_spec.SetField(workflow.FieldIdentity, field.TypeString, value)
@@ -394,6 +416,20 @@ type WorkflowUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowMutation
+}
+
+// SetStatus sets the "status" field.
+func (wuo *WorkflowUpdateOne) SetStatus(w workflow.Status) *WorkflowUpdateOne {
+	wuo.mutation.SetStatus(w)
+	return wuo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableStatus(w *workflow.Status) *WorkflowUpdateOne {
+	if w != nil {
+		wuo.SetStatus(*w)
+	}
+	return wuo
 }
 
 // SetIdentity sets the "identity" field.
@@ -609,6 +645,11 @@ func (wuo *WorkflowUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (wuo *WorkflowUpdateOne) check() error {
+	if v, ok := wuo.mutation.Status(); ok {
+		if err := workflow.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Workflow.status": %w`, err)}
+		}
+	}
 	if v, ok := wuo.mutation.Identity(); ok {
 		if err := workflow.IdentityValidator(v); err != nil {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Workflow.identity": %w`, err)}
@@ -650,6 +691,9 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := wuo.mutation.Status(); ok {
+		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := wuo.mutation.Identity(); ok {
 		_spec.SetField(workflow.FieldIdentity, field.TypeString, value)

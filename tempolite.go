@@ -17,6 +17,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
 
@@ -151,6 +152,10 @@ func (tp *Tempolite) Wait() error {
 	<-time.After(1 * time.Second)
 	return tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 		log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+		tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+			log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
+			return true
+		})
 		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
 	}, time.Second)
 }
@@ -205,21 +210,27 @@ func (tp *Tempolite) getActivity(id string) (*ActivityInfo, error) {
 
 func (tp *Tempolite) getWorkflow(id string) (*WorkflowInfo, error) {
 	log.Printf("getWorkflow - looking for workflow execution %s", id)
-	run, err := tp.client.Run.Query().
-		Where(run.IDEQ(id)).
-		WithWorkflow(func(q *ent.WorkflowQuery) {
-			q.WithExecutions()
-		}).
+	workflow, err := tp.client.Workflow.Query().
+		Where(workflow.IDEQ(id)).
+		WithExecutions().
 		First(tp.ctx)
 	if err != nil {
 		return nil, err
 	}
-	info := WorkflowInfo{
-		tp:          tp,
-		ID:          run.Edges.Workflow.ID,
-		RunID:       run.ID,
-		ExecutionID: run.Edges.Workflow.Edges.Executions[len(run.Edges.Workflow.Edges.Executions)-1].ID,
+
+	var mostRecentExec *ent.WorkflowExecution
+	for _, exec := range workflow.Edges.Executions {
+		if mostRecentExec == nil || exec.StartedAt.After(mostRecentExec.StartedAt) {
+			mostRecentExec = exec
+		}
 	}
+
+	info := WorkflowInfo{
+		tp:    tp,
+		ID:    workflow.ID,
+		RunID: workflow.ID,
+	}
+
 	return &info, nil
 }
 
@@ -285,7 +296,7 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(params).
 			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 3,
+				MaximumAttempts: 1,
 			}).
 			Save(tp.ctx); err != nil {
 			return "", err
@@ -309,18 +320,19 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 		}
 
 		log.Printf("EnqueueActivity - created activity execution %s for %s with params: %v", activityExecution.ID, longName, params)
-		return runEntity.ID, nil
+		return activityEntity.ID, nil
 	} else {
 		return "", fmt.Errorf("activity %s not found", longName)
 	}
 }
 
-func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (string, error) {
+func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (string, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
 	var ok bool
 	var err error
+	var tx *ent.Tx
 
 	if value, ok = tp.workflows.Load(handlerIdentity); ok {
 		var workflowHandlerInfo Workflow
@@ -339,33 +351,29 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 			}
 		}
 
-		var runEntity *ent.Run
-		// root Run entity that anchored the workflow entity despite retries
-		if runEntity, err = tp.
-			client.
-			Run.
-			Create().
-			SetID(uuid.NewString()).    // immutable
-			SetRunID(uuid.NewString()). // can change if that flow change due to a retry
-			SetType(run.TypeWorkflow).
-			Save(tp.ctx); err != nil {
+		if tx, err = tp.client.Tx(tp.ctx); err != nil {
 			return "", err
 		}
 
-		log.Printf("EnqueueWorkflow - created run entity %s for %s with params: %v", runEntity.ID, handlerIdentity, params)
+		fmt.Println("===CREATE SUB WORKFLOW")
+		fmt.Println(ctx.RunID(), ctx.EntityID(), ctx.ExecutionID())
 
 		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
 		var workflowEntity *ent.Workflow
-		if workflowEntity, err = tp.client.Workflow.
+		if workflowEntity, err = tx.Workflow.
 			Create().
-			SetID(runEntity.RunID).
+			SetID(uuid.NewString()).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
 			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 3,
+				MaximumAttempts: 1,
 			}).
 			Save(tp.ctx); err != nil {
+			fmt.Println("ERROR CREATE WORKFLOW", err)
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
 			return "", err
 		}
 
@@ -373,22 +381,133 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 
 		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
 		var workflowExecution *ent.WorkflowExecution
-		if workflowExecution, err = tp.client.WorkflowExecution.
+		if workflowExecution, err = tx.WorkflowExecution.
 			Create().
 			SetID(uuid.NewString()).
-			SetRunID(runEntity.ID).
+			SetRunID(ctx.RunID()).
 			SetWorkflow(workflowEntity).
 			Save(tp.ctx); err != nil {
-			return "", err
-		}
-
-		if _, err = tp.client.Run.UpdateOneID(runEntity.ID).SetWorkflow(workflowEntity).Save(tp.ctx); err != nil {
+			fmt.Println("ERROR CREATE WORKFLOW EXECUTION", err)
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
 			return "", err
 		}
 
 		log.Printf("EnqueueWorkflow - created workflow execution %s for %s with params: %v", workflowExecution.ID, handlerIdentity, params)
 
-		return runEntity.ID, nil
+		if err = tx.Commit(); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		return workflowEntity.ID, nil
+
+	} else {
+		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
+	}
+}
+
+func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (string, error) {
+	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
+	handlerIdentity := HandlerIdentity(funcName)
+	var value any
+	var ok bool
+	var err error
+	var tx *ent.Tx
+
+	if value, ok = tp.workflows.Load(handlerIdentity); ok {
+		var workflowHandlerInfo Workflow
+		if workflowHandlerInfo, ok = value.(Workflow); !ok {
+			// could be development bug
+			return "", fmt.Errorf("workflow %s is not handler info", handlerIdentity)
+		}
+
+		if len(params) != workflowHandlerInfo.NumIn {
+			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", workflowHandlerInfo.NumIn, len(params))
+		}
+
+		for idx, param := range params {
+			if reflect.TypeOf(param) != workflowHandlerInfo.ParamTypes[idx] {
+				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", workflowHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
+			}
+		}
+
+		if tx, err = tp.client.Tx(tp.ctx); err != nil {
+			return "", err
+		}
+
+		var runEntity *ent.Run
+		// root Run entity that anchored the workflow entity despite retries
+		if runEntity, err = tx.
+			Run.
+			Create().
+			SetID(uuid.NewString()).    // immutable
+			SetRunID(uuid.NewString()). // can change if that flow change due to a retry
+			SetType(run.TypeWorkflow).
+			Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created run entity %s for %s with params: %v", runEntity.ID, handlerIdentity, params)
+
+		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
+		var workflowEntity *ent.Workflow
+		if workflowEntity, err = tx.Workflow.
+			Create().
+			SetID(runEntity.RunID).
+			SetStatus(workflow.StatusPending).
+			SetIdentity(string(handlerIdentity)).
+			SetHandlerName(workflowHandlerInfo.HandlerName).
+			SetInput(params).
+			SetRetryPolicy(schema.RetryPolicy{
+				MaximumAttempts: 1,
+			}).
+			Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created workflow entity %s for %s with params: %v", workflowEntity.ID, handlerIdentity, params)
+
+		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
+		var workflowExecution *ent.WorkflowExecution
+		if workflowExecution, err = tx.WorkflowExecution.
+			Create().
+			SetID(uuid.NewString()).
+			SetRunID(runEntity.ID).
+			SetWorkflow(workflowEntity).
+			Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		if _, err = tx.Run.UpdateOneID(runEntity.ID).SetWorkflow(workflowEntity).Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		log.Printf("EnqueueWorkflow - created workflow execution %s for %s with params: %v", workflowExecution.ID, handlerIdentity, params)
+
+		if err = tx.Commit(); err != nil {
+			if err = tx.Rollback(); err != nil {
+				return "", err
+			}
+			return "", err
+		}
+
+		return workflowEntity.ID, nil
 	} else {
 		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}

@@ -8,18 +8,18 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 type WorkflowInfo struct {
-	tp          *Tempolite
-	ID          string
-	RunID       string
-	ExecutionID string
+	tp    *Tempolite
+	ID    string
+	RunID string
 }
 
-func (i *WorkflowInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
-	// TODO: make a utilities
+func (i *WorkflowInfo) Get() ([]interface{}, error) {
 	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
 	var value any
@@ -27,26 +27,38 @@ func (i *WorkflowInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
 	var workflowHandlerInfo Workflow
 	for {
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		case <-i.tp.ctx.Done():
+			return nil, i.tp.ctx.Err()
 		case <-ticker.C:
-			exec, err := i.tp.client.WorkflowExecution.Query().Where(workflowexecution.IDEQ(i.ExecutionID)).WithWorkflow().Only(ctx)
+			workflowEntity, err := i.tp.client.Workflow.Query().Where(workflow.IDEQ(i.ID)).Only(i.tp.ctx)
 			if err != nil {
 				return nil, err
 			}
-			if value, ok = i.tp.workflows.Load(HandlerIdentity(exec.Edges.Workflow.Identity)); ok {
+			if value, ok = i.tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 				if workflowHandlerInfo, ok = value.(Workflow); !ok {
-					log.Printf("scheduler: workflow %s is not handler info", i.ExecutionID)
+					log.Printf("scheduler: workflow %s is not handler info", i.ID)
 					return nil, errors.New("workflow is not handler info")
 				}
-				switch exec.Status {
-				case workflowexecution.StatusCompleted:
-					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), exec.Output)
 
+				// Get the latest workflow execution
+				latestExec, err := i.tp.client.WorkflowExecution.Query().
+					Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(i.ID))).
+					Order(ent.Desc(workflowexecution.FieldStartedAt)).
+					First(i.tp.ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				switch latestExec.Status {
+				case workflowexecution.StatusCompleted:
+					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 				case workflowexecution.StatusCancelled:
 					return nil, fmt.Errorf("workflow %s was cancelled", i.ID)
 				case workflowexecution.StatusFailed:
-					return nil, errors.New(exec.Error)
+					return nil, errors.New(latestExec.Error)
+				case workflowexecution.StatusPending, workflowexecution.StatusRunning, workflowexecution.StatusRetried:
+					// The workflow is still in progress
+					return nil, errors.New("workflow is still in progress")
 				}
 			}
 			runtime.Gosched()
@@ -92,6 +104,9 @@ func (i *SagaInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
 
 type TempoliteContext interface {
 	context.Context
+	RunID() string
+	EntityID() string
+	ExecutionID() string
 }
 
 type WorkflowContext struct {
@@ -100,6 +115,18 @@ type WorkflowContext struct {
 	workflowID  string
 	executionID string
 	runID       string
+}
+
+func (w WorkflowContext) RunID() string {
+	return w.runID
+}
+
+func (w WorkflowContext) EntityID() string {
+	return w.workflowID
+}
+
+func (w WorkflowContext) ExecutionID() string {
+	return w.executionID
 }
 
 // Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
@@ -117,9 +144,12 @@ func (w WorkflowContext) GetWorkflow(id string) (*WorkflowInfo, error) {
 	return w.tp.GetWorkflow(id)
 }
 
-func (w WorkflowContext) ExecuteWorkflow(name HandlerIdentity, inputs ...any) (*WorkflowInfo, error) {
-	// todo: implement
-	return nil, nil
+func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) (*WorkflowInfo, error) {
+	id, err := w.tp.enqueueSubWorkflow(w, handler, inputs...)
+	if err != nil {
+		return nil, err
+	}
+	return w.tp.GetWorkflow(id)
 }
 
 func (w WorkflowContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
@@ -145,6 +175,18 @@ type ActivityContext struct {
 	runID       string
 }
 
+func (w ActivityContext) RunID() string {
+	return w.runID
+}
+
+func (w ActivityContext) EntityID() string {
+	return w.activityID
+}
+
+func (w ActivityContext) ExecutionID() string {
+	return w.executionID
+}
+
 func (w ActivityContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
 	// todo: implement
 	return nil, nil
@@ -167,7 +209,22 @@ func (w ActivityContext) GetActivity(id string) (*ActivityInfo, error) {
 
 type SideEffectContext struct {
 	TempoliteContext
-	tp *Tempolite
+	tp           *Tempolite
+	sideEffectID string
+	executionID  string
+	runID        string
+}
+
+func (w SideEffectContext) RunID() string {
+	return w.runID
+}
+
+func (w SideEffectContext) EntityID() string {
+	return w.sideEffectID
+}
+
+func (w SideEffectContext) ExecutionID() string {
+	return w.executionID
 }
 
 func (w SideEffectContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {

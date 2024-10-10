@@ -23,6 +23,20 @@ type WorkflowCreate struct {
 	hooks    []Hook
 }
 
+// SetStatus sets the "status" field.
+func (wc *WorkflowCreate) SetStatus(w workflow.Status) *WorkflowCreate {
+	wc.mutation.SetStatus(w)
+	return wc
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableStatus(w *workflow.Status) *WorkflowCreate {
+	if w != nil {
+		wc.SetStatus(*w)
+	}
+	return wc
+}
+
 // SetIdentity sets the "identity" field.
 func (wc *WorkflowCreate) SetIdentity(s string) *WorkflowCreate {
 	wc.mutation.SetIdentity(s)
@@ -154,6 +168,10 @@ func (wc *WorkflowCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (wc *WorkflowCreate) defaults() {
+	if _, ok := wc.mutation.Status(); !ok {
+		v := workflow.DefaultStatus
+		wc.mutation.SetStatus(v)
+	}
 	if _, ok := wc.mutation.CreatedAt(); !ok {
 		v := workflow.DefaultCreatedAt()
 		wc.mutation.SetCreatedAt(v)
@@ -162,6 +180,14 @@ func (wc *WorkflowCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (wc *WorkflowCreate) check() error {
+	if _, ok := wc.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Workflow.status"`)}
+	}
+	if v, ok := wc.mutation.Status(); ok {
+		if err := workflow.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Workflow.status": %w`, err)}
+		}
+	}
 	if _, ok := wc.mutation.Identity(); !ok {
 		return &ValidationError{Name: "identity", err: errors.New(`ent: missing required field "Workflow.identity"`)}
 	}
@@ -218,6 +244,10 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if id, ok := wc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := wc.mutation.Status(); ok {
+		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
 	}
 	if value, ok := wc.mutation.Identity(); ok {
 		_spec.SetField(workflow.FieldIdentity, field.TypeString, value)

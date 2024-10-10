@@ -18,6 +18,9 @@ func (Workflow) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
+		field.Enum("status").
+			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
+			Default("Pending"),
 		field.String("identity").
 			NotEmpty(),
 		field.String("handler_name").

@@ -26,14 +26,18 @@ func (tp *Tempolite) createActivityPool() *retrypool.Pool[*activityTask] {
 		retrypool.WithOnTaskSuccess(tp.activityOnSuccess),
 		retrypool.WithOnTaskFailure(tp.activityOnFailure),
 	}
+
+	workers := []retrypool.Worker[*activityTask]{}
+
+	for i := 0; i < 5; i++ {
+		workers = append(workers, activityWorker{id: i, tp: tp})
+	}
+
 	return retrypool.New(
 		tp.ctx,
-		[]retrypool.Worker[*activityTask]{
-			activityWorker{
-				tp: tp,
-			},
-		},
+		workers,
 		opts...)
+
 }
 
 func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask]) {
@@ -47,7 +51,7 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 
 	// Simple retry mechanism
 	// We know in advance the config and the retry value, we can manage in-memory
-	if task.Data().retryCount < task.Data().maxRetry {
+	if task.Data().maxRetry > 0 && task.Data().retryCount < task.Data().maxRetry {
 		task.Data().retryCount++
 		fmt.Println("retry it the task: ", err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
@@ -69,6 +73,7 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 }
 
 type activityWorker struct {
+	id int
 	tp *Tempolite
 }
 

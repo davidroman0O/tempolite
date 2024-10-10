@@ -85,6 +85,26 @@ func CreatedAt(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldStatus, vs...))
+}
+
 // IdentityEQ applies the EQ predicate on the "identity" field.
 func IdentityEQ(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldIdentity, v))

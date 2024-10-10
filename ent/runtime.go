@@ -158,15 +158,15 @@ func init() {
 	workflowFields := schema.Workflow{}.Fields()
 	_ = workflowFields
 	// workflowDescIdentity is the schema descriptor for identity field.
-	workflowDescIdentity := workflowFields[1].Descriptor()
+	workflowDescIdentity := workflowFields[2].Descriptor()
 	// workflow.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	workflow.IdentityValidator = workflowDescIdentity.Validators[0].(func(string) error)
 	// workflowDescHandlerName is the schema descriptor for handler_name field.
-	workflowDescHandlerName := workflowFields[2].Descriptor()
+	workflowDescHandlerName := workflowFields[3].Descriptor()
 	// workflow.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	workflow.HandlerNameValidator = workflowDescHandlerName.Validators[0].(func(string) error)
 	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[6].Descriptor()
+	workflowDescCreatedAt := workflowFields[7].Descriptor()
 	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()

@@ -10,6 +10,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
 )
 
@@ -71,11 +72,10 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 					}
 
 					contextActivity := ActivityContext{
-						TempoliteContext: tp.ctx,
-						tp:               tp,
-						activityID:       activityEntity.ID,
-						executionID:      act.ID,
-						runID:            act.RunID,
+						tp:          tp,
+						activityID:  activityEntity.ID,
+						executionID: act.ID,
+						runID:       act.RunID,
 					}
 
 					task := &activityTask{
@@ -89,17 +89,12 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 
 					retryIt := func() error {
 
-						var runEntity *ent.Run
-						if runEntity, err = tp.client.Run.Get(tp.ctx, act.RunID); err != nil {
-							return err
-						}
-
 						// create a new execution for the same activity
 						var activityExecution *ent.ActivityExecution
 						if activityExecution, err = tp.client.ActivityExecution.
 							Create().
 							SetID(uuid.NewString()).
-							SetRunID(runEntity.RunID).
+							SetRunID(act.RunID).
 							SetActivity(activityEntity).
 							Save(tp.ctx); err != nil {
 							return err
@@ -128,7 +123,12 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 						continue
 					}
 
-					task.retryCount = total
+					log.Printf("scheduler: total: %d", total)
+
+					// If it's not me
+					if total > 1 {
+						task.retryCount = total
+					}
 
 					log.Printf("scheduler: Dispatching activity %s with params: %v", activityEntity.HandlerName, activityEntity.Input)
 
@@ -165,7 +165,8 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
 				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
 				Order(ent.Asc(workflowexecution.FieldStartedAt)).WithWorkflow().
-				Limit(1).All(tp.ctx)
+				Limit(1).
+				All(tp.ctx)
 			if err != nil {
 				log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
 				continue
@@ -178,10 +179,10 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 			var value any
 			var ok bool
 
-			for _, wkflw := range pendingWorkflows {
+			for _, pendingWorkflowExecution := range pendingWorkflows {
 
 				var workflowEntity *ent.Workflow
-				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, wkflw.Edges.Workflow.ID); err != nil {
+				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
 					// todo: maybe we can tag the execution as not executable
 					log.Printf("scheduler: Workflow.Get failed: %v", err)
 					continue
@@ -214,11 +215,10 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 					}
 
 					contextWorkflow := WorkflowContext{
-						TempoliteContext: tp.ctx,
-						tp:               tp,
-						workflowID:       workflowEntity.ID,
-						executionID:      wkflw.ID,
-						runID:            wkflw.RunID,
+						tp:          tp,
+						workflowID:  workflowEntity.ID,
+						executionID: pendingWorkflowExecution.ID,
+						runID:       pendingWorkflowExecution.RunID,
 					}
 
 					task := &workflowTask{
@@ -230,17 +230,17 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 						retryCount:  0,
 					}
 
+					// On retry, we will have to create a new workflow exection
 					retryIt := func() error {
-						var runEntity *ent.Run
-						if runEntity, err = tp.client.Run.Get(tp.ctx, wkflw.RunID); err != nil {
-							return err
-						}
+
+						fmt.Println("\t Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
+
 						// create a new execution for the same workflow
 						var workflowExecution *ent.WorkflowExecution
 						if workflowExecution, err = tp.client.WorkflowExecution.
 							Create().
 							SetID(uuid.NewString()).
-							SetRunID(runEntity.RunID).
+							SetRunID(pendingWorkflowExecution.RunID).
 							SetWorkflow(workflowEntity).
 							Save(tp.ctx); err != nil {
 							return err
@@ -249,9 +249,16 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 						task.ctx.executionID = workflowExecution.ID
 						task.retryCount++
 
+						fmt.Printf("retrying workflow %s (%v) with params: %v\n", workflowEntity.HandlerName, task.retryCount, workflowEntity.Input)
+
 						if err := tp.workflowPool.Dispatch(task); err != nil {
 							log.Printf("scheduler: Dispatch failed: %v", err)
 							return err
+						}
+
+						// now we notify the workflow enity that we're working
+						if _, err = tp.client.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+							log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
 						}
 
 						return nil
@@ -259,31 +266,41 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 
 					task.retry = retryIt
 
-					// query the count of how many workflow execution exists related to the workflowEntity
-					// > but but why are you getting the count?!?!
-					// well maybe if we crashed, then when re-enqueueing the workflow, we can prepare the retry count and continue our work
-					total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(workflowEntity.ID))).Count(tp.ctx)
-					if err != nil {
-						log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
-						continue
-					}
+					// // query the count of how many workflow execution exists related to the workflowEntity
+					// // > but but why are you getting the count?!?!
+					// // well maybe if we crashed, then when re-enqueueing the workflow, we can prepare the retry count and continue our work
+					// total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(workflowEntity.ID))).Count(tp.ctx)
+					// if err != nil {
+					// 	log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
+					// 	continue
+					// }
 
-					task.retryCount = total
+					// log.Printf("scheduler: total: %d", total)
 
-					log.Printf("scheduler: Dispatching workflow %s with params: %v", workflowEntity.HandlerName, workflowEntity.Input)
-					if err := tp.workflowPool.Dispatch(task); err != nil {
+					// // If it's not me
+					// if total > 1 {
+					// 	task.retryCount = total
+					// }
+
+					log.Printf("scheduler: Dispatching workflow %s of id %v exec id %v with params: %v", workflowEntity.HandlerName, workflowEntity.ID, contextWorkflow.executionID, workflowEntity.Input)
+
+					if err := tp.workflowPool.
+						Dispatch(
+							task,
+							retrypool.WithImmediateRetry[*workflowTask](),
+						); err != nil {
 						log.Printf("scheduler: Dispatch failed: %v", err)
 						continue
 					}
 
-					if _, err = tp.client.WorkflowExecution.UpdateOneID(wkflw.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
+					if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
 						// TODO: could be a problem if not really dispatched
 						log.Printf("scheduler: WorkflowExecution.UpdateOneID failed: %v", err)
 						continue
 					}
 
 				} else {
-					log.Printf("scheduler: Workflow %s not found", wkflw.Edges.Workflow.HandlerName)
+					log.Printf("scheduler: Workflow %s not found", pendingWorkflowExecution.Edges.Workflow.HandlerName)
 					continue
 				}
 			}

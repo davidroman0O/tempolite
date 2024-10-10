@@ -36,7 +36,7 @@ var (
 	// ActivityExecutionsColumns holds the columns for the "activity_executions" table.
 	ActivityExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "run_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried"}, Default: "Pending"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
@@ -256,6 +256,7 @@ var (
 	// WorkflowsColumns holds the columns for the "workflows" table.
 	WorkflowsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
@@ -272,7 +273,7 @@ var (
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
 	WorkflowExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "run_id", Type: field.TypeString, Unique: true},
+		{Name: "run_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},

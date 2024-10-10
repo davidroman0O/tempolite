@@ -19,6 +19,8 @@ type Workflow struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
+	// Status holds the value of the "status" field.
+	Status workflow.Status `json:"status,omitempty"`
 	// Identity holds the value of the "identity" field.
 	Identity string `json:"identity,omitempty"`
 	// HandlerName holds the value of the "handler_name" field.
@@ -73,7 +75,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflow.FieldInput, workflow.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case workflow.FieldID, workflow.FieldIdentity, workflow.FieldHandlerName:
+		case workflow.FieldID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName:
 			values[i] = new(sql.NullString)
 		case workflow.FieldTimeout, workflow.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -97,6 +99,12 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				w.ID = value.String
+			}
+		case workflow.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				w.Status = workflow.Status(value.String)
 			}
 		case workflow.FieldIdentity:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -184,6 +192,9 @@ func (w *Workflow) String() string {
 	var builder strings.Builder
 	builder.WriteString("Workflow(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", w.ID))
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", w.Status))
+	builder.WriteString(", ")
 	builder.WriteString("identity=")
 	builder.WriteString(w.Identity)
 	builder.WriteString(", ")
