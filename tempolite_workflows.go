@@ -2,10 +2,10 @@ package tempolite
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"reflect"
 
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 	"github.com/davidroman0O/retrypool"
 )
 
@@ -15,7 +15,13 @@ type workflowTask struct {
 	params      []interface{}
 }
 
-func (tp *Tempolite) createWorkflowPool(opts ...retrypool.Option[*workflowTask]) *retrypool.Pool[*workflowTask] {
+func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
+
+	opts := []retrypool.Option[*workflowTask]{
+		retrypool.WithOnTaskSuccess(tp.workflowOnSuccess),
+		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
+	}
+
 	return retrypool.New(
 		tp.ctx,
 		[]retrypool.Worker[*workflowTask]{
@@ -24,6 +30,20 @@ func (tp *Tempolite) createWorkflowPool(opts ...retrypool.Option[*workflowTask])
 			},
 		},
 		opts...)
+}
+
+func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask]) {
+	log.Printf("workflowOnSuccess: %d", workerID)
+	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusCompleted).Save(tp.ctx); err != nil {
+		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
+	}
+}
+
+func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
+	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).Save(tp.ctx); err != nil {
+		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
+	}
+	return retrypool.DeadTaskActionAddToDeadTasks
 }
 
 type workflowWorker struct {
@@ -56,7 +76,5 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		}
 	}
 
-	fmt.Println(res, errRes)
-
-	return nil
+	return errRes
 }

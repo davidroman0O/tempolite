@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+/// Why? Because i'm a bit paranoid
+
 // convertInput converts rawInput into an interface{} matching the desiredType and desiredKind.
 func convertInput(rawInput interface{}, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
 	if rawInput == nil {
