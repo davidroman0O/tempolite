@@ -40,25 +40,31 @@ func (i *WorkflowInfo) Get() ([]interface{}, error) {
 					return nil, errors.New("workflow is not handler info")
 				}
 
-				// Get the latest workflow execution
-				latestExec, err := i.tp.client.WorkflowExecution.Query().
-					Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(i.ID))).
-					Order(ent.Desc(workflowexecution.FieldStartedAt)).
-					First(i.tp.ctx)
-				if err != nil {
-					return nil, err
-				}
-
-				switch latestExec.Status {
-				case workflowexecution.StatusCompleted:
-					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), latestExec.Output)
-				case workflowexecution.StatusCancelled:
-					return nil, fmt.Errorf("workflow %s was cancelled", i.ID)
-				case workflowexecution.StatusFailed:
-					return nil, errors.New(latestExec.Error)
-				case workflowexecution.StatusPending, workflowexecution.StatusRunning, workflowexecution.StatusRetried:
-					// The workflow is still in progress
-					return nil, errors.New("workflow is still in progress")
+				switch workflowEntity.Status {
+				// wait for the confirmation that the workflow entity reached a final state
+				case workflow.StatusCompleted, workflow.StatusFailed, workflow.StatusCancelled:
+					// Then only get the latest workflow execution
+					// Simply because eventually my children can have retries and i need to let them finish
+					latestExec, err := i.tp.client.WorkflowExecution.Query().
+						Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(i.ID))).
+						Order(ent.Desc(workflowexecution.FieldStartedAt)).
+						First(i.tp.ctx)
+					if err != nil {
+						return nil, err
+					}
+					switch latestExec.Status {
+					case workflowexecution.StatusCompleted:
+						return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), latestExec.Output)
+					case workflowexecution.StatusCancelled:
+						return nil, fmt.Errorf("workflow %s was cancelled", i.ID)
+					case workflowexecution.StatusFailed:
+						return nil, errors.New(latestExec.Error)
+					case workflowexecution.StatusPending, workflowexecution.StatusRunning, workflowexecution.StatusRetried:
+						// The workflow is still in progress
+						return nil, errors.New("workflow is still in progress")
+					}
+				default:
+					continue
 				}
 			}
 			runtime.Gosched()
