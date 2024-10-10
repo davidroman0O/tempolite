@@ -336,12 +336,12 @@ func (seq *SideEffectQuery) WithActivity(opts ...func(*ActivityQuery)) *SideEffe
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handler_name,omitempty"`
+//		Identity string `json:"identity,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SideEffect.Query().
-//		GroupBy(sideeffect.FieldHandlerName).
+//		GroupBy(sideeffect.FieldIdentity).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (seq *SideEffectQuery) GroupBy(field string, fields ...string) *SideEffectGroupBy {
@@ -359,11 +359,11 @@ func (seq *SideEffectQuery) GroupBy(field string, fields ...string) *SideEffectG
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handler_name,omitempty"`
+//		Identity string `json:"identity,omitempty"`
 //	}
 //
 //	client.SideEffect.Query().
-//		Select(sideeffect.FieldHandlerName).
+//		Select(sideeffect.FieldIdentity).
 //		Scan(ctx, &v)
 func (seq *SideEffectQuery) Select(fields ...string) *SideEffectSelect {
 	seq.ctx.Fields = append(seq.ctx.Fields, fields...)

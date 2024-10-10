@@ -25,12 +25,16 @@ import (
 func init() {
 	activityFields := schema.Activity{}.Fields()
 	_ = activityFields
+	// activityDescIdentity is the schema descriptor for identity field.
+	activityDescIdentity := activityFields[1].Descriptor()
+	// activity.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
+	activity.IdentityValidator = activityDescIdentity.Validators[0].(func(string) error)
 	// activityDescHandlerName is the schema descriptor for handler_name field.
-	activityDescHandlerName := activityFields[1].Descriptor()
+	activityDescHandlerName := activityFields[2].Descriptor()
 	// activity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	activity.HandlerNameValidator = activityDescHandlerName.Validators[0].(func(string) error)
 	// activityDescCreatedAt is the schema descriptor for created_at field.
-	activityDescCreatedAt := activityFields[5].Descriptor()
+	activityDescCreatedAt := activityFields[6].Descriptor()
 	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
 	activityexecutionFields := schema.ActivityExecution{}.Fields()
@@ -107,12 +111,16 @@ func init() {
 	sagastepexecution.UpdateDefaultUpdatedAt = sagastepexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	sideeffectFields := schema.SideEffect{}.Fields()
 	_ = sideeffectFields
+	// sideeffectDescIdentity is the schema descriptor for identity field.
+	sideeffectDescIdentity := sideeffectFields[1].Descriptor()
+	// sideeffect.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
+	sideeffect.IdentityValidator = sideeffectDescIdentity.Validators[0].(func(string) error)
 	// sideeffectDescHandlerName is the schema descriptor for handler_name field.
-	sideeffectDescHandlerName := sideeffectFields[1].Descriptor()
+	sideeffectDescHandlerName := sideeffectFields[2].Descriptor()
 	// sideeffect.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sideeffect.HandlerNameValidator = sideeffectDescHandlerName.Validators[0].(func(string) error)
 	// sideeffectDescCreatedAt is the schema descriptor for created_at field.
-	sideeffectDescCreatedAt := sideeffectFields[5].Descriptor()
+	sideeffectDescCreatedAt := sideeffectFields[6].Descriptor()
 	// sideeffect.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sideeffect.DefaultCreatedAt = sideeffectDescCreatedAt.Default.(func() time.Time)
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()

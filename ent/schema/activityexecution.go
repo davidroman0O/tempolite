@@ -21,7 +21,7 @@ func (ActivityExecution) Fields() []ent.Field {
 		field.String("run_id").
 			Unique(),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed").
+			Values("Pending", "Running", "Completed", "Failed", "Retried").
 			Default("Pending"),
 		field.Int("attempt").
 			Default(1),

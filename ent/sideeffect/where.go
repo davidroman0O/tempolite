@@ -65,6 +65,11 @@ func IDContainsFold(id string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldContainsFold(FieldID, id))
 }
 
+// Identity applies equality check predicate on the "identity" field. It's identical to IdentityEQ.
+func Identity(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEQ(FieldIdentity, v))
+}
+
 // HandlerName applies equality check predicate on the "handler_name" field. It's identical to HandlerNameEQ.
 func HandlerName(v string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldEQ(FieldHandlerName, v))
@@ -78,6 +83,71 @@ func Timeout(v time.Time) predicate.SideEffect {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// IdentityEQ applies the EQ predicate on the "identity" field.
+func IdentityEQ(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEQ(FieldIdentity, v))
+}
+
+// IdentityNEQ applies the NEQ predicate on the "identity" field.
+func IdentityNEQ(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNEQ(FieldIdentity, v))
+}
+
+// IdentityIn applies the In predicate on the "identity" field.
+func IdentityIn(vs ...string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldIn(FieldIdentity, vs...))
+}
+
+// IdentityNotIn applies the NotIn predicate on the "identity" field.
+func IdentityNotIn(vs ...string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNotIn(FieldIdentity, vs...))
+}
+
+// IdentityGT applies the GT predicate on the "identity" field.
+func IdentityGT(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldGT(FieldIdentity, v))
+}
+
+// IdentityGTE applies the GTE predicate on the "identity" field.
+func IdentityGTE(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldGTE(FieldIdentity, v))
+}
+
+// IdentityLT applies the LT predicate on the "identity" field.
+func IdentityLT(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldLT(FieldIdentity, v))
+}
+
+// IdentityLTE applies the LTE predicate on the "identity" field.
+func IdentityLTE(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldLTE(FieldIdentity, v))
+}
+
+// IdentityContains applies the Contains predicate on the "identity" field.
+func IdentityContains(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldContains(FieldIdentity, v))
+}
+
+// IdentityHasPrefix applies the HasPrefix predicate on the "identity" field.
+func IdentityHasPrefix(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldHasPrefix(FieldIdentity, v))
+}
+
+// IdentityHasSuffix applies the HasSuffix predicate on the "identity" field.
+func IdentityHasSuffix(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldHasSuffix(FieldIdentity, v))
+}
+
+// IdentityEqualFold applies the EqualFold predicate on the "identity" field.
+func IdentityEqualFold(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEqualFold(FieldIdentity, v))
+}
+
+// IdentityContainsFold applies the ContainsFold predicate on the "identity" field.
+func IdentityContainsFold(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldContainsFold(FieldIdentity, v))
 }
 
 // HandlerNameEQ applies the EQ predicate on the "handler_name" field.

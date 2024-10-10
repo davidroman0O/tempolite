@@ -408,12 +408,12 @@ func (aq *ActivityQuery) WithSideEffects(opts ...func(*SideEffectQuery)) *Activi
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handler_name,omitempty"`
+//		Identity string `json:"identity,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Activity.Query().
-//		GroupBy(activity.FieldHandlerName).
+//		GroupBy(activity.FieldIdentity).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (aq *ActivityQuery) GroupBy(field string, fields ...string) *ActivityGroupBy {
@@ -431,11 +431,11 @@ func (aq *ActivityQuery) GroupBy(field string, fields ...string) *ActivityGroupB
 // Example:
 //
 //	var v []struct {
-//		HandlerName string `json:"handler_name,omitempty"`
+//		Identity string `json:"identity,omitempty"`
 //	}
 //
 //	client.Activity.Query().
-//		Select(activity.FieldHandlerName).
+//		Select(activity.FieldIdentity).
 //		Scan(ctx, &v)
 func (aq *ActivityQuery) Select(fields ...string) *ActivitySelect {
 	aq.ctx.Fields = append(aq.ctx.Fields, fields...)

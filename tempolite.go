@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -38,8 +37,10 @@ type Tempolite struct {
 	cancel context.CancelFunc
 
 	workflowPool *retrypool.Pool[*workflowTask]
+	activityPool *retrypool.Pool[*activityTask]
 
 	schedulerExecutionWorkflowDone chan struct{}
+	schedulerExecutionActivityDone chan struct{}
 }
 
 type tempoliteConfig struct {
@@ -120,15 +121,19 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 	}
 
 	tp := &Tempolite{
-		ctx:    ctx,
-		db:     db,
-		client: client,
-		cancel: cancel,
+		ctx:                            ctx,
+		db:                             db,
+		client:                         client,
+		cancel:                         cancel,
+		schedulerExecutionWorkflowDone: make(chan struct{}),
+		schedulerExecutionActivityDone: make(chan struct{}),
 	}
 
 	tp.workflowPool = tp.createWorkflowPool()
+	tp.activityPool = tp.createActivityPool()
 
 	go tp.schedulerExeutionWorkflow()
+	go tp.schedulerExecutionActivity()
 
 	return tp, nil
 }
@@ -200,39 +205,75 @@ func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...int
 }
 
 func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interface{}) (string, error) {
-	// The whole implementation will be totally different, it's just for fun here
-	// The real implementation will be with ActivityTask save on a db, then fetched from a scheduler to be sent to a pool.
-	handlerInterface, ok := tp.activities.Load(longName)
-	if !ok {
+	var value any
+	var ok bool
+	var err error
+
+	if value, ok = tp.activities.Load(longName); ok {
+		var activityHandlerInfo Activity
+		if activityHandlerInfo, ok = value.(Activity); !ok {
+			// could be development bug
+			return "", fmt.Errorf("activity %s is not handler info", longName)
+		}
+
+		if len(params) != activityHandlerInfo.NumIn {
+			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", activityHandlerInfo.NumIn, len(params))
+		}
+
+		for idx, param := range params {
+			if reflect.TypeOf(param) != activityHandlerInfo.ParamTypes[idx] {
+				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", activityHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
+			}
+		}
+
+		var runEntity *ent.Run
+		// root Run entity that anchored the activity entity despite retries
+		if runEntity, err = tp.
+			client.
+			Run.
+			Create().
+			SetID(uuid.NewString()).    // immutable
+			SetRunID(uuid.NewString()). // can change if that flow change due to a retry
+			SetType(run.TypeActivity).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueActivity - created run entity %s for %s with params: %v", runEntity.ID, longName, params)
+
+		var activityEntity *ent.Activity
+		if activityEntity, err = tp.client.
+			Activity.
+			Create().
+			SetID(runEntity.RunID).
+			SetIdentity(string(longName)).
+			SetHandlerName(activityHandlerInfo.HandlerName).
+			SetInput(params).
+			SetRetryPolicy(schema.RetryPolicy{
+				MaximumAttempts: 3,
+			}).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueActivity - created activity entity %s for %s with params: %v", activityEntity.ID, longName, params)
+
+		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
+		var activityExecution *ent.ActivityExecution
+		if activityExecution, err = tp.client.ActivityExecution.
+			Create().
+			SetID(uuid.NewString()).
+			SetRunID(runEntity.ID).
+			SetActivity(activityEntity).
+			Save(tp.ctx); err != nil {
+			return "", err
+		}
+
+		log.Printf("EnqueueActivity - created activity execution %s for %s with params: %v", activityExecution.ID, longName, params)
+		return runEntity.ID, nil
+	} else {
 		return "", fmt.Errorf("activity %s not found", longName)
 	}
-
-	activity := handlerInterface.(Activity)
-
-	if len(params) != activity.NumIn {
-		return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", activity.NumIn, len(params))
-	}
-
-	// Serialize parameters
-	payloadBytes, err := json.Marshal(params)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal task parameters: %v", err)
-	}
-
-	// Enqueue the activity task (implementation depends on your task queue system)
-	taskID := "task-id" // Generate or obtain a unique task ID
-	log.Printf("Enqueued activity %s with payload: %s", longName, string(payloadBytes))
-
-	// values := []reflect.Value{
-	// 	reflect.ValueOf(ActivityContext{}),
-	// }
-	// for _, param := range params {
-	// 	values = append(values, reflect.ValueOf(param))
-	// }
-
-	// reflect.ValueOf(activity.Handler).Call(values)
-
-	return taskID, nil
 }
 
 func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (string, error) {

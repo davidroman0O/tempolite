@@ -14,6 +14,8 @@ const (
 	Label = "side_effect"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldIdentity holds the string denoting the identity field in the database.
+	FieldIdentity = "identity"
 	// FieldHandlerName holds the string denoting the handler_name field in the database.
 	FieldHandlerName = "handler_name"
 	// FieldInput holds the string denoting the input field in the database.
@@ -49,6 +51,7 @@ const (
 // Columns holds all SQL columns for sideeffect fields.
 var Columns = []string{
 	FieldID,
+	FieldIdentity,
 	FieldHandlerName,
 	FieldInput,
 	FieldRetryPolicy,
@@ -78,6 +81,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
+	IdentityValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -90,6 +95,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByIdentity orders the results by the identity field.
+func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdentity, opts...).ToFunc()
 }
 
 // ByHandlerName orders the results by the handler_name field.

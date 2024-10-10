@@ -23,6 +23,12 @@ type SideEffectCreate struct {
 	hooks    []Hook
 }
 
+// SetIdentity sets the "identity" field.
+func (sec *SideEffectCreate) SetIdentity(s string) *SideEffectCreate {
+	sec.mutation.SetIdentity(s)
+	return sec
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (sec *SideEffectCreate) SetHandlerName(s string) *SideEffectCreate {
 	sec.mutation.SetHandlerName(s)
@@ -160,6 +166,14 @@ func (sec *SideEffectCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (sec *SideEffectCreate) check() error {
+	if _, ok := sec.mutation.Identity(); !ok {
+		return &ValidationError{Name: "identity", err: errors.New(`ent: missing required field "SideEffect.identity"`)}
+	}
+	if v, ok := sec.mutation.Identity(); ok {
+		if err := sideeffect.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
+		}
+	}
 	if _, ok := sec.mutation.HandlerName(); !ok {
 		return &ValidationError{Name: "handler_name", err: errors.New(`ent: missing required field "SideEffect.handler_name"`)}
 	}
@@ -208,6 +222,10 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 	if id, ok := sec.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := sec.mutation.Identity(); ok {
+		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
+		_node.Identity = value
 	}
 	if value, ok := sec.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)

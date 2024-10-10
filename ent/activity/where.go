@@ -65,6 +65,11 @@ func IDContainsFold(id string) predicate.Activity {
 	return predicate.Activity(sql.FieldContainsFold(FieldID, id))
 }
 
+// Identity applies equality check predicate on the "identity" field. It's identical to IdentityEQ.
+func Identity(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldIdentity, v))
+}
+
 // HandlerName applies equality check predicate on the "handler_name" field. It's identical to HandlerNameEQ.
 func HandlerName(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldHandlerName, v))
@@ -78,6 +83,71 @@ func Timeout(v time.Time) predicate.Activity {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// IdentityEQ applies the EQ predicate on the "identity" field.
+func IdentityEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldIdentity, v))
+}
+
+// IdentityNEQ applies the NEQ predicate on the "identity" field.
+func IdentityNEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldNEQ(FieldIdentity, v))
+}
+
+// IdentityIn applies the In predicate on the "identity" field.
+func IdentityIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldIn(FieldIdentity, vs...))
+}
+
+// IdentityNotIn applies the NotIn predicate on the "identity" field.
+func IdentityNotIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldNotIn(FieldIdentity, vs...))
+}
+
+// IdentityGT applies the GT predicate on the "identity" field.
+func IdentityGT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGT(FieldIdentity, v))
+}
+
+// IdentityGTE applies the GTE predicate on the "identity" field.
+func IdentityGTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGTE(FieldIdentity, v))
+}
+
+// IdentityLT applies the LT predicate on the "identity" field.
+func IdentityLT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLT(FieldIdentity, v))
+}
+
+// IdentityLTE applies the LTE predicate on the "identity" field.
+func IdentityLTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLTE(FieldIdentity, v))
+}
+
+// IdentityContains applies the Contains predicate on the "identity" field.
+func IdentityContains(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContains(FieldIdentity, v))
+}
+
+// IdentityHasPrefix applies the HasPrefix predicate on the "identity" field.
+func IdentityHasPrefix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasPrefix(FieldIdentity, v))
+}
+
+// IdentityHasSuffix applies the HasSuffix predicate on the "identity" field.
+func IdentityHasSuffix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasSuffix(FieldIdentity, v))
+}
+
+// IdentityEqualFold applies the EqualFold predicate on the "identity" field.
+func IdentityEqualFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEqualFold(FieldIdentity, v))
+}
+
+// IdentityContainsFold applies the ContainsFold predicate on the "identity" field.
+func IdentityContainsFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContainsFold(FieldIdentity, v))
 }
 
 // HandlerNameEQ applies the EQ predicate on the "handler_name" field.

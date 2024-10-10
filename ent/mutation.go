@@ -54,6 +54,7 @@ type ActivityMutation struct {
 	op                  Op
 	typ                 string
 	id                  *string
+	identity            *string
 	handler_name        *string
 	input               *[]interface{}
 	appendinput         []interface{}
@@ -179,6 +180,42 @@ func (m *ActivityMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetIdentity sets the "identity" field.
+func (m *ActivityMutation) SetIdentity(s string) {
+	m.identity = &s
+}
+
+// Identity returns the value of the "identity" field in the mutation.
+func (m *ActivityMutation) Identity() (r string, exists bool) {
+	v := m.identity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdentity returns the old "identity" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldIdentity(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdentity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdentity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdentity: %w", err)
+	}
+	return oldValue.Identity, nil
+}
+
+// ResetIdentity resets all changes to the "identity" field.
+func (m *ActivityMutation) ResetIdentity() {
+	m.identity = nil
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -637,7 +674,10 @@ func (m *ActivityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
+	if m.identity != nil {
+		fields = append(fields, activity.FieldIdentity)
+	}
 	if m.handler_name != nil {
 		fields = append(fields, activity.FieldHandlerName)
 	}
@@ -661,6 +701,8 @@ func (m *ActivityMutation) Fields() []string {
 // schema.
 func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case activity.FieldIdentity:
+		return m.Identity()
 	case activity.FieldHandlerName:
 		return m.HandlerName()
 	case activity.FieldInput:
@@ -680,6 +722,8 @@ func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case activity.FieldIdentity:
+		return m.OldIdentity(ctx)
 	case activity.FieldHandlerName:
 		return m.OldHandlerName(ctx)
 	case activity.FieldInput:
@@ -699,6 +743,13 @@ func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case activity.FieldIdentity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdentity(v)
+		return nil
 	case activity.FieldHandlerName:
 		v, ok := value.(string)
 		if !ok {
@@ -798,6 +849,9 @@ func (m *ActivityMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ActivityMutation) ResetField(name string) error {
 	switch name {
+	case activity.FieldIdentity:
+		m.ResetIdentity()
+		return nil
 	case activity.FieldHandlerName:
 		m.ResetHandlerName()
 		return nil
@@ -5022,6 +5076,7 @@ type SideEffectMutation struct {
 	op                Op
 	typ               string
 	id                *string
+	identity          *string
 	handler_name      *string
 	input             *[]interface{}
 	appendinput       []interface{}
@@ -5141,6 +5196,42 @@ func (m *SideEffectMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetIdentity sets the "identity" field.
+func (m *SideEffectMutation) SetIdentity(s string) {
+	m.identity = &s
+}
+
+// Identity returns the value of the "identity" field in the mutation.
+func (m *SideEffectMutation) Identity() (r string, exists bool) {
+	v := m.identity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdentity returns the old "identity" field's value of the SideEffect entity.
+// If the SideEffect object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectMutation) OldIdentity(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdentity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdentity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdentity: %w", err)
+	}
+	return oldValue.Identity, nil
+}
+
+// ResetIdentity resets all changes to the "identity" field.
+func (m *SideEffectMutation) ResetIdentity() {
+	m.identity = nil
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -5491,7 +5582,10 @@ func (m *SideEffectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
+	if m.identity != nil {
+		fields = append(fields, sideeffect.FieldIdentity)
+	}
 	if m.handler_name != nil {
 		fields = append(fields, sideeffect.FieldHandlerName)
 	}
@@ -5515,6 +5609,8 @@ func (m *SideEffectMutation) Fields() []string {
 // schema.
 func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case sideeffect.FieldIdentity:
+		return m.Identity()
 	case sideeffect.FieldHandlerName:
 		return m.HandlerName()
 	case sideeffect.FieldInput:
@@ -5534,6 +5630,8 @@ func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case sideeffect.FieldIdentity:
+		return m.OldIdentity(ctx)
 	case sideeffect.FieldHandlerName:
 		return m.OldHandlerName(ctx)
 	case sideeffect.FieldInput:
@@ -5553,6 +5651,13 @@ func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Val
 // type.
 func (m *SideEffectMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case sideeffect.FieldIdentity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdentity(v)
+		return nil
 	case sideeffect.FieldHandlerName:
 		v, ok := value.(string)
 		if !ok {
@@ -5652,6 +5757,9 @@ func (m *SideEffectMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SideEffectMutation) ResetField(name string) error {
 	switch name {
+	case sideeffect.FieldIdentity:
+		m.ResetIdentity()
+		return nil
 	case sideeffect.FieldHandlerName:
 		m.ResetHandlerName()
 		return nil

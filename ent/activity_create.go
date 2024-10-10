@@ -25,6 +25,12 @@ type ActivityCreate struct {
 	hooks    []Hook
 }
 
+// SetIdentity sets the "identity" field.
+func (ac *ActivityCreate) SetIdentity(s string) *ActivityCreate {
+	ac.mutation.SetIdentity(s)
+	return ac
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (ac *ActivityCreate) SetHandlerName(s string) *ActivityCreate {
 	ac.mutation.SetHandlerName(s)
@@ -192,6 +198,14 @@ func (ac *ActivityCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (ac *ActivityCreate) check() error {
+	if _, ok := ac.mutation.Identity(); !ok {
+		return &ValidationError{Name: "identity", err: errors.New(`ent: missing required field "Activity.identity"`)}
+	}
+	if v, ok := ac.mutation.Identity(); ok {
+		if err := activity.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
+		}
+	}
 	if _, ok := ac.mutation.HandlerName(); !ok {
 		return &ValidationError{Name: "handler_name", err: errors.New(`ent: missing required field "Activity.handler_name"`)}
 	}
@@ -240,6 +254,10 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 	if id, ok := ac.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := ac.mutation.Identity(); ok {
+		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
+		_node.Identity = value
 	}
 	if value, ok := ac.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)

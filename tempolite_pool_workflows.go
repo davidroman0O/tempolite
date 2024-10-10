@@ -56,7 +56,7 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 		fmt.Println("retry it the task: ", err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
-			log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
+			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
 		}
 		if err := task.Data().retry(); err != nil {
 			log.Printf("workflowOnFailure: retry failed: %v", err)
@@ -66,7 +66,7 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 	}
 
 	if _, err := tp.client.WorkflowExecution.Update().SetStatus(workflowexecution.StatusFailed).Save(tp.ctx); err != nil {
-		log.Printf("workflowOnSuccess: WorkflowExecution.Update failed: %v", err)
+		log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
 	}
 
 	fmt.Println("remove it the task: ", err)
@@ -104,6 +104,10 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		if !returnedValues[len(returnedValues)-1].IsNil() {
 			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
 		}
+	}
+
+	if _, err := w.tp.client.WorkflowExecution.Update().Where(workflowexecution.IDEQ(data.executionID)).SetOutput(res).Save(w.tp.ctx); err != nil {
+		log.Printf("workflowWorker: WorkflowExecution.Update failed: %v", err)
 	}
 
 	return errRes

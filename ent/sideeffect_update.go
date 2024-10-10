@@ -32,6 +32,20 @@ func (seu *SideEffectUpdate) Where(ps ...predicate.SideEffect) *SideEffectUpdate
 	return seu
 }
 
+// SetIdentity sets the "identity" field.
+func (seu *SideEffectUpdate) SetIdentity(s string) *SideEffectUpdate {
+	seu.mutation.SetIdentity(s)
+	return seu
+}
+
+// SetNillableIdentity sets the "identity" field if the given value is not nil.
+func (seu *SideEffectUpdate) SetNillableIdentity(s *string) *SideEffectUpdate {
+	if s != nil {
+		seu.SetIdentity(*s)
+	}
+	return seu
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (seu *SideEffectUpdate) SetHandlerName(s string) *SideEffectUpdate {
 	seu.mutation.SetHandlerName(s)
@@ -207,6 +221,11 @@ func (seu *SideEffectUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (seu *SideEffectUpdate) check() error {
+	if v, ok := seu.mutation.Identity(); ok {
+		if err := sideeffect.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
+		}
+	}
 	if v, ok := seu.mutation.HandlerName(); ok {
 		if err := sideeffect.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
@@ -226,6 +245,9 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := seu.mutation.Identity(); ok {
+		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
 	}
 	if value, ok := seu.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)
@@ -345,6 +367,20 @@ type SideEffectUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *SideEffectMutation
+}
+
+// SetIdentity sets the "identity" field.
+func (seuo *SideEffectUpdateOne) SetIdentity(s string) *SideEffectUpdateOne {
+	seuo.mutation.SetIdentity(s)
+	return seuo
+}
+
+// SetNillableIdentity sets the "identity" field if the given value is not nil.
+func (seuo *SideEffectUpdateOne) SetNillableIdentity(s *string) *SideEffectUpdateOne {
+	if s != nil {
+		seuo.SetIdentity(*s)
+	}
+	return seuo
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -535,6 +571,11 @@ func (seuo *SideEffectUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (seuo *SideEffectUpdateOne) check() error {
+	if v, ok := seuo.mutation.Identity(); ok {
+		if err := sideeffect.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
+		}
+	}
 	if v, ok := seuo.mutation.HandlerName(); ok {
 		if err := sideeffect.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
@@ -571,6 +612,9 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := seuo.mutation.Identity(); ok {
+		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
 	}
 	if value, ok := seuo.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)

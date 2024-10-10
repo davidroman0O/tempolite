@@ -18,6 +18,8 @@ func (Activity) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
+		field.String("identity").
+			NotEmpty(),
 		field.String("handler_name").
 			NotEmpty(),
 		field.JSON("input", []interface{}{}),

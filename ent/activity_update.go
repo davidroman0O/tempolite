@@ -34,6 +34,20 @@ func (au *ActivityUpdate) Where(ps ...predicate.Activity) *ActivityUpdate {
 	return au
 }
 
+// SetIdentity sets the "identity" field.
+func (au *ActivityUpdate) SetIdentity(s string) *ActivityUpdate {
+	au.mutation.SetIdentity(s)
+	return au
+}
+
+// SetNillableIdentity sets the "identity" field if the given value is not nil.
+func (au *ActivityUpdate) SetNillableIdentity(s *string) *ActivityUpdate {
+	if s != nil {
+		au.SetIdentity(*s)
+	}
+	return au
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (au *ActivityUpdate) SetHandlerName(s string) *ActivityUpdate {
 	au.mutation.SetHandlerName(s)
@@ -281,6 +295,11 @@ func (au *ActivityUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (au *ActivityUpdate) check() error {
+	if v, ok := au.mutation.Identity(); ok {
+		if err := activity.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
+		}
+	}
 	if v, ok := au.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -300,6 +319,9 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := au.mutation.Identity(); ok {
+		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
 	}
 	if value, ok := au.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
@@ -509,6 +531,20 @@ type ActivityUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *ActivityMutation
+}
+
+// SetIdentity sets the "identity" field.
+func (auo *ActivityUpdateOne) SetIdentity(s string) *ActivityUpdateOne {
+	auo.mutation.SetIdentity(s)
+	return auo
+}
+
+// SetNillableIdentity sets the "identity" field if the given value is not nil.
+func (auo *ActivityUpdateOne) SetNillableIdentity(s *string) *ActivityUpdateOne {
+	if s != nil {
+		auo.SetIdentity(*s)
+	}
+	return auo
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -771,6 +807,11 @@ func (auo *ActivityUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (auo *ActivityUpdateOne) check() error {
+	if v, ok := auo.mutation.Identity(); ok {
+		if err := activity.IdentityValidator(v); err != nil {
+			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
+		}
+	}
 	if v, ok := auo.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -807,6 +848,9 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := auo.mutation.Identity(); ok {
+		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
 	}
 	if value, ok := auo.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
