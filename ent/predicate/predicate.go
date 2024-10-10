@@ -9,14 +9,17 @@ import (
 // ExecutionContext is the predicate function for executioncontext builders.
 type ExecutionContext func(*sql.Selector)
 
-// ExecutionUnit is the predicate function for executionunit builders.
-type ExecutionUnit func(*sql.Selector)
+// HandlerExecution is the predicate function for handlerexecution builders.
+type HandlerExecution func(*sql.Selector)
 
-// SagaCompensation is the predicate function for sagacompensation builders.
-type SagaCompensation func(*sql.Selector)
+// HandlerTask is the predicate function for handlertask builders.
+type HandlerTask func(*sql.Selector)
 
-// SagaTransaction is the predicate function for sagatransaction builders.
-type SagaTransaction func(*sql.Selector)
+// SagaExecution is the predicate function for sagaexecution builders.
+type SagaExecution func(*sql.Selector)
 
-// Task is the predicate function for task builders.
-type Task func(*sql.Selector)
+// SagaStepExecution is the predicate function for sagastepexecution builders.
+type SagaStepExecution func(*sql.Selector)
+
+// SideEffectResult is the predicate function for sideeffectresult builders.
+type SideEffectResult func(*sql.Selector)

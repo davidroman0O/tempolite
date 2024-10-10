@@ -14,14 +14,16 @@ type Tx struct {
 	config
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
 	ExecutionContext *ExecutionContextClient
-	// ExecutionUnit is the client for interacting with the ExecutionUnit builders.
-	ExecutionUnit *ExecutionUnitClient
-	// SagaCompensation is the client for interacting with the SagaCompensation builders.
-	SagaCompensation *SagaCompensationClient
-	// SagaTransaction is the client for interacting with the SagaTransaction builders.
-	SagaTransaction *SagaTransactionClient
-	// Task is the client for interacting with the Task builders.
-	Task *TaskClient
+	// HandlerExecution is the client for interacting with the HandlerExecution builders.
+	HandlerExecution *HandlerExecutionClient
+	// HandlerTask is the client for interacting with the HandlerTask builders.
+	HandlerTask *HandlerTaskClient
+	// SagaExecution is the client for interacting with the SagaExecution builders.
+	SagaExecution *SagaExecutionClient
+	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
+	SagaStepExecution *SagaStepExecutionClient
+	// SideEffectResult is the client for interacting with the SideEffectResult builders.
+	SideEffectResult *SideEffectResultClient
 
 	// lazily loaded.
 	client     *Client
@@ -154,10 +156,11 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.ExecutionContext = NewExecutionContextClient(tx.config)
-	tx.ExecutionUnit = NewExecutionUnitClient(tx.config)
-	tx.SagaCompensation = NewSagaCompensationClient(tx.config)
-	tx.SagaTransaction = NewSagaTransactionClient(tx.config)
-	tx.Task = NewTaskClient(tx.config)
+	tx.HandlerExecution = NewHandlerExecutionClient(tx.config)
+	tx.HandlerTask = NewHandlerTaskClient(tx.config)
+	tx.SagaExecution = NewSagaExecutionClient(tx.config)
+	tx.SagaStepExecution = NewSagaStepExecutionClient(tx.config)
+	tx.SideEffectResult = NewSideEffectResultClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

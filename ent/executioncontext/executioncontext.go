@@ -22,17 +22,35 @@ const (
 	FieldStartTime = "start_time"
 	// FieldEndTime holds the string denoting the end_time field in the database.
 	FieldEndTime = "end_time"
-	// EdgeExecutionUnits holds the string denoting the execution_units edge name in mutations.
-	EdgeExecutionUnits = "execution_units"
+	// EdgeHandlerExecutions holds the string denoting the handler_executions edge name in mutations.
+	EdgeHandlerExecutions = "handler_executions"
+	// EdgeSideEffectResults holds the string denoting the side_effect_results edge name in mutations.
+	EdgeSideEffectResults = "side_effect_results"
+	// EdgeSagaExecutions holds the string denoting the saga_executions edge name in mutations.
+	EdgeSagaExecutions = "saga_executions"
 	// Table holds the table name of the executioncontext in the database.
 	Table = "execution_contexts"
-	// ExecutionUnitsTable is the table that holds the execution_units relation/edge.
-	ExecutionUnitsTable = "execution_units"
-	// ExecutionUnitsInverseTable is the table name for the ExecutionUnit entity.
-	// It exists in this package in order to avoid circular dependency with the "executionunit" package.
-	ExecutionUnitsInverseTable = "execution_units"
-	// ExecutionUnitsColumn is the table column denoting the execution_units relation/edge.
-	ExecutionUnitsColumn = "execution_context_execution_units"
+	// HandlerExecutionsTable is the table that holds the handler_executions relation/edge.
+	HandlerExecutionsTable = "handler_executions"
+	// HandlerExecutionsInverseTable is the table name for the HandlerExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "handlerexecution" package.
+	HandlerExecutionsInverseTable = "handler_executions"
+	// HandlerExecutionsColumn is the table column denoting the handler_executions relation/edge.
+	HandlerExecutionsColumn = "execution_context_handler_executions"
+	// SideEffectResultsTable is the table that holds the side_effect_results relation/edge.
+	SideEffectResultsTable = "side_effect_results"
+	// SideEffectResultsInverseTable is the table name for the SideEffectResult entity.
+	// It exists in this package in order to avoid circular dependency with the "sideeffectresult" package.
+	SideEffectResultsInverseTable = "side_effect_results"
+	// SideEffectResultsColumn is the table column denoting the side_effect_results relation/edge.
+	SideEffectResultsColumn = "execution_context_side_effect_results"
+	// SagaExecutionsTable is the table that holds the saga_executions relation/edge.
+	SagaExecutionsTable = "saga_executions"
+	// SagaExecutionsInverseTable is the table name for the SagaExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "sagaexecution" package.
+	SagaExecutionsInverseTable = "saga_executions"
+	// SagaExecutionsColumn is the table column denoting the saga_executions relation/edge.
+	SagaExecutionsColumn = "execution_context_id"
 )
 
 // Columns holds all SQL columns for executioncontext fields.
@@ -106,23 +124,65 @@ func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndTime, opts...).ToFunc()
 }
 
-// ByExecutionUnitsCount orders the results by execution_units count.
-func ByExecutionUnitsCount(opts ...sql.OrderTermOption) OrderOption {
+// ByHandlerExecutionsCount orders the results by handler_executions count.
+func ByHandlerExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newExecutionUnitsStep(), opts...)
+		sqlgraph.OrderByNeighborsCount(s, newHandlerExecutionsStep(), opts...)
 	}
 }
 
-// ByExecutionUnits orders the results by execution_units terms.
-func ByExecutionUnits(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByHandlerExecutions orders the results by handler_executions terms.
+func ByHandlerExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newExecutionUnitsStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newHandlerExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-func newExecutionUnitsStep() *sqlgraph.Step {
+
+// BySideEffectResultsCount orders the results by side_effect_results count.
+func BySideEffectResultsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSideEffectResultsStep(), opts...)
+	}
+}
+
+// BySideEffectResults orders the results by side_effect_results terms.
+func BySideEffectResults(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSideEffectResultsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySagaExecutionsCount orders the results by saga_executions count.
+func BySagaExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSagaExecutionsStep(), opts...)
+	}
+}
+
+// BySagaExecutions orders the results by saga_executions terms.
+func BySagaExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSagaExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newHandlerExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ExecutionUnitsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionUnitsTable, ExecutionUnitsColumn),
+		sqlgraph.To(HandlerExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, HandlerExecutionsTable, HandlerExecutionsColumn),
+	)
+}
+func newSideEffectResultsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SideEffectResultsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SideEffectResultsTable, SideEffectResultsColumn),
+	)
+}
+func newSagaExecutionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SagaExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SagaExecutionsTable, SagaExecutionsColumn),
 	)
 }

@@ -12,8 +12,10 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/executionunit"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
 )
 
 // ExecutionContextUpdate is the builder for updating ExecutionContext entities.
@@ -91,19 +93,49 @@ func (ecu *ExecutionContextUpdate) ClearEndTime() *ExecutionContextUpdate {
 	return ecu
 }
 
-// AddExecutionUnitIDs adds the "execution_units" edge to the ExecutionUnit entity by IDs.
-func (ecu *ExecutionContextUpdate) AddExecutionUnitIDs(ids ...string) *ExecutionContextUpdate {
-	ecu.mutation.AddExecutionUnitIDs(ids...)
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecu *ExecutionContextUpdate) AddHandlerExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.AddHandlerExecutionIDs(ids...)
 	return ecu
 }
 
-// AddExecutionUnits adds the "execution_units" edges to the ExecutionUnit entity.
-func (ecu *ExecutionContextUpdate) AddExecutionUnits(e ...*ExecutionUnit) *ExecutionContextUpdate {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecu *ExecutionContextUpdate) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
 	}
-	return ecu.AddExecutionUnitIDs(ids...)
+	return ecu.AddHandlerExecutionIDs(ids...)
+}
+
+// AddSideEffectResultIDs adds the "side_effect_results" edge to the SideEffectResult entity by IDs.
+func (ecu *ExecutionContextUpdate) AddSideEffectResultIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.AddSideEffectResultIDs(ids...)
+	return ecu
+}
+
+// AddSideEffectResults adds the "side_effect_results" edges to the SideEffectResult entity.
+func (ecu *ExecutionContextUpdate) AddSideEffectResults(s ...*SideEffectResult) *ExecutionContextUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecu.AddSideEffectResultIDs(ids...)
+}
+
+// AddSagaExecutionIDs adds the "saga_executions" edge to the SagaExecution entity by IDs.
+func (ecu *ExecutionContextUpdate) AddSagaExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.AddSagaExecutionIDs(ids...)
+	return ecu
+}
+
+// AddSagaExecutions adds the "saga_executions" edges to the SagaExecution entity.
+func (ecu *ExecutionContextUpdate) AddSagaExecutions(s ...*SagaExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecu.AddSagaExecutionIDs(ids...)
 }
 
 // Mutation returns the ExecutionContextMutation object of the builder.
@@ -111,25 +143,67 @@ func (ecu *ExecutionContextUpdate) Mutation() *ExecutionContextMutation {
 	return ecu.mutation
 }
 
-// ClearExecutionUnits clears all "execution_units" edges to the ExecutionUnit entity.
-func (ecu *ExecutionContextUpdate) ClearExecutionUnits() *ExecutionContextUpdate {
-	ecu.mutation.ClearExecutionUnits()
+// ClearHandlerExecutions clears all "handler_executions" edges to the HandlerExecution entity.
+func (ecu *ExecutionContextUpdate) ClearHandlerExecutions() *ExecutionContextUpdate {
+	ecu.mutation.ClearHandlerExecutions()
 	return ecu
 }
 
-// RemoveExecutionUnitIDs removes the "execution_units" edge to ExecutionUnit entities by IDs.
-func (ecu *ExecutionContextUpdate) RemoveExecutionUnitIDs(ids ...string) *ExecutionContextUpdate {
-	ecu.mutation.RemoveExecutionUnitIDs(ids...)
+// RemoveHandlerExecutionIDs removes the "handler_executions" edge to HandlerExecution entities by IDs.
+func (ecu *ExecutionContextUpdate) RemoveHandlerExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.RemoveHandlerExecutionIDs(ids...)
 	return ecu
 }
 
-// RemoveExecutionUnits removes "execution_units" edges to ExecutionUnit entities.
-func (ecu *ExecutionContextUpdate) RemoveExecutionUnits(e ...*ExecutionUnit) *ExecutionContextUpdate {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+// RemoveHandlerExecutions removes "handler_executions" edges to HandlerExecution entities.
+func (ecu *ExecutionContextUpdate) RemoveHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
 	}
-	return ecu.RemoveExecutionUnitIDs(ids...)
+	return ecu.RemoveHandlerExecutionIDs(ids...)
+}
+
+// ClearSideEffectResults clears all "side_effect_results" edges to the SideEffectResult entity.
+func (ecu *ExecutionContextUpdate) ClearSideEffectResults() *ExecutionContextUpdate {
+	ecu.mutation.ClearSideEffectResults()
+	return ecu
+}
+
+// RemoveSideEffectResultIDs removes the "side_effect_results" edge to SideEffectResult entities by IDs.
+func (ecu *ExecutionContextUpdate) RemoveSideEffectResultIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.RemoveSideEffectResultIDs(ids...)
+	return ecu
+}
+
+// RemoveSideEffectResults removes "side_effect_results" edges to SideEffectResult entities.
+func (ecu *ExecutionContextUpdate) RemoveSideEffectResults(s ...*SideEffectResult) *ExecutionContextUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecu.RemoveSideEffectResultIDs(ids...)
+}
+
+// ClearSagaExecutions clears all "saga_executions" edges to the SagaExecution entity.
+func (ecu *ExecutionContextUpdate) ClearSagaExecutions() *ExecutionContextUpdate {
+	ecu.mutation.ClearSagaExecutions()
+	return ecu
+}
+
+// RemoveSagaExecutionIDs removes the "saga_executions" edge to SagaExecution entities by IDs.
+func (ecu *ExecutionContextUpdate) RemoveSagaExecutionIDs(ids ...string) *ExecutionContextUpdate {
+	ecu.mutation.RemoveSagaExecutionIDs(ids...)
+	return ecu
+}
+
+// RemoveSagaExecutions removes "saga_executions" edges to SagaExecution entities.
+func (ecu *ExecutionContextUpdate) RemoveSagaExecutions(s ...*SagaExecution) *ExecutionContextUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecu.RemoveSagaExecutionIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -196,28 +270,28 @@ func (ecu *ExecutionContextUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if ecu.mutation.EndTimeCleared() {
 		_spec.ClearField(executioncontext.FieldEndTime, field.TypeTime)
 	}
-	if ecu.mutation.ExecutionUnitsCleared() {
+	if ecu.mutation.HandlerExecutionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ecu.mutation.RemovedExecutionUnitsIDs(); len(nodes) > 0 && !ecu.mutation.ExecutionUnitsCleared() {
+	if nodes := ecu.mutation.RemovedHandlerExecutionsIDs(); len(nodes) > 0 && !ecu.mutation.HandlerExecutionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -225,15 +299,105 @@ func (ecu *ExecutionContextUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ecu.mutation.ExecutionUnitsIDs(); len(nodes) > 0 {
+	if nodes := ecu.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ecu.mutation.SideEffectResultsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.RemovedSideEffectResultsIDs(); len(nodes) > 0 && !ecu.mutation.SideEffectResultsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.SideEffectResultsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ecu.mutation.SagaExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.RemovedSagaExecutionsIDs(); len(nodes) > 0 && !ecu.mutation.SagaExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecu.mutation.SagaExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -323,19 +487,49 @@ func (ecuo *ExecutionContextUpdateOne) ClearEndTime() *ExecutionContextUpdateOne
 	return ecuo
 }
 
-// AddExecutionUnitIDs adds the "execution_units" edge to the ExecutionUnit entity by IDs.
-func (ecuo *ExecutionContextUpdateOne) AddExecutionUnitIDs(ids ...string) *ExecutionContextUpdateOne {
-	ecuo.mutation.AddExecutionUnitIDs(ids...)
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecuo *ExecutionContextUpdateOne) AddHandlerExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.AddHandlerExecutionIDs(ids...)
 	return ecuo
 }
 
-// AddExecutionUnits adds the "execution_units" edges to the ExecutionUnit entity.
-func (ecuo *ExecutionContextUpdateOne) AddExecutionUnits(e ...*ExecutionUnit) *ExecutionContextUpdateOne {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecuo *ExecutionContextUpdateOne) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
 	}
-	return ecuo.AddExecutionUnitIDs(ids...)
+	return ecuo.AddHandlerExecutionIDs(ids...)
+}
+
+// AddSideEffectResultIDs adds the "side_effect_results" edge to the SideEffectResult entity by IDs.
+func (ecuo *ExecutionContextUpdateOne) AddSideEffectResultIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.AddSideEffectResultIDs(ids...)
+	return ecuo
+}
+
+// AddSideEffectResults adds the "side_effect_results" edges to the SideEffectResult entity.
+func (ecuo *ExecutionContextUpdateOne) AddSideEffectResults(s ...*SideEffectResult) *ExecutionContextUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecuo.AddSideEffectResultIDs(ids...)
+}
+
+// AddSagaExecutionIDs adds the "saga_executions" edge to the SagaExecution entity by IDs.
+func (ecuo *ExecutionContextUpdateOne) AddSagaExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.AddSagaExecutionIDs(ids...)
+	return ecuo
+}
+
+// AddSagaExecutions adds the "saga_executions" edges to the SagaExecution entity.
+func (ecuo *ExecutionContextUpdateOne) AddSagaExecutions(s ...*SagaExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecuo.AddSagaExecutionIDs(ids...)
 }
 
 // Mutation returns the ExecutionContextMutation object of the builder.
@@ -343,25 +537,67 @@ func (ecuo *ExecutionContextUpdateOne) Mutation() *ExecutionContextMutation {
 	return ecuo.mutation
 }
 
-// ClearExecutionUnits clears all "execution_units" edges to the ExecutionUnit entity.
-func (ecuo *ExecutionContextUpdateOne) ClearExecutionUnits() *ExecutionContextUpdateOne {
-	ecuo.mutation.ClearExecutionUnits()
+// ClearHandlerExecutions clears all "handler_executions" edges to the HandlerExecution entity.
+func (ecuo *ExecutionContextUpdateOne) ClearHandlerExecutions() *ExecutionContextUpdateOne {
+	ecuo.mutation.ClearHandlerExecutions()
 	return ecuo
 }
 
-// RemoveExecutionUnitIDs removes the "execution_units" edge to ExecutionUnit entities by IDs.
-func (ecuo *ExecutionContextUpdateOne) RemoveExecutionUnitIDs(ids ...string) *ExecutionContextUpdateOne {
-	ecuo.mutation.RemoveExecutionUnitIDs(ids...)
+// RemoveHandlerExecutionIDs removes the "handler_executions" edge to HandlerExecution entities by IDs.
+func (ecuo *ExecutionContextUpdateOne) RemoveHandlerExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.RemoveHandlerExecutionIDs(ids...)
 	return ecuo
 }
 
-// RemoveExecutionUnits removes "execution_units" edges to ExecutionUnit entities.
-func (ecuo *ExecutionContextUpdateOne) RemoveExecutionUnits(e ...*ExecutionUnit) *ExecutionContextUpdateOne {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+// RemoveHandlerExecutions removes "handler_executions" edges to HandlerExecution entities.
+func (ecuo *ExecutionContextUpdateOne) RemoveHandlerExecutions(h ...*HandlerExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
 	}
-	return ecuo.RemoveExecutionUnitIDs(ids...)
+	return ecuo.RemoveHandlerExecutionIDs(ids...)
+}
+
+// ClearSideEffectResults clears all "side_effect_results" edges to the SideEffectResult entity.
+func (ecuo *ExecutionContextUpdateOne) ClearSideEffectResults() *ExecutionContextUpdateOne {
+	ecuo.mutation.ClearSideEffectResults()
+	return ecuo
+}
+
+// RemoveSideEffectResultIDs removes the "side_effect_results" edge to SideEffectResult entities by IDs.
+func (ecuo *ExecutionContextUpdateOne) RemoveSideEffectResultIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.RemoveSideEffectResultIDs(ids...)
+	return ecuo
+}
+
+// RemoveSideEffectResults removes "side_effect_results" edges to SideEffectResult entities.
+func (ecuo *ExecutionContextUpdateOne) RemoveSideEffectResults(s ...*SideEffectResult) *ExecutionContextUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecuo.RemoveSideEffectResultIDs(ids...)
+}
+
+// ClearSagaExecutions clears all "saga_executions" edges to the SagaExecution entity.
+func (ecuo *ExecutionContextUpdateOne) ClearSagaExecutions() *ExecutionContextUpdateOne {
+	ecuo.mutation.ClearSagaExecutions()
+	return ecuo
+}
+
+// RemoveSagaExecutionIDs removes the "saga_executions" edge to SagaExecution entities by IDs.
+func (ecuo *ExecutionContextUpdateOne) RemoveSagaExecutionIDs(ids ...string) *ExecutionContextUpdateOne {
+	ecuo.mutation.RemoveSagaExecutionIDs(ids...)
+	return ecuo
+}
+
+// RemoveSagaExecutions removes "saga_executions" edges to SagaExecution entities.
+func (ecuo *ExecutionContextUpdateOne) RemoveSagaExecutions(s ...*SagaExecution) *ExecutionContextUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecuo.RemoveSagaExecutionIDs(ids...)
 }
 
 // Where appends a list predicates to the ExecutionContextUpdate builder.
@@ -458,28 +694,28 @@ func (ecuo *ExecutionContextUpdateOne) sqlSave(ctx context.Context) (_node *Exec
 	if ecuo.mutation.EndTimeCleared() {
 		_spec.ClearField(executioncontext.FieldEndTime, field.TypeTime)
 	}
-	if ecuo.mutation.ExecutionUnitsCleared() {
+	if ecuo.mutation.HandlerExecutionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ecuo.mutation.RemovedExecutionUnitsIDs(); len(nodes) > 0 && !ecuo.mutation.ExecutionUnitsCleared() {
+	if nodes := ecuo.mutation.RemovedHandlerExecutionsIDs(); len(nodes) > 0 && !ecuo.mutation.HandlerExecutionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -487,15 +723,105 @@ func (ecuo *ExecutionContextUpdateOne) sqlSave(ctx context.Context) (_node *Exec
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ecuo.mutation.ExecutionUnitsIDs(); len(nodes) > 0 {
+	if nodes := ecuo.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ecuo.mutation.SideEffectResultsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.RemovedSideEffectResultsIDs(); len(nodes) > 0 && !ecuo.mutation.SideEffectResultsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.SideEffectResultsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ecuo.mutation.SagaExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.RemovedSagaExecutionsIDs(); len(nodes) > 0 && !ecuo.mutation.SagaExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ecuo.mutation.SagaExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

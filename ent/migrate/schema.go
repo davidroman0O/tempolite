@@ -22,125 +22,137 @@ var (
 		Columns:    ExecutionContextsColumns,
 		PrimaryKey: []*schema.Column{ExecutionContextsColumns[0]},
 	}
-	// ExecutionUnitsColumns holds the columns for the "execution_units" table.
-	ExecutionUnitsColumns = []*schema.Column{
+	// HandlerExecutionsColumns holds the columns for the "handler_executions" table.
+	HandlerExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"handler", "side_effect", "saga"}},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "handler_name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "running", "completed", "failed"}},
 		{Name: "start_time", Type: field.TypeTime},
 		{Name: "end_time", Type: field.TypeTime, Nullable: true},
 		{Name: "retry_count", Type: field.TypeInt, Default: 0},
 		{Name: "max_retries", Type: field.TypeInt, Default: 3},
-		{Name: "execution_context_execution_units", Type: field.TypeString, Nullable: true},
-		{Name: "execution_unit_children", Type: field.TypeString, Nullable: true},
+		{Name: "execution_context_handler_executions", Type: field.TypeString},
+		{Name: "handler_execution_children", Type: field.TypeString, Nullable: true},
+		{Name: "handler_execution_saga_step_execution", Type: field.TypeString, Nullable: true},
 	}
-	// ExecutionUnitsTable holds the schema information for the "execution_units" table.
-	ExecutionUnitsTable = &schema.Table{
-		Name:       "execution_units",
-		Columns:    ExecutionUnitsColumns,
-		PrimaryKey: []*schema.Column{ExecutionUnitsColumns[0]},
+	// HandlerExecutionsTable holds the schema information for the "handler_executions" table.
+	HandlerExecutionsTable = &schema.Table{
+		Name:       "handler_executions",
+		Columns:    HandlerExecutionsColumns,
+		PrimaryKey: []*schema.Column{HandlerExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "execution_units_execution_contexts_execution_units",
-				Columns:    []*schema.Column{ExecutionUnitsColumns[7]},
+				Symbol:     "handler_executions_execution_contexts_handler_executions",
+				Columns:    []*schema.Column{HandlerExecutionsColumns[8]},
 				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "handler_executions_handler_executions_children",
+				Columns:    []*schema.Column{HandlerExecutionsColumns[9]},
+				RefColumns: []*schema.Column{HandlerExecutionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "execution_units_execution_units_children",
-				Columns:    []*schema.Column{ExecutionUnitsColumns[8]},
-				RefColumns: []*schema.Column{ExecutionUnitsColumns[0]},
+				Symbol:     "handler_executions_saga_step_executions_saga_step_execution",
+				Columns:    []*schema.Column{HandlerExecutionsColumns[10]},
+				RefColumns: []*schema.Column{SagaStepExecutionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
 	}
-	// SagaCompensationsColumns holds the columns for the "saga_compensations" table.
-	SagaCompensationsColumns = []*schema.Column{
+	// HandlerTasksColumns holds the columns for the "handler_tasks" table.
+	HandlerTasksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "order", Type: field.TypeInt},
-		{Name: "next_compensation_name", Type: field.TypeString},
-		{Name: "execution_unit_saga_compensations", Type: field.TypeString, Nullable: true},
-		{Name: "saga_compensation_task", Type: field.TypeString, Nullable: true},
-		{Name: "saga_transaction_compensation", Type: field.TypeString, Unique: true, Nullable: true},
-	}
-	// SagaCompensationsTable holds the schema information for the "saga_compensations" table.
-	SagaCompensationsTable = &schema.Table{
-		Name:       "saga_compensations",
-		Columns:    SagaCompensationsColumns,
-		PrimaryKey: []*schema.Column{SagaCompensationsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "saga_compensations_execution_units_saga_compensations",
-				Columns:    []*schema.Column{SagaCompensationsColumns[3]},
-				RefColumns: []*schema.Column{ExecutionUnitsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "saga_compensations_tasks_task",
-				Columns:    []*schema.Column{SagaCompensationsColumns[4]},
-				RefColumns: []*schema.Column{TasksColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "saga_compensations_saga_transactions_compensation",
-				Columns:    []*schema.Column{SagaCompensationsColumns[5]},
-				RefColumns: []*schema.Column{SagaTransactionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
-	}
-	// SagaTransactionsColumns holds the columns for the "saga_transactions" table.
-	SagaTransactionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "order", Type: field.TypeInt},
-		{Name: "next_transaction_name", Type: field.TypeString},
-		{Name: "failure_compensation_name", Type: field.TypeString},
-		{Name: "execution_unit_saga_transactions", Type: field.TypeString, Nullable: true},
-		{Name: "saga_transaction_task", Type: field.TypeString, Nullable: true},
-	}
-	// SagaTransactionsTable holds the schema information for the "saga_transactions" table.
-	SagaTransactionsTable = &schema.Table{
-		Name:       "saga_transactions",
-		Columns:    SagaTransactionsColumns,
-		PrimaryKey: []*schema.Column{SagaTransactionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "saga_transactions_execution_units_saga_transactions",
-				Columns:    []*schema.Column{SagaTransactionsColumns[4]},
-				RefColumns: []*schema.Column{ExecutionUnitsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "saga_transactions_tasks_task",
-				Columns:    []*schema.Column{SagaTransactionsColumns[5]},
-				RefColumns: []*schema.Column{TasksColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
-	}
-	// TasksColumns holds the columns for the "tasks" table.
-	TasksColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"handler", "side_effect", "saga_transaction", "saga_compensation"}},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "in_progress", "completed", "failed"}},
+		{Name: "task_type", Type: field.TypeEnum, Enums: []string{"handler", "side_effect", "transaction", "compensation"}, Default: "handler"},
 		{Name: "handler_name", Type: field.TypeString},
-		{Name: "payload", Type: field.TypeBytes},
+		{Name: "payload", Type: field.TypeBytes, Nullable: true},
 		{Name: "result", Type: field.TypeBytes, Nullable: true},
 		{Name: "error", Type: field.TypeBytes, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "in_progress", "completed", "failed"}},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "execution_unit_tasks", Type: field.TypeString, Nullable: true},
+		{Name: "handler_execution_tasks", Type: field.TypeString, Nullable: true},
 	}
-	// TasksTable holds the schema information for the "tasks" table.
-	TasksTable = &schema.Table{
-		Name:       "tasks",
-		Columns:    TasksColumns,
-		PrimaryKey: []*schema.Column{TasksColumns[0]},
+	// HandlerTasksTable holds the schema information for the "handler_tasks" table.
+	HandlerTasksTable = &schema.Table{
+		Name:       "handler_tasks",
+		Columns:    HandlerTasksColumns,
+		PrimaryKey: []*schema.Column{HandlerTasksColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "tasks_execution_units_tasks",
-				Columns:    []*schema.Column{TasksColumns[9]},
-				RefColumns: []*schema.Column{ExecutionUnitsColumns[0]},
+				Symbol:     "handler_tasks_handler_executions_tasks",
+				Columns:    []*schema.Column{HandlerTasksColumns[9]},
+				RefColumns: []*schema.Column{HandlerExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// SagaExecutionsColumns holds the columns for the "saga_executions" table.
+	SagaExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "completed", "failed"}},
+		{Name: "start_time", Type: field.TypeTime},
+		{Name: "end_time", Type: field.TypeTime, Nullable: true},
+		{Name: "execution_context_id", Type: field.TypeString},
+	}
+	// SagaExecutionsTable holds the schema information for the "saga_executions" table.
+	SagaExecutionsTable = &schema.Table{
+		Name:       "saga_executions",
+		Columns:    SagaExecutionsColumns,
+		PrimaryKey: []*schema.Column{SagaExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "saga_executions_execution_contexts_saga_executions",
+				Columns:    []*schema.Column{SagaExecutionsColumns[4]},
+				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// SagaStepExecutionsColumns holds the columns for the "saga_step_executions" table.
+	SagaStepExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "saga_execution_id", Type: field.TypeString},
+		{Name: "step_number", Type: field.TypeInt},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "in_progress", "completed", "failed", "compensated"}},
+		{Name: "start_time", Type: field.TypeTime, Nullable: true},
+		{Name: "end_time", Type: field.TypeTime, Nullable: true},
+		{Name: "saga_execution_steps", Type: field.TypeString, Nullable: true},
+	}
+	// SagaStepExecutionsTable holds the schema information for the "saga_step_executions" table.
+	SagaStepExecutionsTable = &schema.Table{
+		Name:       "saga_step_executions",
+		Columns:    SagaStepExecutionsColumns,
+		PrimaryKey: []*schema.Column{SagaStepExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "saga_step_executions_saga_executions_steps",
+				Columns:    []*schema.Column{SagaStepExecutionsColumns[6]},
+				RefColumns: []*schema.Column{SagaExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// SideEffectResultsColumns holds the columns for the "side_effect_results" table.
+	SideEffectResultsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "execution_context_id", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString},
+		{Name: "result", Type: field.TypeBytes},
+		{Name: "execution_context_side_effect_results", Type: field.TypeString, Nullable: true},
+	}
+	// SideEffectResultsTable holds the schema information for the "side_effect_results" table.
+	SideEffectResultsTable = &schema.Table{
+		Name:       "side_effect_results",
+		Columns:    SideEffectResultsColumns,
+		PrimaryKey: []*schema.Column{SideEffectResultsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "side_effect_results_execution_contexts_side_effect_results",
+				Columns:    []*schema.Column{SideEffectResultsColumns[4]},
+				RefColumns: []*schema.Column{ExecutionContextsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -148,20 +160,20 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		ExecutionContextsTable,
-		ExecutionUnitsTable,
-		SagaCompensationsTable,
-		SagaTransactionsTable,
-		TasksTable,
+		HandlerExecutionsTable,
+		HandlerTasksTable,
+		SagaExecutionsTable,
+		SagaStepExecutionsTable,
+		SideEffectResultsTable,
 	}
 )
 
 func init() {
-	ExecutionUnitsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
-	ExecutionUnitsTable.ForeignKeys[1].RefTable = ExecutionUnitsTable
-	SagaCompensationsTable.ForeignKeys[0].RefTable = ExecutionUnitsTable
-	SagaCompensationsTable.ForeignKeys[1].RefTable = TasksTable
-	SagaCompensationsTable.ForeignKeys[2].RefTable = SagaTransactionsTable
-	SagaTransactionsTable.ForeignKeys[0].RefTable = ExecutionUnitsTable
-	SagaTransactionsTable.ForeignKeys[1].RefTable = TasksTable
-	TasksTable.ForeignKeys[0].RefTable = ExecutionUnitsTable
+	HandlerExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
+	HandlerExecutionsTable.ForeignKeys[1].RefTable = HandlerExecutionsTable
+	HandlerExecutionsTable.ForeignKeys[2].RefTable = SagaStepExecutionsTable
+	HandlerTasksTable.ForeignKeys[0].RefTable = HandlerExecutionsTable
+	SagaExecutionsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
+	SagaStepExecutionsTable.ForeignKeys[0].RefTable = SagaExecutionsTable
+	SideEffectResultsTable.ForeignKeys[0].RefTable = ExecutionContextsTable
 }

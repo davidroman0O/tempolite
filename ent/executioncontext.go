@@ -33,20 +33,42 @@ type ExecutionContext struct {
 
 // ExecutionContextEdges holds the relations/edges for other nodes in the graph.
 type ExecutionContextEdges struct {
-	// ExecutionUnits holds the value of the execution_units edge.
-	ExecutionUnits []*ExecutionUnit `json:"execution_units,omitempty"`
+	// HandlerExecutions holds the value of the handler_executions edge.
+	HandlerExecutions []*HandlerExecution `json:"handler_executions,omitempty"`
+	// SideEffectResults holds the value of the side_effect_results edge.
+	SideEffectResults []*SideEffectResult `json:"side_effect_results,omitempty"`
+	// SagaExecutions holds the value of the saga_executions edge.
+	SagaExecutions []*SagaExecution `json:"saga_executions,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [3]bool
 }
 
-// ExecutionUnitsOrErr returns the ExecutionUnits value or an error if the edge
+// HandlerExecutionsOrErr returns the HandlerExecutions value or an error if the edge
 // was not loaded in eager-loading.
-func (e ExecutionContextEdges) ExecutionUnitsOrErr() ([]*ExecutionUnit, error) {
+func (e ExecutionContextEdges) HandlerExecutionsOrErr() ([]*HandlerExecution, error) {
 	if e.loadedTypes[0] {
-		return e.ExecutionUnits, nil
+		return e.HandlerExecutions, nil
 	}
-	return nil, &NotLoadedError{edge: "execution_units"}
+	return nil, &NotLoadedError{edge: "handler_executions"}
+}
+
+// SideEffectResultsOrErr returns the SideEffectResults value or an error if the edge
+// was not loaded in eager-loading.
+func (e ExecutionContextEdges) SideEffectResultsOrErr() ([]*SideEffectResult, error) {
+	if e.loadedTypes[1] {
+		return e.SideEffectResults, nil
+	}
+	return nil, &NotLoadedError{edge: "side_effect_results"}
+}
+
+// SagaExecutionsOrErr returns the SagaExecutions value or an error if the edge
+// was not loaded in eager-loading.
+func (e ExecutionContextEdges) SagaExecutionsOrErr() ([]*SagaExecution, error) {
+	if e.loadedTypes[2] {
+		return e.SagaExecutions, nil
+	}
+	return nil, &NotLoadedError{edge: "saga_executions"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -116,9 +138,19 @@ func (ec *ExecutionContext) Value(name string) (ent.Value, error) {
 	return ec.selectValues.Get(name)
 }
 
-// QueryExecutionUnits queries the "execution_units" edge of the ExecutionContext entity.
-func (ec *ExecutionContext) QueryExecutionUnits() *ExecutionUnitQuery {
-	return NewExecutionContextClient(ec.config).QueryExecutionUnits(ec)
+// QueryHandlerExecutions queries the "handler_executions" edge of the ExecutionContext entity.
+func (ec *ExecutionContext) QueryHandlerExecutions() *HandlerExecutionQuery {
+	return NewExecutionContextClient(ec.config).QueryHandlerExecutions(ec)
+}
+
+// QuerySideEffectResults queries the "side_effect_results" edge of the ExecutionContext entity.
+func (ec *ExecutionContext) QuerySideEffectResults() *SideEffectResultQuery {
+	return NewExecutionContextClient(ec.config).QuerySideEffectResults(ec)
+}
+
+// QuerySagaExecutions queries the "saga_executions" edge of the ExecutionContext entity.
+func (ec *ExecutionContext) QuerySagaExecutions() *SagaExecutionQuery {
+	return NewExecutionContextClient(ec.config).QuerySagaExecutions(ec)
 }
 
 // Update returns a builder for updating this ExecutionContext.

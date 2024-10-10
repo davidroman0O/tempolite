@@ -16,10 +16,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/executionunit"
-	"github.com/davidroman0O/go-tempolite/ent/sagacompensation"
-	"github.com/davidroman0O/go-tempolite/ent/sagatransaction"
-	"github.com/davidroman0O/go-tempolite/ent/task"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
+	"github.com/davidroman0O/go-tempolite/ent/handlertask"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
 )
 
 // Client is the client that holds all ent builders.
@@ -29,14 +30,16 @@ type Client struct {
 	Schema *migrate.Schema
 	// ExecutionContext is the client for interacting with the ExecutionContext builders.
 	ExecutionContext *ExecutionContextClient
-	// ExecutionUnit is the client for interacting with the ExecutionUnit builders.
-	ExecutionUnit *ExecutionUnitClient
-	// SagaCompensation is the client for interacting with the SagaCompensation builders.
-	SagaCompensation *SagaCompensationClient
-	// SagaTransaction is the client for interacting with the SagaTransaction builders.
-	SagaTransaction *SagaTransactionClient
-	// Task is the client for interacting with the Task builders.
-	Task *TaskClient
+	// HandlerExecution is the client for interacting with the HandlerExecution builders.
+	HandlerExecution *HandlerExecutionClient
+	// HandlerTask is the client for interacting with the HandlerTask builders.
+	HandlerTask *HandlerTaskClient
+	// SagaExecution is the client for interacting with the SagaExecution builders.
+	SagaExecution *SagaExecutionClient
+	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
+	SagaStepExecution *SagaStepExecutionClient
+	// SideEffectResult is the client for interacting with the SideEffectResult builders.
+	SideEffectResult *SideEffectResultClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -49,10 +52,11 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.ExecutionContext = NewExecutionContextClient(c.config)
-	c.ExecutionUnit = NewExecutionUnitClient(c.config)
-	c.SagaCompensation = NewSagaCompensationClient(c.config)
-	c.SagaTransaction = NewSagaTransactionClient(c.config)
-	c.Task = NewTaskClient(c.config)
+	c.HandlerExecution = NewHandlerExecutionClient(c.config)
+	c.HandlerTask = NewHandlerTaskClient(c.config)
+	c.SagaExecution = NewSagaExecutionClient(c.config)
+	c.SagaStepExecution = NewSagaStepExecutionClient(c.config)
+	c.SideEffectResult = NewSideEffectResultClient(c.config)
 }
 
 type (
@@ -143,13 +147,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		ExecutionContext: NewExecutionContextClient(cfg),
-		ExecutionUnit:    NewExecutionUnitClient(cfg),
-		SagaCompensation: NewSagaCompensationClient(cfg),
-		SagaTransaction:  NewSagaTransactionClient(cfg),
-		Task:             NewTaskClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		ExecutionContext:  NewExecutionContextClient(cfg),
+		HandlerExecution:  NewHandlerExecutionClient(cfg),
+		HandlerTask:       NewHandlerTaskClient(cfg),
+		SagaExecution:     NewSagaExecutionClient(cfg),
+		SagaStepExecution: NewSagaStepExecutionClient(cfg),
+		SideEffectResult:  NewSideEffectResultClient(cfg),
 	}, nil
 }
 
@@ -167,13 +172,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		ExecutionContext: NewExecutionContextClient(cfg),
-		ExecutionUnit:    NewExecutionUnitClient(cfg),
-		SagaCompensation: NewSagaCompensationClient(cfg),
-		SagaTransaction:  NewSagaTransactionClient(cfg),
-		Task:             NewTaskClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		ExecutionContext:  NewExecutionContextClient(cfg),
+		HandlerExecution:  NewHandlerExecutionClient(cfg),
+		HandlerTask:       NewHandlerTaskClient(cfg),
+		SagaExecution:     NewSagaExecutionClient(cfg),
+		SagaStepExecution: NewSagaStepExecutionClient(cfg),
+		SideEffectResult:  NewSideEffectResultClient(cfg),
 	}, nil
 }
 
@@ -202,21 +208,23 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.ExecutionContext.Use(hooks...)
-	c.ExecutionUnit.Use(hooks...)
-	c.SagaCompensation.Use(hooks...)
-	c.SagaTransaction.Use(hooks...)
-	c.Task.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.ExecutionContext, c.HandlerExecution, c.HandlerTask, c.SagaExecution,
+		c.SagaStepExecution, c.SideEffectResult,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.ExecutionContext.Intercept(interceptors...)
-	c.ExecutionUnit.Intercept(interceptors...)
-	c.SagaCompensation.Intercept(interceptors...)
-	c.SagaTransaction.Intercept(interceptors...)
-	c.Task.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.ExecutionContext, c.HandlerExecution, c.HandlerTask, c.SagaExecution,
+		c.SagaStepExecution, c.SideEffectResult,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -224,14 +232,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *ExecutionContextMutation:
 		return c.ExecutionContext.mutate(ctx, m)
-	case *ExecutionUnitMutation:
-		return c.ExecutionUnit.mutate(ctx, m)
-	case *SagaCompensationMutation:
-		return c.SagaCompensation.mutate(ctx, m)
-	case *SagaTransactionMutation:
-		return c.SagaTransaction.mutate(ctx, m)
-	case *TaskMutation:
-		return c.Task.mutate(ctx, m)
+	case *HandlerExecutionMutation:
+		return c.HandlerExecution.mutate(ctx, m)
+	case *HandlerTaskMutation:
+		return c.HandlerTask.mutate(ctx, m)
+	case *SagaExecutionMutation:
+		return c.SagaExecution.mutate(ctx, m)
+	case *SagaStepExecutionMutation:
+		return c.SagaStepExecution.mutate(ctx, m)
+	case *SideEffectResultMutation:
+		return c.SideEffectResult.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -345,15 +355,47 @@ func (c *ExecutionContextClient) GetX(ctx context.Context, id string) *Execution
 	return obj
 }
 
-// QueryExecutionUnits queries the execution_units edge of a ExecutionContext.
-func (c *ExecutionContextClient) QueryExecutionUnits(ec *ExecutionContext) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
+// QueryHandlerExecutions queries the handler_executions edge of a ExecutionContext.
+func (c *ExecutionContextClient) QueryHandlerExecutions(ec *ExecutionContext) *HandlerExecutionQuery {
+	query := (&HandlerExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := ec.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.ExecutionUnitsTable, executioncontext.ExecutionUnitsColumn),
+			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.HandlerExecutionsTable, executioncontext.HandlerExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySideEffectResults queries the side_effect_results edge of a ExecutionContext.
+func (c *ExecutionContextClient) QuerySideEffectResults(ec *ExecutionContext) *SideEffectResultQuery {
+	query := (&SideEffectResultClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ec.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
+			sqlgraph.To(sideeffectresult.Table, sideeffectresult.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.SideEffectResultsTable, executioncontext.SideEffectResultsColumn),
+		)
+		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySagaExecutions queries the saga_executions edge of a ExecutionContext.
+func (c *ExecutionContextClient) QuerySagaExecutions(ec *ExecutionContext) *SagaExecutionQuery {
+	query := (&SagaExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ec.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(executioncontext.Table, executioncontext.FieldID, id),
+			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, executioncontext.SagaExecutionsTable, executioncontext.SagaExecutionsColumn),
 		)
 		fromV = sqlgraph.Neighbors(ec.driver.Dialect(), step)
 		return fromV, nil
@@ -386,107 +428,107 @@ func (c *ExecutionContextClient) mutate(ctx context.Context, m *ExecutionContext
 	}
 }
 
-// ExecutionUnitClient is a client for the ExecutionUnit schema.
-type ExecutionUnitClient struct {
+// HandlerExecutionClient is a client for the HandlerExecution schema.
+type HandlerExecutionClient struct {
 	config
 }
 
-// NewExecutionUnitClient returns a client for the ExecutionUnit from the given config.
-func NewExecutionUnitClient(c config) *ExecutionUnitClient {
-	return &ExecutionUnitClient{config: c}
+// NewHandlerExecutionClient returns a client for the HandlerExecution from the given config.
+func NewHandlerExecutionClient(c config) *HandlerExecutionClient {
+	return &HandlerExecutionClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `executionunit.Hooks(f(g(h())))`.
-func (c *ExecutionUnitClient) Use(hooks ...Hook) {
-	c.hooks.ExecutionUnit = append(c.hooks.ExecutionUnit, hooks...)
+// A call to `Use(f, g, h)` equals to `handlerexecution.Hooks(f(g(h())))`.
+func (c *HandlerExecutionClient) Use(hooks ...Hook) {
+	c.hooks.HandlerExecution = append(c.hooks.HandlerExecution, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `executionunit.Intercept(f(g(h())))`.
-func (c *ExecutionUnitClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ExecutionUnit = append(c.inters.ExecutionUnit, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `handlerexecution.Intercept(f(g(h())))`.
+func (c *HandlerExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.HandlerExecution = append(c.inters.HandlerExecution, interceptors...)
 }
 
-// Create returns a builder for creating a ExecutionUnit entity.
-func (c *ExecutionUnitClient) Create() *ExecutionUnitCreate {
-	mutation := newExecutionUnitMutation(c.config, OpCreate)
-	return &ExecutionUnitCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a HandlerExecution entity.
+func (c *HandlerExecutionClient) Create() *HandlerExecutionCreate {
+	mutation := newHandlerExecutionMutation(c.config, OpCreate)
+	return &HandlerExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of ExecutionUnit entities.
-func (c *ExecutionUnitClient) CreateBulk(builders ...*ExecutionUnitCreate) *ExecutionUnitCreateBulk {
-	return &ExecutionUnitCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of HandlerExecution entities.
+func (c *HandlerExecutionClient) CreateBulk(builders ...*HandlerExecutionCreate) *HandlerExecutionCreateBulk {
+	return &HandlerExecutionCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *ExecutionUnitClient) MapCreateBulk(slice any, setFunc func(*ExecutionUnitCreate, int)) *ExecutionUnitCreateBulk {
+func (c *HandlerExecutionClient) MapCreateBulk(slice any, setFunc func(*HandlerExecutionCreate, int)) *HandlerExecutionCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &ExecutionUnitCreateBulk{err: fmt.Errorf("calling to ExecutionUnitClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &HandlerExecutionCreateBulk{err: fmt.Errorf("calling to HandlerExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*ExecutionUnitCreate, rv.Len())
+	builders := make([]*HandlerExecutionCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &ExecutionUnitCreateBulk{config: c.config, builders: builders}
+	return &HandlerExecutionCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for ExecutionUnit.
-func (c *ExecutionUnitClient) Update() *ExecutionUnitUpdate {
-	mutation := newExecutionUnitMutation(c.config, OpUpdate)
-	return &ExecutionUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for HandlerExecution.
+func (c *HandlerExecutionClient) Update() *HandlerExecutionUpdate {
+	mutation := newHandlerExecutionMutation(c.config, OpUpdate)
+	return &HandlerExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *ExecutionUnitClient) UpdateOne(eu *ExecutionUnit) *ExecutionUnitUpdateOne {
-	mutation := newExecutionUnitMutation(c.config, OpUpdateOne, withExecutionUnit(eu))
-	return &ExecutionUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *HandlerExecutionClient) UpdateOne(he *HandlerExecution) *HandlerExecutionUpdateOne {
+	mutation := newHandlerExecutionMutation(c.config, OpUpdateOne, withHandlerExecution(he))
+	return &HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *ExecutionUnitClient) UpdateOneID(id string) *ExecutionUnitUpdateOne {
-	mutation := newExecutionUnitMutation(c.config, OpUpdateOne, withExecutionUnitID(id))
-	return &ExecutionUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *HandlerExecutionClient) UpdateOneID(id string) *HandlerExecutionUpdateOne {
+	mutation := newHandlerExecutionMutation(c.config, OpUpdateOne, withHandlerExecutionID(id))
+	return &HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for ExecutionUnit.
-func (c *ExecutionUnitClient) Delete() *ExecutionUnitDelete {
-	mutation := newExecutionUnitMutation(c.config, OpDelete)
-	return &ExecutionUnitDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for HandlerExecution.
+func (c *HandlerExecutionClient) Delete() *HandlerExecutionDelete {
+	mutation := newHandlerExecutionMutation(c.config, OpDelete)
+	return &HandlerExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *ExecutionUnitClient) DeleteOne(eu *ExecutionUnit) *ExecutionUnitDeleteOne {
-	return c.DeleteOneID(eu.ID)
+func (c *HandlerExecutionClient) DeleteOne(he *HandlerExecution) *HandlerExecutionDeleteOne {
+	return c.DeleteOneID(he.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ExecutionUnitClient) DeleteOneID(id string) *ExecutionUnitDeleteOne {
-	builder := c.Delete().Where(executionunit.ID(id))
+func (c *HandlerExecutionClient) DeleteOneID(id string) *HandlerExecutionDeleteOne {
+	builder := c.Delete().Where(handlerexecution.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &ExecutionUnitDeleteOne{builder}
+	return &HandlerExecutionDeleteOne{builder}
 }
 
-// Query returns a query builder for ExecutionUnit.
-func (c *ExecutionUnitClient) Query() *ExecutionUnitQuery {
-	return &ExecutionUnitQuery{
+// Query returns a query builder for HandlerExecution.
+func (c *HandlerExecutionClient) Query() *HandlerExecutionQuery {
+	return &HandlerExecutionQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeExecutionUnit},
+		ctx:    &QueryContext{Type: TypeHandlerExecution},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a ExecutionUnit entity by its id.
-func (c *ExecutionUnitClient) Get(ctx context.Context, id string) (*ExecutionUnit, error) {
-	return c.Query().Where(executionunit.ID(id)).Only(ctx)
+// Get returns a HandlerExecution entity by its id.
+func (c *HandlerExecutionClient) Get(ctx context.Context, id string) (*HandlerExecution, error) {
+	return c.Query().Where(handlerexecution.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *ExecutionUnitClient) GetX(ctx context.Context, id string) *ExecutionUnit {
+func (c *HandlerExecutionClient) GetX(ctx context.Context, id string) *HandlerExecution {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -494,228 +536,212 @@ func (c *ExecutionUnitClient) GetX(ctx context.Context, id string) *ExecutionUni
 	return obj
 }
 
-// QueryExecutionContext queries the execution_context edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QueryExecutionContext(eu *ExecutionUnit) *ExecutionContextQuery {
+// QueryExecutionContext queries the execution_context edge of a HandlerExecution.
+func (c *HandlerExecutionClient) QueryExecutionContext(he *HandlerExecution) *ExecutionContextQuery {
 	query := (&ExecutionContextClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
+		id := he.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
+			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
 			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, executionunit.ExecutionContextTable, executionunit.ExecutionContextColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, handlerexecution.ExecutionContextTable, handlerexecution.ExecutionContextColumn),
 		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QueryParent queries the parent edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QueryParent(eu *ExecutionUnit) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
+// QueryParent queries the parent edge of a HandlerExecution.
+func (c *HandlerExecutionClient) QueryParent(he *HandlerExecution) *HandlerExecutionQuery {
+	query := (&HandlerExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
+		id := he.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, executionunit.ParentTable, executionunit.ParentColumn),
+			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
+			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, handlerexecution.ParentTable, handlerexecution.ParentColumn),
 		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QueryChildren queries the children edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QueryChildren(eu *ExecutionUnit) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
+// QueryChildren queries the children edge of a HandlerExecution.
+func (c *HandlerExecutionClient) QueryChildren(he *HandlerExecution) *HandlerExecutionQuery {
+	query := (&HandlerExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
+		id := he.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executionunit.ChildrenTable, executionunit.ChildrenColumn),
+			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
+			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, handlerexecution.ChildrenTable, handlerexecution.ChildrenColumn),
 		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QueryTasks queries the tasks edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QueryTasks(eu *ExecutionUnit) *TaskQuery {
-	query := (&TaskClient{config: c.config}).Query()
+// QueryTasks queries the tasks edge of a HandlerExecution.
+func (c *HandlerExecutionClient) QueryTasks(he *HandlerExecution) *HandlerTaskQuery {
+	query := (&HandlerTaskClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
+		id := he.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
-			sqlgraph.To(task.Table, task.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executionunit.TasksTable, executionunit.TasksColumn),
+			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
+			sqlgraph.To(handlertask.Table, handlertask.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, handlerexecution.TasksTable, handlerexecution.TasksColumn),
 		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QuerySagaTransactions queries the saga_transactions edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QuerySagaTransactions(eu *ExecutionUnit) *SagaTransactionQuery {
-	query := (&SagaTransactionClient{config: c.config}).Query()
+// QuerySagaStepExecution queries the saga_step_execution edge of a HandlerExecution.
+func (c *HandlerExecutionClient) QuerySagaStepExecution(he *HandlerExecution) *SagaStepExecutionQuery {
+	query := (&SagaStepExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
+		id := he.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
-			sqlgraph.To(sagatransaction.Table, sagatransaction.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executionunit.SagaTransactionsTable, executionunit.SagaTransactionsColumn),
+			sqlgraph.From(handlerexecution.Table, handlerexecution.FieldID, id),
+			sqlgraph.To(sagastepexecution.Table, sagastepexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, handlerexecution.SagaStepExecutionTable, handlerexecution.SagaStepExecutionColumn),
 		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySagaCompensations queries the saga_compensations edge of a ExecutionUnit.
-func (c *ExecutionUnitClient) QuerySagaCompensations(eu *ExecutionUnit) *SagaCompensationQuery {
-	query := (&SagaCompensationClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := eu.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(executionunit.Table, executionunit.FieldID, id),
-			sqlgraph.To(sagacompensation.Table, sagacompensation.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, executionunit.SagaCompensationsTable, executionunit.SagaCompensationsColumn),
-		)
-		fromV = sqlgraph.Neighbors(eu.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(he.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
 // Hooks returns the client hooks.
-func (c *ExecutionUnitClient) Hooks() []Hook {
-	return c.hooks.ExecutionUnit
+func (c *HandlerExecutionClient) Hooks() []Hook {
+	return c.hooks.HandlerExecution
 }
 
 // Interceptors returns the client interceptors.
-func (c *ExecutionUnitClient) Interceptors() []Interceptor {
-	return c.inters.ExecutionUnit
+func (c *HandlerExecutionClient) Interceptors() []Interceptor {
+	return c.inters.HandlerExecution
 }
 
-func (c *ExecutionUnitClient) mutate(ctx context.Context, m *ExecutionUnitMutation) (Value, error) {
+func (c *HandlerExecutionClient) mutate(ctx context.Context, m *HandlerExecutionMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&ExecutionUnitCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&ExecutionUnitUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&ExecutionUnitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&ExecutionUnitDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&HandlerExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown ExecutionUnit mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown HandlerExecution mutation op: %q", m.Op())
 	}
 }
 
-// SagaCompensationClient is a client for the SagaCompensation schema.
-type SagaCompensationClient struct {
+// HandlerTaskClient is a client for the HandlerTask schema.
+type HandlerTaskClient struct {
 	config
 }
 
-// NewSagaCompensationClient returns a client for the SagaCompensation from the given config.
-func NewSagaCompensationClient(c config) *SagaCompensationClient {
-	return &SagaCompensationClient{config: c}
+// NewHandlerTaskClient returns a client for the HandlerTask from the given config.
+func NewHandlerTaskClient(c config) *HandlerTaskClient {
+	return &HandlerTaskClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `sagacompensation.Hooks(f(g(h())))`.
-func (c *SagaCompensationClient) Use(hooks ...Hook) {
-	c.hooks.SagaCompensation = append(c.hooks.SagaCompensation, hooks...)
+// A call to `Use(f, g, h)` equals to `handlertask.Hooks(f(g(h())))`.
+func (c *HandlerTaskClient) Use(hooks ...Hook) {
+	c.hooks.HandlerTask = append(c.hooks.HandlerTask, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `sagacompensation.Intercept(f(g(h())))`.
-func (c *SagaCompensationClient) Intercept(interceptors ...Interceptor) {
-	c.inters.SagaCompensation = append(c.inters.SagaCompensation, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `handlertask.Intercept(f(g(h())))`.
+func (c *HandlerTaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.HandlerTask = append(c.inters.HandlerTask, interceptors...)
 }
 
-// Create returns a builder for creating a SagaCompensation entity.
-func (c *SagaCompensationClient) Create() *SagaCompensationCreate {
-	mutation := newSagaCompensationMutation(c.config, OpCreate)
-	return &SagaCompensationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a HandlerTask entity.
+func (c *HandlerTaskClient) Create() *HandlerTaskCreate {
+	mutation := newHandlerTaskMutation(c.config, OpCreate)
+	return &HandlerTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of SagaCompensation entities.
-func (c *SagaCompensationClient) CreateBulk(builders ...*SagaCompensationCreate) *SagaCompensationCreateBulk {
-	return &SagaCompensationCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of HandlerTask entities.
+func (c *HandlerTaskClient) CreateBulk(builders ...*HandlerTaskCreate) *HandlerTaskCreateBulk {
+	return &HandlerTaskCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *SagaCompensationClient) MapCreateBulk(slice any, setFunc func(*SagaCompensationCreate, int)) *SagaCompensationCreateBulk {
+func (c *HandlerTaskClient) MapCreateBulk(slice any, setFunc func(*HandlerTaskCreate, int)) *HandlerTaskCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &SagaCompensationCreateBulk{err: fmt.Errorf("calling to SagaCompensationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &HandlerTaskCreateBulk{err: fmt.Errorf("calling to HandlerTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*SagaCompensationCreate, rv.Len())
+	builders := make([]*HandlerTaskCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &SagaCompensationCreateBulk{config: c.config, builders: builders}
+	return &HandlerTaskCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for SagaCompensation.
-func (c *SagaCompensationClient) Update() *SagaCompensationUpdate {
-	mutation := newSagaCompensationMutation(c.config, OpUpdate)
-	return &SagaCompensationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for HandlerTask.
+func (c *HandlerTaskClient) Update() *HandlerTaskUpdate {
+	mutation := newHandlerTaskMutation(c.config, OpUpdate)
+	return &HandlerTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *SagaCompensationClient) UpdateOne(sc *SagaCompensation) *SagaCompensationUpdateOne {
-	mutation := newSagaCompensationMutation(c.config, OpUpdateOne, withSagaCompensation(sc))
-	return &SagaCompensationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *HandlerTaskClient) UpdateOne(ht *HandlerTask) *HandlerTaskUpdateOne {
+	mutation := newHandlerTaskMutation(c.config, OpUpdateOne, withHandlerTask(ht))
+	return &HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *SagaCompensationClient) UpdateOneID(id string) *SagaCompensationUpdateOne {
-	mutation := newSagaCompensationMutation(c.config, OpUpdateOne, withSagaCompensationID(id))
-	return &SagaCompensationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *HandlerTaskClient) UpdateOneID(id string) *HandlerTaskUpdateOne {
+	mutation := newHandlerTaskMutation(c.config, OpUpdateOne, withHandlerTaskID(id))
+	return &HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for SagaCompensation.
-func (c *SagaCompensationClient) Delete() *SagaCompensationDelete {
-	mutation := newSagaCompensationMutation(c.config, OpDelete)
-	return &SagaCompensationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for HandlerTask.
+func (c *HandlerTaskClient) Delete() *HandlerTaskDelete {
+	mutation := newHandlerTaskMutation(c.config, OpDelete)
+	return &HandlerTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *SagaCompensationClient) DeleteOne(sc *SagaCompensation) *SagaCompensationDeleteOne {
-	return c.DeleteOneID(sc.ID)
+func (c *HandlerTaskClient) DeleteOne(ht *HandlerTask) *HandlerTaskDeleteOne {
+	return c.DeleteOneID(ht.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SagaCompensationClient) DeleteOneID(id string) *SagaCompensationDeleteOne {
-	builder := c.Delete().Where(sagacompensation.ID(id))
+func (c *HandlerTaskClient) DeleteOneID(id string) *HandlerTaskDeleteOne {
+	builder := c.Delete().Where(handlertask.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &SagaCompensationDeleteOne{builder}
+	return &HandlerTaskDeleteOne{builder}
 }
 
-// Query returns a query builder for SagaCompensation.
-func (c *SagaCompensationClient) Query() *SagaCompensationQuery {
-	return &SagaCompensationQuery{
+// Query returns a query builder for HandlerTask.
+func (c *HandlerTaskClient) Query() *HandlerTaskQuery {
+	return &HandlerTaskQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeSagaCompensation},
+		ctx:    &QueryContext{Type: TypeHandlerTask},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a SagaCompensation entity by its id.
-func (c *SagaCompensationClient) Get(ctx context.Context, id string) (*SagaCompensation, error) {
-	return c.Query().Where(sagacompensation.ID(id)).Only(ctx)
+// Get returns a HandlerTask entity by its id.
+func (c *HandlerTaskClient) Get(ctx context.Context, id string) (*HandlerTask, error) {
+	return c.Query().Where(handlertask.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *SagaCompensationClient) GetX(ctx context.Context, id string) *SagaCompensation {
+func (c *HandlerTaskClient) GetX(ctx context.Context, id string) *HandlerTask {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -723,180 +749,148 @@ func (c *SagaCompensationClient) GetX(ctx context.Context, id string) *SagaCompe
 	return obj
 }
 
-// QueryExecutionUnit queries the execution_unit edge of a SagaCompensation.
-func (c *SagaCompensationClient) QueryExecutionUnit(sc *SagaCompensation) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
+// QueryHandlerExecution queries the handler_execution edge of a HandlerTask.
+func (c *HandlerTaskClient) QueryHandlerExecution(ht *HandlerTask) *HandlerExecutionQuery {
+	query := (&HandlerExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := sc.ID
+		id := ht.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(sagacompensation.Table, sagacompensation.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sagacompensation.ExecutionUnitTable, sagacompensation.ExecutionUnitColumn),
+			sqlgraph.From(handlertask.Table, handlertask.FieldID, id),
+			sqlgraph.To(handlerexecution.Table, handlerexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, handlertask.HandlerExecutionTable, handlertask.HandlerExecutionColumn),
 		)
-		fromV = sqlgraph.Neighbors(sc.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTask queries the task edge of a SagaCompensation.
-func (c *SagaCompensationClient) QueryTask(sc *SagaCompensation) *TaskQuery {
-	query := (&TaskClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := sc.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sagacompensation.Table, sagacompensation.FieldID, id),
-			sqlgraph.To(task.Table, task.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, sagacompensation.TaskTable, sagacompensation.TaskColumn),
-		)
-		fromV = sqlgraph.Neighbors(sc.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTransaction queries the transaction edge of a SagaCompensation.
-func (c *SagaCompensationClient) QueryTransaction(sc *SagaCompensation) *SagaTransactionQuery {
-	query := (&SagaTransactionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := sc.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sagacompensation.Table, sagacompensation.FieldID, id),
-			sqlgraph.To(sagatransaction.Table, sagatransaction.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, sagacompensation.TransactionTable, sagacompensation.TransactionColumn),
-		)
-		fromV = sqlgraph.Neighbors(sc.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(ht.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
 // Hooks returns the client hooks.
-func (c *SagaCompensationClient) Hooks() []Hook {
-	return c.hooks.SagaCompensation
+func (c *HandlerTaskClient) Hooks() []Hook {
+	return c.hooks.HandlerTask
 }
 
 // Interceptors returns the client interceptors.
-func (c *SagaCompensationClient) Interceptors() []Interceptor {
-	return c.inters.SagaCompensation
+func (c *HandlerTaskClient) Interceptors() []Interceptor {
+	return c.inters.HandlerTask
 }
 
-func (c *SagaCompensationClient) mutate(ctx context.Context, m *SagaCompensationMutation) (Value, error) {
+func (c *HandlerTaskClient) mutate(ctx context.Context, m *HandlerTaskMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&SagaCompensationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&SagaCompensationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&SagaCompensationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&HandlerTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&SagaCompensationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&HandlerTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown SagaCompensation mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown HandlerTask mutation op: %q", m.Op())
 	}
 }
 
-// SagaTransactionClient is a client for the SagaTransaction schema.
-type SagaTransactionClient struct {
+// SagaExecutionClient is a client for the SagaExecution schema.
+type SagaExecutionClient struct {
 	config
 }
 
-// NewSagaTransactionClient returns a client for the SagaTransaction from the given config.
-func NewSagaTransactionClient(c config) *SagaTransactionClient {
-	return &SagaTransactionClient{config: c}
+// NewSagaExecutionClient returns a client for the SagaExecution from the given config.
+func NewSagaExecutionClient(c config) *SagaExecutionClient {
+	return &SagaExecutionClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `sagatransaction.Hooks(f(g(h())))`.
-func (c *SagaTransactionClient) Use(hooks ...Hook) {
-	c.hooks.SagaTransaction = append(c.hooks.SagaTransaction, hooks...)
+// A call to `Use(f, g, h)` equals to `sagaexecution.Hooks(f(g(h())))`.
+func (c *SagaExecutionClient) Use(hooks ...Hook) {
+	c.hooks.SagaExecution = append(c.hooks.SagaExecution, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `sagatransaction.Intercept(f(g(h())))`.
-func (c *SagaTransactionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.SagaTransaction = append(c.inters.SagaTransaction, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `sagaexecution.Intercept(f(g(h())))`.
+func (c *SagaExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SagaExecution = append(c.inters.SagaExecution, interceptors...)
 }
 
-// Create returns a builder for creating a SagaTransaction entity.
-func (c *SagaTransactionClient) Create() *SagaTransactionCreate {
-	mutation := newSagaTransactionMutation(c.config, OpCreate)
-	return &SagaTransactionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a SagaExecution entity.
+func (c *SagaExecutionClient) Create() *SagaExecutionCreate {
+	mutation := newSagaExecutionMutation(c.config, OpCreate)
+	return &SagaExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of SagaTransaction entities.
-func (c *SagaTransactionClient) CreateBulk(builders ...*SagaTransactionCreate) *SagaTransactionCreateBulk {
-	return &SagaTransactionCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of SagaExecution entities.
+func (c *SagaExecutionClient) CreateBulk(builders ...*SagaExecutionCreate) *SagaExecutionCreateBulk {
+	return &SagaExecutionCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *SagaTransactionClient) MapCreateBulk(slice any, setFunc func(*SagaTransactionCreate, int)) *SagaTransactionCreateBulk {
+func (c *SagaExecutionClient) MapCreateBulk(slice any, setFunc func(*SagaExecutionCreate, int)) *SagaExecutionCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &SagaTransactionCreateBulk{err: fmt.Errorf("calling to SagaTransactionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &SagaExecutionCreateBulk{err: fmt.Errorf("calling to SagaExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*SagaTransactionCreate, rv.Len())
+	builders := make([]*SagaExecutionCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &SagaTransactionCreateBulk{config: c.config, builders: builders}
+	return &SagaExecutionCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for SagaTransaction.
-func (c *SagaTransactionClient) Update() *SagaTransactionUpdate {
-	mutation := newSagaTransactionMutation(c.config, OpUpdate)
-	return &SagaTransactionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for SagaExecution.
+func (c *SagaExecutionClient) Update() *SagaExecutionUpdate {
+	mutation := newSagaExecutionMutation(c.config, OpUpdate)
+	return &SagaExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *SagaTransactionClient) UpdateOne(st *SagaTransaction) *SagaTransactionUpdateOne {
-	mutation := newSagaTransactionMutation(c.config, OpUpdateOne, withSagaTransaction(st))
-	return &SagaTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SagaExecutionClient) UpdateOne(se *SagaExecution) *SagaExecutionUpdateOne {
+	mutation := newSagaExecutionMutation(c.config, OpUpdateOne, withSagaExecution(se))
+	return &SagaExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *SagaTransactionClient) UpdateOneID(id string) *SagaTransactionUpdateOne {
-	mutation := newSagaTransactionMutation(c.config, OpUpdateOne, withSagaTransactionID(id))
-	return &SagaTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SagaExecutionClient) UpdateOneID(id string) *SagaExecutionUpdateOne {
+	mutation := newSagaExecutionMutation(c.config, OpUpdateOne, withSagaExecutionID(id))
+	return &SagaExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for SagaTransaction.
-func (c *SagaTransactionClient) Delete() *SagaTransactionDelete {
-	mutation := newSagaTransactionMutation(c.config, OpDelete)
-	return &SagaTransactionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for SagaExecution.
+func (c *SagaExecutionClient) Delete() *SagaExecutionDelete {
+	mutation := newSagaExecutionMutation(c.config, OpDelete)
+	return &SagaExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *SagaTransactionClient) DeleteOne(st *SagaTransaction) *SagaTransactionDeleteOne {
-	return c.DeleteOneID(st.ID)
+func (c *SagaExecutionClient) DeleteOne(se *SagaExecution) *SagaExecutionDeleteOne {
+	return c.DeleteOneID(se.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SagaTransactionClient) DeleteOneID(id string) *SagaTransactionDeleteOne {
-	builder := c.Delete().Where(sagatransaction.ID(id))
+func (c *SagaExecutionClient) DeleteOneID(id string) *SagaExecutionDeleteOne {
+	builder := c.Delete().Where(sagaexecution.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &SagaTransactionDeleteOne{builder}
+	return &SagaExecutionDeleteOne{builder}
 }
 
-// Query returns a query builder for SagaTransaction.
-func (c *SagaTransactionClient) Query() *SagaTransactionQuery {
-	return &SagaTransactionQuery{
+// Query returns a query builder for SagaExecution.
+func (c *SagaExecutionClient) Query() *SagaExecutionQuery {
+	return &SagaExecutionQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeSagaTransaction},
+		ctx:    &QueryContext{Type: TypeSagaExecution},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a SagaTransaction entity by its id.
-func (c *SagaTransactionClient) Get(ctx context.Context, id string) (*SagaTransaction, error) {
-	return c.Query().Where(sagatransaction.ID(id)).Only(ctx)
+// Get returns a SagaExecution entity by its id.
+func (c *SagaExecutionClient) Get(ctx context.Context, id string) (*SagaExecution, error) {
+	return c.Query().Where(sagaexecution.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *SagaTransactionClient) GetX(ctx context.Context, id string) *SagaTransaction {
+func (c *SagaExecutionClient) GetX(ctx context.Context, id string) *SagaExecution {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -904,180 +898,164 @@ func (c *SagaTransactionClient) GetX(ctx context.Context, id string) *SagaTransa
 	return obj
 }
 
-// QueryExecutionUnit queries the execution_unit edge of a SagaTransaction.
-func (c *SagaTransactionClient) QueryExecutionUnit(st *SagaTransaction) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
+// QueryExecutionContext queries the execution_context edge of a SagaExecution.
+func (c *SagaExecutionClient) QueryExecutionContext(se *SagaExecution) *ExecutionContextQuery {
+	query := (&ExecutionContextClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := st.ID
+		id := se.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(sagatransaction.Table, sagatransaction.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sagatransaction.ExecutionUnitTable, sagatransaction.ExecutionUnitColumn),
+			sqlgraph.From(sagaexecution.Table, sagaexecution.FieldID, id),
+			sqlgraph.To(executioncontext.Table, executioncontext.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sagaexecution.ExecutionContextTable, sagaexecution.ExecutionContextColumn),
 		)
-		fromV = sqlgraph.Neighbors(st.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
-// QueryTask queries the task edge of a SagaTransaction.
-func (c *SagaTransactionClient) QueryTask(st *SagaTransaction) *TaskQuery {
-	query := (&TaskClient{config: c.config}).Query()
+// QuerySteps queries the steps edge of a SagaExecution.
+func (c *SagaExecutionClient) QuerySteps(se *SagaExecution) *SagaStepExecutionQuery {
+	query := (&SagaStepExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := st.ID
+		id := se.ID
 		step := sqlgraph.NewStep(
-			sqlgraph.From(sagatransaction.Table, sagatransaction.FieldID, id),
-			sqlgraph.To(task.Table, task.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, sagatransaction.TaskTable, sagatransaction.TaskColumn),
+			sqlgraph.From(sagaexecution.Table, sagaexecution.FieldID, id),
+			sqlgraph.To(sagastepexecution.Table, sagastepexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, sagaexecution.StepsTable, sagaexecution.StepsColumn),
 		)
-		fromV = sqlgraph.Neighbors(st.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryCompensation queries the compensation edge of a SagaTransaction.
-func (c *SagaTransactionClient) QueryCompensation(st *SagaTransaction) *SagaCompensationQuery {
-	query := (&SagaCompensationClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := st.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sagatransaction.Table, sagatransaction.FieldID, id),
-			sqlgraph.To(sagacompensation.Table, sagacompensation.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, sagatransaction.CompensationTable, sagatransaction.CompensationColumn),
-		)
-		fromV = sqlgraph.Neighbors(st.driver.Dialect(), step)
+		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
 		return fromV, nil
 	}
 	return query
 }
 
 // Hooks returns the client hooks.
-func (c *SagaTransactionClient) Hooks() []Hook {
-	return c.hooks.SagaTransaction
+func (c *SagaExecutionClient) Hooks() []Hook {
+	return c.hooks.SagaExecution
 }
 
 // Interceptors returns the client interceptors.
-func (c *SagaTransactionClient) Interceptors() []Interceptor {
-	return c.inters.SagaTransaction
+func (c *SagaExecutionClient) Interceptors() []Interceptor {
+	return c.inters.SagaExecution
 }
 
-func (c *SagaTransactionClient) mutate(ctx context.Context, m *SagaTransactionMutation) (Value, error) {
+func (c *SagaExecutionClient) mutate(ctx context.Context, m *SagaExecutionMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&SagaTransactionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&SagaTransactionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&SagaTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&SagaTransactionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&SagaExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown SagaTransaction mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown SagaExecution mutation op: %q", m.Op())
 	}
 }
 
-// TaskClient is a client for the Task schema.
-type TaskClient struct {
+// SagaStepExecutionClient is a client for the SagaStepExecution schema.
+type SagaStepExecutionClient struct {
 	config
 }
 
-// NewTaskClient returns a client for the Task from the given config.
-func NewTaskClient(c config) *TaskClient {
-	return &TaskClient{config: c}
+// NewSagaStepExecutionClient returns a client for the SagaStepExecution from the given config.
+func NewSagaStepExecutionClient(c config) *SagaStepExecutionClient {
+	return &SagaStepExecutionClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `task.Hooks(f(g(h())))`.
-func (c *TaskClient) Use(hooks ...Hook) {
-	c.hooks.Task = append(c.hooks.Task, hooks...)
+// A call to `Use(f, g, h)` equals to `sagastepexecution.Hooks(f(g(h())))`.
+func (c *SagaStepExecutionClient) Use(hooks ...Hook) {
+	c.hooks.SagaStepExecution = append(c.hooks.SagaStepExecution, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `task.Intercept(f(g(h())))`.
-func (c *TaskClient) Intercept(interceptors ...Interceptor) {
-	c.inters.Task = append(c.inters.Task, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `sagastepexecution.Intercept(f(g(h())))`.
+func (c *SagaStepExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SagaStepExecution = append(c.inters.SagaStepExecution, interceptors...)
 }
 
-// Create returns a builder for creating a Task entity.
-func (c *TaskClient) Create() *TaskCreate {
-	mutation := newTaskMutation(c.config, OpCreate)
-	return &TaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a SagaStepExecution entity.
+func (c *SagaStepExecutionClient) Create() *SagaStepExecutionCreate {
+	mutation := newSagaStepExecutionMutation(c.config, OpCreate)
+	return &SagaStepExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of Task entities.
-func (c *TaskClient) CreateBulk(builders ...*TaskCreate) *TaskCreateBulk {
-	return &TaskCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of SagaStepExecution entities.
+func (c *SagaStepExecutionClient) CreateBulk(builders ...*SagaStepExecutionCreate) *SagaStepExecutionCreateBulk {
+	return &SagaStepExecutionCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *TaskClient) MapCreateBulk(slice any, setFunc func(*TaskCreate, int)) *TaskCreateBulk {
+func (c *SagaStepExecutionClient) MapCreateBulk(slice any, setFunc func(*SagaStepExecutionCreate, int)) *SagaStepExecutionCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &TaskCreateBulk{err: fmt.Errorf("calling to TaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &SagaStepExecutionCreateBulk{err: fmt.Errorf("calling to SagaStepExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*TaskCreate, rv.Len())
+	builders := make([]*SagaStepExecutionCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &TaskCreateBulk{config: c.config, builders: builders}
+	return &SagaStepExecutionCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for Task.
-func (c *TaskClient) Update() *TaskUpdate {
-	mutation := newTaskMutation(c.config, OpUpdate)
-	return &TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for SagaStepExecution.
+func (c *SagaStepExecutionClient) Update() *SagaStepExecutionUpdate {
+	mutation := newSagaStepExecutionMutation(c.config, OpUpdate)
+	return &SagaStepExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *TaskClient) UpdateOne(t *Task) *TaskUpdateOne {
-	mutation := newTaskMutation(c.config, OpUpdateOne, withTask(t))
-	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SagaStepExecutionClient) UpdateOne(sse *SagaStepExecution) *SagaStepExecutionUpdateOne {
+	mutation := newSagaStepExecutionMutation(c.config, OpUpdateOne, withSagaStepExecution(sse))
+	return &SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *TaskClient) UpdateOneID(id string) *TaskUpdateOne {
-	mutation := newTaskMutation(c.config, OpUpdateOne, withTaskID(id))
-	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *SagaStepExecutionClient) UpdateOneID(id string) *SagaStepExecutionUpdateOne {
+	mutation := newSagaStepExecutionMutation(c.config, OpUpdateOne, withSagaStepExecutionID(id))
+	return &SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for Task.
-func (c *TaskClient) Delete() *TaskDelete {
-	mutation := newTaskMutation(c.config, OpDelete)
-	return &TaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for SagaStepExecution.
+func (c *SagaStepExecutionClient) Delete() *SagaStepExecutionDelete {
+	mutation := newSagaStepExecutionMutation(c.config, OpDelete)
+	return &SagaStepExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *TaskClient) DeleteOne(t *Task) *TaskDeleteOne {
-	return c.DeleteOneID(t.ID)
+func (c *SagaStepExecutionClient) DeleteOne(sse *SagaStepExecution) *SagaStepExecutionDeleteOne {
+	return c.DeleteOneID(sse.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *TaskClient) DeleteOneID(id string) *TaskDeleteOne {
-	builder := c.Delete().Where(task.ID(id))
+func (c *SagaStepExecutionClient) DeleteOneID(id string) *SagaStepExecutionDeleteOne {
+	builder := c.Delete().Where(sagastepexecution.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &TaskDeleteOne{builder}
+	return &SagaStepExecutionDeleteOne{builder}
 }
 
-// Query returns a query builder for Task.
-func (c *TaskClient) Query() *TaskQuery {
-	return &TaskQuery{
+// Query returns a query builder for SagaStepExecution.
+func (c *SagaStepExecutionClient) Query() *SagaStepExecutionQuery {
+	return &SagaStepExecutionQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeTask},
+		ctx:    &QueryContext{Type: TypeSagaStepExecution},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a Task entity by its id.
-func (c *TaskClient) Get(ctx context.Context, id string) (*Task, error) {
-	return c.Query().Where(task.ID(id)).Only(ctx)
+// Get returns a SagaStepExecution entity by its id.
+func (c *SagaStepExecutionClient) Get(ctx context.Context, id string) (*SagaStepExecution, error) {
+	return c.Query().Where(sagastepexecution.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *TaskClient) GetX(ctx context.Context, id string) *Task {
+func (c *SagaStepExecutionClient) GetX(ctx context.Context, id string) *SagaStepExecution {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -1085,55 +1063,172 @@ func (c *TaskClient) GetX(ctx context.Context, id string) *Task {
 	return obj
 }
 
-// QueryExecutionUnit queries the execution_unit edge of a Task.
-func (c *TaskClient) QueryExecutionUnit(t *Task) *ExecutionUnitQuery {
-	query := (&ExecutionUnitClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := t.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(task.Table, task.FieldID, id),
-			sqlgraph.To(executionunit.Table, executionunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, task.ExecutionUnitTable, task.ExecutionUnitColumn),
-		)
-		fromV = sqlgraph.Neighbors(t.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
-func (c *TaskClient) Hooks() []Hook {
-	return c.hooks.Task
+func (c *SagaStepExecutionClient) Hooks() []Hook {
+	return c.hooks.SagaStepExecution
 }
 
 // Interceptors returns the client interceptors.
-func (c *TaskClient) Interceptors() []Interceptor {
-	return c.inters.Task
+func (c *SagaStepExecutionClient) Interceptors() []Interceptor {
+	return c.inters.SagaStepExecution
 }
 
-func (c *TaskClient) mutate(ctx context.Context, m *TaskMutation) (Value, error) {
+func (c *SagaStepExecutionClient) mutate(ctx context.Context, m *SagaStepExecutionMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&TaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaStepExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaStepExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&TaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&SagaStepExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("ent: unknown Task mutation op: %q", m.Op())
+		return nil, fmt.Errorf("ent: unknown SagaStepExecution mutation op: %q", m.Op())
+	}
+}
+
+// SideEffectResultClient is a client for the SideEffectResult schema.
+type SideEffectResultClient struct {
+	config
+}
+
+// NewSideEffectResultClient returns a client for the SideEffectResult from the given config.
+func NewSideEffectResultClient(c config) *SideEffectResultClient {
+	return &SideEffectResultClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sideeffectresult.Hooks(f(g(h())))`.
+func (c *SideEffectResultClient) Use(hooks ...Hook) {
+	c.hooks.SideEffectResult = append(c.hooks.SideEffectResult, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sideeffectresult.Intercept(f(g(h())))`.
+func (c *SideEffectResultClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SideEffectResult = append(c.inters.SideEffectResult, interceptors...)
+}
+
+// Create returns a builder for creating a SideEffectResult entity.
+func (c *SideEffectResultClient) Create() *SideEffectResultCreate {
+	mutation := newSideEffectResultMutation(c.config, OpCreate)
+	return &SideEffectResultCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SideEffectResult entities.
+func (c *SideEffectResultClient) CreateBulk(builders ...*SideEffectResultCreate) *SideEffectResultCreateBulk {
+	return &SideEffectResultCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SideEffectResultClient) MapCreateBulk(slice any, setFunc func(*SideEffectResultCreate, int)) *SideEffectResultCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SideEffectResultCreateBulk{err: fmt.Errorf("calling to SideEffectResultClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SideEffectResultCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SideEffectResultCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SideEffectResult.
+func (c *SideEffectResultClient) Update() *SideEffectResultUpdate {
+	mutation := newSideEffectResultMutation(c.config, OpUpdate)
+	return &SideEffectResultUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SideEffectResultClient) UpdateOne(ser *SideEffectResult) *SideEffectResultUpdateOne {
+	mutation := newSideEffectResultMutation(c.config, OpUpdateOne, withSideEffectResult(ser))
+	return &SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SideEffectResultClient) UpdateOneID(id string) *SideEffectResultUpdateOne {
+	mutation := newSideEffectResultMutation(c.config, OpUpdateOne, withSideEffectResultID(id))
+	return &SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SideEffectResult.
+func (c *SideEffectResultClient) Delete() *SideEffectResultDelete {
+	mutation := newSideEffectResultMutation(c.config, OpDelete)
+	return &SideEffectResultDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SideEffectResultClient) DeleteOne(ser *SideEffectResult) *SideEffectResultDeleteOne {
+	return c.DeleteOneID(ser.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SideEffectResultClient) DeleteOneID(id string) *SideEffectResultDeleteOne {
+	builder := c.Delete().Where(sideeffectresult.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SideEffectResultDeleteOne{builder}
+}
+
+// Query returns a query builder for SideEffectResult.
+func (c *SideEffectResultClient) Query() *SideEffectResultQuery {
+	return &SideEffectResultQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSideEffectResult},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SideEffectResult entity by its id.
+func (c *SideEffectResultClient) Get(ctx context.Context, id string) (*SideEffectResult, error) {
+	return c.Query().Where(sideeffectresult.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SideEffectResultClient) GetX(ctx context.Context, id string) *SideEffectResult {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SideEffectResultClient) Hooks() []Hook {
+	return c.hooks.SideEffectResult
+}
+
+// Interceptors returns the client interceptors.
+func (c *SideEffectResultClient) Interceptors() []Interceptor {
+	return c.inters.SideEffectResult
+}
+
+func (c *SideEffectResultClient) mutate(ctx context.Context, m *SideEffectResultMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SideEffectResultCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SideEffectResultUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SideEffectResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SideEffectResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SideEffectResult mutation op: %q", m.Op())
 	}
 }
 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		ExecutionContext, ExecutionUnit, SagaCompensation, SagaTransaction,
-		Task []ent.Hook
+		ExecutionContext, HandlerExecution, HandlerTask, SagaExecution,
+		SagaStepExecution, SideEffectResult []ent.Hook
 	}
 	inters struct {
-		ExecutionContext, ExecutionUnit, SagaCompensation, SagaTransaction,
-		Task []ent.Interceptor
+		ExecutionContext, HandlerExecution, HandlerTask, SagaExecution,
+		SagaStepExecution, SideEffectResult []ent.Interceptor
 	}
 )

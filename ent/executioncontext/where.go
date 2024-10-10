@@ -255,21 +255,67 @@ func EndTimeNotNil() predicate.ExecutionContext {
 	return predicate.ExecutionContext(sql.FieldNotNull(FieldEndTime))
 }
 
-// HasExecutionUnits applies the HasEdge predicate on the "execution_units" edge.
-func HasExecutionUnits() predicate.ExecutionContext {
+// HasHandlerExecutions applies the HasEdge predicate on the "handler_executions" edge.
+func HasHandlerExecutions() predicate.ExecutionContext {
 	return predicate.ExecutionContext(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ExecutionUnitsTable, ExecutionUnitsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, HandlerExecutionsTable, HandlerExecutionsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasExecutionUnitsWith applies the HasEdge predicate on the "execution_units" edge with a given conditions (other predicates).
-func HasExecutionUnitsWith(preds ...predicate.ExecutionUnit) predicate.ExecutionContext {
+// HasHandlerExecutionsWith applies the HasEdge predicate on the "handler_executions" edge with a given conditions (other predicates).
+func HasHandlerExecutionsWith(preds ...predicate.HandlerExecution) predicate.ExecutionContext {
 	return predicate.ExecutionContext(func(s *sql.Selector) {
-		step := newExecutionUnitsStep()
+		step := newHandlerExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSideEffectResults applies the HasEdge predicate on the "side_effect_results" edge.
+func HasSideEffectResults() predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SideEffectResultsTable, SideEffectResultsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSideEffectResultsWith applies the HasEdge predicate on the "side_effect_results" edge with a given conditions (other predicates).
+func HasSideEffectResultsWith(preds ...predicate.SideEffectResult) predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := newSideEffectResultsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSagaExecutions applies the HasEdge predicate on the "saga_executions" edge.
+func HasSagaExecutions() predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SagaExecutionsTable, SagaExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSagaExecutionsWith applies the HasEdge predicate on the "saga_executions" edge with a given conditions (other predicates).
+func HasSagaExecutionsWith(preds ...predicate.SagaExecution) predicate.ExecutionContext {
+	return predicate.ExecutionContext(func(s *sql.Selector) {
+		step := newSagaExecutionsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

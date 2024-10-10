@@ -11,7 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/executioncontext"
-	"github.com/davidroman0O/go-tempolite/ent/executionunit"
+	"github.com/davidroman0O/go-tempolite/ent/handlerexecution"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectresult"
 )
 
 // ExecutionContextCreate is the builder for creating a ExecutionContext entity.
@@ -59,19 +61,49 @@ func (ecc *ExecutionContextCreate) SetID(s string) *ExecutionContextCreate {
 	return ecc
 }
 
-// AddExecutionUnitIDs adds the "execution_units" edge to the ExecutionUnit entity by IDs.
-func (ecc *ExecutionContextCreate) AddExecutionUnitIDs(ids ...string) *ExecutionContextCreate {
-	ecc.mutation.AddExecutionUnitIDs(ids...)
+// AddHandlerExecutionIDs adds the "handler_executions" edge to the HandlerExecution entity by IDs.
+func (ecc *ExecutionContextCreate) AddHandlerExecutionIDs(ids ...string) *ExecutionContextCreate {
+	ecc.mutation.AddHandlerExecutionIDs(ids...)
 	return ecc
 }
 
-// AddExecutionUnits adds the "execution_units" edges to the ExecutionUnit entity.
-func (ecc *ExecutionContextCreate) AddExecutionUnits(e ...*ExecutionUnit) *ExecutionContextCreate {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+// AddHandlerExecutions adds the "handler_executions" edges to the HandlerExecution entity.
+func (ecc *ExecutionContextCreate) AddHandlerExecutions(h ...*HandlerExecution) *ExecutionContextCreate {
+	ids := make([]string, len(h))
+	for i := range h {
+		ids[i] = h[i].ID
 	}
-	return ecc.AddExecutionUnitIDs(ids...)
+	return ecc.AddHandlerExecutionIDs(ids...)
+}
+
+// AddSideEffectResultIDs adds the "side_effect_results" edge to the SideEffectResult entity by IDs.
+func (ecc *ExecutionContextCreate) AddSideEffectResultIDs(ids ...string) *ExecutionContextCreate {
+	ecc.mutation.AddSideEffectResultIDs(ids...)
+	return ecc
+}
+
+// AddSideEffectResults adds the "side_effect_results" edges to the SideEffectResult entity.
+func (ecc *ExecutionContextCreate) AddSideEffectResults(s ...*SideEffectResult) *ExecutionContextCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecc.AddSideEffectResultIDs(ids...)
+}
+
+// AddSagaExecutionIDs adds the "saga_executions" edge to the SagaExecution entity by IDs.
+func (ecc *ExecutionContextCreate) AddSagaExecutionIDs(ids ...string) *ExecutionContextCreate {
+	ecc.mutation.AddSagaExecutionIDs(ids...)
+	return ecc
+}
+
+// AddSagaExecutions adds the "saga_executions" edges to the SagaExecution entity.
+func (ecc *ExecutionContextCreate) AddSagaExecutions(s ...*SagaExecution) *ExecutionContextCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return ecc.AddSagaExecutionIDs(ids...)
 }
 
 // Mutation returns the ExecutionContextMutation object of the builder.
@@ -173,15 +205,47 @@ func (ecc *ExecutionContextCreate) createSpec() (*ExecutionContext, *sqlgraph.Cr
 		_spec.SetField(executioncontext.FieldEndTime, field.TypeTime, value)
 		_node.EndTime = value
 	}
-	if nodes := ecc.mutation.ExecutionUnitsIDs(); len(nodes) > 0 {
+	if nodes := ecc.mutation.HandlerExecutionsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   executioncontext.ExecutionUnitsTable,
-			Columns: []string{executioncontext.ExecutionUnitsColumn},
+			Table:   executioncontext.HandlerExecutionsTable,
+			Columns: []string{executioncontext.HandlerExecutionsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(executionunit.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(handlerexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := ecc.mutation.SideEffectResultsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SideEffectResultsTable,
+			Columns: []string{executioncontext.SideEffectResultsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sideeffectresult.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := ecc.mutation.SagaExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   executioncontext.SagaExecutionsTable,
+			Columns: []string{executioncontext.SagaExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
