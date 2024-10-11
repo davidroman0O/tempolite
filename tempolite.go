@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
@@ -200,8 +201,29 @@ func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
 }
 
 func (tp *Tempolite) getActivity(id string) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
+	log.Printf("getActivity - looking for workflow execution %s", id)
+	activity, err := tp.client.Activity.Query().
+		Where(activity.IDEQ(id)).
+		WithExecutions().
+		First(tp.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var mostRecentExec *ent.ActivityExecution
+	for _, exec := range activity.Edges.Executions {
+		if mostRecentExec == nil || exec.StartedAt.After(mostRecentExec.StartedAt) {
+			mostRecentExec = exec
+		}
+	}
+
+	info := ActivityInfo{
+		tp:    tp,
+		ID:    activity.ID,
+		RunID: activity.ID,
+	}
+
+	return &info, nil
 }
 
 func (tp *Tempolite) getWorkflow(id string) (*WorkflowInfo, error) {

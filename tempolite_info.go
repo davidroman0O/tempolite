@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
+	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
@@ -87,23 +89,81 @@ func (i *WorkflowInfo) Resume() error {
 	return nil
 }
 
-type ActivityInfo struct{}
+type ActivityInfo struct {
+	tp    *Tempolite
+	ID    string
+	RunID string
+}
 
-func (i *ActivityInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
+func (i *ActivityInfo) Get() ([]interface{}, error) {
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+	var value any
+	var ok bool
+	var activityHandlerInfo Activity
+	for {
+		select {
+		case <-i.tp.ctx.Done():
+			return nil, i.tp.ctx.Err()
+		case <-ticker.C:
+			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ID)).Only(i.tp.ctx)
+			if err != nil {
+				return nil, err
+			}
+			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
+				if activityHandlerInfo, ok = value.(Activity); !ok {
+					log.Printf("scheduler: activity %s is not handler info", i.ID)
+					return nil, errors.New("activity is not handler info")
+				}
+
+				switch activityEntity.Status {
+				// wait for the confirmation that the workflow entity reached a final state
+				case activity.StatusCompleted, activity.StatusFailed, activity.StatusCancelled:
+					// Then only get the latest activity execution
+					// Simply because eventually my children can have retries and i need to let them finish
+					latestExec, err := i.tp.client.ActivityExecution.Query().
+						Where(activityexecution.HasActivityWith(activity.IDEQ(i.ID))).
+						Order(ent.Desc(activityexecution.FieldStartedAt)).
+						First(i.tp.ctx)
+					if err != nil {
+						return nil, err
+					}
+					switch latestExec.Status {
+					case activityexecution.StatusCompleted:
+						return i.tp.convertBackResults(HandlerInfo(activityHandlerInfo), latestExec.Output)
+					case activityexecution.StatusFailed:
+						return nil, errors.New(latestExec.Error)
+					case activityexecution.StatusPending, activityexecution.StatusRunning, activityexecution.StatusRetried:
+						// The workflow is still in progress
+						return nil, errors.New("workflow is still in progress")
+					}
+				default:
+					continue
+				}
+			}
+			runtime.Gosched()
+		}
+	}
+}
+
+type SideEffectInfo struct {
+	tp    *Tempolite
+	ID    string
+	RunID string
+}
+
+func (i *SideEffectInfo) Get() ([]interface{}, error) {
 	// todo: implement
 	return nil, nil
 }
 
-type SideEffectInfo struct{}
-
-func (i *SideEffectInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
-	// todo: implement
-	return nil, nil
+type SagaInfo struct {
+	tp    *Tempolite
+	ID    string
+	RunID string
 }
 
-type SagaInfo struct{}
-
-func (i *SagaInfo) Get(ctx TempoliteContext) ([]interface{}, error) {
+func (i *SagaInfo) Get() ([]interface{}, error) {
 	// todo: implement
 	return nil, nil
 }
@@ -213,13 +273,15 @@ func (w ActivityContext) ExecuteSaga(name HandlerIdentity, inputs interface{}) (
 }
 
 func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
+	id, err := w.tp.enqueueSubActivty(w, name, inputs...)
+	if err != nil {
+		return nil, err
+	}
+	return w.tp.GetActivity(id)
 }
 
 func (w ActivityContext) GetActivity(id string) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
+	return w.tp.GetActivity(id)
 }
 
 type SideEffectContext struct {
