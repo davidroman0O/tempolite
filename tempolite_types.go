@@ -7,6 +7,30 @@ import (
 	"reflect"
 )
 
+type WorkflowID string
+
+func (s WorkflowID) String() string {
+	return string(s)
+}
+
+type WorkflowExecutionID string
+
+func (s WorkflowExecutionID) String() string {
+	return string(s)
+}
+
+type ActivityID string
+
+func (s ActivityID) String() string {
+	return string(s)
+}
+
+type ActivityExecutionID string
+
+func (s ActivityExecutionID) String() string {
+	return string(s)
+}
+
 type HandlerIdentity string
 
 type SagaStep interface {

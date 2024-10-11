@@ -89,7 +89,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 		return true
 	})
 
-	var id string
+	var id WorkflowID
 	if id, err = tp.EnqueueWorkflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 
 	tp, err := New(
 		context.Background(),
-		WithPath("./db/tempolite-workflow-sub-info-get-simple.db"),
+		WithPath("./db/tempolite-workflow-sub-info-child-fail.db"),
 		WithDestructive(),
 	)
 	if err != nil {
@@ -159,12 +159,6 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 			fmt.Println("info.Get failed: ", err)
 			return -1, err
 		}
-
-		// if !failed {
-		// 	failed = true
-		// 	fmt.Println("failed on purpose: ", failed)
-		// 	return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
-		// }
 		return 420, nil
 	}
 
@@ -181,7 +175,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		return true
 	})
 
-	var id string
+	var id WorkflowID
 	if id, err = tp.EnqueueWorkflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
@@ -210,7 +204,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	tp, err := New(
 		context.Background(),
-		WithPath("./db/tempolite-workflow-sub-info-get-simple.db"),
+		WithPath("./db/tempolite-workflow-sub-info-parent-fail.db"),
 		WithDestructive(),
 	)
 	if err != nil {
@@ -265,7 +259,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 		return true
 	})
 
-	var id string
+	var id WorkflowID
 	if id, err = tp.EnqueueWorkflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}

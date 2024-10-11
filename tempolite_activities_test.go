@@ -101,7 +101,7 @@ func TestActivityChildrenSimple(t *testing.T) {
 		return true
 	})
 
-	var id string
+	var id ActivityID
 	if id, err = tp.EnqueueActivity(As[testSimpleParentActivity]()); err != nil {
 		t.Fatalf("EnqueueActivity failed: %v", err)
 	}

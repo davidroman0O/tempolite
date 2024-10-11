@@ -15,7 +15,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
@@ -200,58 +199,6 @@ func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
 	return nil, nil
 }
 
-func (tp *Tempolite) getActivity(id string) (*ActivityInfo, error) {
-	log.Printf("getActivity - looking for workflow execution %s", id)
-	activity, err := tp.client.Activity.Query().
-		Where(activity.IDEQ(id)).
-		WithExecutions().
-		First(tp.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var mostRecentExec *ent.ActivityExecution
-	for _, exec := range activity.Edges.Executions {
-		if mostRecentExec == nil || exec.StartedAt.After(mostRecentExec.StartedAt) {
-			mostRecentExec = exec
-		}
-	}
-
-	info := ActivityInfo{
-		tp:    tp,
-		ID:    activity.ID,
-		RunID: activity.ID,
-	}
-
-	return &info, nil
-}
-
-func (tp *Tempolite) getWorkflow(id string) (*WorkflowInfo, error) {
-	log.Printf("getWorkflow - looking for workflow execution %s", id)
-	workflow, err := tp.client.Workflow.Query().
-		Where(workflow.IDEQ(id)).
-		WithExecutions().
-		First(tp.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var mostRecentExec *ent.WorkflowExecution
-	for _, exec := range workflow.Edges.Executions {
-		if mostRecentExec == nil || exec.StartedAt.After(mostRecentExec.StartedAt) {
-			mostRecentExec = exec
-		}
-	}
-
-	info := WorkflowInfo{
-		tp:    tp,
-		ID:    workflow.ID,
-		RunID: workflow.ID,
-	}
-
-	return &info, nil
-}
-
 func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
 	// todo: implement
 	return nil, nil
@@ -262,7 +209,7 @@ func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
 	return make(chan interface{}, 1)
 }
 
-func (tp *Tempolite) enqueueSubActivty(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (string, error) {
+func (tp *Tempolite) enqueueSubActivty(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
 
 	switch ctx.EntityType() {
 	case "workflow", "activity":
@@ -357,26 +304,28 @@ func (tp *Tempolite) enqueueSubActivty(ctx TempoliteContext, longName HandlerIde
 			return "", err
 		}
 
-		return activityEntity.ID, nil
+		// when we enqueue a sub-activity, that mean we're within the execution model, so we don't care about the activity entity
+		// only the execution
+		return ActivityExecutionID(activityExecution.ID), nil
 
 	} else {
 		return "", fmt.Errorf("activity %s not found", longName)
 	}
 }
 
-func (tp *Tempolite) enqueueSubActivtyFunc(ctx TempoliteContext, activityFunc interface{}, params ...interface{}) (string, error) {
+func (tp *Tempolite) enqueueSubActivtyFunc(ctx TempoliteContext, activityFunc interface{}, params ...interface{}) (ActivityExecutionID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	return tp.enqueueSubActivty(ctx, handlerIdentity, params...)
 }
 
-func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...interface{}) (string, error) {
+func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...interface{}) (ActivityID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	return tp.EnqueueActivity(handlerIdentity, params...)
 }
 
-func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interface{}) (string, error) {
+func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
 	var value any
 	var ok bool
 	var err error
@@ -470,14 +419,14 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 			return "", err
 		}
 
-		return activityEntity.ID, nil
+		// we're outside of the execution model, so we care about the activity entity
+		return ActivityID(activityEntity.ID), nil
 	} else {
 		return "", fmt.Errorf("activity %s not found", longName)
 	}
 }
 
-func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (string, error) {
-
+func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (WorkflowExecutionID, error) {
 	switch ctx.EntityType() {
 	case "workflow", "activity":
 		// nothing
@@ -577,14 +526,16 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 			return "", err
 		}
 
-		return workflowEntity.ID, nil
+		// when we enqueue a sub-workflow, that mean we're within the execution model, so we don't care about the workflow entity
+		// only the execution
+		return WorkflowExecutionID(workflowExecution.ID), nil
 
 	} else {
 		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}
 }
 
-func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (string, error) {
+func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
@@ -681,7 +632,8 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 			return "", err
 		}
 
-		return workflowEntity.ID, nil
+		//	we're outside of the execution model, so we care about the workflow entity
+		return WorkflowID(workflowEntity.ID), nil
 	} else {
 		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}
@@ -699,18 +651,46 @@ func (tp *Tempolite) ResumeWorkflow(id string) (string, error) {
 	return "", nil
 }
 
-func (tp *Tempolite) GetWorkflow(id string) (*WorkflowInfo, error) {
-	return tp.getWorkflow(id)
-}
-
-func (tp *Tempolite) GetActivity(id string) (*ActivityInfo, error) {
-	return tp.getActivity(id)
-}
-
 func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
 	return tp.getSideEffect(id)
 }
 
 func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
 	return tp.getSaga(id)
+}
+
+func (tp *Tempolite) GetWorkflow(id WorkflowID) (*WorkflowInfo, error) {
+	log.Printf("GetWorkflow - looking for workflow %s", id)
+	info := WorkflowInfo{
+		tp:         tp,
+		WorkflowID: id,
+	}
+	return &info, nil
+}
+
+func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID) (*WorkflowExecutionInfo, error) {
+	log.Printf("getWorkflowExecution - looking for workflow execution %s", id)
+	info := WorkflowExecutionInfo{
+		tp:          tp,
+		ExecutionID: id,
+	}
+	return &info, nil
+}
+
+func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
+	log.Printf("GetActivity - looking for activity %s", id)
+	info := ActivityInfo{
+		tp:         tp,
+		ActivityID: id,
+	}
+	return &info, nil
+}
+
+func (tp *Tempolite) getActivity(ctx TempoliteContext, id ActivityExecutionID) (*ActivityExecutionInfo, error) {
+	log.Printf("getActivity - looking for activity execution %s", id)
+	info := ActivityExecutionInfo{
+		tp:          tp,
+		ExecutionID: id,
+	}
+	return &info, nil
 }

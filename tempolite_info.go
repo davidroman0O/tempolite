@@ -16,11 +16,11 @@ import (
 )
 
 type WorkflowInfo struct {
-	tp    *Tempolite
-	ID    string
-	RunID string
+	tp         *Tempolite
+	WorkflowID WorkflowID
 }
 
+// Try to find the latest workflow execution until it reaches a final state
 func (i *WorkflowInfo) Get() ([]interface{}, error) {
 	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
@@ -32,23 +32,23 @@ func (i *WorkflowInfo) Get() ([]interface{}, error) {
 		case <-i.tp.ctx.Done():
 			return nil, i.tp.ctx.Err()
 		case <-ticker.C:
-			workflowEntity, err := i.tp.client.Workflow.Query().Where(workflow.IDEQ(i.ID)).Only(i.tp.ctx)
+
+			workflowEntity, err := i.tp.client.Workflow.Query().Where(workflow.IDEQ(i.WorkflowID.String())).Only(i.tp.ctx)
 			if err != nil {
 				return nil, err
 			}
 			if value, ok = i.tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 				if workflowHandlerInfo, ok = value.(Workflow); !ok {
-					log.Printf("scheduler: workflow %s is not handler info", i.ID)
+					log.Printf("scheduler: workflow %s is not handler info", i.WorkflowID)
 					return nil, errors.New("workflow is not handler info")
 				}
-
 				switch workflowEntity.Status {
 				// wait for the confirmation that the workflow entity reached a final state
 				case workflow.StatusCompleted, workflow.StatusFailed, workflow.StatusCancelled:
 					// Then only get the latest workflow execution
 					// Simply because eventually my children can have retries and i need to let them finish
 					latestExec, err := i.tp.client.WorkflowExecution.Query().
-						Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(i.ID))).
+						Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(i.WorkflowID.String()))).
 						Order(ent.Desc(workflowexecution.FieldStartedAt)).
 						First(i.tp.ctx)
 					if err != nil {
@@ -58,14 +58,17 @@ func (i *WorkflowInfo) Get() ([]interface{}, error) {
 					case workflowexecution.StatusCompleted:
 						return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 					case workflowexecution.StatusCancelled:
-						return nil, fmt.Errorf("workflow %s was cancelled", i.ID)
+						return nil, fmt.Errorf("workflow %s was cancelled", i.WorkflowID)
 					case workflowexecution.StatusFailed:
 						return nil, errors.New(latestExec.Error)
-					case workflowexecution.StatusPending, workflowexecution.StatusRunning, workflowexecution.StatusRetried:
-						// The workflow is still in progress
-						return nil, errors.New("workflow is still in progress")
+					case workflowexecution.StatusRetried:
+						return nil, errors.New("workflow was retried")
+					case workflowexecution.StatusPending, workflowexecution.StatusRunning:
+						runtime.Gosched()
+						continue
 					}
 				default:
+					runtime.Gosched()
 					continue
 				}
 			}
@@ -74,25 +77,73 @@ func (i *WorkflowInfo) Get() ([]interface{}, error) {
 	}
 }
 
-func (i *WorkflowInfo) Cancel() error {
+type WorkflowExecutionInfo struct {
+	tp          *Tempolite
+	ExecutionID WorkflowExecutionID
+}
+
+// Try to find the workflow execution until it reaches a final state
+func (i *WorkflowExecutionInfo) Get() ([]interface{}, error) {
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+	var value any
+	var ok bool
+	var workflowHandlerInfo Workflow
+	for {
+		select {
+		case <-i.tp.ctx.Done():
+			return nil, i.tp.ctx.Err()
+		case <-ticker.C:
+			workflowExecEntity, err := i.tp.client.WorkflowExecution.Query().Where(workflowexecution.IDEQ(i.ExecutionID.String())).WithWorkflow().Only(i.tp.ctx)
+			if err != nil {
+				return nil, err
+			}
+			workflowEntity, err := i.tp.client.Workflow.Query().Where(workflow.IDEQ(workflowExecEntity.Edges.Workflow.ID)).Only(i.tp.ctx)
+			if err != nil {
+				return nil, err
+			}
+			if value, ok = i.tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
+				if workflowHandlerInfo, ok = value.(Workflow); !ok {
+					log.Printf("scheduler: workflow %s is not handler info", workflowExecEntity.Edges.Workflow.ID)
+					return nil, errors.New("workflow is not handler info")
+				}
+				switch workflowExecEntity.Status {
+				case workflowexecution.StatusCompleted:
+					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), workflowExecEntity.Output)
+				case workflowexecution.StatusCancelled:
+					return nil, fmt.Errorf("workflow %s was cancelled", workflowExecEntity.Edges.Workflow.ID)
+				case workflowexecution.StatusFailed:
+					return nil, errors.New(workflowExecEntity.Error)
+				case workflowexecution.StatusRetried:
+					return nil, errors.New("workflow was retried")
+				case workflowexecution.StatusPending, workflowexecution.StatusRunning:
+					runtime.Gosched()
+					continue
+				}
+			}
+			runtime.Gosched()
+		}
+	}
+}
+
+func (i *WorkflowExecutionInfo) Cancel() error {
 	// todo: implement
 	return nil
 }
 
-func (i *WorkflowInfo) Pause() error {
+func (i *WorkflowExecutionInfo) Pause() error {
 	// todo: implement
 	return nil
 }
 
-func (i *WorkflowInfo) Resume() error {
+func (i *WorkflowExecutionInfo) Resume() error {
 	// todo: implement
 	return nil
 }
 
 type ActivityInfo struct {
-	tp    *Tempolite
-	ID    string
-	RunID string
+	tp         *Tempolite
+	ActivityID ActivityID
 }
 
 func (i *ActivityInfo) Get() ([]interface{}, error) {
@@ -106,13 +157,13 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 		case <-i.tp.ctx.Done():
 			return nil, i.tp.ctx.Err()
 		case <-ticker.C:
-			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ID)).Only(i.tp.ctx)
+			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ActivityID.String())).Only(i.tp.ctx)
 			if err != nil {
 				return nil, err
 			}
 			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
 				if activityHandlerInfo, ok = value.(Activity); !ok {
-					log.Printf("scheduler: activity %s is not handler info", i.ID)
+					log.Printf("scheduler: activity %s is not handler info", i.ActivityID.String())
 					return nil, errors.New("activity is not handler info")
 				}
 
@@ -122,7 +173,7 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 					// Then only get the latest activity execution
 					// Simply because eventually my children can have retries and i need to let them finish
 					latestExec, err := i.tp.client.ActivityExecution.Query().
-						Where(activityexecution.HasActivityWith(activity.IDEQ(i.ID))).
+						Where(activityexecution.HasActivityWith(activity.IDEQ(i.ActivityID.String()))).
 						Order(ent.Desc(activityexecution.FieldStartedAt)).
 						First(i.tp.ctx)
 					if err != nil {
@@ -133,11 +184,63 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 						return i.tp.convertBackResults(HandlerInfo(activityHandlerInfo), latestExec.Output)
 					case activityexecution.StatusFailed:
 						return nil, errors.New(latestExec.Error)
-					case activityexecution.StatusPending, activityexecution.StatusRunning, activityexecution.StatusRetried:
+					case activityexecution.StatusRetried:
+						return nil, errors.New("activity was retried")
+					case activityexecution.StatusPending, activityexecution.StatusRunning:
 						// The workflow is still in progress
-						return nil, errors.New("workflow is still in progress")
+						// return nil, errors.New("workflow is still in progress")
+						runtime.Gosched()
+						continue
 					}
 				default:
+					runtime.Gosched()
+					continue
+				}
+			}
+			runtime.Gosched()
+		}
+	}
+}
+
+type ActivityExecutionInfo struct {
+	tp          *Tempolite
+	ExecutionID ActivityExecutionID
+}
+
+// Try to find the activity execution until it reaches a final state
+func (i *ActivityExecutionInfo) Get() ([]interface{}, error) {
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+	var value any
+	var ok bool
+	var activityHandlerInfo Activity
+	for {
+		select {
+		case <-i.tp.ctx.Done():
+			return nil, i.tp.ctx.Err()
+		case <-ticker.C:
+			activityExecEntity, err := i.tp.client.ActivityExecution.Query().Where(activityexecution.IDEQ(i.ExecutionID.String())).WithActivity().Only(i.tp.ctx)
+			if err != nil {
+				return nil, err
+			}
+			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(activityExecEntity.Edges.Activity.ID)).Only(i.tp.ctx)
+			if err != nil {
+				return nil, err
+			}
+			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
+				if activityHandlerInfo, ok = value.(Activity); !ok {
+					log.Printf("scheduler: activity %s is not handler info", activityExecEntity.Edges.Activity.ID)
+					return nil, errors.New("activity is not handler info")
+				}
+				switch activityExecEntity.Status {
+				case activityexecution.StatusCompleted:
+					return i.tp.convertBackResults(HandlerInfo(activityHandlerInfo), activityExecEntity.Output)
+				case activityexecution.StatusFailed:
+					return nil, errors.New(activityExecEntity.Error)
+				case activityexecution.StatusRetried:
+					return nil, errors.New("activity was retried")
+				case activityexecution.StatusPending, activityexecution.StatusRunning:
+					runtime.Gosched()
 					continue
 				}
 			}
@@ -211,16 +314,16 @@ func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, values ...any) error
 	return nil
 }
 
-func (w WorkflowContext) GetWorkflow(id string) (*WorkflowInfo, error) {
-	return w.tp.GetWorkflow(id)
+func (w WorkflowContext) GetWorkflow(id WorkflowExecutionID) (*WorkflowExecutionInfo, error) {
+	return w.tp.getWorkflowExecution(w, id)
 }
 
-func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) (*WorkflowInfo, error) {
+func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) (*WorkflowExecutionInfo, error) {
 	id, err := w.tp.enqueueSubWorkflow(w, handler, inputs...)
 	if err != nil {
 		return nil, err
 	}
-	return w.tp.GetWorkflow(id)
+	return w.tp.getWorkflowExecution(w, id)
 }
 
 func (w WorkflowContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
@@ -272,16 +375,16 @@ func (w ActivityContext) ExecuteSaga(name HandlerIdentity, inputs interface{}) (
 	return nil, nil
 }
 
-func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
+func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityExecutionInfo, error) {
 	id, err := w.tp.enqueueSubActivty(w, name, inputs...)
 	if err != nil {
 		return nil, err
 	}
-	return w.tp.GetActivity(id)
+	return w.tp.getActivity(w, id)
 }
 
-func (w ActivityContext) GetActivity(id string) (*ActivityInfo, error) {
-	return w.tp.GetActivity(id)
+func (w ActivityContext) GetActivity(id ActivityExecutionID) (*ActivityExecutionInfo, error) {
+	return w.tp.getActivity(w, id)
 }
 
 type SideEffectContext struct {
