@@ -161,18 +161,36 @@ func (tp *Tempolite) Wait() error {
 	}, time.Second)
 }
 
-func (tp *Tempolite) convertBackResults(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
-	for idx, rawOutput := range executionOutput {
+	for idx, rawInputs := range executionInputs {
 		inputType := handlerInfo.ParamTypes[idx]
 		inputKind := handlerInfo.ParamsKinds[idx]
-		realInput, err := convertInput(rawOutput, inputType, inputKind)
+		fmt.Println("inputType: ", inputType, "inputKind: ", inputKind, rawInputs)
+		realInput, err := convertIO(rawInputs, inputType, inputKind)
 		if err != nil {
-			log.Printf("get: convertInput failed: %v", err)
+			log.Printf("get: convertIO failed: %v", err)
 			return nil, err
 		}
 		outputs = append(outputs, realInput)
+	}
+	return outputs, nil
+}
+
+func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+	outputs := []interface{}{}
+	// TODO: we can probably parallelize this
+	for idx, rawOutput := range executionOutput {
+		ouputType := handlerInfo.ReturnTypes[idx]
+		outputKind := handlerInfo.ReturnKinds[idx]
+		fmt.Println("ouputType: ", ouputType, "outputKind: ", outputKind, rawOutput)
+		realOutput, err := convertIO(rawOutput, ouputType, outputKind)
+		if err != nil {
+			log.Printf("get: convertIO failed: %v", err)
+			return nil, err
+		}
+		outputs = append(outputs, realOutput)
 	}
 	return outputs, nil
 }
@@ -209,7 +227,7 @@ func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
 	return make(chan interface{}, 1)
 }
 
-func (tp *Tempolite) enqueueSubActivty(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
+func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
 
 	switch ctx.EntityType() {
 	case "workflow", "activity":
@@ -316,7 +334,7 @@ func (tp *Tempolite) enqueueSubActivty(ctx TempoliteContext, longName HandlerIde
 func (tp *Tempolite) enqueueSubActivtyFunc(ctx TempoliteContext, activityFunc interface{}, params ...interface{}) (ActivityExecutionID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
-	return tp.enqueueSubActivty(ctx, handlerIdentity, params...)
+	return tp.enqueueSubActivityExecution(ctx, handlerIdentity, params...)
 }
 
 func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...interface{}) (ActivityID, error) {
@@ -686,7 +704,7 @@ func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
 	return &info, nil
 }
 
-func (tp *Tempolite) getActivity(ctx TempoliteContext, id ActivityExecutionID) (*ActivityExecutionInfo, error) {
+func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID) (*ActivityExecutionInfo, error) {
 	log.Printf("getActivity - looking for activity execution %s", id)
 	info := ActivityExecutionInfo{
 		tp:          tp,

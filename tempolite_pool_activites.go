@@ -56,11 +56,11 @@ func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*ac
 	log.Printf("activityOnSuccess: %d", workerID)
 	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).
 		Save(tp.ctx); err != nil {
-		log.Printf("activityOnSuccess: WorkflowExecution.Update failed: %v", err)
+		log.Printf("ERROR activityOnSuccess: WorkflowExecution.Update failed: %v", err)
 	}
 
 	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusCompleted).Save(tp.ctx); err != nil {
-		log.Printf("activityOnSuccess: Workflow.UpdateOneID failed: %v", err)
+		log.Printf("ERROR activityOnSuccess: Workflow.UpdateOneID failed: %v", err)
 	}
 }
 
@@ -75,15 +75,16 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 		fmt.Println("retry it the task: ", err)
 		// Just by creating a new activity execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
-			log.Printf("activityOnFailure: ActivityExecution.Update failed: %v", err)
+			log.Printf("ERROR activityOnFailure: ActivityExecution.Update failed: %v", err)
 		}
 
-		if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.executionID).SetStatus(activity.StatusRetried).Save(tp.ctx); err != nil {
-			log.Printf("activityOnFailure: activity.UpdateOneID failed: %v", err)
+		if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusRetried).Save(tp.ctx); err != nil {
+			log.Printf("ERROR activityOnFailure: activity.UpdateOneID failed: %v", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		if err := task.Data().retry(); err != nil {
-			log.Printf("activityOnFailure: retry failed: %v", err)
+			log.Printf("ERROR activityOnFailure: retry failed: %v", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
@@ -93,10 +94,12 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 	log.Printf("activityOnFailure activity %v - %v: %d", task.Data().ctx.executionID, task.Data().ctx.executionID, workerID)
 
 	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-		log.Printf("activityOnFailure: ActivityExecution.Update failed: %v", err)
+		log.Printf("ERROR activityOnFailure: ActivityExecution.Update failed: %v", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
 	}
-	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.executionID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
-		log.Printf("activityOnFailure: activity.UpdateOneID failed: %v", err)
+	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
+		log.Printf("ERROR activityOnFailure: activity.UpdateOneID failed: %v", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
 	return retrypool.DeadTaskActionDoNothing

@@ -10,8 +10,8 @@ import (
 
 /// Why? Because i'm a bit paranoid
 
-// convertInput converts rawInput into an interface{} matching the desiredType and desiredKind.
-func convertInput(rawInput interface{}, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
+// convertIO converts rawInput into an interface{} matching the desiredType and desiredKind.
+func convertIO(rawInput interface{}, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
 	if rawInput == nil {
 		// Return zero value of desired type if rawInput is nil
 		return reflect.Zero(desiredType).Interface(), nil
@@ -274,7 +274,7 @@ func convertToSlice(rawInput interface{}, desiredType reflect.Type, desiredKind 
 
 	for i := 0; i < length; i++ {
 		rawElem := rawValue.Index(i).Interface()
-		convertedElem, err := convertInput(rawElem, elemType, elemKind)
+		convertedElem, err := convertIO(rawElem, elemType, elemKind)
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert element %d: %v", i, err)
 		}
@@ -304,12 +304,12 @@ func convertToMap(rawInput interface{}, desiredType reflect.Type, desiredKind re
 	for _, rawKey := range rawValue.MapKeys() {
 		rawElem := rawValue.MapIndex(rawKey).Interface()
 
-		convertedKey, err := convertInput(rawKey.Interface(), keyType, keyKind)
+		convertedKey, err := convertIO(rawKey.Interface(), keyType, keyKind)
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert map key %v: %v", rawKey, err)
 		}
 
-		convertedElem, err := convertInput(rawElem, elemType, elemKind)
+		convertedElem, err := convertIO(rawElem, elemType, elemKind)
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert map value %v: %v", rawElem, err)
 		}
@@ -368,7 +368,7 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type, desiredKind
 			continue
 		}
 
-		convertedValue, err := convertInput(rawFieldValue, field.Type, field.Type.Kind())
+		convertedValue, err := convertIO(rawFieldValue, field.Type, field.Type.Kind())
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert field %s: %v", fieldName, err)
 		}
@@ -381,7 +381,7 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type, desiredKind
 func convertToPointer(rawInput interface{}, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
 	elemType := desiredType.Elem()
 	elemKind := elemType.Kind()
-	convertedValue, err := convertInput(rawInput, elemType, elemKind)
+	convertedValue, err := convertIO(rawInput, elemType, elemKind)
 	if err != nil {
 		return nil, err
 	}

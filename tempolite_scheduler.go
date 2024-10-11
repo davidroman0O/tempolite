@@ -62,7 +62,7 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 
 						inputKind := activityHandlerInfo.ParamsKinds[idx]
 
-						realInput, err := convertInput(rawInput, inputType, inputKind)
+						realInput, err := convertIO(rawInput, inputType, inputKind)
 						if err != nil {
 							log.Printf("scheduler: convertInput failed: %v", err)
 							continue
@@ -97,17 +97,13 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 							SetRunID(act.RunID).
 							SetActivity(activityEntity).
 							Save(tp.ctx); err != nil {
+							log.Printf("ERROR scheduler: ActivityExecution.Create failed: %v", err)
 							return err
 						}
 
 						// update the current execution id
 						task.ctx.executionID = activityExecution.ID
 						task.retryCount++
-
-						if err := tp.activityPool.Dispatch(task); err != nil {
-							log.Printf("scheduler: Dispatch failed: %v", err)
-							return err
-						}
 
 						return nil
 					}
@@ -133,7 +129,6 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 					log.Printf("scheduler: Dispatching activity %s with params: %v", activityEntity.HandlerName, activityEntity.Input)
 
 					if err := tp.activityPool.Dispatch(task); err != nil {
-
 						log.Printf("scheduler: Dispatch failed: %v", err)
 						continue
 					}
@@ -205,7 +200,7 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 						inputType := workflowHandlerInfo.ParamTypes[idx]
 						inputKind := workflowHandlerInfo.ParamsKinds[idx]
 
-						realInput, err := convertInput(rawInput, inputType, inputKind)
+						realInput, err := convertIO(rawInput, inputType, inputKind)
 						if err != nil {
 							log.Printf("scheduler: convertInput failed: %v", err)
 							continue

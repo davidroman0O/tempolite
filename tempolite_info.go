@@ -13,6 +13,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/k0kubun/pp/v3"
 )
 
 type WorkflowInfo struct {
@@ -56,7 +57,7 @@ func (i *WorkflowInfo) Get() ([]interface{}, error) {
 					}
 					switch latestExec.Status {
 					case workflowexecution.StatusCompleted:
-						return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), latestExec.Output)
+						return i.tp.convertOuputs(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 					case workflowexecution.StatusCancelled:
 						return nil, fmt.Errorf("workflow %s was cancelled", i.WorkflowID)
 					case workflowexecution.StatusFailed:
@@ -109,7 +110,7 @@ func (i *WorkflowExecutionInfo) Get() ([]interface{}, error) {
 				}
 				switch workflowExecEntity.Status {
 				case workflowexecution.StatusCompleted:
-					return i.tp.convertBackResults(HandlerInfo(workflowHandlerInfo), workflowExecEntity.Output)
+					return i.tp.convertOuputs(HandlerInfo(workflowHandlerInfo), workflowExecEntity.Output)
 				case workflowexecution.StatusCancelled:
 					return nil, fmt.Errorf("workflow %s was cancelled", workflowExecEntity.Edges.Workflow.ID)
 				case workflowexecution.StatusFailed:
@@ -152,6 +153,7 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 	var value any
 	var ok bool
 	var activityHandlerInfo Activity
+	fmt.Println("searching id", i.ActivityID.String())
 	for {
 		select {
 		case <-i.tp.ctx.Done():
@@ -159,6 +161,7 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 		case <-ticker.C:
 			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ActivityID.String())).Only(i.tp.ctx)
 			if err != nil {
+				fmt.Println("error searching activity", err)
 				return nil, err
 			}
 			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
@@ -170,18 +173,29 @@ func (i *ActivityInfo) Get() ([]interface{}, error) {
 				switch activityEntity.Status {
 				// wait for the confirmation that the workflow entity reached a final state
 				case activity.StatusCompleted, activity.StatusFailed, activity.StatusCancelled:
+					fmt.Println("searching for activity execution of ", i.ActivityID.String())
 					// Then only get the latest activity execution
 					// Simply because eventually my children can have retries and i need to let them finish
 					latestExec, err := i.tp.client.ActivityExecution.Query().
-						Where(activityexecution.HasActivityWith(activity.IDEQ(i.ActivityID.String()))).
+						Where(
+							activityexecution.HasActivityWith(activity.IDEQ(i.ActivityID.String())),
+						).
 						Order(ent.Desc(activityexecution.FieldStartedAt)).
 						First(i.tp.ctx)
+
 					if err != nil {
-						return nil, err
+						if ent.IsNotFound(err) {
+							// Handle the case where no execution is found
+							log.Printf("No execution found for activity %s", i.ActivityID)
+							return nil, fmt.Errorf("no execution found for activity %s", i.ActivityID)
+						}
+						log.Printf("Error querying activity execution: %v", err)
+						return nil, fmt.Errorf("error querying activity execution: %w", err)
 					}
+
 					switch latestExec.Status {
 					case activityexecution.StatusCompleted:
-						return i.tp.convertBackResults(HandlerInfo(activityHandlerInfo), latestExec.Output)
+						return i.tp.convertOuputs(HandlerInfo(activityHandlerInfo), latestExec.Output)
 					case activityexecution.StatusFailed:
 						return nil, errors.New(latestExec.Error)
 					case activityexecution.StatusRetried:
@@ -234,7 +248,9 @@ func (i *ActivityExecutionInfo) Get() ([]interface{}, error) {
 				}
 				switch activityExecEntity.Status {
 				case activityexecution.StatusCompleted:
-					return i.tp.convertBackResults(HandlerInfo(activityHandlerInfo), activityExecEntity.Output)
+					pp.Println("inputs:", activityExecEntity.Edges.Activity.Input)
+					pp.Println("outputs", activityExecEntity.Output)
+					return i.tp.convertOuputs(HandlerInfo(activityHandlerInfo), activityExecEntity.Output)
 				case activityexecution.StatusFailed:
 					return nil, errors.New(activityExecEntity.Error)
 				case activityexecution.StatusRetried:
@@ -376,15 +392,15 @@ func (w ActivityContext) ExecuteSaga(name HandlerIdentity, inputs interface{}) (
 }
 
 func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityExecutionInfo, error) {
-	id, err := w.tp.enqueueSubActivty(w, name, inputs...)
+	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
 	if err != nil {
 		return nil, err
 	}
-	return w.tp.getActivity(w, id)
+	return w.tp.getActivityExecution(w, id)
 }
 
 func (w ActivityContext) GetActivity(id ActivityExecutionID) (*ActivityExecutionInfo, error) {
-	return w.tp.getActivity(w, id)
+	return w.tp.getActivityExecution(w, id)
 }
 
 type SideEffectContext struct {

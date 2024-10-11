@@ -66,6 +66,8 @@ func (h testSimpleParentActivity) Run(ctx ActivityContext) (int, string, error) 
 		return 0, "", err
 	}
 
+	fmt.Println("res: ", res)
+
 	if res == nil {
 		return 0, "", fmt.Errorf("invalid result: %v", res)
 	}
