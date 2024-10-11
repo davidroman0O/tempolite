@@ -144,21 +144,51 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 }
 
 func (tp *Tempolite) Close() {
-	fmt.Println("CANCEL EVERYTHING")
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
 }
 
 func (tp *Tempolite) Wait() error {
 	<-time.After(1 * time.Second)
-	return tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-		log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
-		tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
-			log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
-			return true
-		})
-		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-	}, time.Second)
+
+	activityDone := make(chan error)
+	workflowDone := make(chan error)
+
+	doneSignals := []chan error{activityDone, workflowDone}
+
+	go func() {
+		defer close(activityDone)
+		defer log.Println("activityDone")
+		activityDone <- tp.activityPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+			tp.activityPool.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
+				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
+				return true
+			})
+			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		}, time.Second)
+	}()
+
+	go func() {
+		defer close(workflowDone)
+		defer log.Println("workflowDone")
+		workflowDone <- tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+			tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
+				return true
+			})
+			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		}, time.Second)
+	}()
+
+	for _, doneSignal := range doneSignals {
+		if err := <-doneSignal; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
@@ -167,7 +197,7 @@ func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []in
 	for idx, rawInputs := range executionInputs {
 		inputType := handlerInfo.ParamTypes[idx]
 		inputKind := handlerInfo.ParamsKinds[idx]
-		fmt.Println("inputType: ", inputType, "inputKind: ", inputKind, rawInputs)
+		// fmt.Println("inputType: ", inputType, "inputKind: ", inputKind, rawInputs)
 		realInput, err := convertIO(rawInputs, inputType, inputKind)
 		if err != nil {
 			log.Printf("get: convertIO failed: %v", err)
@@ -184,7 +214,7 @@ func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []in
 	for idx, rawOutput := range executionOutput {
 		ouputType := handlerInfo.ReturnTypes[idx]
 		outputKind := handlerInfo.ReturnKinds[idx]
-		fmt.Println("ouputType: ", ouputType, "outputKind: ", outputKind, rawOutput)
+		// fmt.Println("ouputType: ", ouputType, "outputKind: ", outputKind, rawOutput)
 		realOutput, err := convertIO(rawOutput, ouputType, outputKind)
 		if err != nil {
 			log.Printf("get: convertIO failed: %v", err)
@@ -195,36 +225,18 @@ func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []in
 	return outputs, nil
 }
 
-// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
-// Saga only accepts one type of input
-func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo, error) {
-	// todo: implement
-	return nil, nil
-}
+func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
+	if len(params) != handlerInfo.NumIn {
+		return fmt.Errorf("parameter count mismatch (you probably put the wrong handler): expected %d, got %d", handlerInfo.NumIn, len(params))
+	}
 
-func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, input ...interface{}) (*workflowWorker, error) {
-	// todo: implement
-	return nil, nil
-}
+	for idx, param := range params {
+		if reflect.TypeOf(param) != handlerInfo.ParamTypes[idx] {
+			return fmt.Errorf("parameter type mismatch (you probably put the wrong handler) at index %d: expected %s, got %s", idx, handlerInfo.ParamTypes[idx], reflect.TypeOf(param))
+		}
+	}
 
-func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, input ...interface{}) (*SideEffectInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
-	// whatever happen here, we have to create a channel that will then send the data to the other channel used by the consumer ON the correct type!!!
-	return make(chan interface{}, 1)
+	return nil
 }
 
 func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
@@ -246,6 +258,10 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 		if activityHandlerInfo, ok = value.(Activity); !ok {
 			// could be development bug
 			return "", fmt.Errorf("activity %s is not handler info", longName)
+		}
+
+		if err := verifyHandlerAndParams(HandlerInfo(activityHandlerInfo), params); err != nil {
+			return "", err
 		}
 
 		if len(params) != activityHandlerInfo.NumIn {
@@ -354,6 +370,10 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 		if activityHandlerInfo, ok = value.(Activity); !ok {
 			// could be development bug
 			return "", fmt.Errorf("activity %s is not handler info", longName)
+		}
+
+		if err := verifyHandlerAndParams(HandlerInfo(activityHandlerInfo), params); err != nil {
+			return "", err
 		}
 
 		if len(params) != activityHandlerInfo.NumIn {
@@ -466,6 +486,10 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 			return "", fmt.Errorf("workflow %s is not handler info", handlerIdentity)
 		}
 
+		if err := verifyHandlerAndParams(HandlerInfo(workflowHandlerInfo), params); err != nil {
+			return "", err
+		}
+
 		if len(params) != workflowHandlerInfo.NumIn {
 			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", workflowHandlerInfo.NumIn, len(params))
 		}
@@ -568,6 +592,10 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 			return "", fmt.Errorf("workflow %s is not handler info", handlerIdentity)
 		}
 
+		if err := verifyHandlerAndParams(HandlerInfo(workflowHandlerInfo), params); err != nil {
+			return "", err
+		}
+
 		if len(params) != workflowHandlerInfo.NumIn {
 			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", workflowHandlerInfo.NumIn, len(params))
 		}
@@ -657,26 +685,6 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 	}
 }
 
-func (tp *Tempolite) RemoveWorkflow(id string) (string, error) {
-	return "", nil
-}
-
-func (tp *Tempolite) PauseWorkflow(id string) (string, error) {
-	return "", nil
-}
-
-func (tp *Tempolite) ResumeWorkflow(id string) (string, error) {
-	return "", nil
-}
-
-func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
-	return tp.getSideEffect(id)
-}
-
-func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
-	return tp.getSaga(id)
-}
-
 func (tp *Tempolite) GetWorkflow(id WorkflowID) (*WorkflowInfo, error) {
 	log.Printf("GetWorkflow - looking for workflow %s", id)
 	info := WorkflowInfo{
@@ -711,4 +719,55 @@ func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecu
 		ExecutionID: id,
 	}
 	return &info, nil
+}
+
+func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
+	return tp.getSideEffect(id)
+}
+
+func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
+	return tp.getSaga(id)
+}
+
+func (tp *Tempolite) CancelWorkflow(id WorkflowID) (string, error) {
+	return "", nil
+}
+
+func (tp *Tempolite) RemoveWorkflow(id WorkflowID) (string, error) {
+	return "", nil
+}
+
+func (tp *Tempolite) PauseWorkflow(id WorkflowID) (string, error) {
+	return "", nil
+}
+
+func (tp *Tempolite) ResumeWorkflow(id WorkflowID) (string, error) {
+	return "", nil
+}
+
+// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
+// Saga only accepts one type of input
+func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, input ...interface{}) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
+	// whatever happen here, we have to create a channel that will then send the data to the other channel used by the consumer ON the correct type!!!
+	return make(chan interface{}, 1)
 }

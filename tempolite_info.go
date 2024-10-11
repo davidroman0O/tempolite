@@ -381,6 +381,14 @@ func (w ActivityContext) EntityType() string {
 	return "activity"
 }
 
+func (w ActivityContext) ExecuteWorkflow(handler interface{}, inputs ...any) (*WorkflowExecutionInfo, error) {
+	id, err := w.tp.enqueueSubWorkflow(w, handler, inputs...)
+	if err != nil {
+		return nil, err
+	}
+	return w.tp.getWorkflowExecution(w, id)
+}
+
 func (w ActivityContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
 	// todo: implement
 	return nil, nil
