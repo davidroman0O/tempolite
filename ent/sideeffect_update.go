@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
@@ -141,25 +140,6 @@ func (seu *SideEffectUpdate) AddExecutions(s ...*SideEffectExecution) *SideEffec
 	return seu.AddExecutionIDs(ids...)
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (seu *SideEffectUpdate) SetActivityID(id string) *SideEffectUpdate {
-	seu.mutation.SetActivityID(id)
-	return seu
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (seu *SideEffectUpdate) SetNillableActivityID(id *string) *SideEffectUpdate {
-	if id != nil {
-		seu = seu.SetActivityID(*id)
-	}
-	return seu
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (seu *SideEffectUpdate) SetActivity(a *Activity) *SideEffectUpdate {
-	return seu.SetActivityID(a.ID)
-}
-
 // Mutation returns the SideEffectMutation object of the builder.
 func (seu *SideEffectUpdate) Mutation() *SideEffectMutation {
 	return seu.mutation
@@ -184,12 +164,6 @@ func (seu *SideEffectUpdate) RemoveExecutions(s ...*SideEffectExecution) *SideEf
 		ids[i] = s[i].ID
 	}
 	return seu.RemoveExecutionIDs(ids...)
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (seu *SideEffectUpdate) ClearActivity() *SideEffectUpdate {
-	seu.mutation.ClearActivity()
-	return seu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -313,35 +287,6 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if seu.mutation.ActivityCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffect.ActivityTable,
-			Columns: []string{sideeffect.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seu.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffect.ActivityTable,
-			Columns: []string{sideeffect.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -478,25 +423,6 @@ func (seuo *SideEffectUpdateOne) AddExecutions(s ...*SideEffectExecution) *SideE
 	return seuo.AddExecutionIDs(ids...)
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (seuo *SideEffectUpdateOne) SetActivityID(id string) *SideEffectUpdateOne {
-	seuo.mutation.SetActivityID(id)
-	return seuo
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (seuo *SideEffectUpdateOne) SetNillableActivityID(id *string) *SideEffectUpdateOne {
-	if id != nil {
-		seuo = seuo.SetActivityID(*id)
-	}
-	return seuo
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (seuo *SideEffectUpdateOne) SetActivity(a *Activity) *SideEffectUpdateOne {
-	return seuo.SetActivityID(a.ID)
-}
-
 // Mutation returns the SideEffectMutation object of the builder.
 func (seuo *SideEffectUpdateOne) Mutation() *SideEffectMutation {
 	return seuo.mutation
@@ -521,12 +447,6 @@ func (seuo *SideEffectUpdateOne) RemoveExecutions(s ...*SideEffectExecution) *Si
 		ids[i] = s[i].ID
 	}
 	return seuo.RemoveExecutionIDs(ids...)
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (seuo *SideEffectUpdateOne) ClearActivity() *SideEffectUpdateOne {
-	seuo.mutation.ClearActivity()
-	return seuo
 }
 
 // Where appends a list predicates to the SideEffectUpdate builder.
@@ -680,35 +600,6 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if seuo.mutation.ActivityCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffect.ActivityTable,
-			Columns: []string{sideeffect.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seuo.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffect.ActivityTable,
-			Columns: []string{sideeffect.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

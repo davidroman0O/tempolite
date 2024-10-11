@@ -150,6 +150,26 @@ func IdentityContainsFold(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldContainsFold(FieldIdentity, v))
 }
 
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.Activity {
+	return predicate.Activity(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.Activity {
+	return predicate.Activity(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.Activity {
+	return predicate.Activity(sql.FieldNotIn(FieldStatus, vs...))
+}
+
 // HandlerNameEQ applies the EQ predicate on the "handler_name" field.
 func HandlerNameEQ(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldHandlerName, v))
@@ -330,75 +350,6 @@ func HasExecutions() predicate.Activity {
 func HasExecutionsWith(preds ...predicate.ActivityExecution) predicate.Activity {
 	return predicate.Activity(func(s *sql.Selector) {
 		step := newExecutionsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasWorkflow applies the HasEdge predicate on the "workflow" edge.
-func HasWorkflow() predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, WorkflowTable, WorkflowColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasWorkflowWith applies the HasEdge predicate on the "workflow" edge with a given conditions (other predicates).
-func HasWorkflowWith(preds ...predicate.Workflow) predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := newWorkflowStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasSagas applies the HasEdge predicate on the "sagas" edge.
-func HasSagas() predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, SagasTable, SagasColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasSagasWith applies the HasEdge predicate on the "sagas" edge with a given conditions (other predicates).
-func HasSagasWith(preds ...predicate.Saga) predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := newSagasStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasSideEffects applies the HasEdge predicate on the "side_effects" edge.
-func HasSideEffects() predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, SideEffectsTable, SideEffectsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasSideEffectsWith applies the HasEdge predicate on the "side_effects" edge with a given conditions (other predicates).
-func HasSideEffectsWith(preds ...predicate.SideEffect) predicate.Activity {
-	return predicate.Activity(func(s *sql.Selector) {
-		step := newSideEffectsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

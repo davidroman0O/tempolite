@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
@@ -35,47 +36,41 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeActivity            = "Activity"
-	TypeActivityExecution   = "ActivityExecution"
-	TypeRun                 = "Run"
-	TypeSaga                = "Saga"
-	TypeSagaExecution       = "SagaExecution"
-	TypeSagaStepExecution   = "SagaStepExecution"
-	TypeSideEffect          = "SideEffect"
-	TypeSideEffectExecution = "SideEffectExecution"
-	TypeSignal              = "Signal"
-	TypeWorkflow            = "Workflow"
-	TypeWorkflowExecution   = "WorkflowExecution"
+	TypeActivity              = "Activity"
+	TypeActivityExecution     = "ActivityExecution"
+	TypeExecutionRelationship = "ExecutionRelationship"
+	TypeRun                   = "Run"
+	TypeSaga                  = "Saga"
+	TypeSagaExecution         = "SagaExecution"
+	TypeSagaStepExecution     = "SagaStepExecution"
+	TypeSideEffect            = "SideEffect"
+	TypeSideEffectExecution   = "SideEffectExecution"
+	TypeSignal                = "Signal"
+	TypeWorkflow              = "Workflow"
+	TypeWorkflowExecution     = "WorkflowExecution"
 )
 
 // ActivityMutation represents an operation that mutates the Activity nodes in the graph.
 type ActivityMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	identity            *string
-	handler_name        *string
-	input               *[]interface{}
-	appendinput         []interface{}
-	retry_policy        *schema.RetryPolicy
-	timeout             *time.Time
-	created_at          *time.Time
-	clearedFields       map[string]struct{}
-	executions          map[string]struct{}
-	removedexecutions   map[string]struct{}
-	clearedexecutions   bool
-	workflow            *string
-	clearedworkflow     bool
-	sagas               map[string]struct{}
-	removedsagas        map[string]struct{}
-	clearedsagas        bool
-	side_effects        map[string]struct{}
-	removedside_effects map[string]struct{}
-	clearedside_effects bool
-	done                bool
-	oldValue            func(context.Context) (*Activity, error)
-	predicates          []predicate.Activity
+	op                Op
+	typ               string
+	id                *string
+	identity          *string
+	status            *activity.Status
+	handler_name      *string
+	input             *[]interface{}
+	appendinput       []interface{}
+	retry_policy      *schema.RetryPolicy
+	timeout           *time.Time
+	created_at        *time.Time
+	clearedFields     map[string]struct{}
+	executions        map[string]struct{}
+	removedexecutions map[string]struct{}
+	clearedexecutions bool
+	done              bool
+	oldValue          func(context.Context) (*Activity, error)
+	predicates        []predicate.Activity
 }
 
 var _ ent.Mutation = (*ActivityMutation)(nil)
@@ -216,6 +211,42 @@ func (m *ActivityMutation) OldIdentity(ctx context.Context) (v string, err error
 // ResetIdentity resets all changes to the "identity" field.
 func (m *ActivityMutation) ResetIdentity() {
 	m.identity = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ActivityMutation) SetStatus(a activity.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ActivityMutation) Status() (r activity.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldStatus(ctx context.Context) (v activity.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ActivityMutation) ResetStatus() {
+	m.status = nil
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -493,153 +524,6 @@ func (m *ActivityMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
-// SetWorkflowID sets the "workflow" edge to the Workflow entity by id.
-func (m *ActivityMutation) SetWorkflowID(id string) {
-	m.workflow = &id
-}
-
-// ClearWorkflow clears the "workflow" edge to the Workflow entity.
-func (m *ActivityMutation) ClearWorkflow() {
-	m.clearedworkflow = true
-}
-
-// WorkflowCleared reports if the "workflow" edge to the Workflow entity was cleared.
-func (m *ActivityMutation) WorkflowCleared() bool {
-	return m.clearedworkflow
-}
-
-// WorkflowID returns the "workflow" edge ID in the mutation.
-func (m *ActivityMutation) WorkflowID() (id string, exists bool) {
-	if m.workflow != nil {
-		return *m.workflow, true
-	}
-	return
-}
-
-// WorkflowIDs returns the "workflow" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkflowID instead. It exists only for internal usage by the builders.
-func (m *ActivityMutation) WorkflowIDs() (ids []string) {
-	if id := m.workflow; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkflow resets all changes to the "workflow" edge.
-func (m *ActivityMutation) ResetWorkflow() {
-	m.workflow = nil
-	m.clearedworkflow = false
-}
-
-// AddSagaIDs adds the "sagas" edge to the Saga entity by ids.
-func (m *ActivityMutation) AddSagaIDs(ids ...string) {
-	if m.sagas == nil {
-		m.sagas = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.sagas[ids[i]] = struct{}{}
-	}
-}
-
-// ClearSagas clears the "sagas" edge to the Saga entity.
-func (m *ActivityMutation) ClearSagas() {
-	m.clearedsagas = true
-}
-
-// SagasCleared reports if the "sagas" edge to the Saga entity was cleared.
-func (m *ActivityMutation) SagasCleared() bool {
-	return m.clearedsagas
-}
-
-// RemoveSagaIDs removes the "sagas" edge to the Saga entity by IDs.
-func (m *ActivityMutation) RemoveSagaIDs(ids ...string) {
-	if m.removedsagas == nil {
-		m.removedsagas = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.sagas, ids[i])
-		m.removedsagas[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedSagas returns the removed IDs of the "sagas" edge to the Saga entity.
-func (m *ActivityMutation) RemovedSagasIDs() (ids []string) {
-	for id := range m.removedsagas {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// SagasIDs returns the "sagas" edge IDs in the mutation.
-func (m *ActivityMutation) SagasIDs() (ids []string) {
-	for id := range m.sagas {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetSagas resets all changes to the "sagas" edge.
-func (m *ActivityMutation) ResetSagas() {
-	m.sagas = nil
-	m.clearedsagas = false
-	m.removedsagas = nil
-}
-
-// AddSideEffectIDs adds the "side_effects" edge to the SideEffect entity by ids.
-func (m *ActivityMutation) AddSideEffectIDs(ids ...string) {
-	if m.side_effects == nil {
-		m.side_effects = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.side_effects[ids[i]] = struct{}{}
-	}
-}
-
-// ClearSideEffects clears the "side_effects" edge to the SideEffect entity.
-func (m *ActivityMutation) ClearSideEffects() {
-	m.clearedside_effects = true
-}
-
-// SideEffectsCleared reports if the "side_effects" edge to the SideEffect entity was cleared.
-func (m *ActivityMutation) SideEffectsCleared() bool {
-	return m.clearedside_effects
-}
-
-// RemoveSideEffectIDs removes the "side_effects" edge to the SideEffect entity by IDs.
-func (m *ActivityMutation) RemoveSideEffectIDs(ids ...string) {
-	if m.removedside_effects == nil {
-		m.removedside_effects = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.side_effects, ids[i])
-		m.removedside_effects[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedSideEffects returns the removed IDs of the "side_effects" edge to the SideEffect entity.
-func (m *ActivityMutation) RemovedSideEffectsIDs() (ids []string) {
-	for id := range m.removedside_effects {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// SideEffectsIDs returns the "side_effects" edge IDs in the mutation.
-func (m *ActivityMutation) SideEffectsIDs() (ids []string) {
-	for id := range m.side_effects {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetSideEffects resets all changes to the "side_effects" edge.
-func (m *ActivityMutation) ResetSideEffects() {
-	m.side_effects = nil
-	m.clearedside_effects = false
-	m.removedside_effects = nil
-}
-
 // Where appends a list predicates to the ActivityMutation builder.
 func (m *ActivityMutation) Where(ps ...predicate.Activity) {
 	m.predicates = append(m.predicates, ps...)
@@ -674,9 +558,12 @@ func (m *ActivityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.identity != nil {
 		fields = append(fields, activity.FieldIdentity)
+	}
+	if m.status != nil {
+		fields = append(fields, activity.FieldStatus)
 	}
 	if m.handler_name != nil {
 		fields = append(fields, activity.FieldHandlerName)
@@ -703,6 +590,8 @@ func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case activity.FieldIdentity:
 		return m.Identity()
+	case activity.FieldStatus:
+		return m.Status()
 	case activity.FieldHandlerName:
 		return m.HandlerName()
 	case activity.FieldInput:
@@ -724,6 +613,8 @@ func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value
 	switch name {
 	case activity.FieldIdentity:
 		return m.OldIdentity(ctx)
+	case activity.FieldStatus:
+		return m.OldStatus(ctx)
 	case activity.FieldHandlerName:
 		return m.OldHandlerName(ctx)
 	case activity.FieldInput:
@@ -749,6 +640,13 @@ func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIdentity(v)
+		return nil
+	case activity.FieldStatus:
+		v, ok := value.(activity.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
 		return nil
 	case activity.FieldHandlerName:
 		v, ok := value.(string)
@@ -852,6 +750,9 @@ func (m *ActivityMutation) ResetField(name string) error {
 	case activity.FieldIdentity:
 		m.ResetIdentity()
 		return nil
+	case activity.FieldStatus:
+		m.ResetStatus()
+		return nil
 	case activity.FieldHandlerName:
 		m.ResetHandlerName()
 		return nil
@@ -873,18 +774,9 @@ func (m *ActivityMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ActivityMutation) AddedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 1)
 	if m.executions != nil {
 		edges = append(edges, activity.EdgeExecutions)
-	}
-	if m.workflow != nil {
-		edges = append(edges, activity.EdgeWorkflow)
-	}
-	if m.sagas != nil {
-		edges = append(edges, activity.EdgeSagas)
-	}
-	if m.side_effects != nil {
-		edges = append(edges, activity.EdgeSideEffects)
 	}
 	return edges
 }
@@ -899,37 +791,15 @@ func (m *ActivityMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case activity.EdgeWorkflow:
-		if id := m.workflow; id != nil {
-			return []ent.Value{*id}
-		}
-	case activity.EdgeSagas:
-		ids := make([]ent.Value, 0, len(m.sagas))
-		for id := range m.sagas {
-			ids = append(ids, id)
-		}
-		return ids
-	case activity.EdgeSideEffects:
-		ids := make([]ent.Value, 0, len(m.side_effects))
-		for id := range m.side_effects {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ActivityMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 1)
 	if m.removedexecutions != nil {
 		edges = append(edges, activity.EdgeExecutions)
-	}
-	if m.removedsagas != nil {
-		edges = append(edges, activity.EdgeSagas)
-	}
-	if m.removedside_effects != nil {
-		edges = append(edges, activity.EdgeSideEffects)
 	}
 	return edges
 }
@@ -944,36 +814,15 @@ func (m *ActivityMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case activity.EdgeSagas:
-		ids := make([]ent.Value, 0, len(m.removedsagas))
-		for id := range m.removedsagas {
-			ids = append(ids, id)
-		}
-		return ids
-	case activity.EdgeSideEffects:
-		ids := make([]ent.Value, 0, len(m.removedside_effects))
-		for id := range m.removedside_effects {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ActivityMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 1)
 	if m.clearedexecutions {
 		edges = append(edges, activity.EdgeExecutions)
-	}
-	if m.clearedworkflow {
-		edges = append(edges, activity.EdgeWorkflow)
-	}
-	if m.clearedsagas {
-		edges = append(edges, activity.EdgeSagas)
-	}
-	if m.clearedside_effects {
-		edges = append(edges, activity.EdgeSideEffects)
 	}
 	return edges
 }
@@ -984,12 +833,6 @@ func (m *ActivityMutation) EdgeCleared(name string) bool {
 	switch name {
 	case activity.EdgeExecutions:
 		return m.clearedexecutions
-	case activity.EdgeWorkflow:
-		return m.clearedworkflow
-	case activity.EdgeSagas:
-		return m.clearedsagas
-	case activity.EdgeSideEffects:
-		return m.clearedside_effects
 	}
 	return false
 }
@@ -998,9 +841,6 @@ func (m *ActivityMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ActivityMutation) ClearEdge(name string) error {
 	switch name {
-	case activity.EdgeWorkflow:
-		m.ClearWorkflow()
-		return nil
 	}
 	return fmt.Errorf("unknown Activity unique edge %s", name)
 }
@@ -1012,15 +852,6 @@ func (m *ActivityMutation) ResetEdge(name string) error {
 	case activity.EdgeExecutions:
 		m.ResetExecutions()
 		return nil
-	case activity.EdgeWorkflow:
-		m.ResetWorkflow()
-		return nil
-	case activity.EdgeSagas:
-		m.ResetSagas()
-		return nil
-	case activity.EdgeSideEffects:
-		m.ResetSideEffects()
-		return nil
 	}
 	return fmt.Errorf("unknown Activity edge %s", name)
 }
@@ -1028,29 +859,24 @@ func (m *ActivityMutation) ResetEdge(name string) error {
 // ActivityExecutionMutation represents an operation that mutates the ActivityExecution nodes in the graph.
 type ActivityExecutionMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *string
-	run_id                        *string
-	status                        *activityexecution.Status
-	attempt                       *int
-	addattempt                    *int
-	output                        *[]interface{}
-	appendoutput                  []interface{}
-	error                         *string
-	started_at                    *time.Time
-	updated_at                    *time.Time
-	clearedFields                 map[string]struct{}
-	activity                      *string
-	clearedactivity               bool
-	workflow_execution            *string
-	clearedworkflow_execution     bool
-	side_effect_executions        map[string]struct{}
-	removedside_effect_executions map[string]struct{}
-	clearedside_effect_executions bool
-	done                          bool
-	oldValue                      func(context.Context) (*ActivityExecution, error)
-	predicates                    []predicate.ActivityExecution
+	op              Op
+	typ             string
+	id              *string
+	run_id          *string
+	status          *activityexecution.Status
+	attempt         *int
+	addattempt      *int
+	output          *[]interface{}
+	appendoutput    []interface{}
+	error           *string
+	started_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	activity        *string
+	clearedactivity bool
+	done            bool
+	oldValue        func(context.Context) (*ActivityExecution, error)
+	predicates      []predicate.ActivityExecution
 }
 
 var _ ent.Mutation = (*ActivityExecutionMutation)(nil)
@@ -1510,99 +1336,6 @@ func (m *ActivityExecutionMutation) ResetActivity() {
 	m.clearedactivity = false
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by id.
-func (m *ActivityExecutionMutation) SetWorkflowExecutionID(id string) {
-	m.workflow_execution = &id
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (m *ActivityExecutionMutation) ClearWorkflowExecution() {
-	m.clearedworkflow_execution = true
-}
-
-// WorkflowExecutionCleared reports if the "workflow_execution" edge to the WorkflowExecution entity was cleared.
-func (m *ActivityExecutionMutation) WorkflowExecutionCleared() bool {
-	return m.clearedworkflow_execution
-}
-
-// WorkflowExecutionID returns the "workflow_execution" edge ID in the mutation.
-func (m *ActivityExecutionMutation) WorkflowExecutionID() (id string, exists bool) {
-	if m.workflow_execution != nil {
-		return *m.workflow_execution, true
-	}
-	return
-}
-
-// WorkflowExecutionIDs returns the "workflow_execution" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkflowExecutionID instead. It exists only for internal usage by the builders.
-func (m *ActivityExecutionMutation) WorkflowExecutionIDs() (ids []string) {
-	if id := m.workflow_execution; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkflowExecution resets all changes to the "workflow_execution" edge.
-func (m *ActivityExecutionMutation) ResetWorkflowExecution() {
-	m.workflow_execution = nil
-	m.clearedworkflow_execution = false
-}
-
-// AddSideEffectExecutionIDs adds the "side_effect_executions" edge to the SideEffectExecution entity by ids.
-func (m *ActivityExecutionMutation) AddSideEffectExecutionIDs(ids ...string) {
-	if m.side_effect_executions == nil {
-		m.side_effect_executions = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.side_effect_executions[ids[i]] = struct{}{}
-	}
-}
-
-// ClearSideEffectExecutions clears the "side_effect_executions" edge to the SideEffectExecution entity.
-func (m *ActivityExecutionMutation) ClearSideEffectExecutions() {
-	m.clearedside_effect_executions = true
-}
-
-// SideEffectExecutionsCleared reports if the "side_effect_executions" edge to the SideEffectExecution entity was cleared.
-func (m *ActivityExecutionMutation) SideEffectExecutionsCleared() bool {
-	return m.clearedside_effect_executions
-}
-
-// RemoveSideEffectExecutionIDs removes the "side_effect_executions" edge to the SideEffectExecution entity by IDs.
-func (m *ActivityExecutionMutation) RemoveSideEffectExecutionIDs(ids ...string) {
-	if m.removedside_effect_executions == nil {
-		m.removedside_effect_executions = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.side_effect_executions, ids[i])
-		m.removedside_effect_executions[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedSideEffectExecutions returns the removed IDs of the "side_effect_executions" edge to the SideEffectExecution entity.
-func (m *ActivityExecutionMutation) RemovedSideEffectExecutionsIDs() (ids []string) {
-	for id := range m.removedside_effect_executions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// SideEffectExecutionsIDs returns the "side_effect_executions" edge IDs in the mutation.
-func (m *ActivityExecutionMutation) SideEffectExecutionsIDs() (ids []string) {
-	for id := range m.side_effect_executions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetSideEffectExecutions resets all changes to the "side_effect_executions" edge.
-func (m *ActivityExecutionMutation) ResetSideEffectExecutions() {
-	m.side_effect_executions = nil
-	m.clearedside_effect_executions = false
-	m.removedside_effect_executions = nil
-}
-
 // Where appends a list predicates to the ActivityExecutionMutation builder.
 func (m *ActivityExecutionMutation) Where(ps ...predicate.ActivityExecution) {
 	m.predicates = append(m.predicates, ps...)
@@ -1868,15 +1601,9 @@ func (m *ActivityExecutionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ActivityExecutionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 1)
 	if m.activity != nil {
 		edges = append(edges, activityexecution.EdgeActivity)
-	}
-	if m.workflow_execution != nil {
-		edges = append(edges, activityexecution.EdgeWorkflowExecution)
-	}
-	if m.side_effect_executions != nil {
-		edges = append(edges, activityexecution.EdgeSideEffectExecutions)
 	}
 	return edges
 }
@@ -1889,54 +1616,27 @@ func (m *ActivityExecutionMutation) AddedIDs(name string) []ent.Value {
 		if id := m.activity; id != nil {
 			return []ent.Value{*id}
 		}
-	case activityexecution.EdgeWorkflowExecution:
-		if id := m.workflow_execution; id != nil {
-			return []ent.Value{*id}
-		}
-	case activityexecution.EdgeSideEffectExecutions:
-		ids := make([]ent.Value, 0, len(m.side_effect_executions))
-		for id := range m.side_effect_executions {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ActivityExecutionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.removedside_effect_executions != nil {
-		edges = append(edges, activityexecution.EdgeSideEffectExecutions)
-	}
+	edges := make([]string, 0, 1)
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *ActivityExecutionMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case activityexecution.EdgeSideEffectExecutions:
-		ids := make([]ent.Value, 0, len(m.removedside_effect_executions))
-		for id := range m.removedside_effect_executions {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ActivityExecutionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 1)
 	if m.clearedactivity {
 		edges = append(edges, activityexecution.EdgeActivity)
-	}
-	if m.clearedworkflow_execution {
-		edges = append(edges, activityexecution.EdgeWorkflowExecution)
-	}
-	if m.clearedside_effect_executions {
-		edges = append(edges, activityexecution.EdgeSideEffectExecutions)
 	}
 	return edges
 }
@@ -1947,10 +1647,6 @@ func (m *ActivityExecutionMutation) EdgeCleared(name string) bool {
 	switch name {
 	case activityexecution.EdgeActivity:
 		return m.clearedactivity
-	case activityexecution.EdgeWorkflowExecution:
-		return m.clearedworkflow_execution
-	case activityexecution.EdgeSideEffectExecutions:
-		return m.clearedside_effect_executions
 	}
 	return false
 }
@@ -1961,9 +1657,6 @@ func (m *ActivityExecutionMutation) ClearEdge(name string) error {
 	switch name {
 	case activityexecution.EdgeActivity:
 		m.ClearActivity()
-		return nil
-	case activityexecution.EdgeWorkflowExecution:
-		m.ClearWorkflowExecution()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution unique edge %s", name)
@@ -1976,14 +1669,496 @@ func (m *ActivityExecutionMutation) ResetEdge(name string) error {
 	case activityexecution.EdgeActivity:
 		m.ResetActivity()
 		return nil
-	case activityexecution.EdgeWorkflowExecution:
-		m.ResetWorkflowExecution()
-		return nil
-	case activityexecution.EdgeSideEffectExecutions:
-		m.ResetSideEffectExecutions()
-		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution edge %s", name)
+}
+
+// ExecutionRelationshipMutation represents an operation that mutates the ExecutionRelationship nodes in the graph.
+type ExecutionRelationshipMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	parent_id     *string
+	child_id      *string
+	parent_type   *executionrelationship.ParentType
+	child_type    *executionrelationship.ChildType
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*ExecutionRelationship, error)
+	predicates    []predicate.ExecutionRelationship
+}
+
+var _ ent.Mutation = (*ExecutionRelationshipMutation)(nil)
+
+// executionrelationshipOption allows management of the mutation configuration using functional options.
+type executionrelationshipOption func(*ExecutionRelationshipMutation)
+
+// newExecutionRelationshipMutation creates new mutation for the ExecutionRelationship entity.
+func newExecutionRelationshipMutation(c config, op Op, opts ...executionrelationshipOption) *ExecutionRelationshipMutation {
+	m := &ExecutionRelationshipMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeExecutionRelationship,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withExecutionRelationshipID sets the ID field of the mutation.
+func withExecutionRelationshipID(id int) executionrelationshipOption {
+	return func(m *ExecutionRelationshipMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ExecutionRelationship
+		)
+		m.oldValue = func(ctx context.Context) (*ExecutionRelationship, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ExecutionRelationship.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withExecutionRelationship sets the old ExecutionRelationship of the mutation.
+func withExecutionRelationship(node *ExecutionRelationship) executionrelationshipOption {
+	return func(m *ExecutionRelationshipMutation) {
+		m.oldValue = func(context.Context) (*ExecutionRelationship, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ExecutionRelationshipMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ExecutionRelationshipMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ExecutionRelationshipMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ExecutionRelationshipMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ExecutionRelationship.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetParentID sets the "parent_id" field.
+func (m *ExecutionRelationshipMutation) SetParentID(s string) {
+	m.parent_id = &s
+}
+
+// ParentID returns the value of the "parent_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ParentID() (r string, exists bool) {
+	v := m.parent_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentID returns the old "parent_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldParentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentID: %w", err)
+	}
+	return oldValue.ParentID, nil
+}
+
+// ResetParentID resets all changes to the "parent_id" field.
+func (m *ExecutionRelationshipMutation) ResetParentID() {
+	m.parent_id = nil
+}
+
+// SetChildID sets the "child_id" field.
+func (m *ExecutionRelationshipMutation) SetChildID(s string) {
+	m.child_id = &s
+}
+
+// ChildID returns the value of the "child_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ChildID() (r string, exists bool) {
+	v := m.child_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChildID returns the old "child_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldChildID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChildID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChildID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChildID: %w", err)
+	}
+	return oldValue.ChildID, nil
+}
+
+// ResetChildID resets all changes to the "child_id" field.
+func (m *ExecutionRelationshipMutation) ResetChildID() {
+	m.child_id = nil
+}
+
+// SetParentType sets the "parent_type" field.
+func (m *ExecutionRelationshipMutation) SetParentType(et executionrelationship.ParentType) {
+	m.parent_type = &et
+}
+
+// ParentType returns the value of the "parent_type" field in the mutation.
+func (m *ExecutionRelationshipMutation) ParentType() (r executionrelationship.ParentType, exists bool) {
+	v := m.parent_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentType returns the old "parent_type" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldParentType(ctx context.Context) (v executionrelationship.ParentType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentType: %w", err)
+	}
+	return oldValue.ParentType, nil
+}
+
+// ResetParentType resets all changes to the "parent_type" field.
+func (m *ExecutionRelationshipMutation) ResetParentType() {
+	m.parent_type = nil
+}
+
+// SetChildType sets the "child_type" field.
+func (m *ExecutionRelationshipMutation) SetChildType(et executionrelationship.ChildType) {
+	m.child_type = &et
+}
+
+// ChildType returns the value of the "child_type" field in the mutation.
+func (m *ExecutionRelationshipMutation) ChildType() (r executionrelationship.ChildType, exists bool) {
+	v := m.child_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChildType returns the old "child_type" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldChildType(ctx context.Context) (v executionrelationship.ChildType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChildType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChildType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChildType: %w", err)
+	}
+	return oldValue.ChildType, nil
+}
+
+// ResetChildType resets all changes to the "child_type" field.
+func (m *ExecutionRelationshipMutation) ResetChildType() {
+	m.child_type = nil
+}
+
+// Where appends a list predicates to the ExecutionRelationshipMutation builder.
+func (m *ExecutionRelationshipMutation) Where(ps ...predicate.ExecutionRelationship) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ExecutionRelationshipMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ExecutionRelationshipMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ExecutionRelationship, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ExecutionRelationshipMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ExecutionRelationshipMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ExecutionRelationship).
+func (m *ExecutionRelationshipMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ExecutionRelationshipMutation) Fields() []string {
+	fields := make([]string, 0, 4)
+	if m.parent_id != nil {
+		fields = append(fields, executionrelationship.FieldParentID)
+	}
+	if m.child_id != nil {
+		fields = append(fields, executionrelationship.FieldChildID)
+	}
+	if m.parent_type != nil {
+		fields = append(fields, executionrelationship.FieldParentType)
+	}
+	if m.child_type != nil {
+		fields = append(fields, executionrelationship.FieldChildType)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ExecutionRelationshipMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case executionrelationship.FieldParentID:
+		return m.ParentID()
+	case executionrelationship.FieldChildID:
+		return m.ChildID()
+	case executionrelationship.FieldParentType:
+		return m.ParentType()
+	case executionrelationship.FieldChildType:
+		return m.ChildType()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ExecutionRelationshipMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case executionrelationship.FieldParentID:
+		return m.OldParentID(ctx)
+	case executionrelationship.FieldChildID:
+		return m.OldChildID(ctx)
+	case executionrelationship.FieldParentType:
+		return m.OldParentType(ctx)
+	case executionrelationship.FieldChildType:
+		return m.OldChildType(ctx)
+	}
+	return nil, fmt.Errorf("unknown ExecutionRelationship field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExecutionRelationshipMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case executionrelationship.FieldParentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentID(v)
+		return nil
+	case executionrelationship.FieldChildID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChildID(v)
+		return nil
+	case executionrelationship.FieldParentType:
+		v, ok := value.(executionrelationship.ParentType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentType(v)
+		return nil
+	case executionrelationship.FieldChildType:
+		v, ok := value.(executionrelationship.ChildType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChildType(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ExecutionRelationship field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ExecutionRelationshipMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ExecutionRelationshipMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ExecutionRelationshipMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ExecutionRelationship numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ExecutionRelationshipMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ExecutionRelationshipMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ExecutionRelationshipMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ExecutionRelationship nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ExecutionRelationshipMutation) ResetField(name string) error {
+	switch name {
+	case executionrelationship.FieldParentID:
+		m.ResetParentID()
+		return nil
+	case executionrelationship.FieldChildID:
+		m.ResetChildID()
+		return nil
+	case executionrelationship.FieldParentType:
+		m.ResetParentType()
+		return nil
+	case executionrelationship.FieldChildType:
+		m.ResetChildType()
+		return nil
+	}
+	return fmt.Errorf("unknown ExecutionRelationship field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ExecutionRelationshipMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ExecutionRelationshipMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ExecutionRelationshipMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ExecutionRelationshipMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ExecutionRelationshipMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ExecutionRelationshipMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ExecutionRelationshipMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ExecutionRelationship unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ExecutionRelationshipMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ExecutionRelationship edge %s", name)
 }
 
 // RunMutation represents an operation that mutates the Run nodes in the graph.
@@ -2568,8 +2743,6 @@ type SagaMutation struct {
 	executions        map[string]struct{}
 	removedexecutions map[string]struct{}
 	clearedexecutions bool
-	activity          *string
-	clearedactivity   bool
 	done              bool
 	oldValue          func(context.Context) (*Saga, error)
 	predicates        []predicate.Saga
@@ -2954,45 +3127,6 @@ func (m *SagaMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by id.
-func (m *SagaMutation) SetActivityID(id string) {
-	m.activity = &id
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (m *SagaMutation) ClearActivity() {
-	m.clearedactivity = true
-}
-
-// ActivityCleared reports if the "activity" edge to the Activity entity was cleared.
-func (m *SagaMutation) ActivityCleared() bool {
-	return m.clearedactivity
-}
-
-// ActivityID returns the "activity" edge ID in the mutation.
-func (m *SagaMutation) ActivityID() (id string, exists bool) {
-	if m.activity != nil {
-		return *m.activity, true
-	}
-	return
-}
-
-// ActivityIDs returns the "activity" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ActivityID instead. It exists only for internal usage by the builders.
-func (m *SagaMutation) ActivityIDs() (ids []string) {
-	if id := m.activity; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetActivity resets all changes to the "activity" edge.
-func (m *SagaMutation) ResetActivity() {
-	m.activity = nil
-	m.clearedactivity = false
-}
-
 // Where appends a list predicates to the SagaMutation builder.
 func (m *SagaMutation) Where(ps ...predicate.Saga) {
 	m.predicates = append(m.predicates, ps...)
@@ -3209,12 +3343,9 @@ func (m *SagaMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SagaMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.executions != nil {
 		edges = append(edges, saga.EdgeExecutions)
-	}
-	if m.activity != nil {
-		edges = append(edges, saga.EdgeActivity)
 	}
 	return edges
 }
@@ -3229,17 +3360,13 @@ func (m *SagaMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case saga.EdgeActivity:
-		if id := m.activity; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SagaMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.removedexecutions != nil {
 		edges = append(edges, saga.EdgeExecutions)
 	}
@@ -3262,12 +3389,9 @@ func (m *SagaMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SagaMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.clearedexecutions {
 		edges = append(edges, saga.EdgeExecutions)
-	}
-	if m.clearedactivity {
-		edges = append(edges, saga.EdgeActivity)
 	}
 	return edges
 }
@@ -3278,8 +3402,6 @@ func (m *SagaMutation) EdgeCleared(name string) bool {
 	switch name {
 	case saga.EdgeExecutions:
 		return m.clearedexecutions
-	case saga.EdgeActivity:
-		return m.clearedactivity
 	}
 	return false
 }
@@ -3288,9 +3410,6 @@ func (m *SagaMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *SagaMutation) ClearEdge(name string) error {
 	switch name {
-	case saga.EdgeActivity:
-		m.ClearActivity()
-		return nil
 	}
 	return fmt.Errorf("unknown Saga unique edge %s", name)
 }
@@ -3301,9 +3420,6 @@ func (m *SagaMutation) ResetEdge(name string) error {
 	switch name {
 	case saga.EdgeExecutions:
 		m.ResetExecutions()
-		return nil
-	case saga.EdgeActivity:
-		m.ResetActivity()
 		return nil
 	}
 	return fmt.Errorf("unknown Saga edge %s", name)
@@ -5110,8 +5226,6 @@ type SideEffectMutation struct {
 	executions        map[string]struct{}
 	removedexecutions map[string]struct{}
 	clearedexecutions bool
-	activity          *string
-	clearedactivity   bool
 	done              bool
 	oldValue          func(context.Context) (*SideEffect, error)
 	predicates        []predicate.SideEffect
@@ -5532,45 +5646,6 @@ func (m *SideEffectMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by id.
-func (m *SideEffectMutation) SetActivityID(id string) {
-	m.activity = &id
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (m *SideEffectMutation) ClearActivity() {
-	m.clearedactivity = true
-}
-
-// ActivityCleared reports if the "activity" edge to the Activity entity was cleared.
-func (m *SideEffectMutation) ActivityCleared() bool {
-	return m.clearedactivity
-}
-
-// ActivityID returns the "activity" edge ID in the mutation.
-func (m *SideEffectMutation) ActivityID() (id string, exists bool) {
-	if m.activity != nil {
-		return *m.activity, true
-	}
-	return
-}
-
-// ActivityIDs returns the "activity" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ActivityID instead. It exists only for internal usage by the builders.
-func (m *SideEffectMutation) ActivityIDs() (ids []string) {
-	if id := m.activity; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetActivity resets all changes to the "activity" edge.
-func (m *SideEffectMutation) ResetActivity() {
-	m.activity = nil
-	m.clearedactivity = false
-}
-
 // Where appends a list predicates to the SideEffectMutation builder.
 func (m *SideEffectMutation) Where(ps ...predicate.SideEffect) {
 	m.predicates = append(m.predicates, ps...)
@@ -5804,12 +5879,9 @@ func (m *SideEffectMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SideEffectMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.executions != nil {
 		edges = append(edges, sideeffect.EdgeExecutions)
-	}
-	if m.activity != nil {
-		edges = append(edges, sideeffect.EdgeActivity)
 	}
 	return edges
 }
@@ -5824,17 +5896,13 @@ func (m *SideEffectMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case sideeffect.EdgeActivity:
-		if id := m.activity; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SideEffectMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.removedexecutions != nil {
 		edges = append(edges, sideeffect.EdgeExecutions)
 	}
@@ -5857,12 +5925,9 @@ func (m *SideEffectMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SideEffectMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.clearedexecutions {
 		edges = append(edges, sideeffect.EdgeExecutions)
-	}
-	if m.clearedactivity {
-		edges = append(edges, sideeffect.EdgeActivity)
 	}
 	return edges
 }
@@ -5873,8 +5938,6 @@ func (m *SideEffectMutation) EdgeCleared(name string) bool {
 	switch name {
 	case sideeffect.EdgeExecutions:
 		return m.clearedexecutions
-	case sideeffect.EdgeActivity:
-		return m.clearedactivity
 	}
 	return false
 }
@@ -5883,9 +5946,6 @@ func (m *SideEffectMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *SideEffectMutation) ClearEdge(name string) error {
 	switch name {
-	case sideeffect.EdgeActivity:
-		m.ClearActivity()
-		return nil
 	}
 	return fmt.Errorf("unknown SideEffect unique edge %s", name)
 }
@@ -5897,9 +5957,6 @@ func (m *SideEffectMutation) ResetEdge(name string) error {
 	case sideeffect.EdgeExecutions:
 		m.ResetExecutions()
 		return nil
-	case sideeffect.EdgeActivity:
-		m.ResetActivity()
-		return nil
 	}
 	return fmt.Errorf("unknown SideEffect edge %s", name)
 }
@@ -5907,25 +5964,23 @@ func (m *SideEffectMutation) ResetEdge(name string) error {
 // SideEffectExecutionMutation represents an operation that mutates the SideEffectExecution nodes in the graph.
 type SideEffectExecutionMutation struct {
 	config
-	op                        Op
-	typ                       string
-	id                        *string
-	run_id                    *string
-	status                    *sideeffectexecution.Status
-	attempt                   *int
-	addattempt                *int
-	output                    *[]interface{}
-	appendoutput              []interface{}
-	started_at                *time.Time
-	updated_at                *time.Time
-	clearedFields             map[string]struct{}
-	side_effect               *string
-	clearedside_effect        bool
-	activity_execution        *string
-	clearedactivity_execution bool
-	done                      bool
-	oldValue                  func(context.Context) (*SideEffectExecution, error)
-	predicates                []predicate.SideEffectExecution
+	op                 Op
+	typ                string
+	id                 *string
+	run_id             *string
+	status             *sideeffectexecution.Status
+	attempt            *int
+	addattempt         *int
+	output             *[]interface{}
+	appendoutput       []interface{}
+	started_at         *time.Time
+	updated_at         *time.Time
+	clearedFields      map[string]struct{}
+	side_effect        *string
+	clearedside_effect bool
+	done               bool
+	oldValue           func(context.Context) (*SideEffectExecution, error)
+	predicates         []predicate.SideEffectExecution
 }
 
 var _ ent.Mutation = (*SideEffectExecutionMutation)(nil)
@@ -6336,45 +6391,6 @@ func (m *SideEffectExecutionMutation) ResetSideEffect() {
 	m.clearedside_effect = false
 }
 
-// SetActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by id.
-func (m *SideEffectExecutionMutation) SetActivityExecutionID(id string) {
-	m.activity_execution = &id
-}
-
-// ClearActivityExecution clears the "activity_execution" edge to the ActivityExecution entity.
-func (m *SideEffectExecutionMutation) ClearActivityExecution() {
-	m.clearedactivity_execution = true
-}
-
-// ActivityExecutionCleared reports if the "activity_execution" edge to the ActivityExecution entity was cleared.
-func (m *SideEffectExecutionMutation) ActivityExecutionCleared() bool {
-	return m.clearedactivity_execution
-}
-
-// ActivityExecutionID returns the "activity_execution" edge ID in the mutation.
-func (m *SideEffectExecutionMutation) ActivityExecutionID() (id string, exists bool) {
-	if m.activity_execution != nil {
-		return *m.activity_execution, true
-	}
-	return
-}
-
-// ActivityExecutionIDs returns the "activity_execution" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ActivityExecutionID instead. It exists only for internal usage by the builders.
-func (m *SideEffectExecutionMutation) ActivityExecutionIDs() (ids []string) {
-	if id := m.activity_execution; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetActivityExecution resets all changes to the "activity_execution" edge.
-func (m *SideEffectExecutionMutation) ResetActivityExecution() {
-	m.activity_execution = nil
-	m.clearedactivity_execution = false
-}
-
 // Where appends a list predicates to the SideEffectExecutionMutation builder.
 func (m *SideEffectExecutionMutation) Where(ps ...predicate.SideEffectExecution) {
 	m.predicates = append(m.predicates, ps...)
@@ -6617,12 +6633,9 @@ func (m *SideEffectExecutionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SideEffectExecutionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.side_effect != nil {
 		edges = append(edges, sideeffectexecution.EdgeSideEffect)
-	}
-	if m.activity_execution != nil {
-		edges = append(edges, sideeffectexecution.EdgeActivityExecution)
 	}
 	return edges
 }
@@ -6635,17 +6648,13 @@ func (m *SideEffectExecutionMutation) AddedIDs(name string) []ent.Value {
 		if id := m.side_effect; id != nil {
 			return []ent.Value{*id}
 		}
-	case sideeffectexecution.EdgeActivityExecution:
-		if id := m.activity_execution; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SideEffectExecutionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -6657,12 +6666,9 @@ func (m *SideEffectExecutionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SideEffectExecutionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.clearedside_effect {
 		edges = append(edges, sideeffectexecution.EdgeSideEffect)
-	}
-	if m.clearedactivity_execution {
-		edges = append(edges, sideeffectexecution.EdgeActivityExecution)
 	}
 	return edges
 }
@@ -6673,8 +6679,6 @@ func (m *SideEffectExecutionMutation) EdgeCleared(name string) bool {
 	switch name {
 	case sideeffectexecution.EdgeSideEffect:
 		return m.clearedside_effect
-	case sideeffectexecution.EdgeActivityExecution:
-		return m.clearedactivity_execution
 	}
 	return false
 }
@@ -6685,9 +6689,6 @@ func (m *SideEffectExecutionMutation) ClearEdge(name string) error {
 	switch name {
 	case sideeffectexecution.EdgeSideEffect:
 		m.ClearSideEffect()
-		return nil
-	case sideeffectexecution.EdgeActivityExecution:
-		m.ClearActivityExecution()
 		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecution unique edge %s", name)
@@ -6700,9 +6701,6 @@ func (m *SideEffectExecutionMutation) ResetEdge(name string) error {
 	case sideeffectexecution.EdgeSideEffect:
 		m.ResetSideEffect()
 		return nil
-	case sideeffectexecution.EdgeActivityExecution:
-		m.ResetActivityExecution()
-		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecution edge %s", name)
 }
@@ -6710,21 +6708,19 @@ func (m *SideEffectExecutionMutation) ResetEdge(name string) error {
 // SignalMutation represents an operation that mutates the Signal nodes in the graph.
 type SignalMutation struct {
 	config
-	op                        Op
-	typ                       string
-	id                        *string
-	name                      *string
-	data                      *[]interface{}
-	appenddata                []interface{}
-	status                    *signal.Status
-	created_at                *time.Time
-	updated_at                *time.Time
-	clearedFields             map[string]struct{}
-	workflow_execution        *string
-	clearedworkflow_execution bool
-	done                      bool
-	oldValue                  func(context.Context) (*Signal, error)
-	predicates                []predicate.Signal
+	op            Op
+	typ           string
+	id            *string
+	name          *string
+	data          *[]interface{}
+	appenddata    []interface{}
+	status        *signal.Status
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*Signal, error)
+	predicates    []predicate.Signal
 }
 
 var _ ent.Mutation = (*SignalMutation)(nil)
@@ -7040,45 +7036,6 @@ func (m *SignalMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by id.
-func (m *SignalMutation) SetWorkflowExecutionID(id string) {
-	m.workflow_execution = &id
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (m *SignalMutation) ClearWorkflowExecution() {
-	m.clearedworkflow_execution = true
-}
-
-// WorkflowExecutionCleared reports if the "workflow_execution" edge to the WorkflowExecution entity was cleared.
-func (m *SignalMutation) WorkflowExecutionCleared() bool {
-	return m.clearedworkflow_execution
-}
-
-// WorkflowExecutionID returns the "workflow_execution" edge ID in the mutation.
-func (m *SignalMutation) WorkflowExecutionID() (id string, exists bool) {
-	if m.workflow_execution != nil {
-		return *m.workflow_execution, true
-	}
-	return
-}
-
-// WorkflowExecutionIDs returns the "workflow_execution" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkflowExecutionID instead. It exists only for internal usage by the builders.
-func (m *SignalMutation) WorkflowExecutionIDs() (ids []string) {
-	if id := m.workflow_execution; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkflowExecution resets all changes to the "workflow_execution" edge.
-func (m *SignalMutation) ResetWorkflowExecution() {
-	m.workflow_execution = nil
-	m.clearedworkflow_execution = false
-}
-
 // Where appends a list predicates to the SignalMutation builder.
 func (m *SignalMutation) Where(ps ...predicate.Signal) {
 	m.predicates = append(m.predicates, ps...)
@@ -7289,28 +7246,19 @@ func (m *SignalMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SignalMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.workflow_execution != nil {
-		edges = append(edges, signal.EdgeWorkflowExecution)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SignalMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case signal.EdgeWorkflowExecution:
-		if id := m.workflow_execution; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SignalMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -7322,42 +7270,25 @@ func (m *SignalMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SignalMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedworkflow_execution {
-		edges = append(edges, signal.EdgeWorkflowExecution)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SignalMutation) EdgeCleared(name string) bool {
-	switch name {
-	case signal.EdgeWorkflowExecution:
-		return m.clearedworkflow_execution
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SignalMutation) ClearEdge(name string) error {
-	switch name {
-	case signal.EdgeWorkflowExecution:
-		m.ClearWorkflowExecution()
-		return nil
-	}
 	return fmt.Errorf("unknown Signal unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SignalMutation) ResetEdge(name string) error {
-	switch name {
-	case signal.EdgeWorkflowExecution:
-		m.ResetWorkflowExecution()
-		return nil
-	}
 	return fmt.Errorf("unknown Signal edge %s", name)
 }
 
@@ -7379,9 +7310,6 @@ type WorkflowMutation struct {
 	executions        map[string]struct{}
 	removedexecutions map[string]struct{}
 	clearedexecutions bool
-	activities        map[string]struct{}
-	removedactivities map[string]struct{}
-	clearedactivities bool
 	done              bool
 	oldValue          func(context.Context) (*Workflow, error)
 	predicates        []predicate.Workflow
@@ -7838,60 +7766,6 @@ func (m *WorkflowMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
-// AddActivityIDs adds the "activities" edge to the Activity entity by ids.
-func (m *WorkflowMutation) AddActivityIDs(ids ...string) {
-	if m.activities == nil {
-		m.activities = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.activities[ids[i]] = struct{}{}
-	}
-}
-
-// ClearActivities clears the "activities" edge to the Activity entity.
-func (m *WorkflowMutation) ClearActivities() {
-	m.clearedactivities = true
-}
-
-// ActivitiesCleared reports if the "activities" edge to the Activity entity was cleared.
-func (m *WorkflowMutation) ActivitiesCleared() bool {
-	return m.clearedactivities
-}
-
-// RemoveActivityIDs removes the "activities" edge to the Activity entity by IDs.
-func (m *WorkflowMutation) RemoveActivityIDs(ids ...string) {
-	if m.removedactivities == nil {
-		m.removedactivities = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.activities, ids[i])
-		m.removedactivities[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedActivities returns the removed IDs of the "activities" edge to the Activity entity.
-func (m *WorkflowMutation) RemovedActivitiesIDs() (ids []string) {
-	for id := range m.removedactivities {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ActivitiesIDs returns the "activities" edge IDs in the mutation.
-func (m *WorkflowMutation) ActivitiesIDs() (ids []string) {
-	for id := range m.activities {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetActivities resets all changes to the "activities" edge.
-func (m *WorkflowMutation) ResetActivities() {
-	m.activities = nil
-	m.clearedactivities = false
-	m.removedactivities = nil
-}
-
 // Where appends a list predicates to the WorkflowMutation builder.
 func (m *WorkflowMutation) Where(ps ...predicate.Workflow) {
 	m.predicates = append(m.predicates, ps...)
@@ -8142,12 +8016,9 @@ func (m *WorkflowMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.executions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
-	}
-	if m.activities != nil {
-		edges = append(edges, workflow.EdgeActivities)
 	}
 	return edges
 }
@@ -8162,24 +8033,15 @@ func (m *WorkflowMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case workflow.EdgeActivities:
-		ids := make([]ent.Value, 0, len(m.activities))
-		for id := range m.activities {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.removedexecutions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
-	}
-	if m.removedactivities != nil {
-		edges = append(edges, workflow.EdgeActivities)
 	}
 	return edges
 }
@@ -8194,24 +8056,15 @@ func (m *WorkflowMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case workflow.EdgeActivities:
-		ids := make([]ent.Value, 0, len(m.removedactivities))
-		for id := range m.removedactivities {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.clearedexecutions {
 		edges = append(edges, workflow.EdgeExecutions)
-	}
-	if m.clearedactivities {
-		edges = append(edges, workflow.EdgeActivities)
 	}
 	return edges
 }
@@ -8222,8 +8075,6 @@ func (m *WorkflowMutation) EdgeCleared(name string) bool {
 	switch name {
 	case workflow.EdgeExecutions:
 		return m.clearedexecutions
-	case workflow.EdgeActivities:
-		return m.clearedactivities
 	}
 	return false
 }
@@ -8243,9 +8094,6 @@ func (m *WorkflowMutation) ResetEdge(name string) error {
 	case workflow.EdgeExecutions:
 		m.ResetExecutions()
 		return nil
-	case workflow.EdgeActivities:
-		m.ResetActivities()
-		return nil
 	}
 	return fmt.Errorf("unknown Workflow edge %s", name)
 }
@@ -8253,28 +8101,22 @@ func (m *WorkflowMutation) ResetEdge(name string) error {
 // WorkflowExecutionMutation represents an operation that mutates the WorkflowExecution nodes in the graph.
 type WorkflowExecutionMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *string
-	run_id                     *string
-	status                     *workflowexecution.Status
-	output                     *[]interface{}
-	appendoutput               []interface{}
-	error                      *string
-	started_at                 *time.Time
-	updated_at                 *time.Time
-	clearedFields              map[string]struct{}
-	workflow                   *string
-	clearedworkflow            bool
-	activity_executions        map[string]struct{}
-	removedactivity_executions map[string]struct{}
-	clearedactivity_executions bool
-	signals                    map[string]struct{}
-	removedsignals             map[string]struct{}
-	clearedsignals             bool
-	done                       bool
-	oldValue                   func(context.Context) (*WorkflowExecution, error)
-	predicates                 []predicate.WorkflowExecution
+	op              Op
+	typ             string
+	id              *string
+	run_id          *string
+	status          *workflowexecution.Status
+	output          *[]interface{}
+	appendoutput    []interface{}
+	error           *string
+	started_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	workflow        *string
+	clearedworkflow bool
+	done            bool
+	oldValue        func(context.Context) (*WorkflowExecution, error)
+	predicates      []predicate.WorkflowExecution
 }
 
 var _ ent.Mutation = (*WorkflowExecutionMutation)(nil)
@@ -8678,114 +8520,6 @@ func (m *WorkflowExecutionMutation) ResetWorkflow() {
 	m.clearedworkflow = false
 }
 
-// AddActivityExecutionIDs adds the "activity_executions" edge to the ActivityExecution entity by ids.
-func (m *WorkflowExecutionMutation) AddActivityExecutionIDs(ids ...string) {
-	if m.activity_executions == nil {
-		m.activity_executions = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.activity_executions[ids[i]] = struct{}{}
-	}
-}
-
-// ClearActivityExecutions clears the "activity_executions" edge to the ActivityExecution entity.
-func (m *WorkflowExecutionMutation) ClearActivityExecutions() {
-	m.clearedactivity_executions = true
-}
-
-// ActivityExecutionsCleared reports if the "activity_executions" edge to the ActivityExecution entity was cleared.
-func (m *WorkflowExecutionMutation) ActivityExecutionsCleared() bool {
-	return m.clearedactivity_executions
-}
-
-// RemoveActivityExecutionIDs removes the "activity_executions" edge to the ActivityExecution entity by IDs.
-func (m *WorkflowExecutionMutation) RemoveActivityExecutionIDs(ids ...string) {
-	if m.removedactivity_executions == nil {
-		m.removedactivity_executions = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.activity_executions, ids[i])
-		m.removedactivity_executions[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedActivityExecutions returns the removed IDs of the "activity_executions" edge to the ActivityExecution entity.
-func (m *WorkflowExecutionMutation) RemovedActivityExecutionsIDs() (ids []string) {
-	for id := range m.removedactivity_executions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ActivityExecutionsIDs returns the "activity_executions" edge IDs in the mutation.
-func (m *WorkflowExecutionMutation) ActivityExecutionsIDs() (ids []string) {
-	for id := range m.activity_executions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetActivityExecutions resets all changes to the "activity_executions" edge.
-func (m *WorkflowExecutionMutation) ResetActivityExecutions() {
-	m.activity_executions = nil
-	m.clearedactivity_executions = false
-	m.removedactivity_executions = nil
-}
-
-// AddSignalIDs adds the "signals" edge to the Signal entity by ids.
-func (m *WorkflowExecutionMutation) AddSignalIDs(ids ...string) {
-	if m.signals == nil {
-		m.signals = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.signals[ids[i]] = struct{}{}
-	}
-}
-
-// ClearSignals clears the "signals" edge to the Signal entity.
-func (m *WorkflowExecutionMutation) ClearSignals() {
-	m.clearedsignals = true
-}
-
-// SignalsCleared reports if the "signals" edge to the Signal entity was cleared.
-func (m *WorkflowExecutionMutation) SignalsCleared() bool {
-	return m.clearedsignals
-}
-
-// RemoveSignalIDs removes the "signals" edge to the Signal entity by IDs.
-func (m *WorkflowExecutionMutation) RemoveSignalIDs(ids ...string) {
-	if m.removedsignals == nil {
-		m.removedsignals = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.signals, ids[i])
-		m.removedsignals[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedSignals returns the removed IDs of the "signals" edge to the Signal entity.
-func (m *WorkflowExecutionMutation) RemovedSignalsIDs() (ids []string) {
-	for id := range m.removedsignals {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// SignalsIDs returns the "signals" edge IDs in the mutation.
-func (m *WorkflowExecutionMutation) SignalsIDs() (ids []string) {
-	for id := range m.signals {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetSignals resets all changes to the "signals" edge.
-func (m *WorkflowExecutionMutation) ResetSignals() {
-	m.signals = nil
-	m.clearedsignals = false
-	m.removedsignals = nil
-}
-
 // Where appends a list predicates to the WorkflowExecutionMutation builder.
 func (m *WorkflowExecutionMutation) Where(ps ...predicate.WorkflowExecution) {
 	m.predicates = append(m.predicates, ps...)
@@ -9019,15 +8753,9 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowExecutionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 1)
 	if m.workflow != nil {
 		edges = append(edges, workflowexecution.EdgeWorkflow)
-	}
-	if m.activity_executions != nil {
-		edges = append(edges, workflowexecution.EdgeActivityExecutions)
-	}
-	if m.signals != nil {
-		edges = append(edges, workflowexecution.EdgeSignals)
 	}
 	return edges
 }
@@ -9040,65 +8768,27 @@ func (m *WorkflowExecutionMutation) AddedIDs(name string) []ent.Value {
 		if id := m.workflow; id != nil {
 			return []ent.Value{*id}
 		}
-	case workflowexecution.EdgeActivityExecutions:
-		ids := make([]ent.Value, 0, len(m.activity_executions))
-		for id := range m.activity_executions {
-			ids = append(ids, id)
-		}
-		return ids
-	case workflowexecution.EdgeSignals:
-		ids := make([]ent.Value, 0, len(m.signals))
-		for id := range m.signals {
-			ids = append(ids, id)
-		}
-		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowExecutionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.removedactivity_executions != nil {
-		edges = append(edges, workflowexecution.EdgeActivityExecutions)
-	}
-	if m.removedsignals != nil {
-		edges = append(edges, workflowexecution.EdgeSignals)
-	}
+	edges := make([]string, 0, 1)
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *WorkflowExecutionMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case workflowexecution.EdgeActivityExecutions:
-		ids := make([]ent.Value, 0, len(m.removedactivity_executions))
-		for id := range m.removedactivity_executions {
-			ids = append(ids, id)
-		}
-		return ids
-	case workflowexecution.EdgeSignals:
-		ids := make([]ent.Value, 0, len(m.removedsignals))
-		for id := range m.removedsignals {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowExecutionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 1)
 	if m.clearedworkflow {
 		edges = append(edges, workflowexecution.EdgeWorkflow)
-	}
-	if m.clearedactivity_executions {
-		edges = append(edges, workflowexecution.EdgeActivityExecutions)
-	}
-	if m.clearedsignals {
-		edges = append(edges, workflowexecution.EdgeSignals)
 	}
 	return edges
 }
@@ -9109,10 +8799,6 @@ func (m *WorkflowExecutionMutation) EdgeCleared(name string) bool {
 	switch name {
 	case workflowexecution.EdgeWorkflow:
 		return m.clearedworkflow
-	case workflowexecution.EdgeActivityExecutions:
-		return m.clearedactivity_executions
-	case workflowexecution.EdgeSignals:
-		return m.clearedsignals
 	}
 	return false
 }
@@ -9134,12 +8820,6 @@ func (m *WorkflowExecutionMutation) ResetEdge(name string) error {
 	switch name {
 	case workflowexecution.EdgeWorkflow:
 		m.ResetWorkflow()
-		return nil
-	case workflowexecution.EdgeActivityExecutions:
-		m.ResetActivityExecutions()
-		return nil
-	case workflowexecution.EdgeSignals:
-		m.ResetSignals()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecution edge %s", name)

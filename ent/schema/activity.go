@@ -20,6 +20,9 @@ func (Activity) Fields() []ent.Field {
 			Unique(),
 		field.String("identity").
 			NotEmpty(),
+		field.Enum("status").
+			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
+			Default("Pending"),
 		field.String("handler_name").
 			NotEmpty(),
 		field.JSON("input", []interface{}{}),
@@ -36,10 +39,5 @@ func (Activity) Fields() []ent.Field {
 func (Activity) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("executions", ActivityExecution.Type),
-		edge.From("workflow", Workflow.Type).
-			Ref("activities").
-			Unique(),
-		edge.To("sagas", Saga.Type),
-		edge.To("side_effects", SideEffect.Type),
 	}
 }

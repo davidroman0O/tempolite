@@ -12,6 +12,9 @@ type Activity func(*sql.Selector)
 // ActivityExecution is the predicate function for activityexecution builders.
 type ActivityExecution func(*sql.Selector)
 
+// ExecutionRelationship is the predicate function for executionrelationship builders.
+type ExecutionRelationship func(*sql.Selector)
+
 // Run is the predicate function for run builders.
 type Run func(*sql.Selector)
 

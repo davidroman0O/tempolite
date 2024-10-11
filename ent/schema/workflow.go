@@ -39,6 +39,5 @@ func (Workflow) Fields() []ent.Field {
 func (Workflow) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("executions", WorkflowExecution.Type),
-		edge.To("activities", Activity.Type),
 	}
 }

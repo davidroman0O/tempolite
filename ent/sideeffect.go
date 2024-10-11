@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 )
@@ -34,20 +33,17 @@ type SideEffect struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SideEffectQuery when eager-loading is set.
-	Edges                 SideEffectEdges `json:"edges"`
-	activity_side_effects *string
-	selectValues          sql.SelectValues
+	Edges        SideEffectEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // SideEffectEdges holds the relations/edges for other nodes in the graph.
 type SideEffectEdges struct {
 	// Executions holds the value of the executions edge.
 	Executions []*SideEffectExecution `json:"executions,omitempty"`
-	// Activity holds the value of the activity edge.
-	Activity *Activity `json:"activity,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -57,17 +53,6 @@ func (e SideEffectEdges) ExecutionsOrErr() ([]*SideEffectExecution, error) {
 		return e.Executions, nil
 	}
 	return nil, &NotLoadedError{edge: "executions"}
-}
-
-// ActivityOrErr returns the Activity value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SideEffectEdges) ActivityOrErr() (*Activity, error) {
-	if e.Activity != nil {
-		return e.Activity, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: activity.Label}
-	}
-	return nil, &NotLoadedError{edge: "activity"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -81,8 +66,6 @@ func (*SideEffect) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case sideeffect.FieldTimeout, sideeffect.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case sideeffect.ForeignKeys[0]: // activity_side_effects
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -144,13 +127,6 @@ func (se *SideEffect) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				se.CreatedAt = value.Time
 			}
-		case sideeffect.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field activity_side_effects", values[i])
-			} else if value.Valid {
-				se.activity_side_effects = new(string)
-				*se.activity_side_effects = value.String
-			}
 		default:
 			se.selectValues.Set(columns[i], values[i])
 		}
@@ -167,11 +143,6 @@ func (se *SideEffect) Value(name string) (ent.Value, error) {
 // QueryExecutions queries the "executions" edge of the SideEffect entity.
 func (se *SideEffect) QueryExecutions() *SideEffectExecutionQuery {
 	return NewSideEffectClient(se.config).QueryExecutions(se)
-}
-
-// QueryActivity queries the "activity" edge of the SideEffect entity.
-func (se *SideEffect) QueryActivity() *ActivityQuery {
-	return NewSideEffectClient(se.config).QueryActivity(se)
 }
 
 // Update returns a builder for updating this SideEffect.

@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
@@ -116,21 +115,6 @@ func (wc *WorkflowCreate) AddExecutions(w ...*WorkflowExecution) *WorkflowCreate
 		ids[i] = w[i].ID
 	}
 	return wc.AddExecutionIDs(ids...)
-}
-
-// AddActivityIDs adds the "activities" edge to the Activity entity by IDs.
-func (wc *WorkflowCreate) AddActivityIDs(ids ...string) *WorkflowCreate {
-	wc.mutation.AddActivityIDs(ids...)
-	return wc
-}
-
-// AddActivities adds the "activities" edges to the Activity entity.
-func (wc *WorkflowCreate) AddActivities(a ...*Activity) *WorkflowCreate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return wc.AddActivityIDs(ids...)
 }
 
 // Mutation returns the WorkflowMutation object of the builder.
@@ -282,22 +266,6 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := wc.mutation.ActivitiesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   workflow.ActivitiesTable,
-			Columns: []string{workflow.ActivitiesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

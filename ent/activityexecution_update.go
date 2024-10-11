@@ -15,8 +15,6 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // ActivityExecutionUpdate is the builder for updating ActivityExecution entities.
@@ -150,40 +148,6 @@ func (aeu *ActivityExecutionUpdate) SetActivity(a *Activity) *ActivityExecutionU
 	return aeu.SetActivityID(a.ID)
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (aeu *ActivityExecutionUpdate) SetWorkflowExecutionID(id string) *ActivityExecutionUpdate {
-	aeu.mutation.SetWorkflowExecutionID(id)
-	return aeu
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (aeu *ActivityExecutionUpdate) SetNillableWorkflowExecutionID(id *string) *ActivityExecutionUpdate {
-	if id != nil {
-		aeu = aeu.SetWorkflowExecutionID(*id)
-	}
-	return aeu
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (aeu *ActivityExecutionUpdate) SetWorkflowExecution(w *WorkflowExecution) *ActivityExecutionUpdate {
-	return aeu.SetWorkflowExecutionID(w.ID)
-}
-
-// AddSideEffectExecutionIDs adds the "side_effect_executions" edge to the SideEffectExecution entity by IDs.
-func (aeu *ActivityExecutionUpdate) AddSideEffectExecutionIDs(ids ...string) *ActivityExecutionUpdate {
-	aeu.mutation.AddSideEffectExecutionIDs(ids...)
-	return aeu
-}
-
-// AddSideEffectExecutions adds the "side_effect_executions" edges to the SideEffectExecution entity.
-func (aeu *ActivityExecutionUpdate) AddSideEffectExecutions(s ...*SideEffectExecution) *ActivityExecutionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return aeu.AddSideEffectExecutionIDs(ids...)
-}
-
 // Mutation returns the ActivityExecutionMutation object of the builder.
 func (aeu *ActivityExecutionUpdate) Mutation() *ActivityExecutionMutation {
 	return aeu.mutation
@@ -193,33 +157,6 @@ func (aeu *ActivityExecutionUpdate) Mutation() *ActivityExecutionMutation {
 func (aeu *ActivityExecutionUpdate) ClearActivity() *ActivityExecutionUpdate {
 	aeu.mutation.ClearActivity()
 	return aeu
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (aeu *ActivityExecutionUpdate) ClearWorkflowExecution() *ActivityExecutionUpdate {
-	aeu.mutation.ClearWorkflowExecution()
-	return aeu
-}
-
-// ClearSideEffectExecutions clears all "side_effect_executions" edges to the SideEffectExecution entity.
-func (aeu *ActivityExecutionUpdate) ClearSideEffectExecutions() *ActivityExecutionUpdate {
-	aeu.mutation.ClearSideEffectExecutions()
-	return aeu
-}
-
-// RemoveSideEffectExecutionIDs removes the "side_effect_executions" edge to SideEffectExecution entities by IDs.
-func (aeu *ActivityExecutionUpdate) RemoveSideEffectExecutionIDs(ids ...string) *ActivityExecutionUpdate {
-	aeu.mutation.RemoveSideEffectExecutionIDs(ids...)
-	return aeu
-}
-
-// RemoveSideEffectExecutions removes "side_effect_executions" edges to SideEffectExecution entities.
-func (aeu *ActivityExecutionUpdate) RemoveSideEffectExecutions(s ...*SideEffectExecution) *ActivityExecutionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return aeu.RemoveSideEffectExecutionIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -340,80 +277,6 @@ func (aeu *ActivityExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if aeu.mutation.WorkflowExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activityexecution.WorkflowExecutionTable,
-			Columns: []string{activityexecution.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeu.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activityexecution.WorkflowExecutionTable,
-			Columns: []string{activityexecution.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if aeu.mutation.SideEffectExecutionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeu.mutation.RemovedSideEffectExecutionsIDs(); len(nodes) > 0 && !aeu.mutation.SideEffectExecutionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeu.mutation.SideEffectExecutionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -559,40 +422,6 @@ func (aeuo *ActivityExecutionUpdateOne) SetActivity(a *Activity) *ActivityExecut
 	return aeuo.SetActivityID(a.ID)
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (aeuo *ActivityExecutionUpdateOne) SetWorkflowExecutionID(id string) *ActivityExecutionUpdateOne {
-	aeuo.mutation.SetWorkflowExecutionID(id)
-	return aeuo
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (aeuo *ActivityExecutionUpdateOne) SetNillableWorkflowExecutionID(id *string) *ActivityExecutionUpdateOne {
-	if id != nil {
-		aeuo = aeuo.SetWorkflowExecutionID(*id)
-	}
-	return aeuo
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (aeuo *ActivityExecutionUpdateOne) SetWorkflowExecution(w *WorkflowExecution) *ActivityExecutionUpdateOne {
-	return aeuo.SetWorkflowExecutionID(w.ID)
-}
-
-// AddSideEffectExecutionIDs adds the "side_effect_executions" edge to the SideEffectExecution entity by IDs.
-func (aeuo *ActivityExecutionUpdateOne) AddSideEffectExecutionIDs(ids ...string) *ActivityExecutionUpdateOne {
-	aeuo.mutation.AddSideEffectExecutionIDs(ids...)
-	return aeuo
-}
-
-// AddSideEffectExecutions adds the "side_effect_executions" edges to the SideEffectExecution entity.
-func (aeuo *ActivityExecutionUpdateOne) AddSideEffectExecutions(s ...*SideEffectExecution) *ActivityExecutionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return aeuo.AddSideEffectExecutionIDs(ids...)
-}
-
 // Mutation returns the ActivityExecutionMutation object of the builder.
 func (aeuo *ActivityExecutionUpdateOne) Mutation() *ActivityExecutionMutation {
 	return aeuo.mutation
@@ -602,33 +431,6 @@ func (aeuo *ActivityExecutionUpdateOne) Mutation() *ActivityExecutionMutation {
 func (aeuo *ActivityExecutionUpdateOne) ClearActivity() *ActivityExecutionUpdateOne {
 	aeuo.mutation.ClearActivity()
 	return aeuo
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (aeuo *ActivityExecutionUpdateOne) ClearWorkflowExecution() *ActivityExecutionUpdateOne {
-	aeuo.mutation.ClearWorkflowExecution()
-	return aeuo
-}
-
-// ClearSideEffectExecutions clears all "side_effect_executions" edges to the SideEffectExecution entity.
-func (aeuo *ActivityExecutionUpdateOne) ClearSideEffectExecutions() *ActivityExecutionUpdateOne {
-	aeuo.mutation.ClearSideEffectExecutions()
-	return aeuo
-}
-
-// RemoveSideEffectExecutionIDs removes the "side_effect_executions" edge to SideEffectExecution entities by IDs.
-func (aeuo *ActivityExecutionUpdateOne) RemoveSideEffectExecutionIDs(ids ...string) *ActivityExecutionUpdateOne {
-	aeuo.mutation.RemoveSideEffectExecutionIDs(ids...)
-	return aeuo
-}
-
-// RemoveSideEffectExecutions removes "side_effect_executions" edges to SideEffectExecution entities.
-func (aeuo *ActivityExecutionUpdateOne) RemoveSideEffectExecutions(s ...*SideEffectExecution) *ActivityExecutionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return aeuo.RemoveSideEffectExecutionIDs(ids...)
 }
 
 // Where appends a list predicates to the ActivityExecutionUpdate builder.
@@ -779,80 +581,6 @@ func (aeuo *ActivityExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Act
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if aeuo.mutation.WorkflowExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activityexecution.WorkflowExecutionTable,
-			Columns: []string{activityexecution.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeuo.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activityexecution.WorkflowExecutionTable,
-			Columns: []string{activityexecution.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if aeuo.mutation.SideEffectExecutionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeuo.mutation.RemovedSideEffectExecutionsIDs(); len(nodes) > 0 && !aeuo.mutation.SideEffectExecutionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := aeuo.mutation.SideEffectExecutionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

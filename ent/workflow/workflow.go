@@ -31,8 +31,6 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
-	// EdgeActivities holds the string denoting the activities edge name in mutations.
-	EdgeActivities = "activities"
 	// Table holds the table name of the workflow in the database.
 	Table = "workflows"
 	// ExecutionsTable is the table that holds the executions relation/edge.
@@ -42,13 +40,6 @@ const (
 	ExecutionsInverseTable = "workflow_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "workflow_executions"
-	// ActivitiesTable is the table that holds the activities relation/edge.
-	ActivitiesTable = "activities"
-	// ActivitiesInverseTable is the table name for the Activity entity.
-	// It exists in this package in order to avoid circular dependency with the "activity" package.
-	ActivitiesInverseTable = "activities"
-	// ActivitiesColumn is the table column denoting the activities relation/edge.
-	ActivitiesColumn = "workflow_activities"
 )
 
 // Columns holds all SQL columns for workflow fields.
@@ -159,31 +150,10 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByActivitiesCount orders the results by activities count.
-func ByActivitiesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newActivitiesStep(), opts...)
-	}
-}
-
-// ByActivities orders the results by activities terms.
-func ByActivities(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newActivitiesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
-	)
-}
-func newActivitiesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ActivitiesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ActivitiesTable, ActivitiesColumn),
 	)
 }

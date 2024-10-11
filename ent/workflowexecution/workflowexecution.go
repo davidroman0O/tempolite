@@ -29,10 +29,6 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
 	EdgeWorkflow = "workflow"
-	// EdgeActivityExecutions holds the string denoting the activity_executions edge name in mutations.
-	EdgeActivityExecutions = "activity_executions"
-	// EdgeSignals holds the string denoting the signals edge name in mutations.
-	EdgeSignals = "signals"
 	// Table holds the table name of the workflowexecution in the database.
 	Table = "workflow_executions"
 	// WorkflowTable is the table that holds the workflow relation/edge.
@@ -42,20 +38,6 @@ const (
 	WorkflowInverseTable = "workflows"
 	// WorkflowColumn is the table column denoting the workflow relation/edge.
 	WorkflowColumn = "workflow_executions"
-	// ActivityExecutionsTable is the table that holds the activity_executions relation/edge.
-	ActivityExecutionsTable = "activity_executions"
-	// ActivityExecutionsInverseTable is the table name for the ActivityExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "activityexecution" package.
-	ActivityExecutionsInverseTable = "activity_executions"
-	// ActivityExecutionsColumn is the table column denoting the activity_executions relation/edge.
-	ActivityExecutionsColumn = "workflow_execution_activity_executions"
-	// SignalsTable is the table that holds the signals relation/edge.
-	SignalsTable = "signals"
-	// SignalsInverseTable is the table name for the Signal entity.
-	// It exists in this package in order to avoid circular dependency with the "signal" package.
-	SignalsInverseTable = "signals"
-	// SignalsColumn is the table column denoting the signals relation/edge.
-	SignalsColumn = "workflow_execution_signals"
 )
 
 // Columns holds all SQL columns for workflowexecution fields.
@@ -169,52 +151,10 @@ func ByWorkflowField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByActivityExecutionsCount orders the results by activity_executions count.
-func ByActivityExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newActivityExecutionsStep(), opts...)
-	}
-}
-
-// ByActivityExecutions orders the results by activity_executions terms.
-func ByActivityExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newActivityExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySignalsCount orders the results by signals count.
-func BySignalsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSignalsStep(), opts...)
-	}
-}
-
-// BySignals orders the results by signals terms.
-func BySignals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSignalsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newWorkflowStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(WorkflowInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, WorkflowTable, WorkflowColumn),
-	)
-}
-func newActivityExecutionsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ActivityExecutionsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ActivityExecutionsTable, ActivityExecutionsColumn),
-	)
-}
-func newSignalsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SignalsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SignalsTable, SignalsColumn),
 	)
 }

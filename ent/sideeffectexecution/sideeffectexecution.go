@@ -29,8 +29,6 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// EdgeSideEffect holds the string denoting the side_effect edge name in mutations.
 	EdgeSideEffect = "side_effect"
-	// EdgeActivityExecution holds the string denoting the activity_execution edge name in mutations.
-	EdgeActivityExecution = "activity_execution"
 	// Table holds the table name of the sideeffectexecution in the database.
 	Table = "side_effect_executions"
 	// SideEffectTable is the table that holds the side_effect relation/edge.
@@ -40,13 +38,6 @@ const (
 	SideEffectInverseTable = "side_effects"
 	// SideEffectColumn is the table column denoting the side_effect relation/edge.
 	SideEffectColumn = "side_effect_executions"
-	// ActivityExecutionTable is the table that holds the activity_execution relation/edge.
-	ActivityExecutionTable = "side_effect_executions"
-	// ActivityExecutionInverseTable is the table name for the ActivityExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "activityexecution" package.
-	ActivityExecutionInverseTable = "activity_executions"
-	// ActivityExecutionColumn is the table column denoting the activity_execution relation/edge.
-	ActivityExecutionColumn = "activity_execution_side_effect_executions"
 )
 
 // Columns holds all SQL columns for sideeffectexecution fields.
@@ -63,7 +54,6 @@ var Columns = []string{
 // ForeignKeys holds the SQL foreign-keys that are owned by the "side_effect_executions"
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
-	"activity_execution_side_effect_executions",
 	"side_effect_executions",
 }
 
@@ -160,24 +150,10 @@ func BySideEffectField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newSideEffectStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByActivityExecutionField orders the results by activity_execution field.
-func ByActivityExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newActivityExecutionStep(), sql.OrderByField(field, opts...))
-	}
-}
 func newSideEffectStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SideEffectInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, SideEffectTable, SideEffectColumn),
-	)
-}
-func newActivityExecutionStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ActivityExecutionInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ActivityExecutionTable, ActivityExecutionColumn),
 	)
 }

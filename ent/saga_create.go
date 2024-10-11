@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
@@ -96,25 +95,6 @@ func (sc *SagaCreate) AddExecutions(s ...*SagaExecution) *SagaCreate {
 		ids[i] = s[i].ID
 	}
 	return sc.AddExecutionIDs(ids...)
-}
-
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (sc *SagaCreate) SetActivityID(id string) *SagaCreate {
-	sc.mutation.SetActivityID(id)
-	return sc
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (sc *SagaCreate) SetNillableActivityID(id *string) *SagaCreate {
-	if id != nil {
-		sc = sc.SetActivityID(*id)
-	}
-	return sc
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (sc *SagaCreate) SetActivity(a *Activity) *SagaCreate {
-	return sc.SetActivityID(a.ID)
 }
 
 // Mutation returns the SagaMutation object of the builder.
@@ -243,23 +223,6 @@ func (sc *SagaCreate) createSpec() (*Saga, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := sc.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   saga.ActivityTable,
-			Columns: []string{saga.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.activity_sagas = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

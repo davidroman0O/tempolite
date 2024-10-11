@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
@@ -129,25 +128,6 @@ func (seeu *SideEffectExecutionUpdate) SetSideEffect(s *SideEffect) *SideEffectE
 	return seeu.SetSideEffectID(s.ID)
 }
 
-// SetActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID.
-func (seeu *SideEffectExecutionUpdate) SetActivityExecutionID(id string) *SideEffectExecutionUpdate {
-	seeu.mutation.SetActivityExecutionID(id)
-	return seeu
-}
-
-// SetNillableActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID if the given value is not nil.
-func (seeu *SideEffectExecutionUpdate) SetNillableActivityExecutionID(id *string) *SideEffectExecutionUpdate {
-	if id != nil {
-		seeu = seeu.SetActivityExecutionID(*id)
-	}
-	return seeu
-}
-
-// SetActivityExecution sets the "activity_execution" edge to the ActivityExecution entity.
-func (seeu *SideEffectExecutionUpdate) SetActivityExecution(a *ActivityExecution) *SideEffectExecutionUpdate {
-	return seeu.SetActivityExecutionID(a.ID)
-}
-
 // Mutation returns the SideEffectExecutionMutation object of the builder.
 func (seeu *SideEffectExecutionUpdate) Mutation() *SideEffectExecutionMutation {
 	return seeu.mutation
@@ -156,12 +136,6 @@ func (seeu *SideEffectExecutionUpdate) Mutation() *SideEffectExecutionMutation {
 // ClearSideEffect clears the "side_effect" edge to the SideEffect entity.
 func (seeu *SideEffectExecutionUpdate) ClearSideEffect() *SideEffectExecutionUpdate {
 	seeu.mutation.ClearSideEffect()
-	return seeu
-}
-
-// ClearActivityExecution clears the "activity_execution" edge to the ActivityExecution entity.
-func (seeu *SideEffectExecutionUpdate) ClearActivityExecution() *SideEffectExecutionUpdate {
-	seeu.mutation.ClearActivityExecution()
 	return seeu
 }
 
@@ -277,35 +251,6 @@ func (seeu *SideEffectExecutionUpdate) sqlSave(ctx context.Context) (n int, err 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if seeu.mutation.ActivityExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffectexecution.ActivityExecutionTable,
-			Columns: []string{sideeffectexecution.ActivityExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seeu.mutation.ActivityExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffectexecution.ActivityExecutionTable,
-			Columns: []string{sideeffectexecution.ActivityExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -431,25 +376,6 @@ func (seeuo *SideEffectExecutionUpdateOne) SetSideEffect(s *SideEffect) *SideEff
 	return seeuo.SetSideEffectID(s.ID)
 }
 
-// SetActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID.
-func (seeuo *SideEffectExecutionUpdateOne) SetActivityExecutionID(id string) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.SetActivityExecutionID(id)
-	return seeuo
-}
-
-// SetNillableActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID if the given value is not nil.
-func (seeuo *SideEffectExecutionUpdateOne) SetNillableActivityExecutionID(id *string) *SideEffectExecutionUpdateOne {
-	if id != nil {
-		seeuo = seeuo.SetActivityExecutionID(*id)
-	}
-	return seeuo
-}
-
-// SetActivityExecution sets the "activity_execution" edge to the ActivityExecution entity.
-func (seeuo *SideEffectExecutionUpdateOne) SetActivityExecution(a *ActivityExecution) *SideEffectExecutionUpdateOne {
-	return seeuo.SetActivityExecutionID(a.ID)
-}
-
 // Mutation returns the SideEffectExecutionMutation object of the builder.
 func (seeuo *SideEffectExecutionUpdateOne) Mutation() *SideEffectExecutionMutation {
 	return seeuo.mutation
@@ -458,12 +384,6 @@ func (seeuo *SideEffectExecutionUpdateOne) Mutation() *SideEffectExecutionMutati
 // ClearSideEffect clears the "side_effect" edge to the SideEffect entity.
 func (seeuo *SideEffectExecutionUpdateOne) ClearSideEffect() *SideEffectExecutionUpdateOne {
 	seeuo.mutation.ClearSideEffect()
-	return seeuo
-}
-
-// ClearActivityExecution clears the "activity_execution" edge to the ActivityExecution entity.
-func (seeuo *SideEffectExecutionUpdateOne) ClearActivityExecution() *SideEffectExecutionUpdateOne {
-	seeuo.mutation.ClearActivityExecution()
 	return seeuo
 }
 
@@ -609,35 +529,6 @@ func (seeuo *SideEffectExecutionUpdateOne) sqlSave(ctx context.Context) (_node *
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if seeuo.mutation.ActivityExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffectexecution.ActivityExecutionTable,
-			Columns: []string{sideeffectexecution.ActivityExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seeuo.mutation.ActivityExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffectexecution.ActivityExecutionTable,
-			Columns: []string{sideeffectexecution.ActivityExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

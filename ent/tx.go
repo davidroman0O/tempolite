@@ -16,6 +16,8 @@ type Tx struct {
 	Activity *ActivityClient
 	// ActivityExecution is the client for interacting with the ActivityExecution builders.
 	ActivityExecution *ActivityExecutionClient
+	// ExecutionRelationship is the client for interacting with the ExecutionRelationship builders.
+	ExecutionRelationship *ExecutionRelationshipClient
 	// Run is the client for interacting with the Run builders.
 	Run *RunClient
 	// Saga is the client for interacting with the Saga builders.
@@ -167,6 +169,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Activity = NewActivityClient(tx.config)
 	tx.ActivityExecution = NewActivityExecutionClient(tx.config)
+	tx.ExecutionRelationship = NewExecutionRelationshipClient(tx.config)
 	tx.Run = NewRunClient(tx.config)
 	tx.Saga = NewSagaClient(tx.config)
 	tx.SagaExecution = NewSagaExecutionClient(tx.config)

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
 
@@ -35,9 +34,5 @@ func (Signal) Fields() []ent.Field {
 
 // Edges of the Signal.
 func (Signal) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("workflow_execution", WorkflowExecution.Type).
-			Ref("signals").
-			Unique(),
-	}
+	return []ent.Edge{}
 }

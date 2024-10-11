@@ -14,7 +14,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // SignalUpdate is the builder for updating Signal entities.
@@ -96,34 +95,9 @@ func (su *SignalUpdate) SetUpdatedAt(t time.Time) *SignalUpdate {
 	return su
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (su *SignalUpdate) SetWorkflowExecutionID(id string) *SignalUpdate {
-	su.mutation.SetWorkflowExecutionID(id)
-	return su
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (su *SignalUpdate) SetNillableWorkflowExecutionID(id *string) *SignalUpdate {
-	if id != nil {
-		su = su.SetWorkflowExecutionID(*id)
-	}
-	return su
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (su *SignalUpdate) SetWorkflowExecution(w *WorkflowExecution) *SignalUpdate {
-	return su.SetWorkflowExecutionID(w.ID)
-}
-
 // Mutation returns the SignalMutation object of the builder.
 func (su *SignalUpdate) Mutation() *SignalMutation {
 	return su.mutation
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (su *SignalUpdate) ClearWorkflowExecution() *SignalUpdate {
-	su.mutation.ClearWorkflowExecution()
-	return su
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -212,35 +186,6 @@ func (su *SignalUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := su.mutation.UpdatedAt(); ok {
 		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if su.mutation.WorkflowExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   signal.WorkflowExecutionTable,
-			Columns: []string{signal.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := su.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   signal.WorkflowExecutionTable,
-			Columns: []string{signal.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{signal.Label}
@@ -327,34 +272,9 @@ func (suo *SignalUpdateOne) SetUpdatedAt(t time.Time) *SignalUpdateOne {
 	return suo
 }
 
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (suo *SignalUpdateOne) SetWorkflowExecutionID(id string) *SignalUpdateOne {
-	suo.mutation.SetWorkflowExecutionID(id)
-	return suo
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (suo *SignalUpdateOne) SetNillableWorkflowExecutionID(id *string) *SignalUpdateOne {
-	if id != nil {
-		suo = suo.SetWorkflowExecutionID(*id)
-	}
-	return suo
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (suo *SignalUpdateOne) SetWorkflowExecution(w *WorkflowExecution) *SignalUpdateOne {
-	return suo.SetWorkflowExecutionID(w.ID)
-}
-
 // Mutation returns the SignalMutation object of the builder.
 func (suo *SignalUpdateOne) Mutation() *SignalMutation {
 	return suo.mutation
-}
-
-// ClearWorkflowExecution clears the "workflow_execution" edge to the WorkflowExecution entity.
-func (suo *SignalUpdateOne) ClearWorkflowExecution() *SignalUpdateOne {
-	suo.mutation.ClearWorkflowExecution()
-	return suo
 }
 
 // Where appends a list predicates to the SignalUpdate builder.
@@ -472,35 +392,6 @@ func (suo *SignalUpdateOne) sqlSave(ctx context.Context) (_node *Signal, err err
 	}
 	if value, ok := suo.mutation.UpdatedAt(); ok {
 		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if suo.mutation.WorkflowExecutionCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   signal.WorkflowExecutionTable,
-			Columns: []string{signal.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := suo.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   signal.WorkflowExecutionTable,
-			Columns: []string{signal.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Signal{config: suo.config}
 	_spec.Assign = _node.assignValues

@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -26,8 +25,6 @@ type SagaQuery struct {
 	inters         []Interceptor
 	predicates     []predicate.Saga
 	withExecutions *SagaExecutionQuery
-	withActivity   *ActivityQuery
-	withFKs        bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -79,28 +76,6 @@ func (sq *SagaQuery) QueryExecutions() *SagaExecutionQuery {
 			sqlgraph.From(saga.Table, saga.FieldID, selector),
 			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, saga.ExecutionsTable, saga.ExecutionsColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryActivity chains the current query on the "activity" edge.
-func (sq *SagaQuery) QueryActivity() *ActivityQuery {
-	query := (&ActivityClient{config: sq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := sq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(saga.Table, saga.FieldID, selector),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, saga.ActivityTable, saga.ActivityColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
 		return fromU, nil
@@ -301,7 +276,6 @@ func (sq *SagaQuery) Clone() *SagaQuery {
 		inters:         append([]Interceptor{}, sq.inters...),
 		predicates:     append([]predicate.Saga{}, sq.predicates...),
 		withExecutions: sq.withExecutions.Clone(),
-		withActivity:   sq.withActivity.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
@@ -316,17 +290,6 @@ func (sq *SagaQuery) WithExecutions(opts ...func(*SagaExecutionQuery)) *SagaQuer
 		opt(query)
 	}
 	sq.withExecutions = query
-	return sq
-}
-
-// WithActivity tells the query-builder to eager-load the nodes that are connected to
-// the "activity" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SagaQuery) WithActivity(opts ...func(*ActivityQuery)) *SagaQuery {
-	query := (&ActivityClient{config: sq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	sq.withActivity = query
 	return sq
 }
 
@@ -407,19 +370,11 @@ func (sq *SagaQuery) prepareQuery(ctx context.Context) error {
 func (sq *SagaQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Saga, error) {
 	var (
 		nodes       = []*Saga{}
-		withFKs     = sq.withFKs
 		_spec       = sq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [1]bool{
 			sq.withExecutions != nil,
-			sq.withActivity != nil,
 		}
 	)
-	if sq.withActivity != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, saga.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Saga).scanValues(nil, columns)
 	}
@@ -442,12 +397,6 @@ func (sq *SagaQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Saga, e
 		if err := sq.loadExecutions(ctx, query, nodes,
 			func(n *Saga) { n.Edges.Executions = []*SagaExecution{} },
 			func(n *Saga, e *SagaExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := sq.withActivity; query != nil {
-		if err := sq.loadActivity(ctx, query, nodes, nil,
-			func(n *Saga, e *Activity) { n.Edges.Activity = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -482,38 +431,6 @@ func (sq *SagaQuery) loadExecutions(ctx context.Context, query *SagaExecutionQue
 			return fmt.Errorf(`unexpected referenced foreign-key "saga_executions" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
-	}
-	return nil
-}
-func (sq *SagaQuery) loadActivity(ctx context.Context, query *ActivityQuery, nodes []*Saga, init func(*Saga), assign func(*Saga, *Activity)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Saga)
-	for i := range nodes {
-		if nodes[i].activity_sagas == nil {
-			continue
-		}
-		fk := *nodes[i].activity_sagas
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(activity.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "activity_sagas" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
 	}
 	return nil
 }

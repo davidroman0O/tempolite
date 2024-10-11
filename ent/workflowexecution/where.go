@@ -358,52 +358,6 @@ func HasWorkflowWith(preds ...predicate.Workflow) predicate.WorkflowExecution {
 	})
 }
 
-// HasActivityExecutions applies the HasEdge predicate on the "activity_executions" edge.
-func HasActivityExecutions() predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ActivityExecutionsTable, ActivityExecutionsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasActivityExecutionsWith applies the HasEdge predicate on the "activity_executions" edge with a given conditions (other predicates).
-func HasActivityExecutionsWith(preds ...predicate.ActivityExecution) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(func(s *sql.Selector) {
-		step := newActivityExecutionsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasSignals applies the HasEdge predicate on the "signals" edge.
-func HasSignals() predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, SignalsTable, SignalsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasSignalsWith applies the HasEdge predicate on the "signals" edge with a given conditions (other predicates).
-func HasSignalsWith(preds ...predicate.Signal) predicate.WorkflowExecution {
-	return predicate.WorkflowExecution(func(s *sql.Selector) {
-		step := newSignalsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.WorkflowExecution) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.AndPredicates(predicates...))

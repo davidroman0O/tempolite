@@ -15,10 +15,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // ActivityUpdate is the builder for updating Activity entities.
@@ -44,6 +41,20 @@ func (au *ActivityUpdate) SetIdentity(s string) *ActivityUpdate {
 func (au *ActivityUpdate) SetNillableIdentity(s *string) *ActivityUpdate {
 	if s != nil {
 		au.SetIdentity(*s)
+	}
+	return au
+}
+
+// SetStatus sets the "status" field.
+func (au *ActivityUpdate) SetStatus(a activity.Status) *ActivityUpdate {
+	au.mutation.SetStatus(a)
+	return au
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (au *ActivityUpdate) SetNillableStatus(a *activity.Status) *ActivityUpdate {
+	if a != nil {
+		au.SetStatus(*a)
 	}
 	return au
 }
@@ -143,55 +154,6 @@ func (au *ActivityUpdate) AddExecutions(a ...*ActivityExecution) *ActivityUpdate
 	return au.AddExecutionIDs(ids...)
 }
 
-// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
-func (au *ActivityUpdate) SetWorkflowID(id string) *ActivityUpdate {
-	au.mutation.SetWorkflowID(id)
-	return au
-}
-
-// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
-func (au *ActivityUpdate) SetNillableWorkflowID(id *string) *ActivityUpdate {
-	if id != nil {
-		au = au.SetWorkflowID(*id)
-	}
-	return au
-}
-
-// SetWorkflow sets the "workflow" edge to the Workflow entity.
-func (au *ActivityUpdate) SetWorkflow(w *Workflow) *ActivityUpdate {
-	return au.SetWorkflowID(w.ID)
-}
-
-// AddSagaIDs adds the "sagas" edge to the Saga entity by IDs.
-func (au *ActivityUpdate) AddSagaIDs(ids ...string) *ActivityUpdate {
-	au.mutation.AddSagaIDs(ids...)
-	return au
-}
-
-// AddSagas adds the "sagas" edges to the Saga entity.
-func (au *ActivityUpdate) AddSagas(s ...*Saga) *ActivityUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return au.AddSagaIDs(ids...)
-}
-
-// AddSideEffectIDs adds the "side_effects" edge to the SideEffect entity by IDs.
-func (au *ActivityUpdate) AddSideEffectIDs(ids ...string) *ActivityUpdate {
-	au.mutation.AddSideEffectIDs(ids...)
-	return au
-}
-
-// AddSideEffects adds the "side_effects" edges to the SideEffect entity.
-func (au *ActivityUpdate) AddSideEffects(s ...*SideEffect) *ActivityUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return au.AddSideEffectIDs(ids...)
-}
-
 // Mutation returns the ActivityMutation object of the builder.
 func (au *ActivityUpdate) Mutation() *ActivityMutation {
 	return au.mutation
@@ -216,54 +178,6 @@ func (au *ActivityUpdate) RemoveExecutions(a ...*ActivityExecution) *ActivityUpd
 		ids[i] = a[i].ID
 	}
 	return au.RemoveExecutionIDs(ids...)
-}
-
-// ClearWorkflow clears the "workflow" edge to the Workflow entity.
-func (au *ActivityUpdate) ClearWorkflow() *ActivityUpdate {
-	au.mutation.ClearWorkflow()
-	return au
-}
-
-// ClearSagas clears all "sagas" edges to the Saga entity.
-func (au *ActivityUpdate) ClearSagas() *ActivityUpdate {
-	au.mutation.ClearSagas()
-	return au
-}
-
-// RemoveSagaIDs removes the "sagas" edge to Saga entities by IDs.
-func (au *ActivityUpdate) RemoveSagaIDs(ids ...string) *ActivityUpdate {
-	au.mutation.RemoveSagaIDs(ids...)
-	return au
-}
-
-// RemoveSagas removes "sagas" edges to Saga entities.
-func (au *ActivityUpdate) RemoveSagas(s ...*Saga) *ActivityUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return au.RemoveSagaIDs(ids...)
-}
-
-// ClearSideEffects clears all "side_effects" edges to the SideEffect entity.
-func (au *ActivityUpdate) ClearSideEffects() *ActivityUpdate {
-	au.mutation.ClearSideEffects()
-	return au
-}
-
-// RemoveSideEffectIDs removes the "side_effects" edge to SideEffect entities by IDs.
-func (au *ActivityUpdate) RemoveSideEffectIDs(ids ...string) *ActivityUpdate {
-	au.mutation.RemoveSideEffectIDs(ids...)
-	return au
-}
-
-// RemoveSideEffects removes "side_effects" edges to SideEffect entities.
-func (au *ActivityUpdate) RemoveSideEffects(s ...*SideEffect) *ActivityUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return au.RemoveSideEffectIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -300,6 +214,11 @@ func (au *ActivityUpdate) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
 		}
 	}
+	if v, ok := au.mutation.Status(); ok {
+		if err := activity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
+		}
+	}
 	if v, ok := au.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -322,6 +241,9 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := au.mutation.Identity(); ok {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := au.mutation.Status(); ok {
+		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := au.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
@@ -394,125 +316,6 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if au.mutation.WorkflowCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activity.WorkflowTable,
-			Columns: []string{activity.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.WorkflowIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activity.WorkflowTable,
-			Columns: []string{activity.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if au.mutation.SagasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.RemovedSagasIDs(); len(nodes) > 0 && !au.mutation.SagasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.SagasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if au.mutation.SideEffectsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.RemovedSideEffectsIDs(); len(nodes) > 0 && !au.mutation.SideEffectsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.SideEffectsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, au.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{activity.Label}
@@ -543,6 +346,20 @@ func (auo *ActivityUpdateOne) SetIdentity(s string) *ActivityUpdateOne {
 func (auo *ActivityUpdateOne) SetNillableIdentity(s *string) *ActivityUpdateOne {
 	if s != nil {
 		auo.SetIdentity(*s)
+	}
+	return auo
+}
+
+// SetStatus sets the "status" field.
+func (auo *ActivityUpdateOne) SetStatus(a activity.Status) *ActivityUpdateOne {
+	auo.mutation.SetStatus(a)
+	return auo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (auo *ActivityUpdateOne) SetNillableStatus(a *activity.Status) *ActivityUpdateOne {
+	if a != nil {
+		auo.SetStatus(*a)
 	}
 	return auo
 }
@@ -642,55 +459,6 @@ func (auo *ActivityUpdateOne) AddExecutions(a ...*ActivityExecution) *ActivityUp
 	return auo.AddExecutionIDs(ids...)
 }
 
-// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
-func (auo *ActivityUpdateOne) SetWorkflowID(id string) *ActivityUpdateOne {
-	auo.mutation.SetWorkflowID(id)
-	return auo
-}
-
-// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
-func (auo *ActivityUpdateOne) SetNillableWorkflowID(id *string) *ActivityUpdateOne {
-	if id != nil {
-		auo = auo.SetWorkflowID(*id)
-	}
-	return auo
-}
-
-// SetWorkflow sets the "workflow" edge to the Workflow entity.
-func (auo *ActivityUpdateOne) SetWorkflow(w *Workflow) *ActivityUpdateOne {
-	return auo.SetWorkflowID(w.ID)
-}
-
-// AddSagaIDs adds the "sagas" edge to the Saga entity by IDs.
-func (auo *ActivityUpdateOne) AddSagaIDs(ids ...string) *ActivityUpdateOne {
-	auo.mutation.AddSagaIDs(ids...)
-	return auo
-}
-
-// AddSagas adds the "sagas" edges to the Saga entity.
-func (auo *ActivityUpdateOne) AddSagas(s ...*Saga) *ActivityUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return auo.AddSagaIDs(ids...)
-}
-
-// AddSideEffectIDs adds the "side_effects" edge to the SideEffect entity by IDs.
-func (auo *ActivityUpdateOne) AddSideEffectIDs(ids ...string) *ActivityUpdateOne {
-	auo.mutation.AddSideEffectIDs(ids...)
-	return auo
-}
-
-// AddSideEffects adds the "side_effects" edges to the SideEffect entity.
-func (auo *ActivityUpdateOne) AddSideEffects(s ...*SideEffect) *ActivityUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return auo.AddSideEffectIDs(ids...)
-}
-
 // Mutation returns the ActivityMutation object of the builder.
 func (auo *ActivityUpdateOne) Mutation() *ActivityMutation {
 	return auo.mutation
@@ -715,54 +483,6 @@ func (auo *ActivityUpdateOne) RemoveExecutions(a ...*ActivityExecution) *Activit
 		ids[i] = a[i].ID
 	}
 	return auo.RemoveExecutionIDs(ids...)
-}
-
-// ClearWorkflow clears the "workflow" edge to the Workflow entity.
-func (auo *ActivityUpdateOne) ClearWorkflow() *ActivityUpdateOne {
-	auo.mutation.ClearWorkflow()
-	return auo
-}
-
-// ClearSagas clears all "sagas" edges to the Saga entity.
-func (auo *ActivityUpdateOne) ClearSagas() *ActivityUpdateOne {
-	auo.mutation.ClearSagas()
-	return auo
-}
-
-// RemoveSagaIDs removes the "sagas" edge to Saga entities by IDs.
-func (auo *ActivityUpdateOne) RemoveSagaIDs(ids ...string) *ActivityUpdateOne {
-	auo.mutation.RemoveSagaIDs(ids...)
-	return auo
-}
-
-// RemoveSagas removes "sagas" edges to Saga entities.
-func (auo *ActivityUpdateOne) RemoveSagas(s ...*Saga) *ActivityUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return auo.RemoveSagaIDs(ids...)
-}
-
-// ClearSideEffects clears all "side_effects" edges to the SideEffect entity.
-func (auo *ActivityUpdateOne) ClearSideEffects() *ActivityUpdateOne {
-	auo.mutation.ClearSideEffects()
-	return auo
-}
-
-// RemoveSideEffectIDs removes the "side_effects" edge to SideEffect entities by IDs.
-func (auo *ActivityUpdateOne) RemoveSideEffectIDs(ids ...string) *ActivityUpdateOne {
-	auo.mutation.RemoveSideEffectIDs(ids...)
-	return auo
-}
-
-// RemoveSideEffects removes "side_effects" edges to SideEffect entities.
-func (auo *ActivityUpdateOne) RemoveSideEffects(s ...*SideEffect) *ActivityUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return auo.RemoveSideEffectIDs(ids...)
 }
 
 // Where appends a list predicates to the ActivityUpdate builder.
@@ -812,6 +532,11 @@ func (auo *ActivityUpdateOne) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
 		}
 	}
+	if v, ok := auo.mutation.Status(); ok {
+		if err := activity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
+		}
+	}
 	if v, ok := auo.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -851,6 +576,9 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 	}
 	if value, ok := auo.mutation.Identity(); ok {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := auo.mutation.Status(); ok {
+		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := auo.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
@@ -916,125 +644,6 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if auo.mutation.WorkflowCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activity.WorkflowTable,
-			Columns: []string{activity.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.WorkflowIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activity.WorkflowTable,
-			Columns: []string{activity.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if auo.mutation.SagasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.RemovedSagasIDs(); len(nodes) > 0 && !auo.mutation.SagasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.SagasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if auo.mutation.SideEffectsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.RemovedSideEffectsIDs(); len(nodes) > 0 && !auo.mutation.SideEffectsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.SideEffectsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

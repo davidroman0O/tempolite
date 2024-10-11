@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -253,29 +252,6 @@ func UpdatedAtLT(v time.Time) predicate.Signal {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.Signal {
 	return predicate.Signal(sql.FieldLTE(FieldUpdatedAt, v))
-}
-
-// HasWorkflowExecution applies the HasEdge predicate on the "workflow_execution" edge.
-func HasWorkflowExecution() predicate.Signal {
-	return predicate.Signal(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, WorkflowExecutionTable, WorkflowExecutionColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasWorkflowExecutionWith applies the HasEdge predicate on the "workflow_execution" edge with a given conditions (other predicates).
-func HasWorkflowExecutionWith(preds ...predicate.WorkflowExecution) predicate.Signal {
-	return predicate.Signal(func(s *sql.Selector) {
-		step := newWorkflowExecutionStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

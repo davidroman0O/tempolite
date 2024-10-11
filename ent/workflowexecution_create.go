@@ -10,8 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/signal"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
@@ -106,36 +104,6 @@ func (wec *WorkflowExecutionCreate) SetWorkflowID(id string) *WorkflowExecutionC
 // SetWorkflow sets the "workflow" edge to the Workflow entity.
 func (wec *WorkflowExecutionCreate) SetWorkflow(w *Workflow) *WorkflowExecutionCreate {
 	return wec.SetWorkflowID(w.ID)
-}
-
-// AddActivityExecutionIDs adds the "activity_executions" edge to the ActivityExecution entity by IDs.
-func (wec *WorkflowExecutionCreate) AddActivityExecutionIDs(ids ...string) *WorkflowExecutionCreate {
-	wec.mutation.AddActivityExecutionIDs(ids...)
-	return wec
-}
-
-// AddActivityExecutions adds the "activity_executions" edges to the ActivityExecution entity.
-func (wec *WorkflowExecutionCreate) AddActivityExecutions(a ...*ActivityExecution) *WorkflowExecutionCreate {
-	ids := make([]string, len(a))
-	for i := range a {
-		ids[i] = a[i].ID
-	}
-	return wec.AddActivityExecutionIDs(ids...)
-}
-
-// AddSignalIDs adds the "signals" edge to the Signal entity by IDs.
-func (wec *WorkflowExecutionCreate) AddSignalIDs(ids ...string) *WorkflowExecutionCreate {
-	wec.mutation.AddSignalIDs(ids...)
-	return wec
-}
-
-// AddSignals adds the "signals" edges to the Signal entity.
-func (wec *WorkflowExecutionCreate) AddSignals(s ...*Signal) *WorkflowExecutionCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return wec.AddSignalIDs(ids...)
 }
 
 // Mutation returns the WorkflowExecutionMutation object of the builder.
@@ -283,38 +251,6 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.workflow_executions = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := wec.mutation.ActivityExecutionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   workflowexecution.ActivityExecutionsTable,
-			Columns: []string{workflowexecution.ActivityExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := wec.mutation.SignalsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   workflowexecution.SignalsTable,
-			Columns: []string{workflowexecution.SignalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(signal.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // Activity is the model entity for the Activity schema.
@@ -22,6 +21,8 @@ type Activity struct {
 	ID string `json:"id,omitempty"`
 	// Identity holds the value of the "identity" field.
 	Identity string `json:"identity,omitempty"`
+	// Status holds the value of the "status" field.
+	Status activity.Status `json:"status,omitempty"`
 	// HandlerName holds the value of the "handler_name" field.
 	HandlerName string `json:"handler_name,omitempty"`
 	// Input holds the value of the "input" field.
@@ -34,24 +35,17 @@ type Activity struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityQuery when eager-loading is set.
-	Edges               ActivityEdges `json:"edges"`
-	workflow_activities *string
-	selectValues        sql.SelectValues
+	Edges        ActivityEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // ActivityEdges holds the relations/edges for other nodes in the graph.
 type ActivityEdges struct {
 	// Executions holds the value of the executions edge.
 	Executions []*ActivityExecution `json:"executions,omitempty"`
-	// Workflow holds the value of the workflow edge.
-	Workflow *Workflow `json:"workflow,omitempty"`
-	// Sagas holds the value of the sagas edge.
-	Sagas []*Saga `json:"sagas,omitempty"`
-	// SideEffects holds the value of the side_effects edge.
-	SideEffects []*SideEffect `json:"side_effects,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [1]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -63,35 +57,6 @@ func (e ActivityEdges) ExecutionsOrErr() ([]*ActivityExecution, error) {
 	return nil, &NotLoadedError{edge: "executions"}
 }
 
-// WorkflowOrErr returns the Workflow value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e ActivityEdges) WorkflowOrErr() (*Workflow, error) {
-	if e.Workflow != nil {
-		return e.Workflow, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: workflow.Label}
-	}
-	return nil, &NotLoadedError{edge: "workflow"}
-}
-
-// SagasOrErr returns the Sagas value or an error if the edge
-// was not loaded in eager-loading.
-func (e ActivityEdges) SagasOrErr() ([]*Saga, error) {
-	if e.loadedTypes[2] {
-		return e.Sagas, nil
-	}
-	return nil, &NotLoadedError{edge: "sagas"}
-}
-
-// SideEffectsOrErr returns the SideEffects value or an error if the edge
-// was not loaded in eager-loading.
-func (e ActivityEdges) SideEffectsOrErr() ([]*SideEffect, error) {
-	if e.loadedTypes[3] {
-		return e.SideEffects, nil
-	}
-	return nil, &NotLoadedError{edge: "side_effects"}
-}
-
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Activity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -99,12 +64,10 @@ func (*Activity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case activity.FieldInput, activity.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case activity.FieldID, activity.FieldIdentity, activity.FieldHandlerName:
+		case activity.FieldID, activity.FieldIdentity, activity.FieldStatus, activity.FieldHandlerName:
 			values[i] = new(sql.NullString)
 		case activity.FieldTimeout, activity.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case activity.ForeignKeys[0]: // workflow_activities
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -131,6 +94,12 @@ func (a *Activity) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field identity", values[i])
 			} else if value.Valid {
 				a.Identity = value.String
+			}
+		case activity.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				a.Status = activity.Status(value.String)
 			}
 		case activity.FieldHandlerName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -166,13 +135,6 @@ func (a *Activity) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				a.CreatedAt = value.Time
 			}
-		case activity.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workflow_activities", values[i])
-			} else if value.Valid {
-				a.workflow_activities = new(string)
-				*a.workflow_activities = value.String
-			}
 		default:
 			a.selectValues.Set(columns[i], values[i])
 		}
@@ -189,21 +151,6 @@ func (a *Activity) Value(name string) (ent.Value, error) {
 // QueryExecutions queries the "executions" edge of the Activity entity.
 func (a *Activity) QueryExecutions() *ActivityExecutionQuery {
 	return NewActivityClient(a.config).QueryExecutions(a)
-}
-
-// QueryWorkflow queries the "workflow" edge of the Activity entity.
-func (a *Activity) QueryWorkflow() *WorkflowQuery {
-	return NewActivityClient(a.config).QueryWorkflow(a)
-}
-
-// QuerySagas queries the "sagas" edge of the Activity entity.
-func (a *Activity) QuerySagas() *SagaQuery {
-	return NewActivityClient(a.config).QuerySagas(a)
-}
-
-// QuerySideEffects queries the "side_effects" edge of the Activity entity.
-func (a *Activity) QuerySideEffects() *SideEffectQuery {
-	return NewActivityClient(a.config).QuerySideEffects(a)
 }
 
 // Update returns a builder for updating this Activity.
@@ -231,6 +178,9 @@ func (a *Activity) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", a.ID))
 	builder.WriteString("identity=")
 	builder.WriteString(a.Identity)
+	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", a.Status))
 	builder.WriteString(", ")
 	builder.WriteString("handler_name=")
 	builder.WriteString(a.HandlerName)

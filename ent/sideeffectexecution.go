@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 )
@@ -34,21 +33,18 @@ type SideEffectExecution struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SideEffectExecutionQuery when eager-loading is set.
-	Edges                                     SideEffectExecutionEdges `json:"edges"`
-	activity_execution_side_effect_executions *string
-	side_effect_executions                    *string
-	selectValues                              sql.SelectValues
+	Edges                  SideEffectExecutionEdges `json:"edges"`
+	side_effect_executions *string
+	selectValues           sql.SelectValues
 }
 
 // SideEffectExecutionEdges holds the relations/edges for other nodes in the graph.
 type SideEffectExecutionEdges struct {
 	// SideEffect holds the value of the side_effect edge.
 	SideEffect *SideEffect `json:"side_effect,omitempty"`
-	// ActivityExecution holds the value of the activity_execution edge.
-	ActivityExecution *ActivityExecution `json:"activity_execution,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // SideEffectOrErr returns the SideEffect value or an error if the edge
@@ -60,17 +56,6 @@ func (e SideEffectExecutionEdges) SideEffectOrErr() (*SideEffect, error) {
 		return nil, &NotFoundError{label: sideeffect.Label}
 	}
 	return nil, &NotLoadedError{edge: "side_effect"}
-}
-
-// ActivityExecutionOrErr returns the ActivityExecution value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SideEffectExecutionEdges) ActivityExecutionOrErr() (*ActivityExecution, error) {
-	if e.ActivityExecution != nil {
-		return e.ActivityExecution, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: activityexecution.Label}
-	}
-	return nil, &NotLoadedError{edge: "activity_execution"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -86,9 +71,7 @@ func (*SideEffectExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case sideeffectexecution.FieldStartedAt, sideeffectexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case sideeffectexecution.ForeignKeys[0]: // activity_execution_side_effect_executions
-			values[i] = new(sql.NullString)
-		case sideeffectexecution.ForeignKeys[1]: // side_effect_executions
+		case sideeffectexecution.ForeignKeys[0]: // side_effect_executions
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -151,13 +134,6 @@ func (see *SideEffectExecution) assignValues(columns []string, values []any) err
 			}
 		case sideeffectexecution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field activity_execution_side_effect_executions", values[i])
-			} else if value.Valid {
-				see.activity_execution_side_effect_executions = new(string)
-				*see.activity_execution_side_effect_executions = value.String
-			}
-		case sideeffectexecution.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field side_effect_executions", values[i])
 			} else if value.Valid {
 				see.side_effect_executions = new(string)
@@ -179,11 +155,6 @@ func (see *SideEffectExecution) Value(name string) (ent.Value, error) {
 // QuerySideEffect queries the "side_effect" edge of the SideEffectExecution entity.
 func (see *SideEffectExecution) QuerySideEffect() *SideEffectQuery {
 	return NewSideEffectExecutionClient(see.config).QuerySideEffect(see)
-}
-
-// QueryActivityExecution queries the "activity_execution" edge of the SideEffectExecution entity.
-func (see *SideEffectExecution) QueryActivityExecution() *ActivityExecutionQuery {
-	return NewSideEffectExecutionClient(see.config).QueryActivityExecution(see)
 }
 
 // Update returns a builder for updating this SideEffectExecution.

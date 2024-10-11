@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // Signal is the model entity for the Signal schema.
@@ -28,32 +27,8 @@ type Signal struct {
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the SignalQuery when eager-loading is set.
-	Edges                      SignalEdges `json:"edges"`
-	workflow_execution_signals *string
-	selectValues               sql.SelectValues
-}
-
-// SignalEdges holds the relations/edges for other nodes in the graph.
-type SignalEdges struct {
-	// WorkflowExecution holds the value of the workflow_execution edge.
-	WorkflowExecution *WorkflowExecution `json:"workflow_execution,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// WorkflowExecutionOrErr returns the WorkflowExecution value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SignalEdges) WorkflowExecutionOrErr() (*WorkflowExecution, error) {
-	if e.WorkflowExecution != nil {
-		return e.WorkflowExecution, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: workflowexecution.Label}
-	}
-	return nil, &NotLoadedError{edge: "workflow_execution"}
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -67,8 +42,6 @@ func (*Signal) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case signal.FieldCreatedAt, signal.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case signal.ForeignKeys[0]: // workflow_execution_signals
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -122,13 +95,6 @@ func (s *Signal) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.UpdatedAt = value.Time
 			}
-		case signal.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workflow_execution_signals", values[i])
-			} else if value.Valid {
-				s.workflow_execution_signals = new(string)
-				*s.workflow_execution_signals = value.String
-			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -140,11 +106,6 @@ func (s *Signal) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (s *Signal) Value(name string) (ent.Value, error) {
 	return s.selectValues.Get(name)
-}
-
-// QueryWorkflowExecution queries the "workflow_execution" edge of the Signal entity.
-func (s *Signal) QueryWorkflowExecution() *WorkflowExecutionQuery {
-	return NewSignalClient(s.config).QueryWorkflowExecution(s)
 }
 
 // Update returns a builder for updating this Signal.

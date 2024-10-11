@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // ActivityExecution is the model entity for the ActivityExecution schema.
@@ -36,23 +35,18 @@ type ActivityExecution struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityExecutionQuery when eager-loading is set.
-	Edges                                  ActivityExecutionEdges `json:"edges"`
-	activity_executions                    *string
-	workflow_execution_activity_executions *string
-	selectValues                           sql.SelectValues
+	Edges               ActivityExecutionEdges `json:"edges"`
+	activity_executions *string
+	selectValues        sql.SelectValues
 }
 
 // ActivityExecutionEdges holds the relations/edges for other nodes in the graph.
 type ActivityExecutionEdges struct {
 	// Activity holds the value of the activity edge.
 	Activity *Activity `json:"activity,omitempty"`
-	// WorkflowExecution holds the value of the workflow_execution edge.
-	WorkflowExecution *WorkflowExecution `json:"workflow_execution,omitempty"`
-	// SideEffectExecutions holds the value of the side_effect_executions edge.
-	SideEffectExecutions []*SideEffectExecution `json:"side_effect_executions,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [1]bool
 }
 
 // ActivityOrErr returns the Activity value or an error if the edge
@@ -64,26 +58,6 @@ func (e ActivityExecutionEdges) ActivityOrErr() (*Activity, error) {
 		return nil, &NotFoundError{label: activity.Label}
 	}
 	return nil, &NotLoadedError{edge: "activity"}
-}
-
-// WorkflowExecutionOrErr returns the WorkflowExecution value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e ActivityExecutionEdges) WorkflowExecutionOrErr() (*WorkflowExecution, error) {
-	if e.WorkflowExecution != nil {
-		return e.WorkflowExecution, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: workflowexecution.Label}
-	}
-	return nil, &NotLoadedError{edge: "workflow_execution"}
-}
-
-// SideEffectExecutionsOrErr returns the SideEffectExecutions value or an error if the edge
-// was not loaded in eager-loading.
-func (e ActivityExecutionEdges) SideEffectExecutionsOrErr() ([]*SideEffectExecution, error) {
-	if e.loadedTypes[2] {
-		return e.SideEffectExecutions, nil
-	}
-	return nil, &NotLoadedError{edge: "side_effect_executions"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -100,8 +74,6 @@ func (*ActivityExecution) scanValues(columns []string) ([]any, error) {
 		case activityexecution.FieldStartedAt, activityexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		case activityexecution.ForeignKeys[0]: // activity_executions
-			values[i] = new(sql.NullString)
-		case activityexecution.ForeignKeys[1]: // workflow_execution_activity_executions
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -175,13 +147,6 @@ func (ae *ActivityExecution) assignValues(columns []string, values []any) error 
 				ae.activity_executions = new(string)
 				*ae.activity_executions = value.String
 			}
-		case activityexecution.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workflow_execution_activity_executions", values[i])
-			} else if value.Valid {
-				ae.workflow_execution_activity_executions = new(string)
-				*ae.workflow_execution_activity_executions = value.String
-			}
 		default:
 			ae.selectValues.Set(columns[i], values[i])
 		}
@@ -198,16 +163,6 @@ func (ae *ActivityExecution) Value(name string) (ent.Value, error) {
 // QueryActivity queries the "activity" edge of the ActivityExecution entity.
 func (ae *ActivityExecution) QueryActivity() *ActivityQuery {
 	return NewActivityExecutionClient(ae.config).QueryActivity(ae)
-}
-
-// QueryWorkflowExecution queries the "workflow_execution" edge of the ActivityExecution entity.
-func (ae *ActivityExecution) QueryWorkflowExecution() *WorkflowExecutionQuery {
-	return NewActivityExecutionClient(ae.config).QueryWorkflowExecution(ae)
-}
-
-// QuerySideEffectExecutions queries the "side_effect_executions" edge of the ActivityExecution entity.
-func (ae *ActivityExecution) QuerySideEffectExecutions() *SideEffectExecutionQuery {
-	return NewActivityExecutionClient(ae.config).QuerySideEffectExecutions(ae)
 }
 
 // Update returns a builder for updating this ActivityExecution.

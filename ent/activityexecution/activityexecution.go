@@ -31,10 +31,6 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// EdgeActivity holds the string denoting the activity edge name in mutations.
 	EdgeActivity = "activity"
-	// EdgeWorkflowExecution holds the string denoting the workflow_execution edge name in mutations.
-	EdgeWorkflowExecution = "workflow_execution"
-	// EdgeSideEffectExecutions holds the string denoting the side_effect_executions edge name in mutations.
-	EdgeSideEffectExecutions = "side_effect_executions"
 	// Table holds the table name of the activityexecution in the database.
 	Table = "activity_executions"
 	// ActivityTable is the table that holds the activity relation/edge.
@@ -44,20 +40,6 @@ const (
 	ActivityInverseTable = "activities"
 	// ActivityColumn is the table column denoting the activity relation/edge.
 	ActivityColumn = "activity_executions"
-	// WorkflowExecutionTable is the table that holds the workflow_execution relation/edge.
-	WorkflowExecutionTable = "activity_executions"
-	// WorkflowExecutionInverseTable is the table name for the WorkflowExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "workflowexecution" package.
-	WorkflowExecutionInverseTable = "workflow_executions"
-	// WorkflowExecutionColumn is the table column denoting the workflow_execution relation/edge.
-	WorkflowExecutionColumn = "workflow_execution_activity_executions"
-	// SideEffectExecutionsTable is the table that holds the side_effect_executions relation/edge.
-	SideEffectExecutionsTable = "side_effect_executions"
-	// SideEffectExecutionsInverseTable is the table name for the SideEffectExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "sideeffectexecution" package.
-	SideEffectExecutionsInverseTable = "side_effect_executions"
-	// SideEffectExecutionsColumn is the table column denoting the side_effect_executions relation/edge.
-	SideEffectExecutionsColumn = "activity_execution_side_effect_executions"
 )
 
 // Columns holds all SQL columns for activityexecution fields.
@@ -76,7 +58,6 @@ var Columns = []string{
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
 	"activity_executions",
-	"workflow_execution_activity_executions",
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -178,45 +159,10 @@ func ByActivityField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newActivityStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByWorkflowExecutionField orders the results by workflow_execution field.
-func ByWorkflowExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkflowExecutionStep(), sql.OrderByField(field, opts...))
-	}
-}
-
-// BySideEffectExecutionsCount orders the results by side_effect_executions count.
-func BySideEffectExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSideEffectExecutionsStep(), opts...)
-	}
-}
-
-// BySideEffectExecutions orders the results by side_effect_executions terms.
-func BySideEffectExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSideEffectExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newActivityStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ActivityInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ActivityTable, ActivityColumn),
-	)
-}
-func newWorkflowExecutionStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkflowExecutionInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, WorkflowExecutionTable, WorkflowExecutionColumn),
-	)
-}
-func newSideEffectExecutionsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SideEffectExecutionsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SideEffectExecutionsTable, SideEffectExecutionsColumn),
 	)
 }

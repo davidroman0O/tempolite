@@ -12,8 +12,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // ActivityExecutionCreate is the builder for creating a ActivityExecution entity.
@@ -120,40 +118,6 @@ func (aec *ActivityExecutionCreate) SetActivityID(id string) *ActivityExecutionC
 // SetActivity sets the "activity" edge to the Activity entity.
 func (aec *ActivityExecutionCreate) SetActivity(a *Activity) *ActivityExecutionCreate {
 	return aec.SetActivityID(a.ID)
-}
-
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (aec *ActivityExecutionCreate) SetWorkflowExecutionID(id string) *ActivityExecutionCreate {
-	aec.mutation.SetWorkflowExecutionID(id)
-	return aec
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (aec *ActivityExecutionCreate) SetNillableWorkflowExecutionID(id *string) *ActivityExecutionCreate {
-	if id != nil {
-		aec = aec.SetWorkflowExecutionID(*id)
-	}
-	return aec
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (aec *ActivityExecutionCreate) SetWorkflowExecution(w *WorkflowExecution) *ActivityExecutionCreate {
-	return aec.SetWorkflowExecutionID(w.ID)
-}
-
-// AddSideEffectExecutionIDs adds the "side_effect_executions" edge to the SideEffectExecution entity by IDs.
-func (aec *ActivityExecutionCreate) AddSideEffectExecutionIDs(ids ...string) *ActivityExecutionCreate {
-	aec.mutation.AddSideEffectExecutionIDs(ids...)
-	return aec
-}
-
-// AddSideEffectExecutions adds the "side_effect_executions" edges to the SideEffectExecution entity.
-func (aec *ActivityExecutionCreate) AddSideEffectExecutions(s ...*SideEffectExecution) *ActivityExecutionCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return aec.AddSideEffectExecutionIDs(ids...)
 }
 
 // Mutation returns the ActivityExecutionMutation object of the builder.
@@ -312,39 +276,6 @@ func (aec *ActivityExecutionCreate) createSpec() (*ActivityExecution, *sqlgraph.
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.activity_executions = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := aec.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activityexecution.WorkflowExecutionTable,
-			Columns: []string{activityexecution.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.workflow_execution_activity_executions = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := aec.mutation.SideEffectExecutionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activityexecution.SideEffectExecutionsTable,
-			Columns: []string{activityexecution.SideEffectExecutionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

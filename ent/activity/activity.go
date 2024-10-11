@@ -3,6 +3,7 @@
 package activity
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -16,6 +17,8 @@ const (
 	FieldID = "id"
 	// FieldIdentity holds the string denoting the identity field in the database.
 	FieldIdentity = "identity"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
 	// FieldHandlerName holds the string denoting the handler_name field in the database.
 	FieldHandlerName = "handler_name"
 	// FieldInput holds the string denoting the input field in the database.
@@ -28,12 +31,6 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
-	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
-	EdgeWorkflow = "workflow"
-	// EdgeSagas holds the string denoting the sagas edge name in mutations.
-	EdgeSagas = "sagas"
-	// EdgeSideEffects holds the string denoting the side_effects edge name in mutations.
-	EdgeSideEffects = "side_effects"
 	// Table holds the table name of the activity in the database.
 	Table = "activities"
 	// ExecutionsTable is the table that holds the executions relation/edge.
@@ -43,33 +40,13 @@ const (
 	ExecutionsInverseTable = "activity_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "activity_executions"
-	// WorkflowTable is the table that holds the workflow relation/edge.
-	WorkflowTable = "activities"
-	// WorkflowInverseTable is the table name for the Workflow entity.
-	// It exists in this package in order to avoid circular dependency with the "workflow" package.
-	WorkflowInverseTable = "workflows"
-	// WorkflowColumn is the table column denoting the workflow relation/edge.
-	WorkflowColumn = "workflow_activities"
-	// SagasTable is the table that holds the sagas relation/edge.
-	SagasTable = "sagas"
-	// SagasInverseTable is the table name for the Saga entity.
-	// It exists in this package in order to avoid circular dependency with the "saga" package.
-	SagasInverseTable = "sagas"
-	// SagasColumn is the table column denoting the sagas relation/edge.
-	SagasColumn = "activity_sagas"
-	// SideEffectsTable is the table that holds the side_effects relation/edge.
-	SideEffectsTable = "side_effects"
-	// SideEffectsInverseTable is the table name for the SideEffect entity.
-	// It exists in this package in order to avoid circular dependency with the "sideeffect" package.
-	SideEffectsInverseTable = "side_effects"
-	// SideEffectsColumn is the table column denoting the side_effects relation/edge.
-	SideEffectsColumn = "activity_side_effects"
 )
 
 // Columns holds all SQL columns for activity fields.
 var Columns = []string{
 	FieldID,
 	FieldIdentity,
+	FieldStatus,
 	FieldHandlerName,
 	FieldInput,
 	FieldRetryPolicy,
@@ -77,21 +54,10 @@ var Columns = []string{
 	FieldCreatedAt,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "activities"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"workflow_activities",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -107,6 +73,37 @@ var (
 	DefaultCreatedAt func() time.Time
 )
 
+// Status defines the type for the "status" enum field.
+type Status string
+
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
+
+// Status values.
+const (
+	StatusPending   Status = "Pending"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+	StatusPaused    Status = "Paused"
+	StatusRetried   Status = "Retried"
+	StatusCancelled Status = "Cancelled"
+)
+
+func (s Status) String() string {
+	return string(s)
+}
+
+// StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
+func StatusValidator(s Status) error {
+	switch s {
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusRetried, StatusCancelled:
+		return nil
+	default:
+		return fmt.Errorf("activity: invalid enum value for status field: %q", s)
+	}
+}
+
 // OrderOption defines the ordering options for the Activity queries.
 type OrderOption func(*sql.Selector)
 
@@ -118,6 +115,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByIdentity orders the results by the identity field.
 func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIdentity, opts...).ToFunc()
+}
+
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
 // ByHandlerName orders the results by the handler_name field.
@@ -148,66 +150,10 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByWorkflowField orders the results by workflow field.
-func ByWorkflowField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), sql.OrderByField(field, opts...))
-	}
-}
-
-// BySagasCount orders the results by sagas count.
-func BySagasCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSagasStep(), opts...)
-	}
-}
-
-// BySagas orders the results by sagas terms.
-func BySagas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSagasStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySideEffectsCount orders the results by side_effects count.
-func BySideEffectsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSideEffectsStep(), opts...)
-	}
-}
-
-// BySideEffects orders the results by side_effects terms.
-func BySideEffects(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSideEffectsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
-	)
-}
-func newWorkflowStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkflowInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, WorkflowTable, WorkflowColumn),
-	)
-}
-func newSagasStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SagasInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SagasTable, SagasColumn),
-	)
-}
-func newSideEffectsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SideEffectsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SideEffectsTable, SideEffectsColumn),
 	)
 }

@@ -36,8 +36,5 @@ func (SideEffect) Fields() []ent.Field {
 func (SideEffect) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("executions", SideEffectExecution.Type),
-		edge.From("activity", Activity.Type).
-			Ref("side_effects").
-			Unique(),
 	}
 }

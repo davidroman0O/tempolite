@@ -26,8 +26,6 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
-	// EdgeActivity holds the string denoting the activity edge name in mutations.
-	EdgeActivity = "activity"
 	// Table holds the table name of the saga in the database.
 	Table = "sagas"
 	// ExecutionsTable is the table that holds the executions relation/edge.
@@ -37,13 +35,6 @@ const (
 	ExecutionsInverseTable = "saga_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "saga_executions"
-	// ActivityTable is the table that holds the activity relation/edge.
-	ActivityTable = "sagas"
-	// ActivityInverseTable is the table name for the Activity entity.
-	// It exists in this package in order to avoid circular dependency with the "activity" package.
-	ActivityInverseTable = "activities"
-	// ActivityColumn is the table column denoting the activity relation/edge.
-	ActivityColumn = "activity_sagas"
 )
 
 // Columns holds all SQL columns for saga fields.
@@ -56,21 +47,10 @@ var Columns = []string{
 	FieldCreatedAt,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "sagas"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"activity_sagas",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -120,24 +100,10 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByActivityField orders the results by activity field.
-func ByActivityField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newActivityStep(), sql.OrderByField(field, opts...))
-	}
-}
 func newExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
-	)
-}
-func newActivityStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ActivityInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ActivityTable, ActivityColumn),
 	)
 }

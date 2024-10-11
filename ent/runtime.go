@@ -30,11 +30,11 @@ func init() {
 	// activity.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	activity.IdentityValidator = activityDescIdentity.Validators[0].(func(string) error)
 	// activityDescHandlerName is the schema descriptor for handler_name field.
-	activityDescHandlerName := activityFields[2].Descriptor()
+	activityDescHandlerName := activityFields[3].Descriptor()
 	// activity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	activity.HandlerNameValidator = activityDescHandlerName.Validators[0].(func(string) error)
 	// activityDescCreatedAt is the schema descriptor for created_at field.
-	activityDescCreatedAt := activityFields[6].Descriptor()
+	activityDescCreatedAt := activityFields[7].Descriptor()
 	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
 	activityexecutionFields := schema.ActivityExecution{}.Fields()

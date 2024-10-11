@@ -34,8 +34,5 @@ func (Saga) Fields() []ent.Field {
 func (Saga) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("executions", SagaExecution.Type),
-		edge.From("activity", Activity.Type).
-			Ref("sagas").
-			Unique(),
 	}
 }

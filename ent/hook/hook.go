@@ -33,6 +33,18 @@ func (f ActivityExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityExecutionMutation", m)
 }
 
+// The ExecutionRelationshipFunc type is an adapter to allow the use of ordinary
+// function as ExecutionRelationship mutator.
+type ExecutionRelationshipFunc func(context.Context, *ent.ExecutionRelationshipMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ExecutionRelationshipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExecutionRelationshipMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionRelationshipMutation", m)
+}
+
 // The RunFunc type is an adapter to allow the use of ordinary
 // function as Run mutator.
 type RunFunc func(context.Context, *ent.RunMutation) (ent.Value, error)

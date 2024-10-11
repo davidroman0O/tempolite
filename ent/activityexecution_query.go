@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -15,21 +14,17 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // ActivityExecutionQuery is the builder for querying ActivityExecution entities.
 type ActivityExecutionQuery struct {
 	config
-	ctx                      *QueryContext
-	order                    []activityexecution.OrderOption
-	inters                   []Interceptor
-	predicates               []predicate.ActivityExecution
-	withActivity             *ActivityQuery
-	withWorkflowExecution    *WorkflowExecutionQuery
-	withSideEffectExecutions *SideEffectExecutionQuery
-	withFKs                  bool
+	ctx          *QueryContext
+	order        []activityexecution.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.ActivityExecution
+	withActivity *ActivityQuery
+	withFKs      bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -81,50 +76,6 @@ func (aeq *ActivityExecutionQuery) QueryActivity() *ActivityQuery {
 			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, selector),
 			sqlgraph.To(activity.Table, activity.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, activityexecution.ActivityTable, activityexecution.ActivityColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(aeq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryWorkflowExecution chains the current query on the "workflow_execution" edge.
-func (aeq *ActivityExecutionQuery) QueryWorkflowExecution() *WorkflowExecutionQuery {
-	query := (&WorkflowExecutionClient{config: aeq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := aeq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := aeq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, selector),
-			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, activityexecution.WorkflowExecutionTable, activityexecution.WorkflowExecutionColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(aeq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QuerySideEffectExecutions chains the current query on the "side_effect_executions" edge.
-func (aeq *ActivityExecutionQuery) QuerySideEffectExecutions() *SideEffectExecutionQuery {
-	query := (&SideEffectExecutionClient{config: aeq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := aeq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := aeq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, selector),
-			sqlgraph.To(sideeffectexecution.Table, sideeffectexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, activityexecution.SideEffectExecutionsTable, activityexecution.SideEffectExecutionsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(aeq.driver.Dialect(), step)
 		return fromU, nil
@@ -319,14 +270,12 @@ func (aeq *ActivityExecutionQuery) Clone() *ActivityExecutionQuery {
 		return nil
 	}
 	return &ActivityExecutionQuery{
-		config:                   aeq.config,
-		ctx:                      aeq.ctx.Clone(),
-		order:                    append([]activityexecution.OrderOption{}, aeq.order...),
-		inters:                   append([]Interceptor{}, aeq.inters...),
-		predicates:               append([]predicate.ActivityExecution{}, aeq.predicates...),
-		withActivity:             aeq.withActivity.Clone(),
-		withWorkflowExecution:    aeq.withWorkflowExecution.Clone(),
-		withSideEffectExecutions: aeq.withSideEffectExecutions.Clone(),
+		config:       aeq.config,
+		ctx:          aeq.ctx.Clone(),
+		order:        append([]activityexecution.OrderOption{}, aeq.order...),
+		inters:       append([]Interceptor{}, aeq.inters...),
+		predicates:   append([]predicate.ActivityExecution{}, aeq.predicates...),
+		withActivity: aeq.withActivity.Clone(),
 		// clone intermediate query.
 		sql:  aeq.sql.Clone(),
 		path: aeq.path,
@@ -341,28 +290,6 @@ func (aeq *ActivityExecutionQuery) WithActivity(opts ...func(*ActivityQuery)) *A
 		opt(query)
 	}
 	aeq.withActivity = query
-	return aeq
-}
-
-// WithWorkflowExecution tells the query-builder to eager-load the nodes that are connected to
-// the "workflow_execution" edge. The optional arguments are used to configure the query builder of the edge.
-func (aeq *ActivityExecutionQuery) WithWorkflowExecution(opts ...func(*WorkflowExecutionQuery)) *ActivityExecutionQuery {
-	query := (&WorkflowExecutionClient{config: aeq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	aeq.withWorkflowExecution = query
-	return aeq
-}
-
-// WithSideEffectExecutions tells the query-builder to eager-load the nodes that are connected to
-// the "side_effect_executions" edge. The optional arguments are used to configure the query builder of the edge.
-func (aeq *ActivityExecutionQuery) WithSideEffectExecutions(opts ...func(*SideEffectExecutionQuery)) *ActivityExecutionQuery {
-	query := (&SideEffectExecutionClient{config: aeq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	aeq.withSideEffectExecutions = query
 	return aeq
 }
 
@@ -445,13 +372,11 @@ func (aeq *ActivityExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 		nodes       = []*ActivityExecution{}
 		withFKs     = aeq.withFKs
 		_spec       = aeq.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [1]bool{
 			aeq.withActivity != nil,
-			aeq.withWorkflowExecution != nil,
-			aeq.withSideEffectExecutions != nil,
 		}
 	)
-	if aeq.withActivity != nil || aeq.withWorkflowExecution != nil {
+	if aeq.withActivity != nil {
 		withFKs = true
 	}
 	if withFKs {
@@ -478,21 +403,6 @@ func (aeq *ActivityExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	if query := aeq.withActivity; query != nil {
 		if err := aeq.loadActivity(ctx, query, nodes, nil,
 			func(n *ActivityExecution, e *Activity) { n.Edges.Activity = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := aeq.withWorkflowExecution; query != nil {
-		if err := aeq.loadWorkflowExecution(ctx, query, nodes, nil,
-			func(n *ActivityExecution, e *WorkflowExecution) { n.Edges.WorkflowExecution = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := aeq.withSideEffectExecutions; query != nil {
-		if err := aeq.loadSideEffectExecutions(ctx, query, nodes,
-			func(n *ActivityExecution) { n.Edges.SideEffectExecutions = []*SideEffectExecution{} },
-			func(n *ActivityExecution, e *SideEffectExecution) {
-				n.Edges.SideEffectExecutions = append(n.Edges.SideEffectExecutions, e)
-			}); err != nil {
 			return nil, err
 		}
 	}
@@ -528,69 +438,6 @@ func (aeq *ActivityExecutionQuery) loadActivity(ctx context.Context, query *Acti
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
-	}
-	return nil
-}
-func (aeq *ActivityExecutionQuery) loadWorkflowExecution(ctx context.Context, query *WorkflowExecutionQuery, nodes []*ActivityExecution, init func(*ActivityExecution), assign func(*ActivityExecution, *WorkflowExecution)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*ActivityExecution)
-	for i := range nodes {
-		if nodes[i].workflow_execution_activity_executions == nil {
-			continue
-		}
-		fk := *nodes[i].workflow_execution_activity_executions
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(workflowexecution.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "workflow_execution_activity_executions" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (aeq *ActivityExecutionQuery) loadSideEffectExecutions(ctx context.Context, query *SideEffectExecutionQuery, nodes []*ActivityExecution, init func(*ActivityExecution), assign func(*ActivityExecution, *SideEffectExecution)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*ActivityExecution)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	query.withFKs = true
-	query.Where(predicate.SideEffectExecution(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(activityexecution.SideEffectExecutionsColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.activity_execution_side_effect_executions
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "activity_execution_side_effect_executions" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "activity_execution_side_effect_executions" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
 	}
 	return nil
 }

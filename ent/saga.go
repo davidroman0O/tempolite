@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 )
@@ -32,20 +31,17 @@ type Saga struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SagaQuery when eager-loading is set.
-	Edges          SagaEdges `json:"edges"`
-	activity_sagas *string
-	selectValues   sql.SelectValues
+	Edges        SagaEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // SagaEdges holds the relations/edges for other nodes in the graph.
 type SagaEdges struct {
 	// Executions holds the value of the executions edge.
 	Executions []*SagaExecution `json:"executions,omitempty"`
-	// Activity holds the value of the activity edge.
-	Activity *Activity `json:"activity,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -55,17 +51,6 @@ func (e SagaEdges) ExecutionsOrErr() ([]*SagaExecution, error) {
 		return e.Executions, nil
 	}
 	return nil, &NotLoadedError{edge: "executions"}
-}
-
-// ActivityOrErr returns the Activity value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SagaEdges) ActivityOrErr() (*Activity, error) {
-	if e.Activity != nil {
-		return e.Activity, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: activity.Label}
-	}
-	return nil, &NotLoadedError{edge: "activity"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -79,8 +64,6 @@ func (*Saga) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case saga.FieldTimeout, saga.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case saga.ForeignKeys[0]: // activity_sagas
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -136,13 +119,6 @@ func (s *Saga) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.CreatedAt = value.Time
 			}
-		case saga.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field activity_sagas", values[i])
-			} else if value.Valid {
-				s.activity_sagas = new(string)
-				*s.activity_sagas = value.String
-			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -159,11 +135,6 @@ func (s *Saga) Value(name string) (ent.Value, error) {
 // QueryExecutions queries the "executions" edge of the Saga entity.
 func (s *Saga) QueryExecutions() *SagaExecutionQuery {
 	return NewSagaClient(s.config).QueryExecutions(s)
-}
-
-// QueryActivity queries the "activity" edge of the Saga entity.
-func (s *Saga) QueryActivity() *ActivityQuery {
-	return NewSagaClient(s.config).QueryActivity(s)
 }
 
 // Update returns a builder for updating this Saga.

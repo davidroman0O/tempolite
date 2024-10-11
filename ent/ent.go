@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -83,17 +84,18 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			activity.Table:            activity.ValidColumn,
-			activityexecution.Table:   activityexecution.ValidColumn,
-			run.Table:                 run.ValidColumn,
-			saga.Table:                saga.ValidColumn,
-			sagaexecution.Table:       sagaexecution.ValidColumn,
-			sagastepexecution.Table:   sagastepexecution.ValidColumn,
-			sideeffect.Table:          sideeffect.ValidColumn,
-			sideeffectexecution.Table: sideeffectexecution.ValidColumn,
-			signal.Table:              signal.ValidColumn,
-			workflow.Table:            workflow.ValidColumn,
-			workflowexecution.Table:   workflowexecution.ValidColumn,
+			activity.Table:              activity.ValidColumn,
+			activityexecution.Table:     activityexecution.ValidColumn,
+			executionrelationship.Table: executionrelationship.ValidColumn,
+			run.Table:                   run.ValidColumn,
+			saga.Table:                  saga.ValidColumn,
+			sagaexecution.Table:         sagaexecution.ValidColumn,
+			sagastepexecution.Table:     sagastepexecution.ValidColumn,
+			sideeffect.Table:            sideeffect.ValidColumn,
+			sideeffectexecution.Table:   sideeffectexecution.ValidColumn,
+			signal.Table:                signal.ValidColumn,
+			workflow.Table:              workflow.ValidColumn,
+			workflowexecution.Table:     workflowexecution.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 )
@@ -105,25 +104,6 @@ func (seec *SideEffectExecutionCreate) SetSideEffectID(id string) *SideEffectExe
 // SetSideEffect sets the "side_effect" edge to the SideEffect entity.
 func (seec *SideEffectExecutionCreate) SetSideEffect(s *SideEffect) *SideEffectExecutionCreate {
 	return seec.SetSideEffectID(s.ID)
-}
-
-// SetActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID.
-func (seec *SideEffectExecutionCreate) SetActivityExecutionID(id string) *SideEffectExecutionCreate {
-	seec.mutation.SetActivityExecutionID(id)
-	return seec
-}
-
-// SetNillableActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by ID if the given value is not nil.
-func (seec *SideEffectExecutionCreate) SetNillableActivityExecutionID(id *string) *SideEffectExecutionCreate {
-	if id != nil {
-		seec = seec.SetActivityExecutionID(*id)
-	}
-	return seec
-}
-
-// SetActivityExecution sets the "activity_execution" edge to the ActivityExecution entity.
-func (seec *SideEffectExecutionCreate) SetActivityExecution(a *ActivityExecution) *SideEffectExecutionCreate {
-	return seec.SetActivityExecutionID(a.ID)
 }
 
 // Mutation returns the SideEffectExecutionMutation object of the builder.
@@ -278,23 +258,6 @@ func (seec *SideEffectExecutionCreate) createSpec() (*SideEffectExecution, *sqlg
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.side_effect_executions = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := seec.mutation.ActivityExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffectexecution.ActivityExecutionTable,
-			Columns: []string{sideeffectexecution.ActivityExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.activity_execution_side_effect_executions = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

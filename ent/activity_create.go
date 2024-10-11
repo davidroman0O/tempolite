@@ -12,10 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
 )
 
 // ActivityCreate is the builder for creating a Activity entity.
@@ -28,6 +25,20 @@ type ActivityCreate struct {
 // SetIdentity sets the "identity" field.
 func (ac *ActivityCreate) SetIdentity(s string) *ActivityCreate {
 	ac.mutation.SetIdentity(s)
+	return ac
+}
+
+// SetStatus sets the "status" field.
+func (ac *ActivityCreate) SetStatus(a activity.Status) *ActivityCreate {
+	ac.mutation.SetStatus(a)
+	return ac
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (ac *ActivityCreate) SetNillableStatus(a *activity.Status) *ActivityCreate {
+	if a != nil {
+		ac.SetStatus(*a)
+	}
 	return ac
 }
 
@@ -106,55 +117,6 @@ func (ac *ActivityCreate) AddExecutions(a ...*ActivityExecution) *ActivityCreate
 	return ac.AddExecutionIDs(ids...)
 }
 
-// SetWorkflowID sets the "workflow" edge to the Workflow entity by ID.
-func (ac *ActivityCreate) SetWorkflowID(id string) *ActivityCreate {
-	ac.mutation.SetWorkflowID(id)
-	return ac
-}
-
-// SetNillableWorkflowID sets the "workflow" edge to the Workflow entity by ID if the given value is not nil.
-func (ac *ActivityCreate) SetNillableWorkflowID(id *string) *ActivityCreate {
-	if id != nil {
-		ac = ac.SetWorkflowID(*id)
-	}
-	return ac
-}
-
-// SetWorkflow sets the "workflow" edge to the Workflow entity.
-func (ac *ActivityCreate) SetWorkflow(w *Workflow) *ActivityCreate {
-	return ac.SetWorkflowID(w.ID)
-}
-
-// AddSagaIDs adds the "sagas" edge to the Saga entity by IDs.
-func (ac *ActivityCreate) AddSagaIDs(ids ...string) *ActivityCreate {
-	ac.mutation.AddSagaIDs(ids...)
-	return ac
-}
-
-// AddSagas adds the "sagas" edges to the Saga entity.
-func (ac *ActivityCreate) AddSagas(s ...*Saga) *ActivityCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return ac.AddSagaIDs(ids...)
-}
-
-// AddSideEffectIDs adds the "side_effects" edge to the SideEffect entity by IDs.
-func (ac *ActivityCreate) AddSideEffectIDs(ids ...string) *ActivityCreate {
-	ac.mutation.AddSideEffectIDs(ids...)
-	return ac
-}
-
-// AddSideEffects adds the "side_effects" edges to the SideEffect entity.
-func (ac *ActivityCreate) AddSideEffects(s ...*SideEffect) *ActivityCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return ac.AddSideEffectIDs(ids...)
-}
-
 // Mutation returns the ActivityMutation object of the builder.
 func (ac *ActivityCreate) Mutation() *ActivityMutation {
 	return ac.mutation
@@ -190,6 +152,10 @@ func (ac *ActivityCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (ac *ActivityCreate) defaults() {
+	if _, ok := ac.mutation.Status(); !ok {
+		v := activity.DefaultStatus
+		ac.mutation.SetStatus(v)
+	}
 	if _, ok := ac.mutation.CreatedAt(); !ok {
 		v := activity.DefaultCreatedAt()
 		ac.mutation.SetCreatedAt(v)
@@ -204,6 +170,14 @@ func (ac *ActivityCreate) check() error {
 	if v, ok := ac.mutation.Identity(); ok {
 		if err := activity.IdentityValidator(v); err != nil {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
+		}
+	}
+	if _, ok := ac.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Activity.status"`)}
+	}
+	if v, ok := ac.mutation.Status(); ok {
+		if err := activity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
 		}
 	}
 	if _, ok := ac.mutation.HandlerName(); !ok {
@@ -259,6 +233,10 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
 		_node.Identity = value
 	}
+	if value, ok := ac.mutation.Status(); ok {
+		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
+	}
 	if value, ok := ac.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
 		_node.HandlerName = value
@@ -288,55 +266,6 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := ac.mutation.WorkflowIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   activity.WorkflowTable,
-			Columns: []string{activity.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.workflow_activities = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := ac.mutation.SagasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SagasTable,
-			Columns: []string{activity.SagasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := ac.mutation.SideEffectsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   activity.SideEffectsTable,
-			Columns: []string{activity.SideEffectsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sideeffect.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

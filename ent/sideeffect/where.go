@@ -338,29 +338,6 @@ func HasExecutionsWith(preds ...predicate.SideEffectExecution) predicate.SideEff
 	})
 }
 
-// HasActivity applies the HasEdge predicate on the "activity" edge.
-func HasActivity() predicate.SideEffect {
-	return predicate.SideEffect(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, ActivityTable, ActivityColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasActivityWith applies the HasEdge predicate on the "activity" edge with a given conditions (other predicates).
-func HasActivityWith(preds ...predicate.Activity) predicate.SideEffect {
-	return predicate.SideEffect(func(s *sql.Selector) {
-		step := newActivityStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.SideEffect) predicate.SideEffect {
 	return predicate.SideEffect(sql.AndPredicates(predicates...))

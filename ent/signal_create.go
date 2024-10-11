@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // SignalCreate is the builder for creating a Signal entity.
@@ -79,25 +78,6 @@ func (sc *SignalCreate) SetNillableUpdatedAt(t *time.Time) *SignalCreate {
 func (sc *SignalCreate) SetID(s string) *SignalCreate {
 	sc.mutation.SetID(s)
 	return sc
-}
-
-// SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID.
-func (sc *SignalCreate) SetWorkflowExecutionID(id string) *SignalCreate {
-	sc.mutation.SetWorkflowExecutionID(id)
-	return sc
-}
-
-// SetNillableWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by ID if the given value is not nil.
-func (sc *SignalCreate) SetNillableWorkflowExecutionID(id *string) *SignalCreate {
-	if id != nil {
-		sc = sc.SetWorkflowExecutionID(*id)
-	}
-	return sc
-}
-
-// SetWorkflowExecution sets the "workflow_execution" edge to the WorkflowExecution entity.
-func (sc *SignalCreate) SetWorkflowExecution(w *WorkflowExecution) *SignalCreate {
-	return sc.SetWorkflowExecutionID(w.ID)
 }
 
 // Mutation returns the SignalMutation object of the builder.
@@ -227,23 +207,6 @@ func (sc *SignalCreate) createSpec() (*Signal, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.UpdatedAt(); ok {
 		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if nodes := sc.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   signal.WorkflowExecutionTable,
-			Columns: []string{signal.WorkflowExecutionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.workflow_execution_signals = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

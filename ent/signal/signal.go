@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -25,17 +24,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeWorkflowExecution holds the string denoting the workflow_execution edge name in mutations.
-	EdgeWorkflowExecution = "workflow_execution"
 	// Table holds the table name of the signal in the database.
 	Table = "signals"
-	// WorkflowExecutionTable is the table that holds the workflow_execution relation/edge.
-	WorkflowExecutionTable = "signals"
-	// WorkflowExecutionInverseTable is the table name for the WorkflowExecution entity.
-	// It exists in this package in order to avoid circular dependency with the "workflowexecution" package.
-	WorkflowExecutionInverseTable = "workflow_executions"
-	// WorkflowExecutionColumn is the table column denoting the workflow_execution relation/edge.
-	WorkflowExecutionColumn = "workflow_execution_signals"
 )
 
 // Columns holds all SQL columns for signal fields.
@@ -48,21 +38,10 @@ var Columns = []string{
 	FieldUpdatedAt,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "signals"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"workflow_execution_signals",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -133,18 +112,4 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByWorkflowExecutionField orders the results by workflow_execution field.
-func ByWorkflowExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkflowExecutionStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newWorkflowExecutionStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkflowExecutionInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, WorkflowExecutionTable, WorkflowExecutionColumn),
-	)
 }

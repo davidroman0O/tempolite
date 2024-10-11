@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
@@ -102,25 +101,6 @@ func (sec *SideEffectCreate) AddExecutions(s ...*SideEffectExecution) *SideEffec
 		ids[i] = s[i].ID
 	}
 	return sec.AddExecutionIDs(ids...)
-}
-
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (sec *SideEffectCreate) SetActivityID(id string) *SideEffectCreate {
-	sec.mutation.SetActivityID(id)
-	return sec
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (sec *SideEffectCreate) SetNillableActivityID(id *string) *SideEffectCreate {
-	if id != nil {
-		sec = sec.SetActivityID(*id)
-	}
-	return sec
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (sec *SideEffectCreate) SetActivity(a *Activity) *SideEffectCreate {
-	return sec.SetActivityID(a.ID)
 }
 
 // Mutation returns the SideEffectMutation object of the builder.
@@ -261,23 +241,6 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := sec.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   sideeffect.ActivityTable,
-			Columns: []string{sideeffect.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.activity_side_effects = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

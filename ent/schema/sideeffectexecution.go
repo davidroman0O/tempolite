@@ -42,8 +42,5 @@ func (SideEffectExecution) Edges() []ent.Edge {
 			Ref("executions").
 			Unique().
 			Required(),
-		edge.From("activity_execution", ActivityExecution.Type).
-			Ref("side_effect_executions").
-			Unique(),
 	}
 }

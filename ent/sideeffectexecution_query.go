@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
@@ -20,13 +19,12 @@ import (
 // SideEffectExecutionQuery is the builder for querying SideEffectExecution entities.
 type SideEffectExecutionQuery struct {
 	config
-	ctx                   *QueryContext
-	order                 []sideeffectexecution.OrderOption
-	inters                []Interceptor
-	predicates            []predicate.SideEffectExecution
-	withSideEffect        *SideEffectQuery
-	withActivityExecution *ActivityExecutionQuery
-	withFKs               bool
+	ctx            *QueryContext
+	order          []sideeffectexecution.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.SideEffectExecution
+	withSideEffect *SideEffectQuery
+	withFKs        bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -78,28 +76,6 @@ func (seeq *SideEffectExecutionQuery) QuerySideEffect() *SideEffectQuery {
 			sqlgraph.From(sideeffectexecution.Table, sideeffectexecution.FieldID, selector),
 			sqlgraph.To(sideeffect.Table, sideeffect.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, sideeffectexecution.SideEffectTable, sideeffectexecution.SideEffectColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(seeq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryActivityExecution chains the current query on the "activity_execution" edge.
-func (seeq *SideEffectExecutionQuery) QueryActivityExecution() *ActivityExecutionQuery {
-	query := (&ActivityExecutionClient{config: seeq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := seeq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := seeq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sideeffectexecution.Table, sideeffectexecution.FieldID, selector),
-			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sideeffectexecution.ActivityExecutionTable, sideeffectexecution.ActivityExecutionColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(seeq.driver.Dialect(), step)
 		return fromU, nil
@@ -294,13 +270,12 @@ func (seeq *SideEffectExecutionQuery) Clone() *SideEffectExecutionQuery {
 		return nil
 	}
 	return &SideEffectExecutionQuery{
-		config:                seeq.config,
-		ctx:                   seeq.ctx.Clone(),
-		order:                 append([]sideeffectexecution.OrderOption{}, seeq.order...),
-		inters:                append([]Interceptor{}, seeq.inters...),
-		predicates:            append([]predicate.SideEffectExecution{}, seeq.predicates...),
-		withSideEffect:        seeq.withSideEffect.Clone(),
-		withActivityExecution: seeq.withActivityExecution.Clone(),
+		config:         seeq.config,
+		ctx:            seeq.ctx.Clone(),
+		order:          append([]sideeffectexecution.OrderOption{}, seeq.order...),
+		inters:         append([]Interceptor{}, seeq.inters...),
+		predicates:     append([]predicate.SideEffectExecution{}, seeq.predicates...),
+		withSideEffect: seeq.withSideEffect.Clone(),
 		// clone intermediate query.
 		sql:  seeq.sql.Clone(),
 		path: seeq.path,
@@ -315,17 +290,6 @@ func (seeq *SideEffectExecutionQuery) WithSideEffect(opts ...func(*SideEffectQue
 		opt(query)
 	}
 	seeq.withSideEffect = query
-	return seeq
-}
-
-// WithActivityExecution tells the query-builder to eager-load the nodes that are connected to
-// the "activity_execution" edge. The optional arguments are used to configure the query builder of the edge.
-func (seeq *SideEffectExecutionQuery) WithActivityExecution(opts ...func(*ActivityExecutionQuery)) *SideEffectExecutionQuery {
-	query := (&ActivityExecutionClient{config: seeq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	seeq.withActivityExecution = query
 	return seeq
 }
 
@@ -408,12 +372,11 @@ func (seeq *SideEffectExecutionQuery) sqlAll(ctx context.Context, hooks ...query
 		nodes       = []*SideEffectExecution{}
 		withFKs     = seeq.withFKs
 		_spec       = seeq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [1]bool{
 			seeq.withSideEffect != nil,
-			seeq.withActivityExecution != nil,
 		}
 	)
-	if seeq.withSideEffect != nil || seeq.withActivityExecution != nil {
+	if seeq.withSideEffect != nil {
 		withFKs = true
 	}
 	if withFKs {
@@ -440,12 +403,6 @@ func (seeq *SideEffectExecutionQuery) sqlAll(ctx context.Context, hooks ...query
 	if query := seeq.withSideEffect; query != nil {
 		if err := seeq.loadSideEffect(ctx, query, nodes, nil,
 			func(n *SideEffectExecution, e *SideEffect) { n.Edges.SideEffect = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := seeq.withActivityExecution; query != nil {
-		if err := seeq.loadActivityExecution(ctx, query, nodes, nil,
-			func(n *SideEffectExecution, e *ActivityExecution) { n.Edges.ActivityExecution = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -477,38 +434,6 @@ func (seeq *SideEffectExecutionQuery) loadSideEffect(ctx context.Context, query 
 		nodes, ok := nodeids[n.ID]
 		if !ok {
 			return fmt.Errorf(`unexpected foreign-key "side_effect_executions" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (seeq *SideEffectExecutionQuery) loadActivityExecution(ctx context.Context, query *ActivityExecutionQuery, nodes []*SideEffectExecution, init func(*SideEffectExecution), assign func(*SideEffectExecution, *ActivityExecution)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*SideEffectExecution)
-	for i := range nodes {
-		if nodes[i].activity_execution_side_effect_executions == nil {
-			continue
-		}
-		fk := *nodes[i].activity_execution_side_effect_executions
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(activityexecution.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "activity_execution_side_effect_executions" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)

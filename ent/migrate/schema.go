@@ -12,26 +12,18 @@ var (
 	ActivitiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "identity", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "workflow_activities", Type: field.TypeString, Nullable: true},
 	}
 	// ActivitiesTable holds the schema information for the "activities" table.
 	ActivitiesTable = &schema.Table{
 		Name:       "activities",
 		Columns:    ActivitiesColumns,
 		PrimaryKey: []*schema.Column{ActivitiesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "activities_workflows_activities",
-				Columns:    []*schema.Column{ActivitiesColumns[7]},
-				RefColumns: []*schema.Column{WorkflowsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// ActivityExecutionsColumns holds the columns for the "activity_executions" table.
 	ActivityExecutionsColumns = []*schema.Column{
@@ -44,7 +36,6 @@ var (
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "activity_executions", Type: field.TypeString},
-		{Name: "workflow_execution_activity_executions", Type: field.TypeString, Nullable: true},
 	}
 	// ActivityExecutionsTable holds the schema information for the "activity_executions" table.
 	ActivityExecutionsTable = &schema.Table{
@@ -58,11 +49,26 @@ var (
 				RefColumns: []*schema.Column{ActivitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
+		},
+	}
+	// ExecutionRelationshipsColumns holds the columns for the "execution_relationships" table.
+	ExecutionRelationshipsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "parent_id", Type: field.TypeString},
+		{Name: "child_id", Type: field.TypeString},
+		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
+		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
+	}
+	// ExecutionRelationshipsTable holds the schema information for the "execution_relationships" table.
+	ExecutionRelationshipsTable = &schema.Table{
+		Name:       "execution_relationships",
+		Columns:    ExecutionRelationshipsColumns,
+		PrimaryKey: []*schema.Column{ExecutionRelationshipsColumns[0]},
+		Indexes: []*schema.Index{
 			{
-				Symbol:     "activity_executions_workflow_executions_activity_executions",
-				Columns:    []*schema.Column{ActivityExecutionsColumns[9]},
-				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
-				OnDelete:   schema.SetNull,
+				Name:    "executionrelationship_parent_id_child_id",
+				Unique:  true,
+				Columns: []*schema.Column{ExecutionRelationshipsColumns[1], ExecutionRelationshipsColumns[2]},
 			},
 		},
 	}
@@ -103,21 +109,12 @@ var (
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "activity_sagas", Type: field.TypeString, Nullable: true},
 	}
 	// SagasTable holds the schema information for the "sagas" table.
 	SagasTable = &schema.Table{
 		Name:       "sagas",
 		Columns:    SagasColumns,
 		PrimaryKey: []*schema.Column{SagasColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "sagas_activities_sagas",
-				Columns:    []*schema.Column{SagasColumns[6]},
-				RefColumns: []*schema.Column{ActivitiesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// SagaExecutionsColumns holds the columns for the "saga_executions" table.
 	SagaExecutionsColumns = []*schema.Column{
@@ -181,21 +178,12 @@ var (
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "activity_side_effects", Type: field.TypeString, Nullable: true},
 	}
 	// SideEffectsTable holds the schema information for the "side_effects" table.
 	SideEffectsTable = &schema.Table{
 		Name:       "side_effects",
 		Columns:    SideEffectsColumns,
 		PrimaryKey: []*schema.Column{SideEffectsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "side_effects_activities_side_effects",
-				Columns:    []*schema.Column{SideEffectsColumns[7]},
-				RefColumns: []*schema.Column{ActivitiesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// SideEffectExecutionsColumns holds the columns for the "side_effect_executions" table.
 	SideEffectExecutionsColumns = []*schema.Column{
@@ -206,7 +194,6 @@ var (
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "activity_execution_side_effect_executions", Type: field.TypeString, Nullable: true},
 		{Name: "side_effect_executions", Type: field.TypeString},
 	}
 	// SideEffectExecutionsTable holds the schema information for the "side_effect_executions" table.
@@ -216,14 +203,8 @@ var (
 		PrimaryKey: []*schema.Column{SideEffectExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "side_effect_executions_activity_executions_side_effect_executions",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
-				RefColumns: []*schema.Column{ActivityExecutionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
 				Symbol:     "side_effect_executions_side_effects_executions",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[8]},
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
 				RefColumns: []*schema.Column{SideEffectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -237,21 +218,12 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Received", "Processed"}, Default: "Pending"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "workflow_execution_signals", Type: field.TypeString, Nullable: true},
 	}
 	// SignalsTable holds the schema information for the "signals" table.
 	SignalsTable = &schema.Table{
 		Name:       "signals",
 		Columns:    SignalsColumns,
 		PrimaryKey: []*schema.Column{SignalsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "signals_workflow_executions_signals",
-				Columns:    []*schema.Column{SignalsColumns[6]},
-				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
 	}
 	// WorkflowsColumns holds the columns for the "workflows" table.
 	WorkflowsColumns = []*schema.Column{
@@ -299,6 +271,7 @@ var (
 	Tables = []*schema.Table{
 		ActivitiesTable,
 		ActivityExecutionsTable,
+		ExecutionRelationshipsTable,
 		RunsTable,
 		SagasTable,
 		SagaExecutionsTable,
@@ -312,17 +285,11 @@ var (
 )
 
 func init() {
-	ActivitiesTable.ForeignKeys[0].RefTable = WorkflowsTable
 	ActivityExecutionsTable.ForeignKeys[0].RefTable = ActivitiesTable
-	ActivityExecutionsTable.ForeignKeys[1].RefTable = WorkflowExecutionsTable
 	RunsTable.ForeignKeys[0].RefTable = WorkflowsTable
 	RunsTable.ForeignKeys[1].RefTable = ActivitiesTable
-	SagasTable.ForeignKeys[0].RefTable = ActivitiesTable
 	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
 	SagaStepExecutionsTable.ForeignKeys[0].RefTable = SagaExecutionsTable
-	SideEffectsTable.ForeignKeys[0].RefTable = ActivitiesTable
-	SideEffectExecutionsTable.ForeignKeys[0].RefTable = ActivityExecutionsTable
-	SideEffectExecutionsTable.ForeignKeys[1].RefTable = SideEffectsTable
-	SignalsTable.ForeignKeys[0].RefTable = WorkflowExecutionsTable
+	SideEffectExecutionsTable.ForeignKeys[0].RefTable = SideEffectsTable
 	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

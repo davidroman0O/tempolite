@@ -113,6 +113,7 @@ type TempoliteContext interface {
 	RunID() string
 	EntityID() string
 	ExecutionID() string
+	EntityType() string
 }
 
 type WorkflowContext struct {
@@ -133,6 +134,10 @@ func (w WorkflowContext) EntityID() string {
 
 func (w WorkflowContext) ExecutionID() string {
 	return w.executionID
+}
+
+func (w WorkflowContext) EntityType() string {
+	return "workflow"
 }
 
 // Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
@@ -193,6 +198,10 @@ func (w ActivityContext) ExecutionID() string {
 	return w.executionID
 }
 
+func (w ActivityContext) EntityType() string {
+	return "activity"
+}
+
 func (w ActivityContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
 	// todo: implement
 	return nil, nil
@@ -233,6 +242,10 @@ func (w SideEffectContext) ExecutionID() string {
 	return w.executionID
 }
 
+func (w SideEffectContext) EntityType() string {
+	return "sideEffect"
+}
+
 func (w SideEffectContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
 	// todo: implement
 	return nil, nil
@@ -268,6 +281,10 @@ func (w TransactionContext) ExecuteSideEffect(name HandlerIdentity, inputs ...an
 	return nil, nil
 }
 
+func (w TransactionContext) EntityType() string {
+	return "transaction"
+}
+
 type CompensationContext struct {
 	TempoliteContext
 	tp *Tempolite
@@ -281,4 +298,8 @@ func (w CompensationContext) GetActivity(id string) (*ActivityInfo, error) {
 func (w CompensationContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
 	// todo: implement
 	return nil, nil
+}
+
+func (w CompensationContext) EntityType() string {
+	return "compensation"
 }

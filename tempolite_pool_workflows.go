@@ -28,6 +28,7 @@ func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 		retrypool.WithOnTaskSuccess(tp.workflowOnSuccess),
 		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
 		retrypool.WithPanicHandler(tp.workflowOnPanic),
+		retrypool.WithOnRetry(tp.workflowOnRetry),
 	}
 
 	workers := []retrypool.Worker[*workflowTask]{}
@@ -47,7 +48,7 @@ func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTra
 	log.Println(stackTrace)
 }
 
-func (tp *Tempolite) onHandlerTaskRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask]) {
+func (tp *Tempolite) workflowOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask]) {
 	log.Printf("onHandlerTaskRetry: %d, %v", attempt, err)
 }
 

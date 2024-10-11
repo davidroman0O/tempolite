@@ -43,11 +43,9 @@ type Workflow struct {
 type WorkflowEdges struct {
 	// Executions holds the value of the executions edge.
 	Executions []*WorkflowExecution `json:"executions,omitempty"`
-	// Activities holds the value of the activities edge.
-	Activities []*Activity `json:"activities,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -57,15 +55,6 @@ func (e WorkflowEdges) ExecutionsOrErr() ([]*WorkflowExecution, error) {
 		return e.Executions, nil
 	}
 	return nil, &NotLoadedError{edge: "executions"}
-}
-
-// ActivitiesOrErr returns the Activities value or an error if the edge
-// was not loaded in eager-loading.
-func (e WorkflowEdges) ActivitiesOrErr() ([]*Activity, error) {
-	if e.loadedTypes[1] {
-		return e.Activities, nil
-	}
-	return nil, &NotLoadedError{edge: "activities"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -162,11 +151,6 @@ func (w *Workflow) Value(name string) (ent.Value, error) {
 // QueryExecutions queries the "executions" edge of the Workflow entity.
 func (w *Workflow) QueryExecutions() *WorkflowExecutionQuery {
 	return NewWorkflowClient(w.config).QueryExecutions(w)
-}
-
-// QueryActivities queries the "activities" edge of the Workflow entity.
-func (w *Workflow) QueryActivities() *ActivityQuery {
-	return NewWorkflowClient(w.config).QueryActivities(w)
 }
 
 // Update returns a builder for updating this Workflow.

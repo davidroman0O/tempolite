@@ -41,7 +41,5 @@ func (WorkflowExecution) Edges() []ent.Edge {
 			Ref("executions").
 			Unique().
 			Required(),
-		edge.To("activity_executions", ActivityExecution.Type),
-		edge.To("signals", Signal.Type),
 	}
 }

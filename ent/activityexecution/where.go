@@ -403,52 +403,6 @@ func HasActivityWith(preds ...predicate.Activity) predicate.ActivityExecution {
 	})
 }
 
-// HasWorkflowExecution applies the HasEdge predicate on the "workflow_execution" edge.
-func HasWorkflowExecution() predicate.ActivityExecution {
-	return predicate.ActivityExecution(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, WorkflowExecutionTable, WorkflowExecutionColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasWorkflowExecutionWith applies the HasEdge predicate on the "workflow_execution" edge with a given conditions (other predicates).
-func HasWorkflowExecutionWith(preds ...predicate.WorkflowExecution) predicate.ActivityExecution {
-	return predicate.ActivityExecution(func(s *sql.Selector) {
-		step := newWorkflowExecutionStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasSideEffectExecutions applies the HasEdge predicate on the "side_effect_executions" edge.
-func HasSideEffectExecutions() predicate.ActivityExecution {
-	return predicate.ActivityExecution(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, SideEffectExecutionsTable, SideEffectExecutionsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasSideEffectExecutionsWith applies the HasEdge predicate on the "side_effect_executions" edge with a given conditions (other predicates).
-func HasSideEffectExecutionsWith(preds ...predicate.SideEffectExecution) predicate.ActivityExecution {
-	return predicate.ActivityExecution(func(s *sql.Selector) {
-		step := newSideEffectExecutionsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.ActivityExecution) predicate.ActivityExecution {
 	return predicate.ActivityExecution(sql.AndPredicates(predicates...))

@@ -43,9 +43,5 @@ func (ActivityExecution) Edges() []ent.Edge {
 			Ref("executions").
 			Unique().
 			Required(),
-		edge.From("workflow_execution", WorkflowExecution.Type).
-			Ref("activity_executions").
-			Unique(),
-		edge.To("side_effect_executions", SideEffectExecution.Type),
 	}
 }

@@ -13,18 +13,15 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
 // SignalQuery is the builder for querying Signal entities.
 type SignalQuery struct {
 	config
-	ctx                   *QueryContext
-	order                 []signal.OrderOption
-	inters                []Interceptor
-	predicates            []predicate.Signal
-	withWorkflowExecution *WorkflowExecutionQuery
-	withFKs               bool
+	ctx        *QueryContext
+	order      []signal.OrderOption
+	inters     []Interceptor
+	predicates []predicate.Signal
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -59,28 +56,6 @@ func (sq *SignalQuery) Unique(unique bool) *SignalQuery {
 func (sq *SignalQuery) Order(o ...signal.OrderOption) *SignalQuery {
 	sq.order = append(sq.order, o...)
 	return sq
-}
-
-// QueryWorkflowExecution chains the current query on the "workflow_execution" edge.
-func (sq *SignalQuery) QueryWorkflowExecution() *WorkflowExecutionQuery {
-	query := (&WorkflowExecutionClient{config: sq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := sq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(signal.Table, signal.FieldID, selector),
-			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, signal.WorkflowExecutionTable, signal.WorkflowExecutionColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first Signal entity from the query.
@@ -270,27 +245,15 @@ func (sq *SignalQuery) Clone() *SignalQuery {
 		return nil
 	}
 	return &SignalQuery{
-		config:                sq.config,
-		ctx:                   sq.ctx.Clone(),
-		order:                 append([]signal.OrderOption{}, sq.order...),
-		inters:                append([]Interceptor{}, sq.inters...),
-		predicates:            append([]predicate.Signal{}, sq.predicates...),
-		withWorkflowExecution: sq.withWorkflowExecution.Clone(),
+		config:     sq.config,
+		ctx:        sq.ctx.Clone(),
+		order:      append([]signal.OrderOption{}, sq.order...),
+		inters:     append([]Interceptor{}, sq.inters...),
+		predicates: append([]predicate.Signal{}, sq.predicates...),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
 	}
-}
-
-// WithWorkflowExecution tells the query-builder to eager-load the nodes that are connected to
-// the "workflow_execution" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SignalQuery) WithWorkflowExecution(opts ...func(*WorkflowExecutionQuery)) *SignalQuery {
-	query := (&WorkflowExecutionClient{config: sq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	sq.withWorkflowExecution = query
-	return sq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -369,26 +332,15 @@ func (sq *SignalQuery) prepareQuery(ctx context.Context) error {
 
 func (sq *SignalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Signal, error) {
 	var (
-		nodes       = []*Signal{}
-		withFKs     = sq.withFKs
-		_spec       = sq.querySpec()
-		loadedTypes = [1]bool{
-			sq.withWorkflowExecution != nil,
-		}
+		nodes = []*Signal{}
+		_spec = sq.querySpec()
 	)
-	if sq.withWorkflowExecution != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, signal.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Signal).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Signal{config: sq.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -400,46 +352,7 @@ func (sq *SignalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Signa
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := sq.withWorkflowExecution; query != nil {
-		if err := sq.loadWorkflowExecution(ctx, query, nodes, nil,
-			func(n *Signal, e *WorkflowExecution) { n.Edges.WorkflowExecution = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (sq *SignalQuery) loadWorkflowExecution(ctx context.Context, query *WorkflowExecutionQuery, nodes []*Signal, init func(*Signal), assign func(*Signal, *WorkflowExecution)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Signal)
-	for i := range nodes {
-		if nodes[i].workflow_execution_signals == nil {
-			continue
-		}
-		fk := *nodes[i].workflow_execution_signals
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(workflowexecution.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "workflow_execution_signals" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
 }
 
 func (sq *SignalQuery) sqlCount(ctx context.Context) (int, error) {

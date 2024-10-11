@@ -17,6 +17,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -37,6 +38,8 @@ type Client struct {
 	Activity *ActivityClient
 	// ActivityExecution is the client for interacting with the ActivityExecution builders.
 	ActivityExecution *ActivityExecutionClient
+	// ExecutionRelationship is the client for interacting with the ExecutionRelationship builders.
+	ExecutionRelationship *ExecutionRelationshipClient
 	// Run is the client for interacting with the Run builders.
 	Run *RunClient
 	// Saga is the client for interacting with the Saga builders.
@@ -68,6 +71,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Activity = NewActivityClient(c.config)
 	c.ActivityExecution = NewActivityExecutionClient(c.config)
+	c.ExecutionRelationship = NewExecutionRelationshipClient(c.config)
 	c.Run = NewRunClient(c.config)
 	c.Saga = NewSagaClient(c.config)
 	c.SagaExecution = NewSagaExecutionClient(c.config)
@@ -167,19 +171,20 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                 ctx,
-		config:              cfg,
-		Activity:            NewActivityClient(cfg),
-		ActivityExecution:   NewActivityExecutionClient(cfg),
-		Run:                 NewRunClient(cfg),
-		Saga:                NewSagaClient(cfg),
-		SagaExecution:       NewSagaExecutionClient(cfg),
-		SagaStepExecution:   NewSagaStepExecutionClient(cfg),
-		SideEffect:          NewSideEffectClient(cfg),
-		SideEffectExecution: NewSideEffectExecutionClient(cfg),
-		Signal:              NewSignalClient(cfg),
-		Workflow:            NewWorkflowClient(cfg),
-		WorkflowExecution:   NewWorkflowExecutionClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		Activity:              NewActivityClient(cfg),
+		ActivityExecution:     NewActivityExecutionClient(cfg),
+		ExecutionRelationship: NewExecutionRelationshipClient(cfg),
+		Run:                   NewRunClient(cfg),
+		Saga:                  NewSagaClient(cfg),
+		SagaExecution:         NewSagaExecutionClient(cfg),
+		SagaStepExecution:     NewSagaStepExecutionClient(cfg),
+		SideEffect:            NewSideEffectClient(cfg),
+		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
+		Signal:                NewSignalClient(cfg),
+		Workflow:              NewWorkflowClient(cfg),
+		WorkflowExecution:     NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
@@ -197,19 +202,20 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                 ctx,
-		config:              cfg,
-		Activity:            NewActivityClient(cfg),
-		ActivityExecution:   NewActivityExecutionClient(cfg),
-		Run:                 NewRunClient(cfg),
-		Saga:                NewSagaClient(cfg),
-		SagaExecution:       NewSagaExecutionClient(cfg),
-		SagaStepExecution:   NewSagaStepExecutionClient(cfg),
-		SideEffect:          NewSideEffectClient(cfg),
-		SideEffectExecution: NewSideEffectExecutionClient(cfg),
-		Signal:              NewSignalClient(cfg),
-		Workflow:            NewWorkflowClient(cfg),
-		WorkflowExecution:   NewWorkflowExecutionClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		Activity:              NewActivityClient(cfg),
+		ActivityExecution:     NewActivityExecutionClient(cfg),
+		ExecutionRelationship: NewExecutionRelationshipClient(cfg),
+		Run:                   NewRunClient(cfg),
+		Saga:                  NewSagaClient(cfg),
+		SagaExecution:         NewSagaExecutionClient(cfg),
+		SagaStepExecution:     NewSagaStepExecutionClient(cfg),
+		SideEffect:            NewSideEffectClient(cfg),
+		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
+		Signal:                NewSignalClient(cfg),
+		Workflow:              NewWorkflowClient(cfg),
+		WorkflowExecution:     NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
@@ -239,9 +245,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Activity, c.ActivityExecution, c.Run, c.Saga, c.SagaExecution,
-		c.SagaStepExecution, c.SideEffect, c.SideEffectExecution, c.Signal, c.Workflow,
-		c.WorkflowExecution,
+		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.Run, c.Saga,
+		c.SagaExecution, c.SagaStepExecution, c.SideEffect, c.SideEffectExecution,
+		c.Signal, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -251,9 +257,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Activity, c.ActivityExecution, c.Run, c.Saga, c.SagaExecution,
-		c.SagaStepExecution, c.SideEffect, c.SideEffectExecution, c.Signal, c.Workflow,
-		c.WorkflowExecution,
+		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.Run, c.Saga,
+		c.SagaExecution, c.SagaStepExecution, c.SideEffect, c.SideEffectExecution,
+		c.Signal, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -266,6 +272,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Activity.mutate(ctx, m)
 	case *ActivityExecutionMutation:
 		return c.ActivityExecution.mutate(ctx, m)
+	case *ExecutionRelationshipMutation:
+		return c.ExecutionRelationship.mutate(ctx, m)
 	case *RunMutation:
 		return c.Run.mutate(ctx, m)
 	case *SagaMutation:
@@ -406,54 +414,6 @@ func (c *ActivityClient) QueryExecutions(a *Activity) *ActivityExecutionQuery {
 			sqlgraph.From(activity.Table, activity.FieldID, id),
 			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, activity.ExecutionsTable, activity.ExecutionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryWorkflow queries the workflow edge of a Activity.
-func (c *ActivityClient) QueryWorkflow(a *Activity) *WorkflowQuery {
-	query := (&WorkflowClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activity.Table, activity.FieldID, id),
-			sqlgraph.To(workflow.Table, workflow.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, activity.WorkflowTable, activity.WorkflowColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySagas queries the sagas edge of a Activity.
-func (c *ActivityClient) QuerySagas(a *Activity) *SagaQuery {
-	query := (&SagaClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activity.Table, activity.FieldID, id),
-			sqlgraph.To(saga.Table, saga.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, activity.SagasTable, activity.SagasColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySideEffects queries the side_effects edge of a Activity.
-func (c *ActivityClient) QuerySideEffects(a *Activity) *SideEffectQuery {
-	query := (&SideEffectClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activity.Table, activity.FieldID, id),
-			sqlgraph.To(sideeffect.Table, sideeffect.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, activity.SideEffectsTable, activity.SideEffectsColumn),
 		)
 		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
 		return fromV, nil
@@ -610,38 +570,6 @@ func (c *ActivityExecutionClient) QueryActivity(ae *ActivityExecution) *Activity
 	return query
 }
 
-// QueryWorkflowExecution queries the workflow_execution edge of a ActivityExecution.
-func (c *ActivityExecutionClient) QueryWorkflowExecution(ae *ActivityExecution) *WorkflowExecutionQuery {
-	query := (&WorkflowExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ae.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, id),
-			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, activityexecution.WorkflowExecutionTable, activityexecution.WorkflowExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(ae.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySideEffectExecutions queries the side_effect_executions edge of a ActivityExecution.
-func (c *ActivityExecutionClient) QuerySideEffectExecutions(ae *ActivityExecution) *SideEffectExecutionQuery {
-	query := (&SideEffectExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := ae.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(activityexecution.Table, activityexecution.FieldID, id),
-			sqlgraph.To(sideeffectexecution.Table, sideeffectexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, activityexecution.SideEffectExecutionsTable, activityexecution.SideEffectExecutionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(ae.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *ActivityExecutionClient) Hooks() []Hook {
 	return c.hooks.ActivityExecution
@@ -664,6 +592,139 @@ func (c *ActivityExecutionClient) mutate(ctx context.Context, m *ActivityExecuti
 		return (&ActivityExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ActivityExecution mutation op: %q", m.Op())
+	}
+}
+
+// ExecutionRelationshipClient is a client for the ExecutionRelationship schema.
+type ExecutionRelationshipClient struct {
+	config
+}
+
+// NewExecutionRelationshipClient returns a client for the ExecutionRelationship from the given config.
+func NewExecutionRelationshipClient(c config) *ExecutionRelationshipClient {
+	return &ExecutionRelationshipClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `executionrelationship.Hooks(f(g(h())))`.
+func (c *ExecutionRelationshipClient) Use(hooks ...Hook) {
+	c.hooks.ExecutionRelationship = append(c.hooks.ExecutionRelationship, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `executionrelationship.Intercept(f(g(h())))`.
+func (c *ExecutionRelationshipClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExecutionRelationship = append(c.inters.ExecutionRelationship, interceptors...)
+}
+
+// Create returns a builder for creating a ExecutionRelationship entity.
+func (c *ExecutionRelationshipClient) Create() *ExecutionRelationshipCreate {
+	mutation := newExecutionRelationshipMutation(c.config, OpCreate)
+	return &ExecutionRelationshipCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExecutionRelationship entities.
+func (c *ExecutionRelationshipClient) CreateBulk(builders ...*ExecutionRelationshipCreate) *ExecutionRelationshipCreateBulk {
+	return &ExecutionRelationshipCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExecutionRelationshipClient) MapCreateBulk(slice any, setFunc func(*ExecutionRelationshipCreate, int)) *ExecutionRelationshipCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExecutionRelationshipCreateBulk{err: fmt.Errorf("calling to ExecutionRelationshipClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExecutionRelationshipCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExecutionRelationshipCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExecutionRelationship.
+func (c *ExecutionRelationshipClient) Update() *ExecutionRelationshipUpdate {
+	mutation := newExecutionRelationshipMutation(c.config, OpUpdate)
+	return &ExecutionRelationshipUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExecutionRelationshipClient) UpdateOne(er *ExecutionRelationship) *ExecutionRelationshipUpdateOne {
+	mutation := newExecutionRelationshipMutation(c.config, OpUpdateOne, withExecutionRelationship(er))
+	return &ExecutionRelationshipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExecutionRelationshipClient) UpdateOneID(id int) *ExecutionRelationshipUpdateOne {
+	mutation := newExecutionRelationshipMutation(c.config, OpUpdateOne, withExecutionRelationshipID(id))
+	return &ExecutionRelationshipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExecutionRelationship.
+func (c *ExecutionRelationshipClient) Delete() *ExecutionRelationshipDelete {
+	mutation := newExecutionRelationshipMutation(c.config, OpDelete)
+	return &ExecutionRelationshipDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExecutionRelationshipClient) DeleteOne(er *ExecutionRelationship) *ExecutionRelationshipDeleteOne {
+	return c.DeleteOneID(er.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExecutionRelationshipClient) DeleteOneID(id int) *ExecutionRelationshipDeleteOne {
+	builder := c.Delete().Where(executionrelationship.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExecutionRelationshipDeleteOne{builder}
+}
+
+// Query returns a query builder for ExecutionRelationship.
+func (c *ExecutionRelationshipClient) Query() *ExecutionRelationshipQuery {
+	return &ExecutionRelationshipQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExecutionRelationship},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExecutionRelationship entity by its id.
+func (c *ExecutionRelationshipClient) Get(ctx context.Context, id int) (*ExecutionRelationship, error) {
+	return c.Query().Where(executionrelationship.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExecutionRelationshipClient) GetX(ctx context.Context, id int) *ExecutionRelationship {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ExecutionRelationshipClient) Hooks() []Hook {
+	return c.hooks.ExecutionRelationship
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExecutionRelationshipClient) Interceptors() []Interceptor {
+	return c.inters.ExecutionRelationship
+}
+
+func (c *ExecutionRelationshipClient) mutate(ctx context.Context, m *ExecutionRelationshipMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExecutionRelationshipCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExecutionRelationshipUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExecutionRelationshipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExecutionRelationshipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExecutionRelationship mutation op: %q", m.Op())
 	}
 }
 
@@ -949,22 +1010,6 @@ func (c *SagaClient) QueryExecutions(s *Saga) *SagaExecutionQuery {
 			sqlgraph.From(saga.Table, saga.FieldID, id),
 			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, saga.ExecutionsTable, saga.ExecutionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryActivity queries the activity edge of a Saga.
-func (c *SagaClient) QueryActivity(s *Saga) *ActivityQuery {
-	query := (&ActivityClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := s.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(saga.Table, saga.FieldID, id),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, saga.ActivityTable, saga.ActivityColumn),
 		)
 		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
 		return fromV, nil
@@ -1435,22 +1480,6 @@ func (c *SideEffectClient) QueryExecutions(se *SideEffect) *SideEffectExecutionQ
 	return query
 }
 
-// QueryActivity queries the activity edge of a SideEffect.
-func (c *SideEffectClient) QueryActivity(se *SideEffect) *ActivityQuery {
-	query := (&ActivityClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := se.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sideeffect.Table, sideeffect.FieldID, id),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sideeffect.ActivityTable, sideeffect.ActivityColumn),
-		)
-		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *SideEffectClient) Hooks() []Hook {
 	return c.hooks.SideEffect
@@ -1600,22 +1629,6 @@ func (c *SideEffectExecutionClient) QuerySideEffect(see *SideEffectExecution) *S
 	return query
 }
 
-// QueryActivityExecution queries the activity_execution edge of a SideEffectExecution.
-func (c *SideEffectExecutionClient) QueryActivityExecution(see *SideEffectExecution) *ActivityExecutionQuery {
-	query := (&ActivityExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := see.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sideeffectexecution.Table, sideeffectexecution.FieldID, id),
-			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sideeffectexecution.ActivityExecutionTable, sideeffectexecution.ActivityExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(see.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *SideEffectExecutionClient) Hooks() []Hook {
 	return c.hooks.SideEffectExecution
@@ -1747,22 +1760,6 @@ func (c *SignalClient) GetX(ctx context.Context, id string) *Signal {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryWorkflowExecution queries the workflow_execution edge of a Signal.
-func (c *SignalClient) QueryWorkflowExecution(s *Signal) *WorkflowExecutionQuery {
-	query := (&WorkflowExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := s.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(signal.Table, signal.FieldID, id),
-			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, signal.WorkflowExecutionTable, signal.WorkflowExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -1907,22 +1904,6 @@ func (c *WorkflowClient) QueryExecutions(w *Workflow) *WorkflowExecutionQuery {
 			sqlgraph.From(workflow.Table, workflow.FieldID, id),
 			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ExecutionsTable, workflow.ExecutionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryActivities queries the activities edge of a Workflow.
-func (c *WorkflowClient) QueryActivities(w *Workflow) *ActivityQuery {
-	query := (&ActivityClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := w.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(workflow.Table, workflow.FieldID, id),
-			sqlgraph.To(activity.Table, activity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ActivitiesTable, workflow.ActivitiesColumn),
 		)
 		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
 		return fromV, nil
@@ -2079,38 +2060,6 @@ func (c *WorkflowExecutionClient) QueryWorkflow(we *WorkflowExecution) *Workflow
 	return query
 }
 
-// QueryActivityExecutions queries the activity_executions edge of a WorkflowExecution.
-func (c *WorkflowExecutionClient) QueryActivityExecutions(we *WorkflowExecution) *ActivityExecutionQuery {
-	query := (&ActivityExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := we.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
-			sqlgraph.To(activityexecution.Table, activityexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, workflowexecution.ActivityExecutionsTable, workflowexecution.ActivityExecutionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QuerySignals queries the signals edge of a WorkflowExecution.
-func (c *WorkflowExecutionClient) QuerySignals(we *WorkflowExecution) *SignalQuery {
-	query := (&SignalClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := we.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
-			sqlgraph.To(signal.Table, signal.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, workflowexecution.SignalsTable, workflowexecution.SignalsColumn),
-		)
-		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *WorkflowExecutionClient) Hooks() []Hook {
 	return c.hooks.WorkflowExecution
@@ -2139,12 +2088,13 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Activity, ActivityExecution, Run, Saga, SagaExecution, SagaStepExecution,
-		SideEffect, SideEffectExecution, Signal, Workflow, WorkflowExecution []ent.Hook
+		Activity, ActivityExecution, ExecutionRelationship, Run, Saga, SagaExecution,
+		SagaStepExecution, SideEffect, SideEffectExecution, Signal, Workflow,
+		WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		Activity, ActivityExecution, Run, Saga, SagaExecution, SagaStepExecution,
-		SideEffect, SideEffectExecution, Signal, Workflow,
+		Activity, ActivityExecution, ExecutionRelationship, Run, Saga, SagaExecution,
+		SagaStepExecution, SideEffect, SideEffectExecution, Signal, Workflow,
 		WorkflowExecution []ent.Interceptor
 	}
 )

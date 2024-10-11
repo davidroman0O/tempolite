@@ -42,13 +42,9 @@ type WorkflowExecution struct {
 type WorkflowExecutionEdges struct {
 	// Workflow holds the value of the workflow edge.
 	Workflow *Workflow `json:"workflow,omitempty"`
-	// ActivityExecutions holds the value of the activity_executions edge.
-	ActivityExecutions []*ActivityExecution `json:"activity_executions,omitempty"`
-	// Signals holds the value of the signals edge.
-	Signals []*Signal `json:"signals,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [1]bool
 }
 
 // WorkflowOrErr returns the Workflow value or an error if the edge
@@ -60,24 +56,6 @@ func (e WorkflowExecutionEdges) WorkflowOrErr() (*Workflow, error) {
 		return nil, &NotFoundError{label: workflow.Label}
 	}
 	return nil, &NotLoadedError{edge: "workflow"}
-}
-
-// ActivityExecutionsOrErr returns the ActivityExecutions value or an error if the edge
-// was not loaded in eager-loading.
-func (e WorkflowExecutionEdges) ActivityExecutionsOrErr() ([]*ActivityExecution, error) {
-	if e.loadedTypes[1] {
-		return e.ActivityExecutions, nil
-	}
-	return nil, &NotLoadedError{edge: "activity_executions"}
-}
-
-// SignalsOrErr returns the Signals value or an error if the edge
-// was not loaded in eager-loading.
-func (e WorkflowExecutionEdges) SignalsOrErr() ([]*Signal, error) {
-	if e.loadedTypes[2] {
-		return e.Signals, nil
-	}
-	return nil, &NotLoadedError{edge: "signals"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -175,16 +153,6 @@ func (we *WorkflowExecution) Value(name string) (ent.Value, error) {
 // QueryWorkflow queries the "workflow" edge of the WorkflowExecution entity.
 func (we *WorkflowExecution) QueryWorkflow() *WorkflowQuery {
 	return NewWorkflowExecutionClient(we.config).QueryWorkflow(we)
-}
-
-// QueryActivityExecutions queries the "activity_executions" edge of the WorkflowExecution entity.
-func (we *WorkflowExecution) QueryActivityExecutions() *ActivityExecutionQuery {
-	return NewWorkflowExecutionClient(we.config).QueryActivityExecutions(we)
-}
-
-// QuerySignals queries the "signals" edge of the WorkflowExecution entity.
-func (we *WorkflowExecution) QuerySignals() *SignalQuery {
-	return NewWorkflowExecutionClient(we.config).QuerySignals(we)
 }
 
 // Update returns a builder for updating this WorkflowExecution.

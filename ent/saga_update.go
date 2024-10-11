@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -127,25 +126,6 @@ func (su *SagaUpdate) AddExecutions(s ...*SagaExecution) *SagaUpdate {
 	return su.AddExecutionIDs(ids...)
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (su *SagaUpdate) SetActivityID(id string) *SagaUpdate {
-	su.mutation.SetActivityID(id)
-	return su
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (su *SagaUpdate) SetNillableActivityID(id *string) *SagaUpdate {
-	if id != nil {
-		su = su.SetActivityID(*id)
-	}
-	return su
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (su *SagaUpdate) SetActivity(a *Activity) *SagaUpdate {
-	return su.SetActivityID(a.ID)
-}
-
 // Mutation returns the SagaMutation object of the builder.
 func (su *SagaUpdate) Mutation() *SagaMutation {
 	return su.mutation
@@ -170,12 +150,6 @@ func (su *SagaUpdate) RemoveExecutions(s ...*SagaExecution) *SagaUpdate {
 		ids[i] = s[i].ID
 	}
 	return su.RemoveExecutionIDs(ids...)
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (su *SagaUpdate) ClearActivity() *SagaUpdate {
-	su.mutation.ClearActivity()
-	return su
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -298,35 +272,6 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.ActivityCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   saga.ActivityTable,
-			Columns: []string{saga.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := su.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   saga.ActivityTable,
-			Columns: []string{saga.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{saga.Label}
@@ -442,25 +387,6 @@ func (suo *SagaUpdateOne) AddExecutions(s ...*SagaExecution) *SagaUpdateOne {
 	return suo.AddExecutionIDs(ids...)
 }
 
-// SetActivityID sets the "activity" edge to the Activity entity by ID.
-func (suo *SagaUpdateOne) SetActivityID(id string) *SagaUpdateOne {
-	suo.mutation.SetActivityID(id)
-	return suo
-}
-
-// SetNillableActivityID sets the "activity" edge to the Activity entity by ID if the given value is not nil.
-func (suo *SagaUpdateOne) SetNillableActivityID(id *string) *SagaUpdateOne {
-	if id != nil {
-		suo = suo.SetActivityID(*id)
-	}
-	return suo
-}
-
-// SetActivity sets the "activity" edge to the Activity entity.
-func (suo *SagaUpdateOne) SetActivity(a *Activity) *SagaUpdateOne {
-	return suo.SetActivityID(a.ID)
-}
-
 // Mutation returns the SagaMutation object of the builder.
 func (suo *SagaUpdateOne) Mutation() *SagaMutation {
 	return suo.mutation
@@ -485,12 +411,6 @@ func (suo *SagaUpdateOne) RemoveExecutions(s ...*SagaExecution) *SagaUpdateOne {
 		ids[i] = s[i].ID
 	}
 	return suo.RemoveExecutionIDs(ids...)
-}
-
-// ClearActivity clears the "activity" edge to the Activity entity.
-func (suo *SagaUpdateOne) ClearActivity() *SagaUpdateOne {
-	suo.mutation.ClearActivity()
-	return suo
 }
 
 // Where appends a list predicates to the SagaUpdate builder.
@@ -636,35 +556,6 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if suo.mutation.ActivityCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   saga.ActivityTable,
-			Columns: []string{saga.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := suo.mutation.ActivityIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   saga.ActivityTable,
-			Columns: []string{saga.ActivityColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(activity.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
