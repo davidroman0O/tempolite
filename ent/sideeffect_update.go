@@ -59,6 +59,20 @@ func (seu *SideEffectUpdate) SetNillableHandlerName(s *string) *SideEffectUpdate
 	return seu
 }
 
+// SetStatus sets the "status" field.
+func (seu *SideEffectUpdate) SetStatus(s sideeffect.Status) *SideEffectUpdate {
+	seu.mutation.SetStatus(s)
+	return seu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (seu *SideEffectUpdate) SetNillableStatus(s *sideeffect.Status) *SideEffectUpdate {
+	if s != nil {
+		seu.SetStatus(*s)
+	}
+	return seu
+}
+
 // SetInput sets the "input" field.
 func (seu *SideEffectUpdate) SetInput(i []interface{}) *SideEffectUpdate {
 	seu.mutation.SetInput(i)
@@ -205,6 +219,11 @@ func (seu *SideEffectUpdate) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := seu.mutation.Status(); ok {
+		if err := sideeffect.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -225,6 +244,9 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := seu.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := seu.mutation.Status(); ok {
+		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := seu.mutation.Input(); ok {
 		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)
@@ -338,6 +360,20 @@ func (seuo *SideEffectUpdateOne) SetHandlerName(s string) *SideEffectUpdateOne {
 func (seuo *SideEffectUpdateOne) SetNillableHandlerName(s *string) *SideEffectUpdateOne {
 	if s != nil {
 		seuo.SetHandlerName(*s)
+	}
+	return seuo
+}
+
+// SetStatus sets the "status" field.
+func (seuo *SideEffectUpdateOne) SetStatus(s sideeffect.Status) *SideEffectUpdateOne {
+	seuo.mutation.SetStatus(s)
+	return seuo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (seuo *SideEffectUpdateOne) SetNillableStatus(s *sideeffect.Status) *SideEffectUpdateOne {
+	if s != nil {
+		seuo.SetStatus(*s)
 	}
 	return seuo
 }
@@ -501,6 +537,11 @@ func (seuo *SideEffectUpdateOne) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := seuo.mutation.Status(); ok {
+		if err := sideeffect.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -538,6 +579,9 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 	}
 	if value, ok := seuo.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := seuo.mutation.Status(); ok {
+		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := seuo.mutation.Input(); ok {
 		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)

@@ -174,6 +174,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
@@ -192,6 +193,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "side_effect_executions", Type: field.TypeString},
@@ -204,7 +206,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_executions_side_effects_executions",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[8]},
 				RefColumns: []*schema.Column{SideEffectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

@@ -5217,6 +5217,7 @@ type SideEffectMutation struct {
 	id                *string
 	identity          *string
 	handler_name      *string
+	status            *sideeffect.Status
 	input             *[]interface{}
 	appendinput       []interface{}
 	retry_policy      *schema.RetryPolicy
@@ -5405,6 +5406,42 @@ func (m *SideEffectMutation) OldHandlerName(ctx context.Context) (v string, err 
 // ResetHandlerName resets all changes to the "handler_name" field.
 func (m *SideEffectMutation) ResetHandlerName() {
 	m.handler_name = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *SideEffectMutation) SetStatus(s sideeffect.Status) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SideEffectMutation) Status() (r sideeffect.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the SideEffect entity.
+// If the SideEffect object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectMutation) OldStatus(ctx context.Context) (v sideeffect.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SideEffectMutation) ResetStatus() {
+	m.status = nil
 }
 
 // SetInput sets the "input" field.
@@ -5680,12 +5717,15 @@ func (m *SideEffectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.identity != nil {
 		fields = append(fields, sideeffect.FieldIdentity)
 	}
 	if m.handler_name != nil {
 		fields = append(fields, sideeffect.FieldHandlerName)
+	}
+	if m.status != nil {
+		fields = append(fields, sideeffect.FieldStatus)
 	}
 	if m.input != nil {
 		fields = append(fields, sideeffect.FieldInput)
@@ -5711,6 +5751,8 @@ func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 		return m.Identity()
 	case sideeffect.FieldHandlerName:
 		return m.HandlerName()
+	case sideeffect.FieldStatus:
+		return m.Status()
 	case sideeffect.FieldInput:
 		return m.Input()
 	case sideeffect.FieldRetryPolicy:
@@ -5732,6 +5774,8 @@ func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldIdentity(ctx)
 	case sideeffect.FieldHandlerName:
 		return m.OldHandlerName(ctx)
+	case sideeffect.FieldStatus:
+		return m.OldStatus(ctx)
 	case sideeffect.FieldInput:
 		return m.OldInput(ctx)
 	case sideeffect.FieldRetryPolicy:
@@ -5762,6 +5806,13 @@ func (m *SideEffectMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetHandlerName(v)
+		return nil
+	case sideeffect.FieldStatus:
+		v, ok := value.(sideeffect.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
 		return nil
 	case sideeffect.FieldInput:
 		v, ok := value.([]interface{})
@@ -5860,6 +5911,9 @@ func (m *SideEffectMutation) ResetField(name string) error {
 		return nil
 	case sideeffect.FieldHandlerName:
 		m.ResetHandlerName()
+		return nil
+	case sideeffect.FieldStatus:
+		m.ResetStatus()
 		return nil
 	case sideeffect.FieldInput:
 		m.ResetInput()
@@ -5973,6 +6027,7 @@ type SideEffectExecutionMutation struct {
 	addattempt         *int
 	output             *[]interface{}
 	appendoutput       []interface{}
+	error              *string
 	started_at         *time.Time
 	updated_at         *time.Time
 	clearedFields      map[string]struct{}
@@ -6280,6 +6335,55 @@ func (m *SideEffectExecutionMutation) ResetOutput() {
 	delete(m.clearedFields, sideeffectexecution.FieldOutput)
 }
 
+// SetError sets the "error" field.
+func (m *SideEffectExecutionMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *SideEffectExecutionMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the SideEffectExecution entity.
+// If the SideEffectExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectExecutionMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *SideEffectExecutionMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[sideeffectexecution.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *SideEffectExecutionMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[sideeffectexecution.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *SideEffectExecutionMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, sideeffectexecution.FieldError)
+}
+
 // SetStartedAt sets the "started_at" field.
 func (m *SideEffectExecutionMutation) SetStartedAt(t time.Time) {
 	m.started_at = &t
@@ -6425,7 +6529,7 @@ func (m *SideEffectExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.run_id != nil {
 		fields = append(fields, sideeffectexecution.FieldRunID)
 	}
@@ -6437,6 +6541,9 @@ func (m *SideEffectExecutionMutation) Fields() []string {
 	}
 	if m.output != nil {
 		fields = append(fields, sideeffectexecution.FieldOutput)
+	}
+	if m.error != nil {
+		fields = append(fields, sideeffectexecution.FieldError)
 	}
 	if m.started_at != nil {
 		fields = append(fields, sideeffectexecution.FieldStartedAt)
@@ -6460,6 +6567,8 @@ func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Attempt()
 	case sideeffectexecution.FieldOutput:
 		return m.Output()
+	case sideeffectexecution.FieldError:
+		return m.Error()
 	case sideeffectexecution.FieldStartedAt:
 		return m.StartedAt()
 	case sideeffectexecution.FieldUpdatedAt:
@@ -6481,6 +6590,8 @@ func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string)
 		return m.OldAttempt(ctx)
 	case sideeffectexecution.FieldOutput:
 		return m.OldOutput(ctx)
+	case sideeffectexecution.FieldError:
+		return m.OldError(ctx)
 	case sideeffectexecution.FieldStartedAt:
 		return m.OldStartedAt(ctx)
 	case sideeffectexecution.FieldUpdatedAt:
@@ -6521,6 +6632,13 @@ func (m *SideEffectExecutionMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOutput(v)
+		return nil
+	case sideeffectexecution.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
 		return nil
 	case sideeffectexecution.FieldStartedAt:
 		v, ok := value.(time.Time)
@@ -6584,6 +6702,9 @@ func (m *SideEffectExecutionMutation) ClearedFields() []string {
 	if m.FieldCleared(sideeffectexecution.FieldOutput) {
 		fields = append(fields, sideeffectexecution.FieldOutput)
 	}
+	if m.FieldCleared(sideeffectexecution.FieldError) {
+		fields = append(fields, sideeffectexecution.FieldError)
+	}
 	return fields
 }
 
@@ -6600,6 +6721,9 @@ func (m *SideEffectExecutionMutation) ClearField(name string) error {
 	switch name {
 	case sideeffectexecution.FieldOutput:
 		m.ClearOutput()
+		return nil
+	case sideeffectexecution.FieldError:
+		m.ClearError()
 		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecution nullable field %s", name)
@@ -6620,6 +6744,9 @@ func (m *SideEffectExecutionMutation) ResetField(name string) error {
 		return nil
 	case sideeffectexecution.FieldOutput:
 		m.ResetOutput()
+		return nil
+	case sideeffectexecution.FieldError:
+		m.ResetError()
 		return nil
 	case sideeffectexecution.FieldStartedAt:
 		m.ResetStartedAt()

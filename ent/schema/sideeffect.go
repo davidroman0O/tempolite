@@ -22,6 +22,9 @@ func (SideEffect) Fields() []ent.Field {
 			NotEmpty(),
 		field.String("handler_name").
 			NotEmpty(),
+		field.Enum("status").
+			Values("Pending", "Running", "Completed", "Failed").
+			Default("Pending"),
 		field.JSON("input", []interface{}{}),
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),

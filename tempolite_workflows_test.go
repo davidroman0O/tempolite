@@ -105,13 +105,13 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 
 	fmt.Println("info: ", info)
 
-	data, err := info.Get()
+	var number int
+	err = info.Get(&number)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	fmt.Println("data: ", data)
-
+	fmt.Println("data: ", number)
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailChild$ .
@@ -154,7 +154,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 			return -1, err
 		}
 
-		_, err = info.Get()
+		err = info.Get()
 		if err != nil {
 			fmt.Println("info.Get failed: ", err)
 			return -1, err
@@ -191,12 +191,13 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 
 	fmt.Println("info: ", info)
 
-	data, err := info.Get()
+	var number int
+	err = info.Get(&number)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	fmt.Println("data: ", data)
+	fmt.Println("data: ", number)
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailParent$ .
@@ -232,7 +233,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 			return -1, err
 		}
 
-		_, err = info.Get()
+		err = info.Get()
 		if err != nil {
 			fmt.Println("info.Get failed: ", err)
 			return -1, err
@@ -275,10 +276,11 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	fmt.Println("info: ", info)
 
-	data, err := info.Get()
+	var number int
+	err = info.Get(&number)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	fmt.Println("data: ", data)
+	fmt.Println("data: ", number)
 }

@@ -38,11 +38,13 @@ type Tempolite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	workflowPool *retrypool.Pool[*workflowTask]
-	activityPool *retrypool.Pool[*activityTask]
+	workflowPool   *retrypool.Pool[*workflowTask]
+	activityPool   *retrypool.Pool[*activityTask]
+	sideEffectPool *retrypool.Pool[*sideEffectTask]
 
-	schedulerExecutionWorkflowDone chan struct{}
-	schedulerExecutionActivityDone chan struct{}
+	schedulerExecutionWorkflowDone  chan struct{}
+	schedulerExecutionActivityDone  chan struct{}
+	schedulerSideEffectActivityDone chan struct{}
 }
 
 type tempoliteConfig struct {
@@ -242,7 +244,7 @@ func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error
 func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
 
 	switch ctx.EntityType() {
-	case "workflow", "activity":
+	case "workflow":
 		// nothing
 	default:
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
@@ -320,13 +322,13 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 				}
 				return "", err
 			}
-		case "activity":
-			if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-				if err = tx.Rollback(); err != nil {
-					return "", err
-				}
-				return "", err
-			}
+			// case "activity":
+			// 	if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
+			// 		if err = tx.Rollback(); err != nil {
+			// 			return "", err
+			// 		}
+			// 		return "", err
+			// 	}
 		}
 
 		log.Printf("EnqueueSubActivity - created workflow execution %s for %s with params: %v", activityExecution.ID, longName, params)
@@ -465,8 +467,9 @@ func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interfa
 }
 
 func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (WorkflowExecutionID, error) {
+	// only a workflow can have a sub-workflow for determinstic reasons
 	switch ctx.EntityType() {
-	case "workflow", "activity":
+	case "workflow":
 		// nothing
 	default:
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
@@ -550,13 +553,13 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 				}
 				return "", err
 			}
-		case "activity":
-			if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeWorkflow).SetChildID(workflowExecution.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-				if err = tx.Rollback(); err != nil {
-					return "", err
-				}
-				return "", err
-			}
+			// case "activity":
+			// 	if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeWorkflow).SetChildID(workflowExecution.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
+			// 		if err = tx.Rollback(); err != nil {
+			// 			return "", err
+			// 		}
+			// 		return "", err
+			// 	}
 		}
 
 		log.Printf("EnqueueWorkflow - created workflow execution %s for %s with params: %v", workflowExecution.ID, handlerIdentity, params)
@@ -725,6 +728,23 @@ func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
 	return tp.getSideEffect(id)
 }
 
+func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+// Side Effects can't fail
+func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, longName HandlerIdentity) (SideEffectExecutionID, error) {
+	return "", nil
+}
+
+func (tp *Tempolite) enqueueSideEffectFunc(ctx TempoliteContext, workflowFunc interface{}, input ...interface{}) (*SideEffectInfo, error) {
+	// todo: implement
+	return nil, nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
 	return tp.getSaga(id)
 }
@@ -752,17 +772,7 @@ func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, input interface{}) (*Saga
 	return nil, nil
 }
 
-func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, input ...interface{}) (*SideEffectInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
 func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
 	// todo: implement
 	return nil, nil
 }

@@ -215,6 +215,26 @@ func HandlerNameContainsFold(v string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldContainsFold(FieldHandlerName, v))
 }
 
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNotIn(FieldStatus, vs...))
+}
+
 // RetryPolicyIsNil applies the IsNil predicate on the "retry_policy" field.
 func RetryPolicyIsNil() predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldIsNull(FieldRetryPolicy))

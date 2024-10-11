@@ -23,6 +23,8 @@ type SideEffect struct {
 	Identity string `json:"identity,omitempty"`
 	// HandlerName holds the value of the "handler_name" field.
 	HandlerName string `json:"handler_name,omitempty"`
+	// Status holds the value of the "status" field.
+	Status sideeffect.Status `json:"status,omitempty"`
 	// Input holds the value of the "input" field.
 	Input []interface{} `json:"input,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
@@ -62,7 +64,7 @@ func (*SideEffect) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sideeffect.FieldInput, sideeffect.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case sideeffect.FieldID, sideeffect.FieldIdentity, sideeffect.FieldHandlerName:
+		case sideeffect.FieldID, sideeffect.FieldIdentity, sideeffect.FieldHandlerName, sideeffect.FieldStatus:
 			values[i] = new(sql.NullString)
 		case sideeffect.FieldTimeout, sideeffect.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -98,6 +100,12 @@ func (se *SideEffect) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field handler_name", values[i])
 			} else if value.Valid {
 				se.HandlerName = value.String
+			}
+		case sideeffect.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				se.Status = sideeffect.Status(value.String)
 			}
 		case sideeffect.FieldInput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -173,6 +181,9 @@ func (se *SideEffect) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("handler_name=")
 	builder.WriteString(se.HandlerName)
+	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", se.Status))
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", se.Input))

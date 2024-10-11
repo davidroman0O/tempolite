@@ -27,6 +27,8 @@ func (SideEffectExecution) Fields() []ent.Field {
 			Default(1),
 		field.JSON("output", []interface{}{}).
 			Optional(),
+		field.String("error").
+			Optional(),
 		field.Time("started_at").
 			Default(time.Now),
 		field.Time("updated_at").

@@ -97,6 +97,26 @@ func (seeu *SideEffectExecutionUpdate) ClearOutput() *SideEffectExecutionUpdate 
 	return seeu
 }
 
+// SetError sets the "error" field.
+func (seeu *SideEffectExecutionUpdate) SetError(s string) *SideEffectExecutionUpdate {
+	seeu.mutation.SetError(s)
+	return seeu
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (seeu *SideEffectExecutionUpdate) SetNillableError(s *string) *SideEffectExecutionUpdate {
+	if s != nil {
+		seeu.SetError(*s)
+	}
+	return seeu
+}
+
+// ClearError clears the value of the "error" field.
+func (seeu *SideEffectExecutionUpdate) ClearError() *SideEffectExecutionUpdate {
+	seeu.mutation.ClearError()
+	return seeu
+}
+
 // SetStartedAt sets the "started_at" field.
 func (seeu *SideEffectExecutionUpdate) SetStartedAt(t time.Time) *SideEffectExecutionUpdate {
 	seeu.mutation.SetStartedAt(t)
@@ -223,6 +243,12 @@ func (seeu *SideEffectExecutionUpdate) sqlSave(ctx context.Context) (n int, err 
 	if seeu.mutation.OutputCleared() {
 		_spec.ClearField(sideeffectexecution.FieldOutput, field.TypeJSON)
 	}
+	if value, ok := seeu.mutation.Error(); ok {
+		_spec.SetField(sideeffectexecution.FieldError, field.TypeString, value)
+	}
+	if seeu.mutation.ErrorCleared() {
+		_spec.ClearField(sideeffectexecution.FieldError, field.TypeString)
+	}
 	if value, ok := seeu.mutation.StartedAt(); ok {
 		_spec.SetField(sideeffectexecution.FieldStartedAt, field.TypeTime, value)
 	}
@@ -342,6 +368,26 @@ func (seeuo *SideEffectExecutionUpdateOne) AppendOutput(i []interface{}) *SideEf
 // ClearOutput clears the value of the "output" field.
 func (seeuo *SideEffectExecutionUpdateOne) ClearOutput() *SideEffectExecutionUpdateOne {
 	seeuo.mutation.ClearOutput()
+	return seeuo
+}
+
+// SetError sets the "error" field.
+func (seeuo *SideEffectExecutionUpdateOne) SetError(s string) *SideEffectExecutionUpdateOne {
+	seeuo.mutation.SetError(s)
+	return seeuo
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (seeuo *SideEffectExecutionUpdateOne) SetNillableError(s *string) *SideEffectExecutionUpdateOne {
+	if s != nil {
+		seeuo.SetError(*s)
+	}
+	return seeuo
+}
+
+// ClearError clears the value of the "error" field.
+func (seeuo *SideEffectExecutionUpdateOne) ClearError() *SideEffectExecutionUpdateOne {
+	seeuo.mutation.ClearError()
 	return seeuo
 }
 
@@ -500,6 +546,12 @@ func (seeuo *SideEffectExecutionUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if seeuo.mutation.OutputCleared() {
 		_spec.ClearField(sideeffectexecution.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := seeuo.mutation.Error(); ok {
+		_spec.SetField(sideeffectexecution.FieldError, field.TypeString, value)
+	}
+	if seeuo.mutation.ErrorCleared() {
+		_spec.ClearField(sideeffectexecution.FieldError, field.TypeString)
 	}
 	if value, ok := seeuo.mutation.StartedAt(); ok {
 		_spec.SetField(sideeffectexecution.FieldStartedAt, field.TypeTime, value)

@@ -75,6 +75,11 @@ func Attempt(v int) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldEQ(FieldAttempt, v))
 }
 
+// Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
+func Error(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEQ(FieldError, v))
+}
+
 // StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
 func StartedAt(v time.Time) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldEQ(FieldStartedAt, v))
@@ -218,6 +223,81 @@ func OutputIsNil() predicate.SideEffectExecution {
 // OutputNotNil applies the NotNil predicate on the "output" field.
 func OutputNotNil() predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldNotNull(FieldOutput))
+}
+
+// ErrorEQ applies the EQ predicate on the "error" field.
+func ErrorEQ(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEQ(FieldError, v))
+}
+
+// ErrorNEQ applies the NEQ predicate on the "error" field.
+func ErrorNEQ(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldNEQ(FieldError, v))
+}
+
+// ErrorIn applies the In predicate on the "error" field.
+func ErrorIn(vs ...string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldIn(FieldError, vs...))
+}
+
+// ErrorNotIn applies the NotIn predicate on the "error" field.
+func ErrorNotIn(vs ...string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldNotIn(FieldError, vs...))
+}
+
+// ErrorGT applies the GT predicate on the "error" field.
+func ErrorGT(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldGT(FieldError, v))
+}
+
+// ErrorGTE applies the GTE predicate on the "error" field.
+func ErrorGTE(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldGTE(FieldError, v))
+}
+
+// ErrorLT applies the LT predicate on the "error" field.
+func ErrorLT(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldLT(FieldError, v))
+}
+
+// ErrorLTE applies the LTE predicate on the "error" field.
+func ErrorLTE(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldLTE(FieldError, v))
+}
+
+// ErrorContains applies the Contains predicate on the "error" field.
+func ErrorContains(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldContains(FieldError, v))
+}
+
+// ErrorHasPrefix applies the HasPrefix predicate on the "error" field.
+func ErrorHasPrefix(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldHasPrefix(FieldError, v))
+}
+
+// ErrorHasSuffix applies the HasSuffix predicate on the "error" field.
+func ErrorHasSuffix(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldHasSuffix(FieldError, v))
+}
+
+// ErrorIsNil applies the IsNil predicate on the "error" field.
+func ErrorIsNil() predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldIsNull(FieldError))
+}
+
+// ErrorNotNil applies the NotNil predicate on the "error" field.
+func ErrorNotNil() predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldNotNull(FieldError))
+}
+
+// ErrorEqualFold applies the EqualFold predicate on the "error" field.
+func ErrorEqualFold(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEqualFold(FieldError, v))
+}
+
+// ErrorContainsFold applies the ContainsFold predicate on the "error" field.
+func ErrorContainsFold(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldContainsFold(FieldError, v))
 }
 
 // StartedAtEQ applies the EQ predicate on the "started_at" field.

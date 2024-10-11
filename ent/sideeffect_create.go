@@ -34,6 +34,20 @@ func (sec *SideEffectCreate) SetHandlerName(s string) *SideEffectCreate {
 	return sec
 }
 
+// SetStatus sets the "status" field.
+func (sec *SideEffectCreate) SetStatus(s sideeffect.Status) *SideEffectCreate {
+	sec.mutation.SetStatus(s)
+	return sec
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (sec *SideEffectCreate) SetNillableStatus(s *sideeffect.Status) *SideEffectCreate {
+	if s != nil {
+		sec.SetStatus(*s)
+	}
+	return sec
+}
+
 // SetInput sets the "input" field.
 func (sec *SideEffectCreate) SetInput(i []interface{}) *SideEffectCreate {
 	sec.mutation.SetInput(i)
@@ -138,6 +152,10 @@ func (sec *SideEffectCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (sec *SideEffectCreate) defaults() {
+	if _, ok := sec.mutation.Status(); !ok {
+		v := sideeffect.DefaultStatus
+		sec.mutation.SetStatus(v)
+	}
 	if _, ok := sec.mutation.CreatedAt(); !ok {
 		v := sideeffect.DefaultCreatedAt()
 		sec.mutation.SetCreatedAt(v)
@@ -160,6 +178,14 @@ func (sec *SideEffectCreate) check() error {
 	if v, ok := sec.mutation.HandlerName(); ok {
 		if err := sideeffect.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
+		}
+	}
+	if _, ok := sec.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SideEffect.status"`)}
+	}
+	if v, ok := sec.mutation.Status(); ok {
+		if err := sideeffect.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
 		}
 	}
 	if _, ok := sec.mutation.Input(); !ok {
@@ -210,6 +236,10 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 	if value, ok := sec.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)
 		_node.HandlerName = value
+	}
+	if value, ok := sec.mutation.Status(); ok {
+		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
 	}
 	if value, ok := sec.mutation.Input(); ok {
 		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)

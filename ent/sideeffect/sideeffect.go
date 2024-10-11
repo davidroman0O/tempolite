@@ -3,6 +3,7 @@
 package sideeffect
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -18,6 +19,8 @@ const (
 	FieldIdentity = "identity"
 	// FieldHandlerName holds the string denoting the handler_name field in the database.
 	FieldHandlerName = "handler_name"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
@@ -44,6 +47,7 @@ var Columns = []string{
 	FieldID,
 	FieldIdentity,
 	FieldHandlerName,
+	FieldStatus,
 	FieldInput,
 	FieldRetryPolicy,
 	FieldTimeout,
@@ -69,6 +73,34 @@ var (
 	DefaultCreatedAt func() time.Time
 )
 
+// Status defines the type for the "status" enum field.
+type Status string
+
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
+
+// Status values.
+const (
+	StatusPending   Status = "Pending"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+)
+
+func (s Status) String() string {
+	return string(s)
+}
+
+// StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
+func StatusValidator(s Status) error {
+	switch s {
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("sideeffect: invalid enum value for status field: %q", s)
+	}
+}
+
 // OrderOption defines the ordering options for the SideEffect queries.
 type OrderOption func(*sql.Selector)
 
@@ -85,6 +117,11 @@ func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
 // ByHandlerName orders the results by the handler_name field.
 func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
+}
+
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

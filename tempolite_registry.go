@@ -7,6 +7,22 @@ import (
 	"runtime"
 )
 
+type WorkflowGroup struct {
+	tp      *Tempolite
+	version string
+}
+
+func (tp *Tempolite) NewWorkflowGroup(version string) *WorkflowGroup {
+	return &WorkflowGroup{
+		tp:      tp,
+		version: version,
+	}
+}
+
+func (wg *WorkflowGroup) RegisterWorkflow(workflowFunc interface{}) error {
+	return wg.tp.RegisterWorkflow(workflowFunc, wg.version)
+}
+
 type Workflow HandlerInfo
 
 func As[T any]() HandlerIdentity {
@@ -319,14 +335,14 @@ func AsSagaActivity[T any](builder SagaActivityBuilder[T]) *SagaActivity {
 	}
 }
 
-func (tp *Tempolite) RegisterSagaActivity(sagaActivity *SagaActivity) error {
+func (tp *Tempolite) RegisterSagaActivity(sagaActivity *SagaActivity, version ...string) error {
 	// Store the builder function in the sagaBuilders map, using the dataType as the key
 	tp.sagaBuilders.Store(sagaActivity.dataType, sagaActivity.builder)
 	log.Printf("Registered saga activity for type %v", sagaActivity.dataType)
 	return nil
 }
 
-func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
+func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}, version ...string) error {
 	handlerType := reflect.TypeOf(workflowFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -371,6 +387,12 @@ func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 
+	pkgPath := handlerType.PkgPath()
+	var versionStr string
+	if len(version) > 0 {
+		versionStr = version[0]
+	}
+
 	workflow := &Workflow{
 		HandlerName:     funcName,
 		HandlerLongName: handlerIdentity,
@@ -381,6 +403,8 @@ func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 		ReturnKinds:     returnKinds,
 		NumIn:           handlerType.NumIn() - 1, // Exclude context
 		NumOut:          numOut - 1,              // Exclude error
+		PkgPath:         pkgPath,
+		Version:         versionStr,
 	}
 
 	log.Printf("Registering workflow %s with name %s", funcName, handlerIdentity)

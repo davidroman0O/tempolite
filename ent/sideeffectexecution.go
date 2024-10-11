@@ -27,6 +27,8 @@ type SideEffectExecution struct {
 	Attempt int `json:"attempt,omitempty"`
 	// Output holds the value of the "output" field.
 	Output []interface{} `json:"output,omitempty"`
+	// Error holds the value of the "error" field.
+	Error string `json:"error,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt time.Time `json:"started_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -67,7 +69,7 @@ func (*SideEffectExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case sideeffectexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case sideeffectexecution.FieldID, sideeffectexecution.FieldRunID, sideeffectexecution.FieldStatus:
+		case sideeffectexecution.FieldID, sideeffectexecution.FieldRunID, sideeffectexecution.FieldStatus, sideeffectexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case sideeffectexecution.FieldStartedAt, sideeffectexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -119,6 +121,12 @@ func (see *SideEffectExecution) assignValues(columns []string, values []any) err
 				if err := json.Unmarshal(*value, &see.Output); err != nil {
 					return fmt.Errorf("unmarshal field output: %w", err)
 				}
+			}
+		case sideeffectexecution.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				see.Error = value.String
 			}
 		case sideeffectexecution.FieldStartedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -191,6 +199,9 @@ func (see *SideEffectExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", see.Output))
+	builder.WriteString(", ")
+	builder.WriteString("error=")
+	builder.WriteString(see.Error)
 	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(see.StartedAt.Format(time.ANSIC))

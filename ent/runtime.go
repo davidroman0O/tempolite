@@ -120,7 +120,7 @@ func init() {
 	// sideeffect.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sideeffect.HandlerNameValidator = sideeffectDescHandlerName.Validators[0].(func(string) error)
 	// sideeffectDescCreatedAt is the schema descriptor for created_at field.
-	sideeffectDescCreatedAt := sideeffectFields[6].Descriptor()
+	sideeffectDescCreatedAt := sideeffectFields[7].Descriptor()
 	// sideeffect.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sideeffect.DefaultCreatedAt = sideeffectDescCreatedAt.Default.(func() time.Time)
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()
@@ -130,11 +130,11 @@ func init() {
 	// sideeffectexecution.DefaultAttempt holds the default value on creation for the attempt field.
 	sideeffectexecution.DefaultAttempt = sideeffectexecutionDescAttempt.Default.(int)
 	// sideeffectexecutionDescStartedAt is the schema descriptor for started_at field.
-	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[5].Descriptor()
+	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[6].Descriptor()
 	// sideeffectexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	sideeffectexecution.DefaultStartedAt = sideeffectexecutionDescStartedAt.Default.(func() time.Time)
 	// sideeffectexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[6].Descriptor()
+	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[7].Descriptor()
 	// sideeffectexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	sideeffectexecution.DefaultUpdatedAt = sideeffectexecutionDescUpdatedAt.Default.(func() time.Time)
 	// sideeffectexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

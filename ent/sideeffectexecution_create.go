@@ -61,6 +61,20 @@ func (seec *SideEffectExecutionCreate) SetOutput(i []interface{}) *SideEffectExe
 	return seec
 }
 
+// SetError sets the "error" field.
+func (seec *SideEffectExecutionCreate) SetError(s string) *SideEffectExecutionCreate {
+	seec.mutation.SetError(s)
+	return seec
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (seec *SideEffectExecutionCreate) SetNillableError(s *string) *SideEffectExecutionCreate {
+	if s != nil {
+		seec.SetError(*s)
+	}
+	return seec
+}
+
 // SetStartedAt sets the "started_at" field.
 func (seec *SideEffectExecutionCreate) SetStartedAt(t time.Time) *SideEffectExecutionCreate {
 	seec.mutation.SetStartedAt(t)
@@ -234,6 +248,10 @@ func (seec *SideEffectExecutionCreate) createSpec() (*SideEffectExecution, *sqlg
 	if value, ok := seec.mutation.Output(); ok {
 		_spec.SetField(sideeffectexecution.FieldOutput, field.TypeJSON, value)
 		_node.Output = value
+	}
+	if value, ok := seec.mutation.Error(); ok {
+		_spec.SetField(sideeffectexecution.FieldError, field.TypeString, value)
+		_node.Error = value
 	}
 	if value, ok := seec.mutation.StartedAt(); ok {
 		_spec.SetField(sideeffectexecution.FieldStartedAt, field.TypeTime, value)
