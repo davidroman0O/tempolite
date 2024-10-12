@@ -15,8 +15,10 @@ const (
 	ChangeIDCalculateTax = "CalculateTotalWithTax"
 )
 
+type identifier string
+
 // OrderWorkflow is the main workflow function
-func OrderWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) error {
 	total, err := calculateTotal(ctx, orderID)
 	if err != nil {
 		return err
@@ -27,7 +29,7 @@ func OrderWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
 	return nil
 }
 
-func calculateTotal(ctx tempolite.WorkflowContext, orderID string) (float64, error) {
+func calculateTotal(ctx tempolite.WorkflowContext[identifier], orderID string) (float64, error) {
 	// Use GetVersion to manage changes in the workflow logic
 	version := ctx.GetVersion(ChangeIDCalculateTax, tempolite.DefaultVersion, getMaxSupportedVersion())
 	var total float64
@@ -67,7 +69,7 @@ func getMaxSupportedVersion() int {
 func main() {
 	// Create a new Tempolite instance with a destructive option to reset the database
 	ctx := context.Background()
-	tp, err := tempolite.New(ctx, tempolite.WithDestructive())
+	tp, err := tempolite.New[identifier](ctx, tempolite.WithDestructive())
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}

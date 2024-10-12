@@ -70,6 +70,11 @@ func Identity(v string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldEQ(FieldIdentity, v))
 }
 
+// StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
+func StepID(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEQ(FieldStepID, v))
+}
+
 // HandlerName applies equality check predicate on the "handler_name" field. It's identical to HandlerNameEQ.
 func HandlerName(v string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldEQ(FieldHandlerName, v))
@@ -148,6 +153,71 @@ func IdentityEqualFold(v string) predicate.SideEffect {
 // IdentityContainsFold applies the ContainsFold predicate on the "identity" field.
 func IdentityContainsFold(v string) predicate.SideEffect {
 	return predicate.SideEffect(sql.FieldContainsFold(FieldIdentity, v))
+}
+
+// StepIDEQ applies the EQ predicate on the "step_id" field.
+func StepIDEQ(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEQ(FieldStepID, v))
+}
+
+// StepIDNEQ applies the NEQ predicate on the "step_id" field.
+func StepIDNEQ(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNEQ(FieldStepID, v))
+}
+
+// StepIDIn applies the In predicate on the "step_id" field.
+func StepIDIn(vs ...string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldIn(FieldStepID, vs...))
+}
+
+// StepIDNotIn applies the NotIn predicate on the "step_id" field.
+func StepIDNotIn(vs ...string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldNotIn(FieldStepID, vs...))
+}
+
+// StepIDGT applies the GT predicate on the "step_id" field.
+func StepIDGT(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldGT(FieldStepID, v))
+}
+
+// StepIDGTE applies the GTE predicate on the "step_id" field.
+func StepIDGTE(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldGTE(FieldStepID, v))
+}
+
+// StepIDLT applies the LT predicate on the "step_id" field.
+func StepIDLT(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldLT(FieldStepID, v))
+}
+
+// StepIDLTE applies the LTE predicate on the "step_id" field.
+func StepIDLTE(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldLTE(FieldStepID, v))
+}
+
+// StepIDContains applies the Contains predicate on the "step_id" field.
+func StepIDContains(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldContains(FieldStepID, v))
+}
+
+// StepIDHasPrefix applies the HasPrefix predicate on the "step_id" field.
+func StepIDHasPrefix(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldHasPrefix(FieldStepID, v))
+}
+
+// StepIDHasSuffix applies the HasSuffix predicate on the "step_id" field.
+func StepIDHasSuffix(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldHasSuffix(FieldStepID, v))
+}
+
+// StepIDEqualFold applies the EqualFold predicate on the "step_id" field.
+func StepIDEqualFold(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldEqualFold(FieldStepID, v))
+}
+
+// StepIDContainsFold applies the ContainsFold predicate on the "step_id" field.
+func StepIDContainsFold(v string) predicate.SideEffect {
+	return predicate.SideEffect(sql.FieldContainsFold(FieldStepID, v))
 }
 
 // HandlerNameEQ applies the EQ predicate on the "handler_name" field.

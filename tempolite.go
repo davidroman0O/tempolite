@@ -15,7 +15,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
@@ -27,7 +27,14 @@ import (
 	dbSQL "database/sql"
 )
 
-type Tempolite struct {
+// Trade-off of Tempolite vs Temporal
+// Supporting the same similar concepts but now the exact similar features while having less time and resources implies that knowing how Workflows/Activities/Sideffect are behaving in a deterministic and non-deterministic environment, it is crucial
+// to assign some kind of identifying value to each of the calls so the whole system can works with minimum overhead and just be reliable and predictable. For now it should works for sqlite, but one day... i want the same with no db.
+type Identifier interface {
+	~string | ~int
+}
+
+type Tempolite[T Identifier] struct {
 	db     *dbSQL.DB
 	client *ent.Client
 
@@ -40,9 +47,9 @@ type Tempolite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	workflowPool   *retrypool.Pool[*workflowTask]
-	activityPool   *retrypool.Pool[*activityTask]
-	sideEffectPool *retrypool.Pool[*sideEffectTask]
+	workflowPool   *retrypool.Pool[*workflowTask[T]]
+	activityPool   *retrypool.Pool[*activityTask[T]]
+	sideEffectPool *retrypool.Pool[*sideEffectTask[T]]
 
 	schedulerExecutionWorkflowDone  chan struct{}
 	schedulerExecutionActivityDone  chan struct{}
@@ -76,7 +83,7 @@ func WithDestructive() tempoliteOption {
 	}
 }
 
-func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
+func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite[T], error) {
 	cfg := tempoliteConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -132,7 +139,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 		}
 	}
 
-	tp := &Tempolite{
+	tp := &Tempolite[T]{
 		ctx:                            ctx,
 		db:                             db,
 		client:                         client,
@@ -150,7 +157,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 	return tp, nil
 }
 
-func (tp *Tempolite) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
+func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
 	key := fmt.Sprintf("%s-%s", workflowType, changeID)
 
 	// Check cache first
@@ -219,12 +226,12 @@ func (tp *Tempolite) getOrCreateVersion(workflowType, workflowID, changeID strin
 	return v.Version, nil
 }
 
-func (tp *Tempolite) Close() {
+func (tp *Tempolite[T]) Close() {
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
 }
 
-func (tp *Tempolite) Wait() error {
+func (tp *Tempolite[T]) Wait() error {
 	<-time.After(1 * time.Second)
 
 	activityDone := make(chan error)
@@ -237,7 +244,7 @@ func (tp *Tempolite) Wait() error {
 		defer log.Println("activityDone")
 		activityDone <- tp.activityPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
-			tp.activityPool.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
+			tp.activityPool.RangeTasks(func(data *activityTask[T], workerID int, status retrypool.TaskStatus) bool {
 				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
 				return true
 			})
@@ -250,7 +257,7 @@ func (tp *Tempolite) Wait() error {
 		defer log.Println("workflowDone")
 		workflowDone <- tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
-			tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+			tp.workflowPool.RangeTasks(func(data *workflowTask[T], workerID int, status retrypool.TaskStatus) bool {
 				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
 				return true
 			})
@@ -267,7 +274,7 @@ func (tp *Tempolite) Wait() error {
 	return nil
 }
 
-func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
+func (tp *Tempolite[T]) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
 	for idx, rawInputs := range executionInputs {
@@ -284,7 +291,7 @@ func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []in
 	return outputs, nil
 }
 
-func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+func (tp *Tempolite[T]) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
 	for idx, rawOutput := range executionOutput {
@@ -315,8 +322,7 @@ func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error
 	return nil
 }
 
-func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
-
+func (tp *Tempolite[T]) enqueueSubActivityExecution(ctx WorkflowContext[T], stepID T, longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
 		// nothing
@@ -324,9 +330,37 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
 	}
 
+	var err error
+
+	// Check for existing activity with the same stepID within the current workflow
+	exists, err := tp.client.ExecutionRelationship.Query().
+		Where(
+			executionrelationship.And(
+				executionrelationship.RunID(ctx.RunID()),
+				executionrelationship.ParentEntityID(ctx.EntityID()),
+				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ParentStepID(ctx.StepID()),
+			),
+			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeActivity),
+		).
+		First(tp.ctx)
+	if err == nil {
+		// todo: is there a way to just get the status?
+		act, err := tp.client.Activity.Get(tp.ctx, exists.ChildEntityID)
+		if err != nil {
+			return "", err
+		}
+		if act.Status == activity.StatusCompleted {
+			return ActivityID(exists.ChildEntityID), nil
+		}
+	} else if !ent.IsNotFound(err) {
+		return "", fmt.Errorf("error checking for existing stepID: %w", err)
+	}
+
+	fmt.Println("exists", exists)
+
 	var value any
 	var ok bool
-	// var err error
 	var tx *ent.Tx
 
 	if value, ok = tp.activities.Load(longName); ok {
@@ -340,23 +374,6 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 			return "", err
 		}
 
-		// Generate a deterministic activity ID using runID
-		activityID := ctx.NextActivityID()
-
-		// Check if activity execution already exists and is completed
-		existingExec, err := tp.client.ActivityExecution.Query().
-			Where(
-				activityexecution.IDEQ(activityID),
-				activityexecution.StatusEQ(activityexecution.StatusCompleted),
-			).Only(tp.ctx)
-		if err == nil {
-			// Activity execution already exists and is completed
-			return ActivityExecutionID(existingExec.ID), nil
-		} else if !ent.IsNotFound(err) {
-			// Some error occurred
-			return "", err
-		}
-
 		// Proceed to create a new activity and activity execution
 		if tx, err = tp.client.Tx(tp.ctx); err != nil {
 			return "", err
@@ -366,7 +383,8 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 		if activityEntity, err = tx.
 			Activity.
 			Create().
-			SetID(activityID).
+			SetID(uuid.NewString()).
+			SetStepID(fmt.Sprint(stepID)).
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(params).
@@ -386,7 +404,7 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 		var activityExecution *ent.ActivityExecution
 		if activityExecution, err = tx.ActivityExecution.
 			Create().
-			SetID(activityID). // Use the deterministic activity ID
+			SetID(activityEntity.ID). // Use the deterministic activity ID
 			SetRunID(ctx.RunID()).
 			SetActivity(activityEntity).
 			Save(tp.ctx); err != nil {
@@ -397,12 +415,28 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 		}
 
 		// Add execution relationship
-		if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeWorkflow).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
+		if _, err := tx.ExecutionRelationship.Create().
+			SetRunID(ctx.RunID()).
+			// entity
+			SetParentEntityID(ctx.EntityID()).
+			SetChildEntityID(activityEntity.ID).
+			// execution
+			SetParentID(ctx.ExecutionID()).
+			SetChildID(activityEntity.ID).
+			// steps
+			SetParentStepID(ctx.StepID()).
+			SetChildStepID(fmt.Sprint(stepID)).
+			// types
+			SetParentType(executionrelationship.ParentTypeWorkflow).
+			SetChildType(executionrelationship.ChildTypeActivity).
+			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
 			return "", err
 		}
+
+		log.Printf("EnqueueSubActivity - created activity execution %s for %s with params: %v", activityExecution.ID, longName, params)
 
 		if err = tx.Commit(); err != nil {
 			if err = tx.Rollback(); err != nil {
@@ -411,33 +445,63 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName H
 			return "", err
 		}
 
-		return ActivityExecutionID(activityExecution.ID), nil
+		return ActivityID(activityEntity.ID), nil
 
 	} else {
 		return "", fmt.Errorf("activity %s not found", longName)
 	}
 }
 
-func (tp *Tempolite) enqueueSubActivtyFunc(ctx WorkflowContext, activityFunc interface{}, params ...interface{}) (ActivityExecutionID, error) {
+func (tp *Tempolite[T]) enqueueSubActivtyFunc(ctx WorkflowContext[T], stepID T, activityFunc interface{}, params ...interface{}) (ActivityID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
-	return tp.enqueueSubActivityExecution(ctx, handlerIdentity, params...)
+	return tp.enqueueSubActivityExecution(ctx, stepID, handlerIdentity, params...)
 }
 
-func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (WorkflowExecutionID, error) {
-	// only a workflow can have a sub-workflow for determinstic reasons
+func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
-		// nothing
+		// Proceed with sub-workflow creation
 	default:
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
+	}
+
+	fmt.Println("===ENQUEUE SUB WORKFLOW", ctx.RunID(), ctx.EntityID(), fmt.Sprint(stepID), ctx.StepID())
+	// Check for existing sub-workflow with the same stepID within the current workflow
+	exists, err := tp.client.ExecutionRelationship.Query().
+		Where(
+			executionrelationship.And(
+				executionrelationship.RunID(ctx.RunID()),
+				executionrelationship.ParentEntityID(ctx.EntityID()),
+				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ParentStepID(ctx.StepID()),
+			),
+			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeWorkflow),
+		).
+		First(tp.ctx)
+	if err == nil {
+		fmt.Println("===CHECKING WORKFLOW", exists.ChildEntityID)
+		// todo: is there a way to just get the status?
+		act, err := tp.client.Workflow.Get(tp.ctx, exists.ChildEntityID)
+		if err != nil {
+			fmt.Println("===ERROR GETTING WORKFLOW", err)
+			return "", err
+		}
+		if act.Status == workflow.StatusCompleted {
+			fmt.Println("===EXISTING WORKFLOW", exists.ChildEntityID)
+			return WorkflowID(exists.ChildEntityID), nil
+		}
+	} else {
+		if !ent.IsNotFound(err) {
+			fmt.Println("===ERROR CHECKING FOR EXISTING STEP ID", err)
+			return "", fmt.Errorf("error checking for existing stepID: %w", err)
+		}
 	}
 
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
 	var ok bool
-	var err error
 	var tx *ent.Tx
 
 	if value, ok = tp.workflows.Load(handlerIdentity); ok {
@@ -472,6 +536,7 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 		if workflowEntity, err = tx.Workflow.
 			Create().
 			SetID(uuid.NewString()).
+			SetStepID(fmt.Sprint(stepID)).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
@@ -503,21 +568,27 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 			return "", err
 		}
 
-		switch ctx.EntityType() {
-		case "workflow":
-			if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeWorkflow).SetChildType(executionrelationship.ChildTypeWorkflow).SetChildID(workflowExecution.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-				if err = tx.Rollback(); err != nil {
-					return "", err
-				}
+		if _, err := tx.ExecutionRelationship.Create().
+			// run id
+			SetRunID(ctx.RunID()).
+			// entity
+			SetParentEntityID(ctx.EntityID()).
+			SetChildEntityID(workflowEntity.ID).
+			// execution
+			SetParentID(ctx.ExecutionID()).
+			SetChildID(workflowExecution.ID).
+			// Types
+			SetParentType(executionrelationship.ParentTypeWorkflow).
+			SetChildType(executionrelationship.ChildTypeWorkflow).
+			// steps
+			SetParentStepID(ctx.StepID()).
+			SetChildStepID(fmt.Sprint(stepID)).
+			//
+			Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
-			// case "activity":
-			// 	if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeWorkflow).SetChildID(workflowExecution.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-			// 		if err = tx.Rollback(); err != nil {
-			// 			return "", err
-			// 		}
-			// 		return "", err
-			// 	}
+			return "", err
 		}
 
 		log.Printf("EnqueueWorkflow - created workflow execution %s for %s with params: %v", workflowExecution.ID, handlerIdentity, params)
@@ -531,20 +602,36 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 
 		// when we enqueue a sub-workflow, that mean we're within the execution model, so we don't care about the workflow entity
 		// only the execution
-		return WorkflowExecutionID(workflowExecution.ID), nil
+		return WorkflowID(workflowEntity.ID), nil
 
 	} else {
 		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}
 }
 
-func (tp *Tempolite) Workflow(workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, params ...interface{}) *WorkflowInfo[T] {
+	id, err := tp.executeWorkflow(stepID, workflowFunc, params...)
+	fmt.Println("===WORKFLOW", id, err)
+	return tp.getWorkflowRoot(id, err)
+}
+
+func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
 	var ok bool
 	var err error
 	var tx *ent.Tx
+
+	// Check for existing workflow with the same stepID
+	existingWorkflow, errExisting := tp.client.Workflow.Query().
+		Where(workflow.StepID(fmt.Sprint(stepID))).
+		First(tp.ctx)
+	if errExisting == nil {
+		fmt.Println("===EXISTING WORKFLOW", existingWorkflow)
+		// Workflow already exists, return its ID
+		return WorkflowID(existingWorkflow.ID), nil
+	}
 
 	if value, ok = tp.workflows.Load(handlerIdentity); ok {
 		var workflowHandlerInfo Workflow
@@ -594,6 +681,7 @@ func (tp *Tempolite) Workflow(workflowFunc interface{}, params ...interface{}) (
 			Create().
 			SetID(runEntity.RunID).
 			SetStatus(workflow.StatusPending).
+			SetStepID(fmt.Sprint(stepID)).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
@@ -601,6 +689,7 @@ func (tp *Tempolite) Workflow(workflowFunc interface{}, params ...interface{}) (
 				MaximumAttempts: 1,
 			}).
 			Save(tp.ctx); err != nil {
+			fmt.Println("ERROR CREATE WORKFLOW", err)
 			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
@@ -646,18 +735,38 @@ func (tp *Tempolite) Workflow(workflowFunc interface{}, params ...interface{}) (
 	}
 }
 
-func (tp *Tempolite) GetWorkflow(id WorkflowID) *WorkflowInfo {
+func (tp *Tempolite[T]) GetWorkflow(id WorkflowID) *WorkflowInfo[T] {
 	log.Printf("GetWorkflow - looking for workflow %s", id)
-	info := WorkflowInfo{
+	info := WorkflowInfo[T]{
 		tp:         tp,
 		WorkflowID: id,
 	}
 	return &info
 }
 
-func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID, err error) *WorkflowExecutionInfo {
+func (tp *Tempolite[T]) getWorkflowRoot(id WorkflowID, err error) *WorkflowInfo[T] {
+	log.Printf("getWorkflow - looking for workflow %s", id)
+	info := WorkflowInfo[T]{
+		tp:         tp,
+		WorkflowID: id,
+		err:        err,
+	}
+	return &info
+}
+
+func (tp *Tempolite[T]) getWorkflow(ctx TempoliteContext, id WorkflowID, err error) *WorkflowInfo[T] {
+	log.Printf("getWorkflow - looking for workflow %s", id)
+	info := WorkflowInfo[T]{
+		tp:         tp,
+		WorkflowID: id,
+		err:        err,
+	}
+	return &info
+}
+
+func (tp *Tempolite[T]) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID, err error) *WorkflowExecutionInfo[T] {
 	log.Printf("getWorkflowExecution - looking for workflow execution %s", id)
-	info := WorkflowExecutionInfo{
+	info := WorkflowExecutionInfo[T]{
 		tp:          tp,
 		ExecutionID: id,
 		err:         err,
@@ -665,18 +774,28 @@ func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecu
 	return &info
 }
 
-func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
+func (tp *Tempolite[T]) GetActivity(id ActivityID) (*ActivityInfo[T], error) {
 	log.Printf("GetActivity - looking for activity %s", id)
-	info := ActivityInfo{
+	info := ActivityInfo[T]{
 		tp:         tp,
 		ActivityID: id,
 	}
 	return &info, nil
 }
 
-func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo {
+func (tp *Tempolite[T]) getActivity(ctx TempoliteContext, id ActivityID, err error) *ActivityInfo[T] {
+	log.Printf("getActivity - looking for activity %s", id)
+	info := ActivityInfo[T]{
+		tp:         tp,
+		ActivityID: id,
+		err:        err,
+	}
+	return &info
+}
+
+func (tp *Tempolite[T]) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo[T] {
 	log.Printf("getActivity - looking for activity execution %s", id)
-	info := ActivityExecutionInfo{
+	info := ActivityExecutionInfo[T]{
 		tp:          tp,
 		ExecutionID: id,
 		err:         err,
@@ -684,60 +803,60 @@ func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecu
 	return &info
 }
 
-func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {
+func (tp *Tempolite[T]) GetSideEffect(id string) (*SideEffectInfo[T], error) {
 	return tp.getSideEffect(id)
 }
 
-func (tp *Tempolite) getSideEffect(id string) (*SideEffectInfo, error) {
+func (tp *Tempolite[T]) getSideEffect(id string) (*SideEffectInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
 // Side Effects can't fail
-func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, longName HandlerIdentity) (SideEffectExecutionID, error) {
+func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, longName HandlerIdentity) (SideEffectExecutionID, error) {
 	return "", nil
 }
 
-func (tp *Tempolite) enqueueSideEffectFunc(ctx TempoliteContext, workflowFunc interface{}, input ...interface{}) (*SideEffectInfo, error) {
+func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, workflowFunc interface{}, input ...interface{}) (*SideEffectInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
+func (tp *Tempolite[T]) GetSaga(id string) (*SagaInfo[T], error) {
 	return tp.getSaga(id)
 }
 
-func (tp *Tempolite) CancelWorkflow(id WorkflowID) (string, error) {
+func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
-func (tp *Tempolite) RemoveWorkflow(id WorkflowID) (string, error) {
+func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
-func (tp *Tempolite) PauseWorkflow(id WorkflowID) (string, error) {
+func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
-func (tp *Tempolite) ResumeWorkflow(id WorkflowID) (string, error) {
+func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
 // TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
 // Saga only accepts one type of input
-func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo, error) {
+func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
-func (tp *Tempolite) getSaga(id string) (*SagaInfo, error) {
+func (tp *Tempolite[T]) getSaga(id string) (*SagaInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
-func (tp *Tempolite) ProduceSignal(id string) chan interface{} {
+func (tp *Tempolite[T]) ProduceSignal(id string) chan interface{} {
 	// whatever happen here, we have to create a channel that will then send the data to the other channel used by the consumer ON the correct type!!!
 	return make(chan interface{}, 1)
 }

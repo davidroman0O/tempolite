@@ -18,6 +18,7 @@ func (Workflow) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
+		field.String("step_id").NotEmpty(),
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),

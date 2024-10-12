@@ -28,6 +28,12 @@ func (sec *SideEffectCreate) SetIdentity(s string) *SideEffectCreate {
 	return sec
 }
 
+// SetStepID sets the "step_id" field.
+func (sec *SideEffectCreate) SetStepID(s string) *SideEffectCreate {
+	sec.mutation.SetStepID(s)
+	return sec
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (sec *SideEffectCreate) SetHandlerName(s string) *SideEffectCreate {
 	sec.mutation.SetHandlerName(s)
@@ -172,6 +178,14 @@ func (sec *SideEffectCreate) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
 		}
 	}
+	if _, ok := sec.mutation.StepID(); !ok {
+		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "SideEffect.step_id"`)}
+	}
+	if v, ok := sec.mutation.StepID(); ok {
+		if err := sideeffect.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "SideEffect.step_id": %w`, err)}
+		}
+	}
 	if _, ok := sec.mutation.HandlerName(); !ok {
 		return &ValidationError{Name: "handler_name", err: errors.New(`ent: missing required field "SideEffect.handler_name"`)}
 	}
@@ -232,6 +246,10 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 	if value, ok := sec.mutation.Identity(); ok {
 		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
 		_node.Identity = value
+	}
+	if value, ok := sec.mutation.StepID(); ok {
+		_spec.SetField(sideeffect.FieldStepID, field.TypeString, value)
+		_node.StepID = value
 	}
 	if value, ok := sec.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)

@@ -45,6 +45,20 @@ func (seu *SideEffectUpdate) SetNillableIdentity(s *string) *SideEffectUpdate {
 	return seu
 }
 
+// SetStepID sets the "step_id" field.
+func (seu *SideEffectUpdate) SetStepID(s string) *SideEffectUpdate {
+	seu.mutation.SetStepID(s)
+	return seu
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (seu *SideEffectUpdate) SetNillableStepID(s *string) *SideEffectUpdate {
+	if s != nil {
+		seu.SetStepID(*s)
+	}
+	return seu
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (seu *SideEffectUpdate) SetHandlerName(s string) *SideEffectUpdate {
 	seu.mutation.SetHandlerName(s)
@@ -214,6 +228,11 @@ func (seu *SideEffectUpdate) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
 		}
 	}
+	if v, ok := seu.mutation.StepID(); ok {
+		if err := sideeffect.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "SideEffect.step_id": %w`, err)}
+		}
+	}
 	if v, ok := seu.mutation.HandlerName(); ok {
 		if err := sideeffect.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
@@ -241,6 +260,9 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := seu.mutation.Identity(); ok {
 		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := seu.mutation.StepID(); ok {
+		_spec.SetField(sideeffect.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := seu.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)
@@ -346,6 +368,20 @@ func (seuo *SideEffectUpdateOne) SetIdentity(s string) *SideEffectUpdateOne {
 func (seuo *SideEffectUpdateOne) SetNillableIdentity(s *string) *SideEffectUpdateOne {
 	if s != nil {
 		seuo.SetIdentity(*s)
+	}
+	return seuo
+}
+
+// SetStepID sets the "step_id" field.
+func (seuo *SideEffectUpdateOne) SetStepID(s string) *SideEffectUpdateOne {
+	seuo.mutation.SetStepID(s)
+	return seuo
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (seuo *SideEffectUpdateOne) SetNillableStepID(s *string) *SideEffectUpdateOne {
+	if s != nil {
+		seuo.SetStepID(*s)
 	}
 	return seuo
 }
@@ -532,6 +568,11 @@ func (seuo *SideEffectUpdateOne) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "SideEffect.identity": %w`, err)}
 		}
 	}
+	if v, ok := seuo.mutation.StepID(); ok {
+		if err := sideeffect.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "SideEffect.step_id": %w`, err)}
+		}
+	}
 	if v, ok := seuo.mutation.HandlerName(); ok {
 		if err := sideeffect.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.handler_name": %w`, err)}
@@ -576,6 +617,9 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 	}
 	if value, ok := seuo.mutation.Identity(); ok {
 		_spec.SetField(sideeffect.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := seuo.mutation.StepID(); ok {
+		_spec.SetField(sideeffect.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := seuo.mutation.HandlerName(); ok {
 		_spec.SetField(sideeffect.FieldHandlerName, field.TypeString, value)

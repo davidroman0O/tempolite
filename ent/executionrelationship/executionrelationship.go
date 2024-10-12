@@ -13,6 +13,12 @@ const (
 	Label = "execution_relationship"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldRunID holds the string denoting the run_id field in the database.
+	FieldRunID = "run_id"
+	// FieldParentEntityID holds the string denoting the parent_entity_id field in the database.
+	FieldParentEntityID = "parent_entity_id"
+	// FieldChildEntityID holds the string denoting the child_entity_id field in the database.
+	FieldChildEntityID = "child_entity_id"
 	// FieldParentID holds the string denoting the parent_id field in the database.
 	FieldParentID = "parent_id"
 	// FieldChildID holds the string denoting the child_id field in the database.
@@ -21,6 +27,10 @@ const (
 	FieldParentType = "parent_type"
 	// FieldChildType holds the string denoting the child_type field in the database.
 	FieldChildType = "child_type"
+	// FieldParentStepID holds the string denoting the parent_step_id field in the database.
+	FieldParentStepID = "parent_step_id"
+	// FieldChildStepID holds the string denoting the child_step_id field in the database.
+	FieldChildStepID = "child_step_id"
 	// Table holds the table name of the executionrelationship in the database.
 	Table = "execution_relationships"
 )
@@ -28,10 +38,15 @@ const (
 // Columns holds all SQL columns for executionrelationship fields.
 var Columns = []string{
 	FieldID,
+	FieldRunID,
+	FieldParentEntityID,
+	FieldChildEntityID,
 	FieldParentID,
 	FieldChildID,
 	FieldParentType,
 	FieldChildType,
+	FieldParentStepID,
+	FieldChildStepID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -43,6 +58,19 @@ func ValidColumn(column string) bool {
 	}
 	return false
 }
+
+var (
+	// RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	RunIDValidator func(string) error
+	// ParentEntityIDValidator is a validator for the "parent_entity_id" field. It is called by the builders before save.
+	ParentEntityIDValidator func(string) error
+	// ChildEntityIDValidator is a validator for the "child_entity_id" field. It is called by the builders before save.
+	ChildEntityIDValidator func(string) error
+	// ParentStepIDValidator is a validator for the "parent_step_id" field. It is called by the builders before save.
+	ParentStepIDValidator func(string) error
+	// ChildStepIDValidator is a validator for the "child_step_id" field. It is called by the builders before save.
+	ChildStepIDValidator func(string) error
+)
 
 // ParentType defines the type for the "parent_type" enum field.
 type ParentType string
@@ -102,6 +130,21 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
+// ByRunID orders the results by the run_id field.
+func ByRunID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRunID, opts...).ToFunc()
+}
+
+// ByParentEntityID orders the results by the parent_entity_id field.
+func ByParentEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentEntityID, opts...).ToFunc()
+}
+
+// ByChildEntityID orders the results by the child_entity_id field.
+func ByChildEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldChildEntityID, opts...).ToFunc()
+}
+
 // ByParentID orders the results by the parent_id field.
 func ByParentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentID, opts...).ToFunc()
@@ -120,4 +163,14 @@ func ByParentType(opts ...sql.OrderTermOption) OrderOption {
 // ByChildType orders the results by the child_type field.
 func ByChildType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldChildType, opts...).ToFunc()
+}
+
+// ByParentStepID orders the results by the parent_step_id field.
+func ByParentStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentStepID, opts...).ToFunc()
+}
+
+// ByChildStepID orders the results by the child_step_id field.
+func ByChildStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldChildStepID, opts...).ToFunc()
 }

@@ -31,6 +31,20 @@ func (wu *WorkflowUpdate) Where(ps ...predicate.Workflow) *WorkflowUpdate {
 	return wu
 }
 
+// SetStepID sets the "step_id" field.
+func (wu *WorkflowUpdate) SetStepID(s string) *WorkflowUpdate {
+	wu.mutation.SetStepID(s)
+	return wu
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableStepID(s *string) *WorkflowUpdate {
+	if s != nil {
+		wu.SetStepID(*s)
+	}
+	return wu
+}
+
 // SetStatus sets the "status" field.
 func (wu *WorkflowUpdate) SetStatus(w workflow.Status) *WorkflowUpdate {
 	wu.mutation.SetStatus(w)
@@ -209,6 +223,11 @@ func (wu *WorkflowUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (wu *WorkflowUpdate) check() error {
+	if v, ok := wu.mutation.StepID(); ok {
+		if err := workflow.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Workflow.step_id": %w`, err)}
+		}
+	}
 	if v, ok := wu.mutation.Status(); ok {
 		if err := workflow.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Workflow.status": %w`, err)}
@@ -238,6 +257,9 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := wu.mutation.StepID(); ok {
+		_spec.SetField(workflow.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := wu.mutation.Status(); ok {
 		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)
@@ -334,6 +356,20 @@ type WorkflowUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowMutation
+}
+
+// SetStepID sets the "step_id" field.
+func (wuo *WorkflowUpdateOne) SetStepID(s string) *WorkflowUpdateOne {
+	wuo.mutation.SetStepID(s)
+	return wuo
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableStepID(s *string) *WorkflowUpdateOne {
+	if s != nil {
+		wuo.SetStepID(*s)
+	}
+	return wuo
 }
 
 // SetStatus sets the "status" field.
@@ -527,6 +563,11 @@ func (wuo *WorkflowUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (wuo *WorkflowUpdateOne) check() error {
+	if v, ok := wuo.mutation.StepID(); ok {
+		if err := workflow.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Workflow.step_id": %w`, err)}
+		}
+	}
 	if v, ok := wuo.mutation.Status(); ok {
 		if err := workflow.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Workflow.status": %w`, err)}
@@ -573,6 +614,9 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := wuo.mutation.StepID(); ok {
+		_spec.SetField(workflow.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := wuo.mutation.Status(); ok {
 		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)

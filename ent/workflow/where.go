@@ -65,6 +65,11 @@ func IDContainsFold(id string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldID, id))
 }
 
+// StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
+func StepID(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldStepID, v))
+}
+
 // Identity applies equality check predicate on the "identity" field. It's identical to IdentityEQ.
 func Identity(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldIdentity, v))
@@ -83,6 +88,71 @@ func Timeout(v time.Time) predicate.Workflow {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// StepIDEQ applies the EQ predicate on the "step_id" field.
+func StepIDEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldStepID, v))
+}
+
+// StepIDNEQ applies the NEQ predicate on the "step_id" field.
+func StepIDNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldStepID, v))
+}
+
+// StepIDIn applies the In predicate on the "step_id" field.
+func StepIDIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldStepID, vs...))
+}
+
+// StepIDNotIn applies the NotIn predicate on the "step_id" field.
+func StepIDNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldStepID, vs...))
+}
+
+// StepIDGT applies the GT predicate on the "step_id" field.
+func StepIDGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldStepID, v))
+}
+
+// StepIDGTE applies the GTE predicate on the "step_id" field.
+func StepIDGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldStepID, v))
+}
+
+// StepIDLT applies the LT predicate on the "step_id" field.
+func StepIDLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldStepID, v))
+}
+
+// StepIDLTE applies the LTE predicate on the "step_id" field.
+func StepIDLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldStepID, v))
+}
+
+// StepIDContains applies the Contains predicate on the "step_id" field.
+func StepIDContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldStepID, v))
+}
+
+// StepIDHasPrefix applies the HasPrefix predicate on the "step_id" field.
+func StepIDHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldStepID, v))
+}
+
+// StepIDHasSuffix applies the HasSuffix predicate on the "step_id" field.
+func StepIDHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldStepID, v))
+}
+
+// StepIDEqualFold applies the EqualFold predicate on the "step_id" field.
+func StepIDEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldStepID, v))
+}
+
+// StepIDContainsFold applies the ContainsFold predicate on the "step_id" field.
+func StepIDContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldStepID, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

@@ -28,6 +28,12 @@ func (ac *ActivityCreate) SetIdentity(s string) *ActivityCreate {
 	return ac
 }
 
+// SetStepID sets the "step_id" field.
+func (ac *ActivityCreate) SetStepID(s string) *ActivityCreate {
+	ac.mutation.SetStepID(s)
+	return ac
+}
+
 // SetStatus sets the "status" field.
 func (ac *ActivityCreate) SetStatus(a activity.Status) *ActivityCreate {
 	ac.mutation.SetStatus(a)
@@ -172,6 +178,14 @@ func (ac *ActivityCreate) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
 		}
 	}
+	if _, ok := ac.mutation.StepID(); !ok {
+		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "Activity.step_id"`)}
+	}
+	if v, ok := ac.mutation.StepID(); ok {
+		if err := activity.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Activity.step_id": %w`, err)}
+		}
+	}
 	if _, ok := ac.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Activity.status"`)}
 	}
@@ -232,6 +246,10 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 	if value, ok := ac.mutation.Identity(); ok {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
 		_node.Identity = value
+	}
+	if value, ok := ac.mutation.StepID(); ok {
+		_spec.SetField(activity.FieldStepID, field.TypeString, value)
+		_node.StepID = value
 	}
 	if value, ok := ac.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)

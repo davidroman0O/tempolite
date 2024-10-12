@@ -299,12 +299,12 @@ func (wq *WorkflowQuery) WithExecutions(opts ...func(*WorkflowExecutionQuery)) *
 // Example:
 //
 //	var v []struct {
-//		Status workflow.Status `json:"status,omitempty"`
+//		StepID string `json:"step_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Workflow.Query().
-//		GroupBy(workflow.FieldStatus).
+//		GroupBy(workflow.FieldStepID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (wq *WorkflowQuery) GroupBy(field string, fields ...string) *WorkflowGroupBy {
@@ -322,11 +322,11 @@ func (wq *WorkflowQuery) GroupBy(field string, fields ...string) *WorkflowGroupB
 // Example:
 //
 //	var v []struct {
-//		Status workflow.Status `json:"status,omitempty"`
+//		StepID string `json:"step_id,omitempty"`
 //	}
 //
 //	client.Workflow.Query().
-//		Select(workflow.FieldStatus).
+//		Select(workflow.FieldStepID).
 //		Scan(ctx, &v)
 func (wq *WorkflowQuery) Select(fields ...string) *WorkflowSelect {
 	wq.ctx.Fields = append(wq.ctx.Fields, fields...)

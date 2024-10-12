@@ -16,6 +16,12 @@ type ExecutionRelationship struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// RunID holds the value of the "run_id" field.
+	RunID string `json:"run_id,omitempty"`
+	// ParentEntityID holds the value of the "parent_entity_id" field.
+	ParentEntityID string `json:"parent_entity_id,omitempty"`
+	// ChildEntityID holds the value of the "child_entity_id" field.
+	ChildEntityID string `json:"child_entity_id,omitempty"`
 	// ParentID holds the value of the "parent_id" field.
 	ParentID string `json:"parent_id,omitempty"`
 	// ChildID holds the value of the "child_id" field.
@@ -23,7 +29,11 @@ type ExecutionRelationship struct {
 	// ParentType holds the value of the "parent_type" field.
 	ParentType executionrelationship.ParentType `json:"parent_type,omitempty"`
 	// ChildType holds the value of the "child_type" field.
-	ChildType    executionrelationship.ChildType `json:"child_type,omitempty"`
+	ChildType executionrelationship.ChildType `json:"child_type,omitempty"`
+	// ParentStepID holds the value of the "parent_step_id" field.
+	ParentStepID string `json:"parent_step_id,omitempty"`
+	// ChildStepID holds the value of the "child_step_id" field.
+	ChildStepID  string `json:"child_step_id,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -34,7 +44,7 @@ func (*ExecutionRelationship) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case executionrelationship.FieldID:
 			values[i] = new(sql.NullInt64)
-		case executionrelationship.FieldParentID, executionrelationship.FieldChildID, executionrelationship.FieldParentType, executionrelationship.FieldChildType:
+		case executionrelationship.FieldRunID, executionrelationship.FieldParentEntityID, executionrelationship.FieldChildEntityID, executionrelationship.FieldParentID, executionrelationship.FieldChildID, executionrelationship.FieldParentType, executionrelationship.FieldChildType, executionrelationship.FieldParentStepID, executionrelationship.FieldChildStepID:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -57,6 +67,24 @@ func (er *ExecutionRelationship) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			er.ID = int(value.Int64)
+		case executionrelationship.FieldRunID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field run_id", values[i])
+			} else if value.Valid {
+				er.RunID = value.String
+			}
+		case executionrelationship.FieldParentEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_entity_id", values[i])
+			} else if value.Valid {
+				er.ParentEntityID = value.String
+			}
+		case executionrelationship.FieldChildEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field child_entity_id", values[i])
+			} else if value.Valid {
+				er.ChildEntityID = value.String
+			}
 		case executionrelationship.FieldParentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_id", values[i])
@@ -80,6 +108,18 @@ func (er *ExecutionRelationship) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field child_type", values[i])
 			} else if value.Valid {
 				er.ChildType = executionrelationship.ChildType(value.String)
+			}
+		case executionrelationship.FieldParentStepID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_step_id", values[i])
+			} else if value.Valid {
+				er.ParentStepID = value.String
+			}
+		case executionrelationship.FieldChildStepID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field child_step_id", values[i])
+			} else if value.Valid {
+				er.ChildStepID = value.String
 			}
 		default:
 			er.selectValues.Set(columns[i], values[i])
@@ -117,6 +157,15 @@ func (er *ExecutionRelationship) String() string {
 	var builder strings.Builder
 	builder.WriteString("ExecutionRelationship(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", er.ID))
+	builder.WriteString("run_id=")
+	builder.WriteString(er.RunID)
+	builder.WriteString(", ")
+	builder.WriteString("parent_entity_id=")
+	builder.WriteString(er.ParentEntityID)
+	builder.WriteString(", ")
+	builder.WriteString("child_entity_id=")
+	builder.WriteString(er.ChildEntityID)
+	builder.WriteString(", ")
 	builder.WriteString("parent_id=")
 	builder.WriteString(er.ParentID)
 	builder.WriteString(", ")
@@ -128,6 +177,12 @@ func (er *ExecutionRelationship) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("child_type=")
 	builder.WriteString(fmt.Sprintf("%v", er.ChildType))
+	builder.WriteString(", ")
+	builder.WriteString("parent_step_id=")
+	builder.WriteString(er.ParentStepID)
+	builder.WriteString(", ")
+	builder.WriteString("child_step_id=")
+	builder.WriteString(er.ChildStepID)
 	builder.WriteByte(')')
 	return builder.String()
 }

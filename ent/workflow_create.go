@@ -22,6 +22,12 @@ type WorkflowCreate struct {
 	hooks    []Hook
 }
 
+// SetStepID sets the "step_id" field.
+func (wc *WorkflowCreate) SetStepID(s string) *WorkflowCreate {
+	wc.mutation.SetStepID(s)
+	return wc
+}
+
 // SetStatus sets the "status" field.
 func (wc *WorkflowCreate) SetStatus(w workflow.Status) *WorkflowCreate {
 	wc.mutation.SetStatus(w)
@@ -164,6 +170,14 @@ func (wc *WorkflowCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (wc *WorkflowCreate) check() error {
+	if _, ok := wc.mutation.StepID(); !ok {
+		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "Workflow.step_id"`)}
+	}
+	if v, ok := wc.mutation.StepID(); ok {
+		if err := workflow.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Workflow.step_id": %w`, err)}
+		}
+	}
 	if _, ok := wc.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Workflow.status"`)}
 	}
@@ -228,6 +242,10 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if id, ok := wc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := wc.mutation.StepID(); ok {
+		_spec.SetField(workflow.FieldStepID, field.TypeString, value)
+		_node.StepID = value
 	}
 	if value, ok := wc.mutation.Status(); ok {
 		_spec.SetField(workflow.FieldStatus, field.TypeEnum, value)

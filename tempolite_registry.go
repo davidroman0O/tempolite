@@ -9,7 +9,7 @@ import (
 
 type Workflow HandlerInfo
 
-func As[T any]() HandlerIdentity {
+func As[T any, Y Identifier]() HandlerIdentity {
 	dataType := reflect.TypeOf((*T)(nil)).Elem()
 	return HandlerIdentity(fmt.Sprintf("%s/%s", dataType.PkgPath(), dataType.Name()))
 }
@@ -18,7 +18,7 @@ type Activity HandlerInfo
 
 type ActivityRegister func() (*Activity, error)
 
-func AsActivity[T any](instance ...T) ActivityRegister {
+func AsActivity[T any, Y Identifier](instance ...T) ActivityRegister {
 	dataType := reflect.TypeOf((*T)(nil)).Elem()
 
 	var defaultInstance T
@@ -28,10 +28,10 @@ func AsActivity[T any](instance ...T) ActivityRegister {
 		defaultInstance = reflect.Zero(dataType).Interface().(T)
 	}
 
-	return activityRegisterType(dataType, defaultInstance)
+	return activityRegisterType[T, Y](dataType, defaultInstance)
 }
 
-func activityRegisterType[T any](dataType reflect.Type, instance T) ActivityRegister {
+func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T) ActivityRegister {
 	return func() (*Activity, error) {
 		handlerValue := reflect.ValueOf(instance)
 		runMethod := handlerValue.MethodByName("Run")
@@ -45,7 +45,7 @@ func activityRegisterType[T any](dataType reflect.Type, instance T) ActivityRegi
 			return nil, fmt.Errorf("Run method of %s must have at least one input parameter (ActivityContext)", dataType)
 		}
 
-		if runMethodType.In(0) != reflect.TypeOf(ActivityContext{}) {
+		if runMethodType.In(0) != reflect.TypeOf(ActivityContext[Y]{}) {
 			return nil, fmt.Errorf("first parameter of Run method in %s must be ActivityContext", dataType)
 		}
 
@@ -97,7 +97,7 @@ type SideEffect HandlerInfo
 
 type SideEffectRegister func() (*SideEffect, error)
 
-func AsSideEffect[T any](instance ...T) SideEffectRegister {
+func AsSideEffect[T any, Y Identifier](instance ...T) SideEffectRegister {
 	dataType := reflect.TypeOf((*T)(nil)).Elem()
 
 	var defaultInstance T
@@ -107,10 +107,10 @@ func AsSideEffect[T any](instance ...T) SideEffectRegister {
 		defaultInstance = reflect.Zero(dataType).Interface().(T)
 	}
 
-	return sideEffectRegisterType(dataType, defaultInstance)
+	return sideEffectRegisterType[T, Y](dataType, defaultInstance)
 }
 
-func sideEffectRegisterType[T any](dataType reflect.Type, instance T) SideEffectRegister {
+func sideEffectRegisterType[T any, Y Identifier](dataType reflect.Type, instance T) SideEffectRegister {
 	return func() (*SideEffect, error) {
 		handlerValue := reflect.ValueOf(instance)
 		runMethod := handlerValue.MethodByName("Run")
@@ -124,7 +124,7 @@ func sideEffectRegisterType[T any](dataType reflect.Type, instance T) SideEffect
 			return nil, fmt.Errorf("Run method of %s must have at least one input parameter (SideEffectContext)", dataType)
 		}
 
-		if runMethodType.In(0) != reflect.TypeOf(SideEffectContext{}) {
+		if runMethodType.In(0) != reflect.TypeOf(SideEffectContext[Y]{}) {
 			return nil, fmt.Errorf("first parameter of Run method in %s must be SideEffectContext", dataType)
 		}
 
@@ -177,12 +177,12 @@ type SagaCompensation HandlerInfo
 
 type SagaRegister func() (*SagaTransaction, *SagaCompensation, error)
 
-func AsSaga[T any]() SagaRegister {
+func AsSaga[T any, Y Identifier]() SagaRegister {
 	dataType := reflect.TypeOf((*T)(nil)).Elem() // Get the type of T as a non-pointer
-	return sagaRegisterType(dataType)
+	return sagaRegisterType[Y](dataType)
 }
 
-func sagaRegisterType(dataType reflect.Type) SagaRegister {
+func sagaRegisterType[Y Identifier](dataType reflect.Type) SagaRegister {
 	return func() (*SagaTransaction, *SagaCompensation, error) {
 		handlerType := dataType
 
@@ -197,7 +197,7 @@ func sagaRegisterType(dataType reflect.Type) SagaRegister {
 		}
 
 		// Validate the Transaction method signature
-		if transactionMethod.Type.NumIn() < 2 || transactionMethod.Type.In(1) != reflect.TypeOf(TransactionContext{}) {
+		if transactionMethod.Type.NumIn() < 2 || transactionMethod.Type.In(1) != reflect.TypeOf(TransactionContext[Y]{}) {
 			return nil, nil, fmt.Errorf("Transaction method in %s must accept (TransactionContext) as its second parameter", handlerType)
 		}
 
@@ -247,7 +247,7 @@ func sagaRegisterType(dataType reflect.Type) SagaRegister {
 		}
 
 		// Validate the Compensation method signature
-		if compensationMethod.Type.NumIn() < 2 || compensationMethod.Type.In(1) != reflect.TypeOf(CompensationContext{}) {
+		if compensationMethod.Type.NumIn() < 2 || compensationMethod.Type.In(1) != reflect.TypeOf(CompensationContext[Y]{}) {
 			return nil, nil, fmt.Errorf("Compensation method in %s must accept (CompensationContext) as its second parameter", handlerType)
 		}
 
@@ -301,7 +301,7 @@ type SagaActivity struct {
 	builder  interface{}
 }
 
-func AsSagaActivity[T any](builder SagaActivityBuilder[T]) *SagaActivity {
+func AsSagaActivity[T any, Y Identifier](builder SagaActivityBuilder[T, Y]) *SagaActivity {
 	var dataType reflect.Type
 
 	// Get the type of T and ensure that we get the underlying type if T is a pointer.
@@ -319,14 +319,14 @@ func AsSagaActivity[T any](builder SagaActivityBuilder[T]) *SagaActivity {
 	}
 }
 
-func (tp *Tempolite) RegisterSagaActivity(sagaActivity *SagaActivity) error {
+func (tp *Tempolite[T]) RegisterSagaActivity(sagaActivity *SagaActivity) error {
 	// Store the builder function in the sagaBuilders map, using the dataType as the key
 	tp.sagaBuilders.Store(sagaActivity.dataType, sagaActivity.builder)
 	log.Printf("Registered saga activity for type %v", sagaActivity.dataType)
 	return nil
 }
 
-func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
+func (tp *Tempolite[T]) RegisterWorkflow(workflowFunc interface{}) error {
 	handlerType := reflect.TypeOf(workflowFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -337,7 +337,7 @@ func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 		return fmt.Errorf("workflow function must have at least one input parameter (WorkflowContext)")
 	}
 
-	if handlerType.In(0) != reflect.TypeOf(WorkflowContext{}) {
+	if handlerType.In(0) != reflect.TypeOf(WorkflowContext[T]{}) {
 		return fmt.Errorf("first parameter of workflow function must be WorkflowContext")
 	}
 
@@ -389,7 +389,7 @@ func (tp *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite) RegisterActivityFunc(activityFunc interface{}) error {
+func (tp *Tempolite[T]) RegisterActivityFunc(activityFunc interface{}) error {
 	handlerType := reflect.TypeOf(activityFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -400,7 +400,7 @@ func (tp *Tempolite) RegisterActivityFunc(activityFunc interface{}) error {
 		return fmt.Errorf("activity function must have at least one input parameter (ActivityContext)")
 	}
 
-	if handlerType.In(0) != reflect.TypeOf(ActivityContext{}) {
+	if handlerType.In(0) != reflect.TypeOf(ActivityContext[T]{}) {
 		return fmt.Errorf("first parameter of activity function must be ActivityContext")
 	}
 
@@ -452,7 +452,7 @@ func (tp *Tempolite) RegisterActivityFunc(activityFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
+func (tp *Tempolite[T]) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
 	handlerType := reflect.TypeOf(sideEffectFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -463,7 +463,7 @@ func (tp *Tempolite) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
 		return fmt.Errorf("side effect function must have at least one input parameter (SideEffectContext)")
 	}
 
-	if handlerType.In(0) != reflect.TypeOf(SideEffectContext{}) {
+	if handlerType.In(0) != reflect.TypeOf(SideEffectContext[T]{}) {
 		return fmt.Errorf("first parameter of side effect function must be SideEffectContext")
 	}
 
@@ -515,12 +515,12 @@ func (tp *Tempolite) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite) IsActivityRegistered(longName HandlerIdentity) bool {
+func (tp *Tempolite[T]) IsActivityRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.activities.Load(longName)
 	return ok
 }
 
-func (tp *Tempolite) RegisterActivity(register ActivityRegister) error {
+func (tp *Tempolite[T]) RegisterActivity(register ActivityRegister) error {
 	activity, err := register()
 	if err != nil {
 		return err
@@ -529,12 +529,12 @@ func (tp *Tempolite) RegisterActivity(register ActivityRegister) error {
 	return nil
 }
 
-func (tp *Tempolite) IsSideEffectRegistered(longName HandlerIdentity) bool {
+func (tp *Tempolite[T]) IsSideEffectRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.sideEffects.Load(longName)
 	return ok
 }
 
-func (tp *Tempolite) RegisterSideEffect(register SideEffectRegister) error {
+func (tp *Tempolite[T]) RegisterSideEffect(register SideEffectRegister) error {
 	sideEffect, err := register()
 	if err != nil {
 		return err
@@ -543,12 +543,12 @@ func (tp *Tempolite) RegisterSideEffect(register SideEffectRegister) error {
 	return nil
 }
 
-func (tp *Tempolite) IsSagaRegistered(longName HandlerIdentity) bool {
+func (tp *Tempolite[T]) IsSagaRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.sagas.Load(longName)
 	return ok
 }
 
-func (tp *Tempolite) RegisterSaga(register SagaRegister) error {
+func (tp *Tempolite[T]) RegisterSaga(register SagaRegister) error {
 	transaction, compensation, err := register()
 	if err != nil {
 		return err

@@ -21,6 +21,8 @@ type Activity struct {
 	ID string `json:"id,omitempty"`
 	// Identity holds the value of the "identity" field.
 	Identity string `json:"identity,omitempty"`
+	// StepID holds the value of the "step_id" field.
+	StepID string `json:"step_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status activity.Status `json:"status,omitempty"`
 	// HandlerName holds the value of the "handler_name" field.
@@ -64,7 +66,7 @@ func (*Activity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case activity.FieldInput, activity.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case activity.FieldID, activity.FieldIdentity, activity.FieldStatus, activity.FieldHandlerName:
+		case activity.FieldID, activity.FieldIdentity, activity.FieldStepID, activity.FieldStatus, activity.FieldHandlerName:
 			values[i] = new(sql.NullString)
 		case activity.FieldTimeout, activity.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -94,6 +96,12 @@ func (a *Activity) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field identity", values[i])
 			} else if value.Valid {
 				a.Identity = value.String
+			}
+		case activity.FieldStepID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field step_id", values[i])
+			} else if value.Valid {
+				a.StepID = value.String
 			}
 		case activity.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -178,6 +186,9 @@ func (a *Activity) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", a.ID))
 	builder.WriteString("identity=")
 	builder.WriteString(a.Identity)
+	builder.WriteString(", ")
+	builder.WriteString("step_id=")
+	builder.WriteString(a.StepID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", a.Status))

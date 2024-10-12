@@ -12,6 +12,7 @@ var (
 	ActivitiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "identity", Type: field.TypeString},
+		{Name: "step_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
@@ -54,10 +55,15 @@ var (
 	// ExecutionRelationshipsColumns holds the columns for the "execution_relationships" table.
 	ExecutionRelationshipsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "parent_entity_id", Type: field.TypeString},
+		{Name: "child_entity_id", Type: field.TypeString},
 		{Name: "parent_id", Type: field.TypeString},
 		{Name: "child_id", Type: field.TypeString},
 		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
 		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
+		{Name: "parent_step_id", Type: field.TypeString},
+		{Name: "child_step_id", Type: field.TypeString},
 	}
 	// ExecutionRelationshipsTable holds the schema information for the "execution_relationships" table.
 	ExecutionRelationshipsTable = &schema.Table{
@@ -68,7 +74,7 @@ var (
 			{
 				Name:    "executionrelationship_parent_id_child_id",
 				Unique:  true,
-				Columns: []*schema.Column{ExecutionRelationshipsColumns[1], ExecutionRelationshipsColumns[2]},
+				Columns: []*schema.Column{ExecutionRelationshipsColumns[4], ExecutionRelationshipsColumns[5]},
 			},
 		},
 	}
@@ -126,6 +132,7 @@ var (
 	SagasColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "name", Type: field.TypeString},
+		{Name: "step_id", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
@@ -194,6 +201,7 @@ var (
 	SideEffectsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "identity", Type: field.TypeString},
+		{Name: "step_id", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "input", Type: field.TypeJSON},
@@ -251,6 +259,7 @@ var (
 	// WorkflowsColumns holds the columns for the "workflows" table.
 	WorkflowsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "step_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},

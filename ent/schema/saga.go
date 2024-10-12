@@ -20,6 +20,7 @@ func (Saga) Fields() []ent.Field {
 			Unique(),
 		field.String("name").
 			NotEmpty(),
+		field.String("step_id").NotEmpty(),
 		field.JSON("input", []interface{}{}),
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),

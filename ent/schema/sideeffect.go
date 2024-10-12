@@ -20,6 +20,7 @@ func (SideEffect) Fields() []ent.Field {
 			Unique(),
 		field.String("identity").
 			NotEmpty(),
+		field.String("step_id").NotEmpty(),
 		field.String("handler_name").
 			NotEmpty(),
 		field.Enum("status").

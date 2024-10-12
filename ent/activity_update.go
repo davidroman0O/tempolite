@@ -45,6 +45,20 @@ func (au *ActivityUpdate) SetNillableIdentity(s *string) *ActivityUpdate {
 	return au
 }
 
+// SetStepID sets the "step_id" field.
+func (au *ActivityUpdate) SetStepID(s string) *ActivityUpdate {
+	au.mutation.SetStepID(s)
+	return au
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (au *ActivityUpdate) SetNillableStepID(s *string) *ActivityUpdate {
+	if s != nil {
+		au.SetStepID(*s)
+	}
+	return au
+}
+
 // SetStatus sets the "status" field.
 func (au *ActivityUpdate) SetStatus(a activity.Status) *ActivityUpdate {
 	au.mutation.SetStatus(a)
@@ -214,6 +228,11 @@ func (au *ActivityUpdate) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
 		}
 	}
+	if v, ok := au.mutation.StepID(); ok {
+		if err := activity.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Activity.step_id": %w`, err)}
+		}
+	}
 	if v, ok := au.mutation.Status(); ok {
 		if err := activity.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
@@ -241,6 +260,9 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := au.mutation.Identity(); ok {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := au.mutation.StepID(); ok {
+		_spec.SetField(activity.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := au.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
@@ -346,6 +368,20 @@ func (auo *ActivityUpdateOne) SetIdentity(s string) *ActivityUpdateOne {
 func (auo *ActivityUpdateOne) SetNillableIdentity(s *string) *ActivityUpdateOne {
 	if s != nil {
 		auo.SetIdentity(*s)
+	}
+	return auo
+}
+
+// SetStepID sets the "step_id" field.
+func (auo *ActivityUpdateOne) SetStepID(s string) *ActivityUpdateOne {
+	auo.mutation.SetStepID(s)
+	return auo
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (auo *ActivityUpdateOne) SetNillableStepID(s *string) *ActivityUpdateOne {
+	if s != nil {
+		auo.SetStepID(*s)
 	}
 	return auo
 }
@@ -532,6 +568,11 @@ func (auo *ActivityUpdateOne) check() error {
 			return &ValidationError{Name: "identity", err: fmt.Errorf(`ent: validator failed for field "Activity.identity": %w`, err)}
 		}
 	}
+	if v, ok := auo.mutation.StepID(); ok {
+		if err := activity.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Activity.step_id": %w`, err)}
+		}
+	}
 	if v, ok := auo.mutation.Status(); ok {
 		if err := activity.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
@@ -576,6 +617,9 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 	}
 	if value, ok := auo.mutation.Identity(); ok {
 		_spec.SetField(activity.FieldIdentity, field.TypeString, value)
+	}
+	if value, ok := auo.mutation.StepID(); ok {
+		_spec.SetField(activity.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := auo.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)

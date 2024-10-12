@@ -13,12 +13,17 @@ type ExecutionRelationship struct {
 
 func (ExecutionRelationship) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("run_id").NotEmpty(),
+		field.String("parent_entity_id").NotEmpty(),
+		field.String("child_entity_id").NotEmpty(),
 		field.String("parent_id"),
 		field.String("child_id"),
 		field.Enum("parent_type").
 			Values("workflow", "activity", "saga", "side_effect"),
 		field.Enum("child_type").
 			Values("workflow", "activity", "saga", "side_effect"),
+		field.String("parent_step_id").NotEmpty(),
+		field.String("child_step_id").NotEmpty(),
 	}
 }
 

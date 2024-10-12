@@ -16,14 +16,17 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
 
-type WorkflowInfo struct {
-	tp         *Tempolite
+type WorkflowInfo[T Identifier] struct {
+	tp         *Tempolite[T]
 	WorkflowID WorkflowID
 	err        error
 }
 
 // Try to find the latest workflow execution until it reaches a final state
-func (i *WorkflowInfo) Get(output ...interface{}) error {
+func (i *WorkflowInfo[T]) Get(output ...interface{}) error {
+	defer func() {
+		log.Printf("WorkflowInfo.Get: %v %v", i.WorkflowID, i.err)
+	}()
 	if i.err != nil {
 		return i.err
 	}
@@ -105,14 +108,14 @@ func (i *WorkflowInfo) Get(output ...interface{}) error {
 	}
 }
 
-type WorkflowExecutionInfo struct {
-	tp          *Tempolite
+type WorkflowExecutionInfo[T Identifier] struct {
+	tp          *Tempolite[T]
 	ExecutionID WorkflowExecutionID
 	err         error
 }
 
 // Try to find the workflow execution until it reaches a final state
-func (i *WorkflowExecutionInfo) Get(output ...interface{}) error {
+func (i *WorkflowExecutionInfo[T]) Get(output ...interface{}) error {
 
 	if i.err != nil {
 		return i.err
@@ -184,28 +187,28 @@ func (i *WorkflowExecutionInfo) Get(output ...interface{}) error {
 	}
 }
 
-func (i *WorkflowExecutionInfo) Cancel() error {
+func (i *WorkflowExecutionInfo[T]) Cancel() error {
 	// todo: implement
 	return nil
 }
 
-func (i *WorkflowExecutionInfo) Pause() error {
+func (i *WorkflowExecutionInfo[T]) Pause() error {
 	// todo: implement
 	return nil
 }
 
-func (i *WorkflowExecutionInfo) Resume() error {
+func (i *WorkflowExecutionInfo[T]) Resume() error {
 	// todo: implement
 	return nil
 }
 
-type ActivityInfo struct {
-	tp         *Tempolite
+type ActivityInfo[T Identifier] struct {
+	tp         *Tempolite[T]
 	ActivityID ActivityID
 	err        error
 }
 
-func (i *ActivityInfo) Get(output ...interface{}) error {
+func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 	if i.err != nil {
 		return i.err
 	}
@@ -301,14 +304,14 @@ func (i *ActivityInfo) Get(output ...interface{}) error {
 	}
 }
 
-type ActivityExecutionInfo struct {
-	tp          *Tempolite
+type ActivityExecutionInfo[T Identifier] struct {
+	tp          *Tempolite[T]
 	ExecutionID ActivityExecutionID
 	err         error
 }
 
 // Try to find the activity execution until it reaches a final state
-func (i *ActivityExecutionInfo) Get(output ...interface{}) error {
+func (i *ActivityExecutionInfo[T]) Get(output ...interface{}) error {
 	if i.err != nil {
 		return i.err
 	}
@@ -377,24 +380,24 @@ func (i *ActivityExecutionInfo) Get(output ...interface{}) error {
 	}
 }
 
-type SideEffectInfo struct {
-	tp    *Tempolite
+type SideEffectInfo[T Identifier] struct {
+	tp    *Tempolite[T]
 	ID    string
 	RunID string
 }
 
-func (i *SideEffectInfo) Get() ([]interface{}, error) {
+func (i *SideEffectInfo[T]) Get() ([]interface{}, error) {
 	// todo: implement
 	return nil, nil
 }
 
-type SagaInfo struct {
-	tp    *Tempolite
+type SagaInfo[T Identifier] struct {
+	tp    *Tempolite[T]
 	ID    string
 	RunID string
 }
 
-func (i *SagaInfo) Get() ([]interface{}, error) {
+func (i *SagaInfo[T]) Get() ([]interface{}, error) {
 	// todo: implement
 	return nil, nil
 }
@@ -405,43 +408,40 @@ type TempoliteContext interface {
 	EntityID() string
 	ExecutionID() string
 	EntityType() string
+	StepID() string
 }
-type WorkflowContext struct {
+
+type WorkflowContext[T Identifier] struct {
 	TempoliteContext
-	tp              *Tempolite
-	workflowID      string
-	executionID     string
-	runID           string
-	workflowType    string
-	activityCounter int
+	tp           *Tempolite[T]
+	workflowID   string
+	executionID  string
+	runID        string
+	workflowType string
+	stepID       string
 }
 
-func (ctx *WorkflowContext) NextActivityID() string {
-	ctx.activityCounter++
-	return fmt.Sprintf("%s-%d", ctx.runID, ctx.activityCounter)
-}
-
-func (w WorkflowContext) RunID() string {
+func (w WorkflowContext[T]) RunID() string {
 	return w.runID
 }
 
-func (w WorkflowContext) EntityID() string {
+func (w WorkflowContext[T]) EntityID() string {
 	return w.workflowID
 }
 
-func (w WorkflowContext) ExecutionID() string {
+func (w WorkflowContext[T]) ExecutionID() string {
 	return w.executionID
 }
 
-func (w WorkflowContext) EntityType() string {
+func (w WorkflowContext[T]) StepID() string {
+	return w.stepID
+}
+
+func (w WorkflowContext[T]) EntityType() string {
 	return "workflow"
 }
 
-func (w WorkflowContext) SideEffect(uniqueID string, handler interface{}, inputs ...any) (*SideEffectInfo, error) {
-	return nil, nil
-}
-
-func (w WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+func (w WorkflowContext[T]) GetVersion(changeID string, minSupported, maxSupported int) int {
 	log.Printf("GetVersion called for workflowType: %s, workflowID: %s, changeID: %s, min: %d, max: %d", w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
 	version, err := w.tp.getOrCreateVersion(w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
 	if err != nil {
@@ -453,144 +453,133 @@ func (w WorkflowContext) GetVersion(changeID string, minSupported, maxSupported 
 }
 
 // Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
-func (w WorkflowContext) Yield() error {
+func (w WorkflowContext[T]) Yield() error {
 	// todo: implement - could use ConsumerSignalChannel and ProducerSignalChannel behind the scene
 	return nil
 }
 
-func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, values ...any) error {
+func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], values ...any) error {
 	// todo: implement
 	return nil
 }
 
-func (w WorkflowContext) GetWorkflow(id WorkflowExecutionID) *WorkflowExecutionInfo {
+func (w WorkflowContext[T]) GetWorkflow(id WorkflowExecutionID) *WorkflowExecutionInfo[T] {
 	return w.tp.getWorkflowExecution(w, id, nil)
 }
 
-func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) *WorkflowExecutionInfo {
-	id, err := w.tp.enqueueSubWorkflow(w, handler, inputs...)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	return w.tp.getWorkflowExecution(w, id, err)
+func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}, inputs ...any) (*SideEffectInfo[T], error) {
+	return nil, nil
 }
 
-func (w WorkflowContext) ExecuteActivity(name HandlerIdentity, inputs ...any) *ActivityExecutionInfo {
-	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
+func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...any) *WorkflowInfo[T] {
+	id, err := w.tp.enqueueSubWorkflow(w, stepID, handler, inputs...)
+	return w.tp.getWorkflow(w, id, err)
+}
+
+func (w WorkflowContext[T]) ExecuteActivityFunc(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
+	id, err := w.tp.enqueueSubActivtyFunc(w, stepID, handler, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
 	}
 	fmt.Println("\t \t activity execution id", id, err)
-	return w.tp.getActivityExecution(w, id, err)
+	return w.tp.getActivity(w, id, err)
 }
 
-func (w WorkflowContext) GetActivity(id string) (*ActivityInfo, error) {
+func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo[T] {
+	id, err := w.tp.enqueueSubActivityExecution(w, stepID, name, inputs...)
+	if err != nil {
+		log.Printf("Error enqueuing activity execution: %v", err)
+	}
+	fmt.Println("\t \t activity execution id", id, err)
+	return w.tp.getActivity(w, id, err)
+}
+
+func (w WorkflowContext[T]) GetActivity(id string) (*ActivityInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
-func (w WorkflowContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-type ActivityContext struct {
+type ActivityContext[T Identifier] struct {
 	TempoliteContext
-	tp          *Tempolite
+	tp          *Tempolite[T]
 	activityID  string
 	executionID string
 	runID       string
+	stepID      string
 }
 
-func (w ActivityContext) RunID() string {
+func (w ActivityContext[T]) StepID() string {
+	return w.stepID
+}
+
+func (w ActivityContext[T]) RunID() string {
 	return w.runID
 }
 
-func (w ActivityContext) EntityID() string {
+func (w ActivityContext[T]) EntityID() string {
 	return w.activityID
 }
 
-func (w ActivityContext) ExecutionID() string {
+func (w ActivityContext[T]) ExecutionID() string {
 	return w.executionID
 }
 
-func (w ActivityContext) EntityType() string {
+func (w ActivityContext[T]) EntityType() string {
 	return "activity"
 }
 
-// func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) *ActivityExecutionInfo {
-// 	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
-
-// 	return w.tp.getActivityExecution(w, id, err)
-// }
-
-func (w ActivityContext) GetActivity(id ActivityExecutionID) *ActivityExecutionInfo {
+func (w ActivityContext[T]) GetActivity(id ActivityExecutionID) *ActivityExecutionInfo[T] {
 	return w.tp.getActivityExecution(w, id, nil)
 }
 
-type SideEffectContext struct {
+type SideEffectContext[T Identifier] struct {
 	TempoliteContext
-	tp           *Tempolite
+	tp           *Tempolite[T]
 	sideEffectID string
 	executionID  string
 	runID        string
+	stepID       string
 }
 
-func (w SideEffectContext) RunID() string {
+func (w SideEffectContext[T]) StepID() string {
+	return w.stepID
+}
+
+func (w SideEffectContext[T]) RunID() string {
 	return w.runID
 }
 
-func (w SideEffectContext) EntityID() string {
+func (w SideEffectContext[T]) EntityID() string {
 	return w.sideEffectID
 }
 
-func (w SideEffectContext) ExecutionID() string {
+func (w SideEffectContext[T]) ExecutionID() string {
 	return w.executionID
 }
 
-func (w SideEffectContext) EntityType() string {
+func (w SideEffectContext[T]) EntityType() string {
 	return "sideEffect"
 }
 
-type TransactionContext struct {
+type TransactionContext[T Identifier] struct {
 	TempoliteContext
-	tp *Tempolite
+	tp *Tempolite[T]
 }
 
-func (w TransactionContext) GetActivity(id string) (*ActivityInfo, error) {
+func (w TransactionContext[T]) GetActivity(id string) (*ActivityInfo[T], error) {
 	// todo: implement
 	return nil, nil
 }
 
-func (w TransactionContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (w TransactionContext) ExecuteSideEffect(name HandlerIdentity, inputs ...any) (*SideEffectInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (w TransactionContext) EntityType() string {
+func (w TransactionContext[T]) EntityType() string {
 	return "transaction"
 }
 
-type CompensationContext struct {
+type CompensationContext[T Identifier] struct {
 	TempoliteContext
-	tp *Tempolite
+	tp *Tempolite[T]
 }
 
-func (w CompensationContext) GetActivity(id string) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (w CompensationContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
-}
-
-func (w CompensationContext) EntityType() string {
+func (w CompensationContext[T]) EntityType() string {
 	return "compensation"
 }

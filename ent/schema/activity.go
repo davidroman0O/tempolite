@@ -20,6 +20,7 @@ func (Activity) Fields() []ent.Field {
 			Unique(),
 		field.String("identity").
 			NotEmpty(),
+		field.String("step_id").NotEmpty(),
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),

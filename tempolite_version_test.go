@@ -15,7 +15,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		ChangeFlag2 bool
 	}
 
-	testWorkflow := func(ctx WorkflowContext, input testWorkflowInput) (string, error) {
+	testWorkflow := func(ctx WorkflowContext[testIdentifier], input testWorkflowInput) (string, error) {
 		var result string
 
 		changeFlag1Value := int(input.ChangeFlag1)
@@ -49,7 +49,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	var changeFlag2 bool
 
 	// First run with WithDestructive
-	tp, err := New(context.Background(), WithPath(dbPath), WithDestructive())
+	tp, err := New[testIdentifier](context.Background(), WithPath(dbPath), WithDestructive())
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -58,7 +58,8 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 
-	id, err := tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	var result string
+	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -67,11 +68,6 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	var result string
-	err = tp.GetWorkflow(id).Get(&result)
-	if err != nil {
-		t.Fatalf("info.Get failed: %v", err)
-	}
 	if result != "AX" {
 		t.Errorf("Expected AX, got %s", result)
 	}
@@ -79,7 +75,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Second run, Change1 to version 1
-	tp, err = New(context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -90,7 +86,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 1
 
-	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -99,10 +95,6 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	err = tp.GetWorkflow(id).Get(&result)
-	if err != nil {
-		t.Fatalf("info.Get failed: %v", err)
-	}
 	if result != "BX" {
 		t.Errorf("Expected BX, got %s", result)
 	}
@@ -110,7 +102,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Third run, Change1 to version 2
-	tp, err = New(context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -121,7 +113,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 2
 
-	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -130,10 +122,6 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	err = tp.GetWorkflow(id).Get(&result)
-	if err != nil {
-		t.Fatalf("info.Get failed: %v", err)
-	}
 	if result != "CX" {
 		t.Errorf("Expected CX, got %s", result)
 	}
@@ -141,7 +129,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Fourth run, activate Change2
-	tp, err = New(context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -153,7 +141,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	changeFlag1 = 0
 	changeFlag2 = true
 
-	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -162,10 +150,6 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	err = tp.GetWorkflow(id).Get(&result)
-	if err != nil {
-		t.Fatalf("info.Get failed: %v", err)
-	}
 	if result != "CY" {
 		t.Errorf("Expected CY, got %s", result)
 	}

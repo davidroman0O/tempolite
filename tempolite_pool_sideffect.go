@@ -7,8 +7,8 @@ import (
 	"github.com/davidroman0O/retrypool"
 )
 
-type sideEffectTask struct {
-	ctx         SideEffectContext
+type sideEffectTask[T Identifier] struct {
+	ctx         SideEffectContext[T]
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -17,19 +17,19 @@ type sideEffectTask struct {
 	retry       func() error
 }
 
-func (tp *Tempolite) createSideEffectPool() *retrypool.Pool[*sideEffectTask] {
-	opts := []retrypool.Option[*sideEffectTask]{
-		retrypool.WithAttempts[*sideEffectTask](1),
+func (tp *Tempolite[T]) createSideEffectPool() *retrypool.Pool[*sideEffectTask[T]] {
+	opts := []retrypool.Option[*sideEffectTask[T]]{
+		retrypool.WithAttempts[*sideEffectTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.sideEffectOnSuccess),
 		retrypool.WithOnTaskFailure(tp.sideEffectOnFailure),
 		retrypool.WithPanicHandler(tp.sideEffectOnPanic),
 		retrypool.WithOnRetry(tp.sideEffectOnRetry),
 	}
 
-	workers := []retrypool.Worker[*sideEffectTask]{}
+	workers := []retrypool.Worker[*sideEffectTask[T]]{}
 
 	for i := 0; i < 5; i++ {
-		workers = append(workers, sideEffectWorker{id: i, tp: tp})
+		workers = append(workers, sideEffectWorker[T]{id: i, tp: tp})
 	}
 
 	return retrypool.New(
@@ -39,30 +39,30 @@ func (tp *Tempolite) createSideEffectPool() *retrypool.Pool[*sideEffectTask] {
 
 }
 
-func (tp *Tempolite) sideEffectOnPanic(task *sideEffectTask, v interface{}, stackTrace string) {
+func (tp *Tempolite[T]) sideEffectOnPanic(task *sideEffectTask[T], v interface{}, stackTrace string) {
 	log.Printf("Task panicked: %v", v)
 	log.Println(stackTrace)
 }
 
-func (tp *Tempolite) sideEffectOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*sideEffectTask]) {
+func (tp *Tempolite[T]) sideEffectOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*sideEffectTask[T]]) {
 	log.Printf("onHandlerTaskRetry: %d, %v", attempt, err)
 }
 
-func (tp *Tempolite) sideEffectOnSuccess(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask]) {
+func (tp *Tempolite[T]) sideEffectOnSuccess(controller retrypool.WorkerController[*sideEffectTask[T]], workerID int, worker retrypool.Worker[*sideEffectTask[T]], task *retrypool.TaskWrapper[*sideEffectTask[T]]) {
 
 }
 
-func (tp *Tempolite) sideEffectOnFailure(controller retrypool.WorkerController[*sideEffectTask], workerID int, worker retrypool.Worker[*sideEffectTask], task *retrypool.TaskWrapper[*sideEffectTask], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite[T]) sideEffectOnFailure(controller retrypool.WorkerController[*sideEffectTask[T]], workerID int, worker retrypool.Worker[*sideEffectTask[T]], task *retrypool.TaskWrapper[*sideEffectTask[T]], err error) retrypool.DeadTaskAction {
 
 	return retrypool.DeadTaskActionDoNothing
 }
 
-type sideEffectWorker struct {
+type sideEffectWorker[T Identifier] struct {
 	id int
-	tp *Tempolite
+	tp *Tempolite[T]
 }
 
-func (w sideEffectWorker) Run(ctx context.Context, data *sideEffectTask) error {
+func (w sideEffectWorker[T]) Run(ctx context.Context, data *sideEffectTask[T]) error {
 
 	return nil
 }

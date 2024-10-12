@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite) schedulerExecutionActivity() {
+func (tp *Tempolite[T]) schedulerExecutionActivity() {
 	defer close(tp.schedulerExecutionActivityDone)
 	for {
 		select {
@@ -71,14 +71,15 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 						inputs = append(inputs, realInput)
 					}
 
-					contextActivity := ActivityContext{
+					contextActivity := ActivityContext[T]{
 						tp:          tp,
 						activityID:  activityEntity.ID,
 						executionID: act.ID,
 						runID:       act.RunID,
+						stepID:      activityEntity.StepID,
 					}
 
-					task := &activityTask{
+					task := &activityTask[T]{
 						ctx:         contextActivity,
 						handlerName: activityHandlerInfo.HandlerLongName,
 						handler:     activityHandlerInfo.Handler,
@@ -149,7 +150,7 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 	}
 }
 
-func (tp *Tempolite) schedulerExecutionWorkflow() {
+func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 	defer close(tp.schedulerExecutionWorkflowDone)
 	for {
 		select {
@@ -209,15 +210,16 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 						inputs = append(inputs, realInput)
 					}
 
-					contextWorkflow := WorkflowContext{
+					contextWorkflow := WorkflowContext[T]{
 						tp:           tp,
 						workflowID:   workflowEntity.ID,
 						executionID:  pendingWorkflowExecution.ID,
 						runID:        pendingWorkflowExecution.RunID,
 						workflowType: workflowEntity.Identity,
+						stepID:       workflowEntity.StepID,
 					}
 
-					task := &workflowTask{
+					task := &workflowTask[T]{
 						ctx:         contextWorkflow,
 						handlerName: workflowHandlerInfo.HandlerLongName,
 						handler:     workflowHandlerInfo.Handler,
@@ -278,7 +280,7 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 					if err := tp.workflowPool.
 						Dispatch(
 							task,
-							retrypool.WithImmediateRetry[*workflowTask](),
+							retrypool.WithImmediateRetry[*workflowTask[T]](),
 						); err != nil {
 						log.Printf("scheduler: Dispatch failed: %v", err)
 						continue

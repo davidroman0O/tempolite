@@ -16,6 +16,8 @@ const (
 	FieldID = "id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldStepID holds the string denoting the step_id field in the database.
+	FieldStepID = "step_id"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
@@ -41,6 +43,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldName,
+	FieldStepID,
 	FieldInput,
 	FieldRetryPolicy,
 	FieldTimeout,
@@ -60,6 +63,8 @@ func ValidColumn(column string) bool {
 var (
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	StepIDValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -75,6 +80,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByStepID orders the results by the step_id field.
+func ByStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStepID, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

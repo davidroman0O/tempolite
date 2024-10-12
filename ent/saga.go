@@ -21,6 +21,8 @@ type Saga struct {
 	ID string `json:"id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// StepID holds the value of the "step_id" field.
+	StepID string `json:"step_id,omitempty"`
 	// Input holds the value of the "input" field.
 	Input []interface{} `json:"input,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
@@ -60,7 +62,7 @@ func (*Saga) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case saga.FieldInput, saga.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case saga.FieldID, saga.FieldName:
+		case saga.FieldID, saga.FieldName, saga.FieldStepID:
 			values[i] = new(sql.NullString)
 		case saga.FieldTimeout, saga.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -90,6 +92,12 @@ func (s *Saga) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				s.Name = value.String
+			}
+		case saga.FieldStepID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field step_id", values[i])
+			} else if value.Valid {
+				s.StepID = value.String
 			}
 		case saga.FieldInput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -162,6 +170,9 @@ func (s *Saga) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", s.ID))
 	builder.WriteString("name=")
 	builder.WriteString(s.Name)
+	builder.WriteString(", ")
+	builder.WriteString("step_id=")
+	builder.WriteString(s.StepID)
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", s.Input))

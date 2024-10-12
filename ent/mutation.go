@@ -59,6 +59,7 @@ type ActivityMutation struct {
 	typ               string
 	id                *string
 	identity          *string
+	step_id           *string
 	status            *activity.Status
 	handler_name      *string
 	input             *[]interface{}
@@ -213,6 +214,42 @@ func (m *ActivityMutation) OldIdentity(ctx context.Context) (v string, err error
 // ResetIdentity resets all changes to the "identity" field.
 func (m *ActivityMutation) ResetIdentity() {
 	m.identity = nil
+}
+
+// SetStepID sets the "step_id" field.
+func (m *ActivityMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *ActivityMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *ActivityMutation) ResetStepID() {
+	m.step_id = nil
 }
 
 // SetStatus sets the "status" field.
@@ -560,9 +597,12 @@ func (m *ActivityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.identity != nil {
 		fields = append(fields, activity.FieldIdentity)
+	}
+	if m.step_id != nil {
+		fields = append(fields, activity.FieldStepID)
 	}
 	if m.status != nil {
 		fields = append(fields, activity.FieldStatus)
@@ -592,6 +632,8 @@ func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case activity.FieldIdentity:
 		return m.Identity()
+	case activity.FieldStepID:
+		return m.StepID()
 	case activity.FieldStatus:
 		return m.Status()
 	case activity.FieldHandlerName:
@@ -615,6 +657,8 @@ func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value
 	switch name {
 	case activity.FieldIdentity:
 		return m.OldIdentity(ctx)
+	case activity.FieldStepID:
+		return m.OldStepID(ctx)
 	case activity.FieldStatus:
 		return m.OldStatus(ctx)
 	case activity.FieldHandlerName:
@@ -642,6 +686,13 @@ func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIdentity(v)
+		return nil
+	case activity.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
 		return nil
 	case activity.FieldStatus:
 		v, ok := value.(activity.Status)
@@ -751,6 +802,9 @@ func (m *ActivityMutation) ResetField(name string) error {
 	switch name {
 	case activity.FieldIdentity:
 		m.ResetIdentity()
+		return nil
+	case activity.FieldStepID:
+		m.ResetStepID()
 		return nil
 	case activity.FieldStatus:
 		m.ResetStatus()
@@ -1678,17 +1732,22 @@ func (m *ActivityExecutionMutation) ResetEdge(name string) error {
 // ExecutionRelationshipMutation represents an operation that mutates the ExecutionRelationship nodes in the graph.
 type ExecutionRelationshipMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int
-	parent_id     *string
-	child_id      *string
-	parent_type   *executionrelationship.ParentType
-	child_type    *executionrelationship.ChildType
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*ExecutionRelationship, error)
-	predicates    []predicate.ExecutionRelationship
+	op               Op
+	typ              string
+	id               *int
+	run_id           *string
+	parent_entity_id *string
+	child_entity_id  *string
+	parent_id        *string
+	child_id         *string
+	parent_type      *executionrelationship.ParentType
+	child_type       *executionrelationship.ChildType
+	parent_step_id   *string
+	child_step_id    *string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*ExecutionRelationship, error)
+	predicates       []predicate.ExecutionRelationship
 }
 
 var _ ent.Mutation = (*ExecutionRelationshipMutation)(nil)
@@ -1787,6 +1846,114 @@ func (m *ExecutionRelationshipMutation) IDs(ctx context.Context) ([]int, error) 
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetRunID sets the "run_id" field.
+func (m *ExecutionRelationshipMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *ExecutionRelationshipMutation) ResetRunID() {
+	m.run_id = nil
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (m *ExecutionRelationshipMutation) SetParentEntityID(s string) {
+	m.parent_entity_id = &s
+}
+
+// ParentEntityID returns the value of the "parent_entity_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ParentEntityID() (r string, exists bool) {
+	v := m.parent_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentEntityID returns the old "parent_entity_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldParentEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentEntityID: %w", err)
+	}
+	return oldValue.ParentEntityID, nil
+}
+
+// ResetParentEntityID resets all changes to the "parent_entity_id" field.
+func (m *ExecutionRelationshipMutation) ResetParentEntityID() {
+	m.parent_entity_id = nil
+}
+
+// SetChildEntityID sets the "child_entity_id" field.
+func (m *ExecutionRelationshipMutation) SetChildEntityID(s string) {
+	m.child_entity_id = &s
+}
+
+// ChildEntityID returns the value of the "child_entity_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ChildEntityID() (r string, exists bool) {
+	v := m.child_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChildEntityID returns the old "child_entity_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldChildEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChildEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChildEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChildEntityID: %w", err)
+	}
+	return oldValue.ChildEntityID, nil
+}
+
+// ResetChildEntityID resets all changes to the "child_entity_id" field.
+func (m *ExecutionRelationshipMutation) ResetChildEntityID() {
+	m.child_entity_id = nil
 }
 
 // SetParentID sets the "parent_id" field.
@@ -1933,6 +2100,78 @@ func (m *ExecutionRelationshipMutation) ResetChildType() {
 	m.child_type = nil
 }
 
+// SetParentStepID sets the "parent_step_id" field.
+func (m *ExecutionRelationshipMutation) SetParentStepID(s string) {
+	m.parent_step_id = &s
+}
+
+// ParentStepID returns the value of the "parent_step_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ParentStepID() (r string, exists bool) {
+	v := m.parent_step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentStepID returns the old "parent_step_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldParentStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentStepID: %w", err)
+	}
+	return oldValue.ParentStepID, nil
+}
+
+// ResetParentStepID resets all changes to the "parent_step_id" field.
+func (m *ExecutionRelationshipMutation) ResetParentStepID() {
+	m.parent_step_id = nil
+}
+
+// SetChildStepID sets the "child_step_id" field.
+func (m *ExecutionRelationshipMutation) SetChildStepID(s string) {
+	m.child_step_id = &s
+}
+
+// ChildStepID returns the value of the "child_step_id" field in the mutation.
+func (m *ExecutionRelationshipMutation) ChildStepID() (r string, exists bool) {
+	v := m.child_step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChildStepID returns the old "child_step_id" field's value of the ExecutionRelationship entity.
+// If the ExecutionRelationship object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionRelationshipMutation) OldChildStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChildStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChildStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChildStepID: %w", err)
+	}
+	return oldValue.ChildStepID, nil
+}
+
+// ResetChildStepID resets all changes to the "child_step_id" field.
+func (m *ExecutionRelationshipMutation) ResetChildStepID() {
+	m.child_step_id = nil
+}
+
 // Where appends a list predicates to the ExecutionRelationshipMutation builder.
 func (m *ExecutionRelationshipMutation) Where(ps ...predicate.ExecutionRelationship) {
 	m.predicates = append(m.predicates, ps...)
@@ -1967,7 +2206,16 @@ func (m *ExecutionRelationshipMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExecutionRelationshipMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 9)
+	if m.run_id != nil {
+		fields = append(fields, executionrelationship.FieldRunID)
+	}
+	if m.parent_entity_id != nil {
+		fields = append(fields, executionrelationship.FieldParentEntityID)
+	}
+	if m.child_entity_id != nil {
+		fields = append(fields, executionrelationship.FieldChildEntityID)
+	}
 	if m.parent_id != nil {
 		fields = append(fields, executionrelationship.FieldParentID)
 	}
@@ -1980,6 +2228,12 @@ func (m *ExecutionRelationshipMutation) Fields() []string {
 	if m.child_type != nil {
 		fields = append(fields, executionrelationship.FieldChildType)
 	}
+	if m.parent_step_id != nil {
+		fields = append(fields, executionrelationship.FieldParentStepID)
+	}
+	if m.child_step_id != nil {
+		fields = append(fields, executionrelationship.FieldChildStepID)
+	}
 	return fields
 }
 
@@ -1988,6 +2242,12 @@ func (m *ExecutionRelationshipMutation) Fields() []string {
 // schema.
 func (m *ExecutionRelationshipMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case executionrelationship.FieldRunID:
+		return m.RunID()
+	case executionrelationship.FieldParentEntityID:
+		return m.ParentEntityID()
+	case executionrelationship.FieldChildEntityID:
+		return m.ChildEntityID()
 	case executionrelationship.FieldParentID:
 		return m.ParentID()
 	case executionrelationship.FieldChildID:
@@ -1996,6 +2256,10 @@ func (m *ExecutionRelationshipMutation) Field(name string) (ent.Value, bool) {
 		return m.ParentType()
 	case executionrelationship.FieldChildType:
 		return m.ChildType()
+	case executionrelationship.FieldParentStepID:
+		return m.ParentStepID()
+	case executionrelationship.FieldChildStepID:
+		return m.ChildStepID()
 	}
 	return nil, false
 }
@@ -2005,6 +2269,12 @@ func (m *ExecutionRelationshipMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ExecutionRelationshipMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case executionrelationship.FieldRunID:
+		return m.OldRunID(ctx)
+	case executionrelationship.FieldParentEntityID:
+		return m.OldParentEntityID(ctx)
+	case executionrelationship.FieldChildEntityID:
+		return m.OldChildEntityID(ctx)
 	case executionrelationship.FieldParentID:
 		return m.OldParentID(ctx)
 	case executionrelationship.FieldChildID:
@@ -2013,6 +2283,10 @@ func (m *ExecutionRelationshipMutation) OldField(ctx context.Context, name strin
 		return m.OldParentType(ctx)
 	case executionrelationship.FieldChildType:
 		return m.OldChildType(ctx)
+	case executionrelationship.FieldParentStepID:
+		return m.OldParentStepID(ctx)
+	case executionrelationship.FieldChildStepID:
+		return m.OldChildStepID(ctx)
 	}
 	return nil, fmt.Errorf("unknown ExecutionRelationship field %s", name)
 }
@@ -2022,6 +2296,27 @@ func (m *ExecutionRelationshipMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *ExecutionRelationshipMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case executionrelationship.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case executionrelationship.FieldParentEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentEntityID(v)
+		return nil
+	case executionrelationship.FieldChildEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChildEntityID(v)
+		return nil
 	case executionrelationship.FieldParentID:
 		v, ok := value.(string)
 		if !ok {
@@ -2049,6 +2344,20 @@ func (m *ExecutionRelationshipMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetChildType(v)
+		return nil
+	case executionrelationship.FieldParentStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentStepID(v)
+		return nil
+	case executionrelationship.FieldChildStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChildStepID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ExecutionRelationship field %s", name)
@@ -2099,6 +2408,15 @@ func (m *ExecutionRelationshipMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ExecutionRelationshipMutation) ResetField(name string) error {
 	switch name {
+	case executionrelationship.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case executionrelationship.FieldParentEntityID:
+		m.ResetParentEntityID()
+		return nil
+	case executionrelationship.FieldChildEntityID:
+		m.ResetChildEntityID()
+		return nil
 	case executionrelationship.FieldParentID:
 		m.ResetParentID()
 		return nil
@@ -2110,6 +2428,12 @@ func (m *ExecutionRelationshipMutation) ResetField(name string) error {
 		return nil
 	case executionrelationship.FieldChildType:
 		m.ResetChildType()
+		return nil
+	case executionrelationship.FieldParentStepID:
+		m.ResetParentStepID()
+		return nil
+	case executionrelationship.FieldChildStepID:
+		m.ResetChildStepID()
 		return nil
 	}
 	return fmt.Errorf("unknown ExecutionRelationship field %s", name)
@@ -3260,6 +3584,7 @@ type SagaMutation struct {
 	typ               string
 	id                *string
 	name              *string
+	step_id           *string
 	input             *[]interface{}
 	appendinput       []interface{}
 	retry_policy      *schema.RetryPolicy
@@ -3412,6 +3737,42 @@ func (m *SagaMutation) OldName(ctx context.Context) (v string, err error) {
 // ResetName resets all changes to the "name" field.
 func (m *SagaMutation) ResetName() {
 	m.name = nil
+}
+
+// SetStepID sets the "step_id" field.
+func (m *SagaMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *SagaMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the Saga entity.
+// If the Saga object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SagaMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *SagaMutation) ResetStepID() {
+	m.step_id = nil
 }
 
 // SetInput sets the "input" field.
@@ -3687,9 +4048,12 @@ func (m *SagaMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SagaMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.name != nil {
 		fields = append(fields, saga.FieldName)
+	}
+	if m.step_id != nil {
+		fields = append(fields, saga.FieldStepID)
 	}
 	if m.input != nil {
 		fields = append(fields, saga.FieldInput)
@@ -3713,6 +4077,8 @@ func (m *SagaMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case saga.FieldName:
 		return m.Name()
+	case saga.FieldStepID:
+		return m.StepID()
 	case saga.FieldInput:
 		return m.Input()
 	case saga.FieldRetryPolicy:
@@ -3732,6 +4098,8 @@ func (m *SagaMutation) OldField(ctx context.Context, name string) (ent.Value, er
 	switch name {
 	case saga.FieldName:
 		return m.OldName(ctx)
+	case saga.FieldStepID:
+		return m.OldStepID(ctx)
 	case saga.FieldInput:
 		return m.OldInput(ctx)
 	case saga.FieldRetryPolicy:
@@ -3755,6 +4123,13 @@ func (m *SagaMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case saga.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
 		return nil
 	case saga.FieldInput:
 		v, ok := value.([]interface{})
@@ -3850,6 +4225,9 @@ func (m *SagaMutation) ResetField(name string) error {
 	switch name {
 	case saga.FieldName:
 		m.ResetName()
+		return nil
+	case saga.FieldStepID:
+		m.ResetStepID()
 		return nil
 	case saga.FieldInput:
 		m.ResetInput()
@@ -5742,6 +6120,7 @@ type SideEffectMutation struct {
 	typ               string
 	id                *string
 	identity          *string
+	step_id           *string
 	handler_name      *string
 	status            *sideeffect.Status
 	input             *[]interface{}
@@ -5896,6 +6275,42 @@ func (m *SideEffectMutation) OldIdentity(ctx context.Context) (v string, err err
 // ResetIdentity resets all changes to the "identity" field.
 func (m *SideEffectMutation) ResetIdentity() {
 	m.identity = nil
+}
+
+// SetStepID sets the "step_id" field.
+func (m *SideEffectMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *SideEffectMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the SideEffect entity.
+// If the SideEffect object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *SideEffectMutation) ResetStepID() {
+	m.step_id = nil
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -6243,9 +6658,12 @@ func (m *SideEffectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.identity != nil {
 		fields = append(fields, sideeffect.FieldIdentity)
+	}
+	if m.step_id != nil {
+		fields = append(fields, sideeffect.FieldStepID)
 	}
 	if m.handler_name != nil {
 		fields = append(fields, sideeffect.FieldHandlerName)
@@ -6275,6 +6693,8 @@ func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case sideeffect.FieldIdentity:
 		return m.Identity()
+	case sideeffect.FieldStepID:
+		return m.StepID()
 	case sideeffect.FieldHandlerName:
 		return m.HandlerName()
 	case sideeffect.FieldStatus:
@@ -6298,6 +6718,8 @@ func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Val
 	switch name {
 	case sideeffect.FieldIdentity:
 		return m.OldIdentity(ctx)
+	case sideeffect.FieldStepID:
+		return m.OldStepID(ctx)
 	case sideeffect.FieldHandlerName:
 		return m.OldHandlerName(ctx)
 	case sideeffect.FieldStatus:
@@ -6325,6 +6747,13 @@ func (m *SideEffectMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIdentity(v)
+		return nil
+	case sideeffect.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
 		return nil
 	case sideeffect.FieldHandlerName:
 		v, ok := value.(string)
@@ -6434,6 +6863,9 @@ func (m *SideEffectMutation) ResetField(name string) error {
 	switch name {
 	case sideeffect.FieldIdentity:
 		m.ResetIdentity()
+		return nil
+	case sideeffect.FieldStepID:
+		m.ResetStepID()
 		return nil
 	case sideeffect.FieldHandlerName:
 		m.ResetHandlerName()
@@ -7951,6 +8383,7 @@ type WorkflowMutation struct {
 	op                Op
 	typ               string
 	id                *string
+	step_id           *string
 	status            *workflow.Status
 	identity          *string
 	handler_name      *string
@@ -8070,6 +8503,42 @@ func (m *WorkflowMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetStepID sets the "step_id" field.
+func (m *WorkflowMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *WorkflowMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *WorkflowMutation) ResetStepID() {
+	m.step_id = nil
 }
 
 // SetStatus sets the "status" field.
@@ -8453,7 +8922,10 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
+	if m.step_id != nil {
+		fields = append(fields, workflow.FieldStepID)
+	}
 	if m.status != nil {
 		fields = append(fields, workflow.FieldStatus)
 	}
@@ -8483,6 +8955,8 @@ func (m *WorkflowMutation) Fields() []string {
 // schema.
 func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case workflow.FieldStepID:
+		return m.StepID()
 	case workflow.FieldStatus:
 		return m.Status()
 	case workflow.FieldIdentity:
@@ -8506,6 +8980,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case workflow.FieldStepID:
+		return m.OldStepID(ctx)
 	case workflow.FieldStatus:
 		return m.OldStatus(ctx)
 	case workflow.FieldIdentity:
@@ -8529,6 +9005,13 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case workflow.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
+		return nil
 	case workflow.FieldStatus:
 		v, ok := value.(workflow.Status)
 		if !ok {
@@ -8642,6 +9125,9 @@ func (m *WorkflowMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowMutation) ResetField(name string) error {
 	switch name {
+	case workflow.FieldStepID:
+		m.ResetStepID()
+		return nil
 	case workflow.FieldStatus:
 		m.ResetStatus()
 		return nil

@@ -6,10 +6,12 @@ import (
 	"testing"
 )
 
+type testIdentifier string
+
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimple$ .
 func TestWorkflowSimple(t *testing.T) {
 
-	tp, err := New(
+	tp, err := New[testIdentifier](
 		context.Background(),
 		WithPath("./db/tempolite-workflow-simple.db"),
 		WithDestructive(),
@@ -25,7 +27,7 @@ func TestWorkflowSimple(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
 		fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
@@ -43,7 +45,7 @@ func TestWorkflowSimple(t *testing.T) {
 		return true
 	})
 
-	if _, err := tp.Workflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -60,7 +62,7 @@ type testSimpleActivity struct {
 	SpecialValue string
 }
 
-func (h testSimpleActivity) Run(ctx ActivityContext, task testMessageActivitySimple) (int, string, error) {
+func (h testSimpleActivity) Run(ctx ActivityContext[testIdentifier], task testMessageActivitySimple) (int, string, error) {
 
 	fmt.Println("testSimpleActivity: ", task.Message)
 
@@ -70,7 +72,7 @@ func (h testSimpleActivity) Run(ctx ActivityContext, task testMessageActivitySim
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowActivitySimple$ .
 func TestWorkflowActivitySimple(t *testing.T) {
 
-	tp, err := New(
+	tp, err := New[testIdentifier](
 		context.Background(),
 		WithPath("./db/tempolite-workflow-activity-simple.db"),
 		WithDestructive(),
@@ -86,12 +88,12 @@ func TestWorkflowActivitySimple(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
 		fmt.Println("localWrkflw: ", input, msg)
 
 		var number int
 		var str string
-		err := ctx.ExecuteActivity(As[testSimpleActivity](), testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		err := ctx.ExecuteActivity("test", As[testSimpleActivity, testIdentifier](), testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
 		if err != nil {
 			return err
 		}
@@ -106,7 +108,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		return nil
 	}
 
-	if err := tp.RegisterActivity(AsActivity[testSimpleActivity](testSimpleActivity{SpecialValue: "test"})); err != nil {
+	if err := tp.RegisterActivity(AsActivity[testSimpleActivity, testIdentifier](testSimpleActivity{SpecialValue: "test"})); err != nil {
 		t.Fatalf("RegisterActivity failed: %v", err)
 	}
 	if err := tp.RegisterWorkflow(localWrkflw); err != nil {
@@ -118,7 +120,83 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		return true
 	})
 
-	if _, err := tp.Workflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
+		t.Fatalf("EnqueueActivityFunc failed: %v", err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+}
+
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowActivityMore$ .
+func TestWorkflowActivityMore(t *testing.T) {
+
+	tp, err := New[testIdentifier](
+		context.Background(),
+		WithPath("./db/tempolite-workflow-activity-more.db"),
+		WithDestructive(),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tp.Close()
+
+	type workflowData struct {
+		Message string
+	}
+
+	failed := false
+
+	activtfn := func(ctx ActivityContext[testIdentifier], id int) (int, error) {
+		fmt.Println("activtfn: ", id)
+
+		if !failed {
+			failed = true
+			return -1, fmt.Errorf("on purpose error")
+		}
+		return 69, nil
+	}
+
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
+		fmt.Println("localWrkflw: ", input, msg)
+
+		var subnumber int
+		if err := ctx.ExecuteActivityFunc("first", activtfn, 420).Get(&subnumber); err != nil {
+			return err
+		}
+
+		fmt.Println("subnumber: ", subnumber)
+
+		var number int
+		var str string
+		err := ctx.ExecuteActivity("second", As[testSimpleActivity, testIdentifier](), testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("number: ", number, "str: ", str)
+
+		return nil
+	}
+
+	if err := tp.RegisterActivityFunc(activtfn); err != nil {
+		t.Fatalf("RegisterActivityFunc failed: %v", err)
+	}
+
+	if err := tp.RegisterActivity(AsActivity[testSimpleActivity, testIdentifier](testSimpleActivity{SpecialValue: "test"})); err != nil {
+		t.Fatalf("RegisterActivity failed: %v", err)
+	}
+	if err := tp.RegisterWorkflow(localWrkflw); err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+
+	tp.workflows.Range(func(key, value any) bool {
+		fmt.Println("key: ", key, "value: ", value)
+		return true
+	})
+
+	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -130,7 +208,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleInfoGet$ .
 func TestWorkflowSimpleInfoGet(t *testing.T) {
 
-	tp, err := New(
+	tp, err := New[testIdentifier](
 		context.Background(),
 		WithPath("./db/tempolite-workflow-infoget-simple.db"),
 		WithDestructive(),
@@ -146,7 +224,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 		fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
@@ -164,19 +242,13 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 		return true
 	})
 
-	var id WorkflowID
-	if id, err = tp.Workflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	var number int
+	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
 	if err := tp.Wait(); err != nil {
 		t.Fatalf("Wait failed: %v", err)
-	}
-
-	var number int
-	err = tp.GetWorkflow(id).Get(&number)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
 	}
 
 	fmt.Println("data: ", number)
@@ -185,7 +257,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailChild$ .
 func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 
-	tp, err := New(
+	tp, err := New[testIdentifier](
 		context.Background(),
 		WithPath("./db/tempolite-workflow-sub-info-child-fail.db"),
 		WithDestructive(),
@@ -201,7 +273,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 
 	failed := false
 
-	anotherWrk := func(ctx WorkflowContext) error {
+	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
 		fmt.Println("anotherWrk")
 		// If we fail here, then the the info.Get will fail and the parent workflow, will also fail
 		// but does that mean, we should be retried?
@@ -213,10 +285,10 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 		fmt.Println("localWrkflw: ", failed, input, msg)
 
-		err := ctx.ExecuteWorkflow(anotherWrk).Get()
+		err := ctx.Workflow("test", anotherWrk).Get()
 
 		if err != nil {
 			fmt.Println("info.Get failed: ", err)
@@ -238,19 +310,13 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		return true
 	})
 
-	var id WorkflowID
-	if id, err = tp.Workflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	var number int
+	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
 	if err := tp.Wait(); err != nil {
 		t.Fatalf("Wait failed: %v", err)
-	}
-
-	var number int
-	err = tp.GetWorkflow(id).Get(&number)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
 	}
 
 	fmt.Println("data: ", number)
@@ -259,7 +325,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailParent$ .
 func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
-	tp, err := New(
+	tp, err := New[testIdentifier](
 		context.Background(),
 		WithPath("./db/tempolite-workflow-sub-info-parent-fail.db"),
 		WithDestructive(),
@@ -275,15 +341,15 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	failed := false
 
-	anotherWrk := func(ctx WorkflowContext) error {
+	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
 		fmt.Println("anotherWrk")
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 		fmt.Println("localWrkflw: ", failed, input, msg)
 
-		err := ctx.ExecuteWorkflow(anotherWrk).Get()
+		err := ctx.Workflow("test", anotherWrk).Get()
 		if err != nil {
 			fmt.Println("info.Get failed: ", err)
 			return -1, err
@@ -310,19 +376,13 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 		return true
 	})
 
-	var id WorkflowID
-	if id, err = tp.Workflow(localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	var number int
+	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
 	if err := tp.Wait(); err != nil {
 		t.Fatalf("Wait failed: %v", err)
-	}
-
-	var number int
-	err = tp.GetWorkflow(id).Get(&number)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
 	}
 
 	fmt.Println("data: ", number)

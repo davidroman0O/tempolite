@@ -28,6 +28,12 @@ func (sc *SagaCreate) SetName(s string) *SagaCreate {
 	return sc
 }
 
+// SetStepID sets the "step_id" field.
+func (sc *SagaCreate) SetStepID(s string) *SagaCreate {
+	sc.mutation.SetStepID(s)
+	return sc
+}
+
 // SetInput sets the "input" field.
 func (sc *SagaCreate) SetInput(i []interface{}) *SagaCreate {
 	sc.mutation.SetInput(i)
@@ -148,6 +154,14 @@ func (sc *SagaCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Saga.name": %w`, err)}
 		}
 	}
+	if _, ok := sc.mutation.StepID(); !ok {
+		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "Saga.step_id"`)}
+	}
+	if v, ok := sc.mutation.StepID(); ok {
+		if err := saga.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Saga.step_id": %w`, err)}
+		}
+	}
 	if _, ok := sc.mutation.Input(); !ok {
 		return &ValidationError{Name: "input", err: errors.New(`ent: missing required field "Saga.input"`)}
 	}
@@ -192,6 +206,10 @@ func (sc *SagaCreate) createSpec() (*Saga, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.Name(); ok {
 		_spec.SetField(saga.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := sc.mutation.StepID(); ok {
+		_spec.SetField(saga.FieldStepID, field.TypeString, value)
+		_node.StepID = value
 	}
 	if value, ok := sc.mutation.Input(); ok {
 		_spec.SetField(saga.FieldInput, field.TypeJSON, value)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -29,12 +30,16 @@ func init() {
 	activityDescIdentity := activityFields[1].Descriptor()
 	// activity.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	activity.IdentityValidator = activityDescIdentity.Validators[0].(func(string) error)
+	// activityDescStepID is the schema descriptor for step_id field.
+	activityDescStepID := activityFields[2].Descriptor()
+	// activity.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	activity.StepIDValidator = activityDescStepID.Validators[0].(func(string) error)
 	// activityDescHandlerName is the schema descriptor for handler_name field.
-	activityDescHandlerName := activityFields[3].Descriptor()
+	activityDescHandlerName := activityFields[4].Descriptor()
 	// activity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	activity.HandlerNameValidator = activityDescHandlerName.Validators[0].(func(string) error)
 	// activityDescCreatedAt is the schema descriptor for created_at field.
-	activityDescCreatedAt := activityFields[7].Descriptor()
+	activityDescCreatedAt := activityFields[8].Descriptor()
 	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
 	activityexecutionFields := schema.ActivityExecution{}.Fields()
@@ -53,6 +58,28 @@ func init() {
 	activityexecution.DefaultUpdatedAt = activityexecutionDescUpdatedAt.Default.(func() time.Time)
 	// activityexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	activityexecution.UpdateDefaultUpdatedAt = activityexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	executionrelationshipFields := schema.ExecutionRelationship{}.Fields()
+	_ = executionrelationshipFields
+	// executionrelationshipDescRunID is the schema descriptor for run_id field.
+	executionrelationshipDescRunID := executionrelationshipFields[0].Descriptor()
+	// executionrelationship.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	executionrelationship.RunIDValidator = executionrelationshipDescRunID.Validators[0].(func(string) error)
+	// executionrelationshipDescParentEntityID is the schema descriptor for parent_entity_id field.
+	executionrelationshipDescParentEntityID := executionrelationshipFields[1].Descriptor()
+	// executionrelationship.ParentEntityIDValidator is a validator for the "parent_entity_id" field. It is called by the builders before save.
+	executionrelationship.ParentEntityIDValidator = executionrelationshipDescParentEntityID.Validators[0].(func(string) error)
+	// executionrelationshipDescChildEntityID is the schema descriptor for child_entity_id field.
+	executionrelationshipDescChildEntityID := executionrelationshipFields[2].Descriptor()
+	// executionrelationship.ChildEntityIDValidator is a validator for the "child_entity_id" field. It is called by the builders before save.
+	executionrelationship.ChildEntityIDValidator = executionrelationshipDescChildEntityID.Validators[0].(func(string) error)
+	// executionrelationshipDescParentStepID is the schema descriptor for parent_step_id field.
+	executionrelationshipDescParentStepID := executionrelationshipFields[7].Descriptor()
+	// executionrelationship.ParentStepIDValidator is a validator for the "parent_step_id" field. It is called by the builders before save.
+	executionrelationship.ParentStepIDValidator = executionrelationshipDescParentStepID.Validators[0].(func(string) error)
+	// executionrelationshipDescChildStepID is the schema descriptor for child_step_id field.
+	executionrelationshipDescChildStepID := executionrelationshipFields[8].Descriptor()
+	// executionrelationship.ChildStepIDValidator is a validator for the "child_step_id" field. It is called by the builders before save.
+	executionrelationship.ChildStepIDValidator = executionrelationshipDescChildStepID.Validators[0].(func(string) error)
 	runFields := schema.Run{}.Fields()
 	_ = runFields
 	// runDescCreatedAt is the schema descriptor for created_at field.
@@ -65,8 +92,12 @@ func init() {
 	sagaDescName := sagaFields[1].Descriptor()
 	// saga.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	saga.NameValidator = sagaDescName.Validators[0].(func(string) error)
+	// sagaDescStepID is the schema descriptor for step_id field.
+	sagaDescStepID := sagaFields[2].Descriptor()
+	// saga.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	saga.StepIDValidator = sagaDescStepID.Validators[0].(func(string) error)
 	// sagaDescCreatedAt is the schema descriptor for created_at field.
-	sagaDescCreatedAt := sagaFields[5].Descriptor()
+	sagaDescCreatedAt := sagaFields[6].Descriptor()
 	// saga.DefaultCreatedAt holds the default value on creation for the created_at field.
 	saga.DefaultCreatedAt = sagaDescCreatedAt.Default.(func() time.Time)
 	sagaexecutionFields := schema.SagaExecution{}.Fields()
@@ -115,12 +146,16 @@ func init() {
 	sideeffectDescIdentity := sideeffectFields[1].Descriptor()
 	// sideeffect.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	sideeffect.IdentityValidator = sideeffectDescIdentity.Validators[0].(func(string) error)
+	// sideeffectDescStepID is the schema descriptor for step_id field.
+	sideeffectDescStepID := sideeffectFields[2].Descriptor()
+	// sideeffect.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	sideeffect.StepIDValidator = sideeffectDescStepID.Validators[0].(func(string) error)
 	// sideeffectDescHandlerName is the schema descriptor for handler_name field.
-	sideeffectDescHandlerName := sideeffectFields[2].Descriptor()
+	sideeffectDescHandlerName := sideeffectFields[3].Descriptor()
 	// sideeffect.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sideeffect.HandlerNameValidator = sideeffectDescHandlerName.Validators[0].(func(string) error)
 	// sideeffectDescCreatedAt is the schema descriptor for created_at field.
-	sideeffectDescCreatedAt := sideeffectFields[7].Descriptor()
+	sideeffectDescCreatedAt := sideeffectFields[8].Descriptor()
 	// sideeffect.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sideeffect.DefaultCreatedAt = sideeffectDescCreatedAt.Default.(func() time.Time)
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()
@@ -157,16 +192,20 @@ func init() {
 	signal.UpdateDefaultUpdatedAt = signalDescUpdatedAt.UpdateDefault.(func() time.Time)
 	workflowFields := schema.Workflow{}.Fields()
 	_ = workflowFields
+	// workflowDescStepID is the schema descriptor for step_id field.
+	workflowDescStepID := workflowFields[1].Descriptor()
+	// workflow.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	workflow.StepIDValidator = workflowDescStepID.Validators[0].(func(string) error)
 	// workflowDescIdentity is the schema descriptor for identity field.
-	workflowDescIdentity := workflowFields[2].Descriptor()
+	workflowDescIdentity := workflowFields[3].Descriptor()
 	// workflow.IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	workflow.IdentityValidator = workflowDescIdentity.Validators[0].(func(string) error)
 	// workflowDescHandlerName is the schema descriptor for handler_name field.
-	workflowDescHandlerName := workflowFields[3].Descriptor()
+	workflowDescHandlerName := workflowFields[4].Descriptor()
 	// workflow.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	workflow.HandlerNameValidator = workflowDescHandlerName.Validators[0].(func(string) error)
 	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[7].Descriptor()
+	workflowDescCreatedAt := workflowFields[8].Descriptor()
 	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()

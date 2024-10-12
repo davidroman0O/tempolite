@@ -45,6 +45,20 @@ func (su *SagaUpdate) SetNillableName(s *string) *SagaUpdate {
 	return su
 }
 
+// SetStepID sets the "step_id" field.
+func (su *SagaUpdate) SetStepID(s string) *SagaUpdate {
+	su.mutation.SetStepID(s)
+	return su
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableStepID(s *string) *SagaUpdate {
+	if s != nil {
+		su.SetStepID(*s)
+	}
+	return su
+}
+
 // SetInput sets the "input" field.
 func (su *SagaUpdate) SetInput(i []interface{}) *SagaUpdate {
 	su.mutation.SetInput(i)
@@ -186,6 +200,11 @@ func (su *SagaUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Saga.name": %w`, err)}
 		}
 	}
+	if v, ok := su.mutation.StepID(); ok {
+		if err := saga.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Saga.step_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -203,6 +222,9 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.Name(); ok {
 		_spec.SetField(saga.FieldName, field.TypeString, value)
+	}
+	if value, ok := su.mutation.StepID(); ok {
+		_spec.SetField(saga.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := su.mutation.Input(); ok {
 		_spec.SetField(saga.FieldInput, field.TypeJSON, value)
@@ -302,6 +324,20 @@ func (suo *SagaUpdateOne) SetName(s string) *SagaUpdateOne {
 func (suo *SagaUpdateOne) SetNillableName(s *string) *SagaUpdateOne {
 	if s != nil {
 		suo.SetName(*s)
+	}
+	return suo
+}
+
+// SetStepID sets the "step_id" field.
+func (suo *SagaUpdateOne) SetStepID(s string) *SagaUpdateOne {
+	suo.mutation.SetStepID(s)
+	return suo
+}
+
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableStepID(s *string) *SagaUpdateOne {
+	if s != nil {
+		suo.SetStepID(*s)
 	}
 	return suo
 }
@@ -460,6 +496,11 @@ func (suo *SagaUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Saga.name": %w`, err)}
 		}
 	}
+	if v, ok := suo.mutation.StepID(); ok {
+		if err := saga.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Saga.step_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -494,6 +535,9 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 	}
 	if value, ok := suo.mutation.Name(); ok {
 		_spec.SetField(saga.FieldName, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.StepID(); ok {
+		_spec.SetField(saga.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.Input(); ok {
 		_spec.SetField(saga.FieldInput, field.TypeJSON, value)

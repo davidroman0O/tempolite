@@ -15,6 +15,8 @@ const (
 	Label = "workflow"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldStepID holds the string denoting the step_id field in the database.
+	FieldStepID = "step_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldIdentity holds the string denoting the identity field in the database.
@@ -45,6 +47,7 @@ const (
 // Columns holds all SQL columns for workflow fields.
 var Columns = []string{
 	FieldID,
+	FieldStepID,
 	FieldStatus,
 	FieldIdentity,
 	FieldHandlerName,
@@ -65,6 +68,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	StepIDValidator func(string) error
 	// IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	IdentityValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
@@ -110,6 +115,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByStepID orders the results by the step_id field.
+func ByStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStepID, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

@@ -19,6 +19,24 @@ type ExecutionRelationshipCreate struct {
 	hooks    []Hook
 }
 
+// SetRunID sets the "run_id" field.
+func (erc *ExecutionRelationshipCreate) SetRunID(s string) *ExecutionRelationshipCreate {
+	erc.mutation.SetRunID(s)
+	return erc
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (erc *ExecutionRelationshipCreate) SetParentEntityID(s string) *ExecutionRelationshipCreate {
+	erc.mutation.SetParentEntityID(s)
+	return erc
+}
+
+// SetChildEntityID sets the "child_entity_id" field.
+func (erc *ExecutionRelationshipCreate) SetChildEntityID(s string) *ExecutionRelationshipCreate {
+	erc.mutation.SetChildEntityID(s)
+	return erc
+}
+
 // SetParentID sets the "parent_id" field.
 func (erc *ExecutionRelationshipCreate) SetParentID(s string) *ExecutionRelationshipCreate {
 	erc.mutation.SetParentID(s)
@@ -40,6 +58,18 @@ func (erc *ExecutionRelationshipCreate) SetParentType(et executionrelationship.P
 // SetChildType sets the "child_type" field.
 func (erc *ExecutionRelationshipCreate) SetChildType(et executionrelationship.ChildType) *ExecutionRelationshipCreate {
 	erc.mutation.SetChildType(et)
+	return erc
+}
+
+// SetParentStepID sets the "parent_step_id" field.
+func (erc *ExecutionRelationshipCreate) SetParentStepID(s string) *ExecutionRelationshipCreate {
+	erc.mutation.SetParentStepID(s)
+	return erc
+}
+
+// SetChildStepID sets the "child_step_id" field.
+func (erc *ExecutionRelationshipCreate) SetChildStepID(s string) *ExecutionRelationshipCreate {
+	erc.mutation.SetChildStepID(s)
 	return erc
 }
 
@@ -77,6 +107,30 @@ func (erc *ExecutionRelationshipCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (erc *ExecutionRelationshipCreate) check() error {
+	if _, ok := erc.mutation.RunID(); !ok {
+		return &ValidationError{Name: "run_id", err: errors.New(`ent: missing required field "ExecutionRelationship.run_id"`)}
+	}
+	if v, ok := erc.mutation.RunID(); ok {
+		if err := executionrelationship.RunIDValidator(v); err != nil {
+			return &ValidationError{Name: "run_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.run_id": %w`, err)}
+		}
+	}
+	if _, ok := erc.mutation.ParentEntityID(); !ok {
+		return &ValidationError{Name: "parent_entity_id", err: errors.New(`ent: missing required field "ExecutionRelationship.parent_entity_id"`)}
+	}
+	if v, ok := erc.mutation.ParentEntityID(); ok {
+		if err := executionrelationship.ParentEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_entity_id": %w`, err)}
+		}
+	}
+	if _, ok := erc.mutation.ChildEntityID(); !ok {
+		return &ValidationError{Name: "child_entity_id", err: errors.New(`ent: missing required field "ExecutionRelationship.child_entity_id"`)}
+	}
+	if v, ok := erc.mutation.ChildEntityID(); ok {
+		if err := executionrelationship.ChildEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_entity_id": %w`, err)}
+		}
+	}
 	if _, ok := erc.mutation.ParentID(); !ok {
 		return &ValidationError{Name: "parent_id", err: errors.New(`ent: missing required field "ExecutionRelationship.parent_id"`)}
 	}
@@ -97,6 +151,22 @@ func (erc *ExecutionRelationshipCreate) check() error {
 	if v, ok := erc.mutation.ChildType(); ok {
 		if err := executionrelationship.ChildTypeValidator(v); err != nil {
 			return &ValidationError{Name: "child_type", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_type": %w`, err)}
+		}
+	}
+	if _, ok := erc.mutation.ParentStepID(); !ok {
+		return &ValidationError{Name: "parent_step_id", err: errors.New(`ent: missing required field "ExecutionRelationship.parent_step_id"`)}
+	}
+	if v, ok := erc.mutation.ParentStepID(); ok {
+		if err := executionrelationship.ParentStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_step_id": %w`, err)}
+		}
+	}
+	if _, ok := erc.mutation.ChildStepID(); !ok {
+		return &ValidationError{Name: "child_step_id", err: errors.New(`ent: missing required field "ExecutionRelationship.child_step_id"`)}
+	}
+	if v, ok := erc.mutation.ChildStepID(); ok {
+		if err := executionrelationship.ChildStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_step_id": %w`, err)}
 		}
 	}
 	return nil
@@ -125,6 +195,18 @@ func (erc *ExecutionRelationshipCreate) createSpec() (*ExecutionRelationship, *s
 		_node = &ExecutionRelationship{config: erc.config}
 		_spec = sqlgraph.NewCreateSpec(executionrelationship.Table, sqlgraph.NewFieldSpec(executionrelationship.FieldID, field.TypeInt))
 	)
+	if value, ok := erc.mutation.RunID(); ok {
+		_spec.SetField(executionrelationship.FieldRunID, field.TypeString, value)
+		_node.RunID = value
+	}
+	if value, ok := erc.mutation.ParentEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldParentEntityID, field.TypeString, value)
+		_node.ParentEntityID = value
+	}
+	if value, ok := erc.mutation.ChildEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldChildEntityID, field.TypeString, value)
+		_node.ChildEntityID = value
+	}
 	if value, ok := erc.mutation.ParentID(); ok {
 		_spec.SetField(executionrelationship.FieldParentID, field.TypeString, value)
 		_node.ParentID = value
@@ -140,6 +222,14 @@ func (erc *ExecutionRelationshipCreate) createSpec() (*ExecutionRelationship, *s
 	if value, ok := erc.mutation.ChildType(); ok {
 		_spec.SetField(executionrelationship.FieldChildType, field.TypeEnum, value)
 		_node.ChildType = value
+	}
+	if value, ok := erc.mutation.ParentStepID(); ok {
+		_spec.SetField(executionrelationship.FieldParentStepID, field.TypeString, value)
+		_node.ParentStepID = value
+	}
+	if value, ok := erc.mutation.ChildStepID(); ok {
+		_spec.SetField(executionrelationship.FieldChildStepID, field.TypeString, value)
+		_node.ChildStepID = value
 	}
 	return _node, _spec
 }

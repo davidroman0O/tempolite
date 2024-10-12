@@ -17,6 +17,8 @@ const (
 	FieldID = "id"
 	// FieldIdentity holds the string denoting the identity field in the database.
 	FieldIdentity = "identity"
+	// FieldStepID holds the string denoting the step_id field in the database.
+	FieldStepID = "step_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldHandlerName holds the string denoting the handler_name field in the database.
@@ -46,6 +48,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldIdentity,
+	FieldStepID,
 	FieldStatus,
 	FieldHandlerName,
 	FieldInput,
@@ -67,6 +70,8 @@ func ValidColumn(column string) bool {
 var (
 	// IdentityValidator is a validator for the "identity" field. It is called by the builders before save.
 	IdentityValidator func(string) error
+	// StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	StepIDValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -115,6 +120,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByIdentity orders the results by the identity field.
 func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIdentity, opts...).ToFunc()
+}
+
+// ByStepID orders the results by the step_id field.
+func ByStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStepID, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

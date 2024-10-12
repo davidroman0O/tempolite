@@ -11,8 +11,8 @@ import (
 	"github.com/davidroman0O/retrypool"
 )
 
-type workflowTask struct {
-	ctx         WorkflowContext
+type workflowTask[T Identifier] struct {
+	ctx         WorkflowContext[T]
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -21,21 +21,21 @@ type workflowTask struct {
 	retry       func() error
 }
 
-func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
+func (tp *Tempolite[T]) createWorkflowPool() *retrypool.Pool[*workflowTask[T]] {
 
-	opts := []retrypool.Option[*workflowTask]{
-		retrypool.WithAttempts[*workflowTask](1),
+	opts := []retrypool.Option[*workflowTask[T]]{
+		retrypool.WithAttempts[*workflowTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.workflowOnSuccess),
 		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
 		retrypool.WithPanicHandler(tp.workflowOnPanic),
 		retrypool.WithOnRetry(tp.workflowOnRetry),
-		retrypool.WithPanicWorker[*workflowTask](tp.workflowWorkerPanic),
+		retrypool.WithPanicWorker[*workflowTask[T]](tp.workflowWorkerPanic),
 	}
 
-	workers := []retrypool.Worker[*workflowTask]{}
+	workers := []retrypool.Worker[*workflowTask[T]]{}
 
 	for i := 0; i < 5; i++ {
-		workers = append(workers, workflowWorker{id: i, tp: tp})
+		workers = append(workers, workflowWorker[T]{id: i, tp: tp})
 	}
 
 	return retrypool.New(
@@ -44,21 +44,21 @@ func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 		opts...)
 }
 
-func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+func (tp *Tempolite[T]) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	log.Printf("workflowWorkerPanic - workerID %d: %v", workerID, err)
 	log.Println(stackTrace)
 }
 
-func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {
+func (tp *Tempolite[T]) workflowOnPanic(task *workflowTask[T], v interface{}, stackTrace string) {
 	log.Printf("Task panicked: %v", v)
 	log.Println(stackTrace)
 }
 
-func (tp *Tempolite) workflowOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask]) {
+func (tp *Tempolite[T]) workflowOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask[T]]) {
 	log.Printf("onHandlerTaskRetry: %d, %v", attempt, err)
 }
 
-func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask]) {
+func (tp *Tempolite[T]) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask[T]], workerID int, worker retrypool.Worker[*workflowTask[T]], task *retrypool.TaskWrapper[*workflowTask[T]]) {
 
 	log.Printf("workflowOnSuccess workflow %v - %v: %d", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID)
 
@@ -72,7 +72,7 @@ func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*wo
 	}
 }
 
-func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[*workflowTask[T]], workerID int, worker retrypool.Worker[*workflowTask[T]], task *retrypool.TaskWrapper[*workflowTask[T]], err error) retrypool.DeadTaskAction {
 
 	// printf with err + retryCount + maxRetry
 	log.Printf("workflowOnFailure:  err: %v,  data: %d, maxrety: %d", err, task.Data().retryCount, task.Data().maxRetry)
@@ -129,12 +129,12 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 	return retrypool.DeadTaskActionDoNothing
 }
 
-type workflowWorker struct {
+type workflowWorker[T Identifier] struct {
 	id int
-	tp *Tempolite
+	tp *Tempolite[T]
 }
 
-func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
+func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error {
 	log.Printf("workflowWorker: %s, %v", data.handlerName, data.params)
 
 	values := []reflect.Value{reflect.ValueOf(data.ctx)}

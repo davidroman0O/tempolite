@@ -262,12 +262,12 @@ func (erq *ExecutionRelationshipQuery) Clone() *ExecutionRelationshipQuery {
 // Example:
 //
 //	var v []struct {
-//		ParentID string `json:"parent_id,omitempty"`
+//		RunID string `json:"run_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ExecutionRelationship.Query().
-//		GroupBy(executionrelationship.FieldParentID).
+//		GroupBy(executionrelationship.FieldRunID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (erq *ExecutionRelationshipQuery) GroupBy(field string, fields ...string) *ExecutionRelationshipGroupBy {
@@ -285,11 +285,11 @@ func (erq *ExecutionRelationshipQuery) GroupBy(field string, fields ...string) *
 // Example:
 //
 //	var v []struct {
-//		ParentID string `json:"parent_id,omitempty"`
+//		RunID string `json:"run_id,omitempty"`
 //	}
 //
 //	client.ExecutionRelationship.Query().
-//		Select(executionrelationship.FieldParentID).
+//		Select(executionrelationship.FieldRunID).
 //		Scan(ctx, &v)
 func (erq *ExecutionRelationshipQuery) Select(fields ...string) *ExecutionRelationshipSelect {
 	erq.ctx.Fields = append(erq.ctx.Fields, fields...)

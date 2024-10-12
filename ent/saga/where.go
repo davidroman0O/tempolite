@@ -70,6 +70,11 @@ func Name(v string) predicate.Saga {
 	return predicate.Saga(sql.FieldEQ(FieldName, v))
 }
 
+// StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
+func StepID(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldStepID, v))
+}
+
 // Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
 func Timeout(v time.Time) predicate.Saga {
 	return predicate.Saga(sql.FieldEQ(FieldTimeout, v))
@@ -143,6 +148,71 @@ func NameEqualFold(v string) predicate.Saga {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.Saga {
 	return predicate.Saga(sql.FieldContainsFold(FieldName, v))
+}
+
+// StepIDEQ applies the EQ predicate on the "step_id" field.
+func StepIDEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldStepID, v))
+}
+
+// StepIDNEQ applies the NEQ predicate on the "step_id" field.
+func StepIDNEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldNEQ(FieldStepID, v))
+}
+
+// StepIDIn applies the In predicate on the "step_id" field.
+func StepIDIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldIn(FieldStepID, vs...))
+}
+
+// StepIDNotIn applies the NotIn predicate on the "step_id" field.
+func StepIDNotIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldNotIn(FieldStepID, vs...))
+}
+
+// StepIDGT applies the GT predicate on the "step_id" field.
+func StepIDGT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGT(FieldStepID, v))
+}
+
+// StepIDGTE applies the GTE predicate on the "step_id" field.
+func StepIDGTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGTE(FieldStepID, v))
+}
+
+// StepIDLT applies the LT predicate on the "step_id" field.
+func StepIDLT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLT(FieldStepID, v))
+}
+
+// StepIDLTE applies the LTE predicate on the "step_id" field.
+func StepIDLTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLTE(FieldStepID, v))
+}
+
+// StepIDContains applies the Contains predicate on the "step_id" field.
+func StepIDContains(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContains(FieldStepID, v))
+}
+
+// StepIDHasPrefix applies the HasPrefix predicate on the "step_id" field.
+func StepIDHasPrefix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasPrefix(FieldStepID, v))
+}
+
+// StepIDHasSuffix applies the HasSuffix predicate on the "step_id" field.
+func StepIDHasSuffix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasSuffix(FieldStepID, v))
+}
+
+// StepIDEqualFold applies the EqualFold predicate on the "step_id" field.
+func StepIDEqualFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEqualFold(FieldStepID, v))
+}
+
+// StepIDContainsFold applies the ContainsFold predicate on the "step_id" field.
+func StepIDContainsFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContainsFold(FieldStepID, v))
 }
 
 // RetryPolicyIsNil applies the IsNil predicate on the "retry_policy" field.

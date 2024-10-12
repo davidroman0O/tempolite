@@ -55,104 +55,19 @@ Workflow
         that the overall state remains consistent, even if parts of the process
         fail.
 
-## Things I changed
+Tempolite is NOT Temporal
+It can support similar concepts but not similar features and I do not intent to have a full on-complete workflow engine solution AT ALL.
+It's a very lightweight version of the concepts of Temporal for small scoped applications.
 
-### Versioning
+Therefore, i can't have the full on history of events with full-on backend detection of the order of the activities. Because it would be too much code to produce and too much bloat when we could have the bare minimum just to be comfortable with small applications
 
-When using Temporal, they have a workflow.GetVersion to check the version of a workflow, so if you inverse two side effect because you were working or if you have a hot fix to do an important workflow in production you're simply screwed. 
-
-I don't think I like having to do that```func determineVersion(ctx workflow.Context) (int, int) {
-    version1 := workflow.GetVersion("side-effect-1", workflow.DefaultVersion, 1)
-    version2 := workflow.GetVersion("side-effect-2", workflow.DefaultVersion, 1)
-    return version1, version2
-}
-
-func Workflow(ctx workflow.Context) error {
-    version1, version2 := determineVersion(ctx)
-
-    if version1 == workflow.DefaultVersion {
-        // Logic for side effect 1, old version
-    } else {
-        // Logic for side effect 1, new version
-    }
-
-    if version2 == workflow.DefaultVersion {
-        // Logic for side effect 2, old version
-    } else {
-        // Logic for side effect 2, new version
-    }
-
-    return nil
-}
-```
-
-I FUCKING HATE IT HOW THEY DO IT
-
-Instead I will use the folder hierarchy to provide the versioning, for example you can have `github.com/davidroman0O/go-tempolite/examples/todo/tempolite/v1/activities/addTodo` as reflect.TypeOf(v).PkgPath() which clearly identify the activity. 
-
-```
-tempolite/
-├── v1/
-│   ├── workflow/
-│   │   └── workflow.go
-│   ├── activities/
-│   │   └── activities.go
-│   ├── side_effects/
-│   │   └── side_effects.go
-│   └── saga/
-│       └── saga.go
-├── v2/
-│   ├── workflow/
-│   │   └── workflow.go
-│   ├── activities/
-│   │   └── activities.go
-│   ├── side_effects/
-│   │   └── side_effects.go
-│   └── saga/
-│       └── saga.go
-└── main.go
-```
-
-Benefits from use that structure:
-
-- Enhanced Modularity:
-   - Each version has its own folder, and within that version, each type of component (workflows, activities, side effects, sagas) is further isolated.
-   - This allows for better modularity, where each component can be updated or reviewed independently without worrying about the others.
-
-- Improved Readability:
-   - With sub-folders, it's easier for developers to understand which logic belongs to workflows, activities, side effects, or sagas.
-   - It also helps when onboarding new team members, as they can easily find the logic related to specific parts of a workflow version.
-
-- Cleaner Dependency Management:
-   - If activities or side effects have dependencies specific to a version, they can be kept isolated in their respective sub-folders.
-   - This reduces the risk of version-specific logic or imports bleeding into other parts of the codebase.
-
-- Simpler Refactoring:
-   - Should you need to move an entire version or refactor one component (e.g., activities in `v2`), you can do so without impacting the rest of the workflow logic.
-   - It also makes it easier to manage changes across versions since each version’s components are self-contained.
-
-
-Which should look like 
+Maybe we need to add names on each "Execute" something like tp.Workflow("name workflow", thefunction, someParam{}) or even ctx.Activity("second-one", As[someStructActivity](), paramparam{}) so we could really "downgrade" but keep a reliable experience using it 
+even maybe add a generic parameter to tempolite which has to be a primitive interface 
 
 ```go
-
-import (
-    v1Workflows "github.com/dude/project/tempolite/v1/workflow"
-)
-
-func main() {
-    tp, _ := tempolite.New()
-
-    tp.RegisterWorkflow(v1Workflows.Something)
-    // or even with optional an personal preference
-    tp.RegisterWorkflow(v1Workflows.Something, "v1")
-    
-    // Or 
-    // I want to setup my workflow just I would setup an http api
-    v1Group := tp.WorkflowGroup("v1")
-    tp.RegisterWorkflow(v1Workflows.Something)
-
+type primitive interface {
+   string | int 
 }
-
 ```
 
+something like that, so the dev can put whatever it want as identifier of its app for each workflow or activity or sideeffect or saga calls so when it retries then tempolite knows which one is which

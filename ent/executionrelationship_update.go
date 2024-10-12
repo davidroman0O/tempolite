@@ -27,6 +27,48 @@ func (eru *ExecutionRelationshipUpdate) Where(ps ...predicate.ExecutionRelations
 	return eru
 }
 
+// SetRunID sets the "run_id" field.
+func (eru *ExecutionRelationshipUpdate) SetRunID(s string) *ExecutionRelationshipUpdate {
+	eru.mutation.SetRunID(s)
+	return eru
+}
+
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (eru *ExecutionRelationshipUpdate) SetNillableRunID(s *string) *ExecutionRelationshipUpdate {
+	if s != nil {
+		eru.SetRunID(*s)
+	}
+	return eru
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (eru *ExecutionRelationshipUpdate) SetParentEntityID(s string) *ExecutionRelationshipUpdate {
+	eru.mutation.SetParentEntityID(s)
+	return eru
+}
+
+// SetNillableParentEntityID sets the "parent_entity_id" field if the given value is not nil.
+func (eru *ExecutionRelationshipUpdate) SetNillableParentEntityID(s *string) *ExecutionRelationshipUpdate {
+	if s != nil {
+		eru.SetParentEntityID(*s)
+	}
+	return eru
+}
+
+// SetChildEntityID sets the "child_entity_id" field.
+func (eru *ExecutionRelationshipUpdate) SetChildEntityID(s string) *ExecutionRelationshipUpdate {
+	eru.mutation.SetChildEntityID(s)
+	return eru
+}
+
+// SetNillableChildEntityID sets the "child_entity_id" field if the given value is not nil.
+func (eru *ExecutionRelationshipUpdate) SetNillableChildEntityID(s *string) *ExecutionRelationshipUpdate {
+	if s != nil {
+		eru.SetChildEntityID(*s)
+	}
+	return eru
+}
+
 // SetParentID sets the "parent_id" field.
 func (eru *ExecutionRelationshipUpdate) SetParentID(s string) *ExecutionRelationshipUpdate {
 	eru.mutation.SetParentID(s)
@@ -83,6 +125,34 @@ func (eru *ExecutionRelationshipUpdate) SetNillableChildType(et *executionrelati
 	return eru
 }
 
+// SetParentStepID sets the "parent_step_id" field.
+func (eru *ExecutionRelationshipUpdate) SetParentStepID(s string) *ExecutionRelationshipUpdate {
+	eru.mutation.SetParentStepID(s)
+	return eru
+}
+
+// SetNillableParentStepID sets the "parent_step_id" field if the given value is not nil.
+func (eru *ExecutionRelationshipUpdate) SetNillableParentStepID(s *string) *ExecutionRelationshipUpdate {
+	if s != nil {
+		eru.SetParentStepID(*s)
+	}
+	return eru
+}
+
+// SetChildStepID sets the "child_step_id" field.
+func (eru *ExecutionRelationshipUpdate) SetChildStepID(s string) *ExecutionRelationshipUpdate {
+	eru.mutation.SetChildStepID(s)
+	return eru
+}
+
+// SetNillableChildStepID sets the "child_step_id" field if the given value is not nil.
+func (eru *ExecutionRelationshipUpdate) SetNillableChildStepID(s *string) *ExecutionRelationshipUpdate {
+	if s != nil {
+		eru.SetChildStepID(*s)
+	}
+	return eru
+}
+
 // Mutation returns the ExecutionRelationshipMutation object of the builder.
 func (eru *ExecutionRelationshipUpdate) Mutation() *ExecutionRelationshipMutation {
 	return eru.mutation
@@ -117,6 +187,21 @@ func (eru *ExecutionRelationshipUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (eru *ExecutionRelationshipUpdate) check() error {
+	if v, ok := eru.mutation.RunID(); ok {
+		if err := executionrelationship.RunIDValidator(v); err != nil {
+			return &ValidationError{Name: "run_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.run_id": %w`, err)}
+		}
+	}
+	if v, ok := eru.mutation.ParentEntityID(); ok {
+		if err := executionrelationship.ParentEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_entity_id": %w`, err)}
+		}
+	}
+	if v, ok := eru.mutation.ChildEntityID(); ok {
+		if err := executionrelationship.ChildEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_entity_id": %w`, err)}
+		}
+	}
 	if v, ok := eru.mutation.ParentType(); ok {
 		if err := executionrelationship.ParentTypeValidator(v); err != nil {
 			return &ValidationError{Name: "parent_type", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_type": %w`, err)}
@@ -125,6 +210,16 @@ func (eru *ExecutionRelationshipUpdate) check() error {
 	if v, ok := eru.mutation.ChildType(); ok {
 		if err := executionrelationship.ChildTypeValidator(v); err != nil {
 			return &ValidationError{Name: "child_type", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_type": %w`, err)}
+		}
+	}
+	if v, ok := eru.mutation.ParentStepID(); ok {
+		if err := executionrelationship.ParentStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_step_id": %w`, err)}
+		}
+	}
+	if v, ok := eru.mutation.ChildStepID(); ok {
+		if err := executionrelationship.ChildStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_step_id": %w`, err)}
 		}
 	}
 	return nil
@@ -142,6 +237,15 @@ func (eru *ExecutionRelationshipUpdate) sqlSave(ctx context.Context) (n int, err
 			}
 		}
 	}
+	if value, ok := eru.mutation.RunID(); ok {
+		_spec.SetField(executionrelationship.FieldRunID, field.TypeString, value)
+	}
+	if value, ok := eru.mutation.ParentEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldParentEntityID, field.TypeString, value)
+	}
+	if value, ok := eru.mutation.ChildEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldChildEntityID, field.TypeString, value)
+	}
 	if value, ok := eru.mutation.ParentID(); ok {
 		_spec.SetField(executionrelationship.FieldParentID, field.TypeString, value)
 	}
@@ -153,6 +257,12 @@ func (eru *ExecutionRelationshipUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if value, ok := eru.mutation.ChildType(); ok {
 		_spec.SetField(executionrelationship.FieldChildType, field.TypeEnum, value)
+	}
+	if value, ok := eru.mutation.ParentStepID(); ok {
+		_spec.SetField(executionrelationship.FieldParentStepID, field.TypeString, value)
+	}
+	if value, ok := eru.mutation.ChildStepID(); ok {
+		_spec.SetField(executionrelationship.FieldChildStepID, field.TypeString, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -172,6 +282,48 @@ type ExecutionRelationshipUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *ExecutionRelationshipMutation
+}
+
+// SetRunID sets the "run_id" field.
+func (eruo *ExecutionRelationshipUpdateOne) SetRunID(s string) *ExecutionRelationshipUpdateOne {
+	eruo.mutation.SetRunID(s)
+	return eruo
+}
+
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (eruo *ExecutionRelationshipUpdateOne) SetNillableRunID(s *string) *ExecutionRelationshipUpdateOne {
+	if s != nil {
+		eruo.SetRunID(*s)
+	}
+	return eruo
+}
+
+// SetParentEntityID sets the "parent_entity_id" field.
+func (eruo *ExecutionRelationshipUpdateOne) SetParentEntityID(s string) *ExecutionRelationshipUpdateOne {
+	eruo.mutation.SetParentEntityID(s)
+	return eruo
+}
+
+// SetNillableParentEntityID sets the "parent_entity_id" field if the given value is not nil.
+func (eruo *ExecutionRelationshipUpdateOne) SetNillableParentEntityID(s *string) *ExecutionRelationshipUpdateOne {
+	if s != nil {
+		eruo.SetParentEntityID(*s)
+	}
+	return eruo
+}
+
+// SetChildEntityID sets the "child_entity_id" field.
+func (eruo *ExecutionRelationshipUpdateOne) SetChildEntityID(s string) *ExecutionRelationshipUpdateOne {
+	eruo.mutation.SetChildEntityID(s)
+	return eruo
+}
+
+// SetNillableChildEntityID sets the "child_entity_id" field if the given value is not nil.
+func (eruo *ExecutionRelationshipUpdateOne) SetNillableChildEntityID(s *string) *ExecutionRelationshipUpdateOne {
+	if s != nil {
+		eruo.SetChildEntityID(*s)
+	}
+	return eruo
 }
 
 // SetParentID sets the "parent_id" field.
@@ -230,6 +382,34 @@ func (eruo *ExecutionRelationshipUpdateOne) SetNillableChildType(et *executionre
 	return eruo
 }
 
+// SetParentStepID sets the "parent_step_id" field.
+func (eruo *ExecutionRelationshipUpdateOne) SetParentStepID(s string) *ExecutionRelationshipUpdateOne {
+	eruo.mutation.SetParentStepID(s)
+	return eruo
+}
+
+// SetNillableParentStepID sets the "parent_step_id" field if the given value is not nil.
+func (eruo *ExecutionRelationshipUpdateOne) SetNillableParentStepID(s *string) *ExecutionRelationshipUpdateOne {
+	if s != nil {
+		eruo.SetParentStepID(*s)
+	}
+	return eruo
+}
+
+// SetChildStepID sets the "child_step_id" field.
+func (eruo *ExecutionRelationshipUpdateOne) SetChildStepID(s string) *ExecutionRelationshipUpdateOne {
+	eruo.mutation.SetChildStepID(s)
+	return eruo
+}
+
+// SetNillableChildStepID sets the "child_step_id" field if the given value is not nil.
+func (eruo *ExecutionRelationshipUpdateOne) SetNillableChildStepID(s *string) *ExecutionRelationshipUpdateOne {
+	if s != nil {
+		eruo.SetChildStepID(*s)
+	}
+	return eruo
+}
+
 // Mutation returns the ExecutionRelationshipMutation object of the builder.
 func (eruo *ExecutionRelationshipUpdateOne) Mutation() *ExecutionRelationshipMutation {
 	return eruo.mutation
@@ -277,6 +457,21 @@ func (eruo *ExecutionRelationshipUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (eruo *ExecutionRelationshipUpdateOne) check() error {
+	if v, ok := eruo.mutation.RunID(); ok {
+		if err := executionrelationship.RunIDValidator(v); err != nil {
+			return &ValidationError{Name: "run_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.run_id": %w`, err)}
+		}
+	}
+	if v, ok := eruo.mutation.ParentEntityID(); ok {
+		if err := executionrelationship.ParentEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_entity_id": %w`, err)}
+		}
+	}
+	if v, ok := eruo.mutation.ChildEntityID(); ok {
+		if err := executionrelationship.ChildEntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_entity_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_entity_id": %w`, err)}
+		}
+	}
 	if v, ok := eruo.mutation.ParentType(); ok {
 		if err := executionrelationship.ParentTypeValidator(v); err != nil {
 			return &ValidationError{Name: "parent_type", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_type": %w`, err)}
@@ -285,6 +480,16 @@ func (eruo *ExecutionRelationshipUpdateOne) check() error {
 	if v, ok := eruo.mutation.ChildType(); ok {
 		if err := executionrelationship.ChildTypeValidator(v); err != nil {
 			return &ValidationError{Name: "child_type", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_type": %w`, err)}
+		}
+	}
+	if v, ok := eruo.mutation.ParentStepID(); ok {
+		if err := executionrelationship.ParentStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.parent_step_id": %w`, err)}
+		}
+	}
+	if v, ok := eruo.mutation.ChildStepID(); ok {
+		if err := executionrelationship.ChildStepIDValidator(v); err != nil {
+			return &ValidationError{Name: "child_step_id", err: fmt.Errorf(`ent: validator failed for field "ExecutionRelationship.child_step_id": %w`, err)}
 		}
 	}
 	return nil
@@ -319,6 +524,15 @@ func (eruo *ExecutionRelationshipUpdateOne) sqlSave(ctx context.Context) (_node 
 			}
 		}
 	}
+	if value, ok := eruo.mutation.RunID(); ok {
+		_spec.SetField(executionrelationship.FieldRunID, field.TypeString, value)
+	}
+	if value, ok := eruo.mutation.ParentEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldParentEntityID, field.TypeString, value)
+	}
+	if value, ok := eruo.mutation.ChildEntityID(); ok {
+		_spec.SetField(executionrelationship.FieldChildEntityID, field.TypeString, value)
+	}
 	if value, ok := eruo.mutation.ParentID(); ok {
 		_spec.SetField(executionrelationship.FieldParentID, field.TypeString, value)
 	}
@@ -330,6 +544,12 @@ func (eruo *ExecutionRelationshipUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if value, ok := eruo.mutation.ChildType(); ok {
 		_spec.SetField(executionrelationship.FieldChildType, field.TypeEnum, value)
+	}
+	if value, ok := eruo.mutation.ParentStepID(); ok {
+		_spec.SetField(executionrelationship.FieldParentStepID, field.TypeString, value)
+	}
+	if value, ok := eruo.mutation.ChildStepID(); ok {
+		_spec.SetField(executionrelationship.FieldChildStepID, field.TypeString, value)
 	}
 	_node = &ExecutionRelationship{config: eruo.config}
 	_spec.Assign = _node.assignValues

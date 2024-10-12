@@ -11,8 +11,8 @@ import (
 	"github.com/davidroman0O/retrypool"
 )
 
-type activityTask struct {
-	ctx         ActivityContext
+type activityTask[T Identifier] struct {
+	ctx         ActivityContext[T]
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -21,19 +21,19 @@ type activityTask struct {
 	retry       func() error
 }
 
-func (tp *Tempolite) createActivityPool() *retrypool.Pool[*activityTask] {
-	opts := []retrypool.Option[*activityTask]{
-		retrypool.WithAttempts[*activityTask](1),
+func (tp *Tempolite[T]) createActivityPool() *retrypool.Pool[*activityTask[T]] {
+	opts := []retrypool.Option[*activityTask[T]]{
+		retrypool.WithAttempts[*activityTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.activityOnSuccess),
 		retrypool.WithOnTaskFailure(tp.activityOnFailure),
 		retrypool.WithPanicHandler(tp.activityOnPanic),
 		retrypool.WithOnRetry(tp.activityOnRetry),
 	}
 
-	workers := []retrypool.Worker[*activityTask]{}
+	workers := []retrypool.Worker[*activityTask[T]]{}
 
 	for i := 0; i < 5; i++ {
-		workers = append(workers, activityWorker{id: i, tp: tp})
+		workers = append(workers, activityWorker[T]{id: i, tp: tp})
 	}
 
 	return retrypool.New(
@@ -43,16 +43,16 @@ func (tp *Tempolite) createActivityPool() *retrypool.Pool[*activityTask] {
 
 }
 
-func (tp *Tempolite) activityOnPanic(task *activityTask, v interface{}, stackTrace string) {
+func (tp *Tempolite[T]) activityOnPanic(task *activityTask[T], v interface{}, stackTrace string) {
 	log.Printf("Task panicked: %v", v)
 	log.Println(stackTrace)
 }
 
-func (tp *Tempolite) activityOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*activityTask]) {
+func (tp *Tempolite[T]) activityOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*activityTask[T]]) {
 	log.Printf("onHandlerTaskRetry: %d, %v", attempt, err)
 }
 
-func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask]) {
+func (tp *Tempolite[T]) activityOnSuccess(controller retrypool.WorkerController[*activityTask[T]], workerID int, worker retrypool.Worker[*activityTask[T]], task *retrypool.TaskWrapper[*activityTask[T]]) {
 	log.Printf("activityOnSuccess: %d", workerID)
 	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).
 		Save(tp.ctx); err != nil {
@@ -64,7 +64,7 @@ func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*ac
 	}
 }
 
-func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[*activityTask[T]], workerID int, worker retrypool.Worker[*activityTask[T]], task *retrypool.TaskWrapper[*activityTask[T]], err error) retrypool.DeadTaskAction {
 	// printf with err + retryCount + maxRetry
 	log.Printf("activityOnFailure: %v, %d, %d", err, task.Data().retryCount, task.Data().maxRetry)
 
@@ -105,12 +105,12 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 	return retrypool.DeadTaskActionDoNothing
 }
 
-type activityWorker struct {
+type activityWorker[T Identifier] struct {
 	id int
-	tp *Tempolite
+	tp *Tempolite[T]
 }
 
-func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
+func (w activityWorker[T]) Run(ctx context.Context, data *activityTask[T]) error {
 	log.Printf("activityWorker: %s, %v", data.handlerName, data.params)
 
 	values := []reflect.Value{reflect.ValueOf(data.ctx)}
