@@ -58,7 +58,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 
-	id, err := tp.EnqueueWorkflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	id, err := tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -67,13 +67,8 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	info, err := tp.GetWorkflow(id)
-	if err != nil {
-		t.Fatalf("GetWorkflow failed: %v", err)
-	}
-
 	var result string
-	err = info.Get(&result)
+	err = tp.GetWorkflow(id).Get(&result)
 	if err != nil {
 		t.Fatalf("info.Get failed: %v", err)
 	}
@@ -95,7 +90,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 1
 
-	id, err = tp.EnqueueWorkflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -104,12 +99,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	info, err = tp.GetWorkflow(id)
-	if err != nil {
-		t.Fatalf("GetWorkflow failed: %v", err)
-	}
-
-	err = info.Get(&result)
+	err = tp.GetWorkflow(id).Get(&result)
 	if err != nil {
 		t.Fatalf("info.Get failed: %v", err)
 	}
@@ -131,7 +121,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 2
 
-	id, err = tp.EnqueueWorkflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -140,16 +130,10 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	info, err = tp.GetWorkflow(id)
-	if err != nil {
-		t.Fatalf("GetWorkflow failed: %v", err)
-	}
-
-	err = info.Get(&result)
+	err = tp.GetWorkflow(id).Get(&result)
 	if err != nil {
 		t.Fatalf("info.Get failed: %v", err)
 	}
-
 	if result != "CX" {
 		t.Errorf("Expected CX, got %s", result)
 	}
@@ -169,7 +153,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	changeFlag1 = 0
 	changeFlag2 = true
 
-	id, err = tp.EnqueueWorkflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
+	id, err = tp.Workflow(testWorkflow, testWorkflowInput{changeFlag1, changeFlag2})
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -178,12 +162,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	info, err = tp.GetWorkflow(id)
-	if err != nil {
-		t.Fatalf("GetWorkflow failed: %v", err)
-	}
-
-	err = info.Get(&result)
+	err = tp.GetWorkflow(id).Get(&result)
 	if err != nil {
 		t.Fatalf("info.Get failed: %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
@@ -143,7 +144,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 	tp.workflowPool = tp.createWorkflowPool()
 	tp.activityPool = tp.createActivityPool()
 
-	go tp.schedulerExeutionWorkflow()
+	go tp.schedulerExecutionWorkflow()
 	go tp.schedulerExecutionActivity()
 
 	return tp, nil
@@ -314,7 +315,7 @@ func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error
 	return nil
 }
 
-func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
+func (tp *Tempolite) enqueueSubActivityExecution(ctx WorkflowContext, longName HandlerIdentity, params ...interface{}) (ActivityExecutionID, error) {
 
 	switch ctx.EntityType() {
 	case "workflow":
@@ -325,7 +326,7 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 
 	var value any
 	var ok bool
-	var err error
+	// var err error
 	var tx *ent.Tx
 
 	if value, ok = tp.activities.Load(longName); ok {
@@ -339,16 +340,24 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 			return "", err
 		}
 
-		if len(params) != activityHandlerInfo.NumIn {
-			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", activityHandlerInfo.NumIn, len(params))
+		// Generate a deterministic activity ID using runID
+		activityID := ctx.NextActivityID()
+
+		// Check if activity execution already exists and is completed
+		existingExec, err := tp.client.ActivityExecution.Query().
+			Where(
+				activityexecution.IDEQ(activityID),
+				activityexecution.StatusEQ(activityexecution.StatusCompleted),
+			).Only(tp.ctx)
+		if err == nil {
+			// Activity execution already exists and is completed
+			return ActivityExecutionID(existingExec.ID), nil
+		} else if !ent.IsNotFound(err) {
+			// Some error occurred
+			return "", err
 		}
 
-		for idx, param := range params {
-			if reflect.TypeOf(param) != activityHandlerInfo.ParamTypes[idx] {
-				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", activityHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
-			}
-		}
-
+		// Proceed to create a new activity and activity execution
 		if tx, err = tp.client.Tx(tp.ctx); err != nil {
 			return "", err
 		}
@@ -357,7 +366,7 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 		if activityEntity, err = tx.
 			Activity.
 			Create().
-			SetID(ctx.RunID()).
+			SetID(activityID).
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(params).
@@ -373,11 +382,11 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 
 		log.Printf("EnqueueSubActivity - created activity entity %s for %s with params: %v", activityEntity.ID, longName, params)
 
-		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
+		// Create activity execution with the deterministic ID
 		var activityExecution *ent.ActivityExecution
 		if activityExecution, err = tx.ActivityExecution.
 			Create().
-			SetID(uuid.NewString()).
+			SetID(activityID). // Use the deterministic activity ID
 			SetRunID(ctx.RunID()).
 			SetActivity(activityEntity).
 			Save(tp.ctx); err != nil {
@@ -387,24 +396,13 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 			return "", err
 		}
 
-		switch ctx.EntityType() {
-		case "workflow":
-			if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeWorkflow).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-				if err = tx.Rollback(); err != nil {
-					return "", err
-				}
+		// Add execution relationship
+		if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeWorkflow).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
+			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
-			// case "activity":
-			// 	if _, err := tx.ExecutionRelationship.Create().SetParentType(executionrelationship.ParentTypeActivity).SetChildType(executionrelationship.ChildTypeActivity).SetChildID(activityEntity.ID).SetParentID(ctx.ExecutionID()).Save(tp.ctx); err != nil {
-			// 		if err = tx.Rollback(); err != nil {
-			// 			return "", err
-			// 		}
-			// 		return "", err
-			// 	}
+			return "", err
 		}
-
-		log.Printf("EnqueueSubActivity - created workflow execution %s for %s with params: %v", activityExecution.ID, longName, params)
 
 		if err = tx.Commit(); err != nil {
 			if err = tx.Rollback(); err != nil {
@@ -413,8 +411,6 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 			return "", err
 		}
 
-		// when we enqueue a sub-activity, that mean we're within the execution model, so we don't care about the activity entity
-		// only the execution
 		return ActivityExecutionID(activityExecution.ID), nil
 
 	} else {
@@ -422,121 +418,10 @@ func (tp *Tempolite) enqueueSubActivityExecution(ctx TempoliteContext, longName 
 	}
 }
 
-func (tp *Tempolite) enqueueSubActivtyFunc(ctx TempoliteContext, activityFunc interface{}, params ...interface{}) (ActivityExecutionID, error) {
+func (tp *Tempolite) enqueueSubActivtyFunc(ctx WorkflowContext, activityFunc interface{}, params ...interface{}) (ActivityExecutionID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	return tp.enqueueSubActivityExecution(ctx, handlerIdentity, params...)
-}
-
-func (tp *Tempolite) EnqueueActivityFunc(activityFunc interface{}, params ...interface{}) (ActivityID, error) {
-	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
-	handlerIdentity := HandlerIdentity(funcName)
-	return tp.EnqueueActivity(handlerIdentity, params...)
-}
-
-func (tp *Tempolite) EnqueueActivity(longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
-	var value any
-	var ok bool
-	var err error
-	var tx *ent.Tx
-
-	if value, ok = tp.activities.Load(longName); ok {
-		var activityHandlerInfo Activity
-		if activityHandlerInfo, ok = value.(Activity); !ok {
-			// could be development bug
-			return "", fmt.Errorf("activity %s is not handler info", longName)
-		}
-
-		if err := verifyHandlerAndParams(HandlerInfo(activityHandlerInfo), params); err != nil {
-			return "", err
-		}
-
-		if len(params) != activityHandlerInfo.NumIn {
-			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", activityHandlerInfo.NumIn, len(params))
-		}
-
-		for idx, param := range params {
-			if reflect.TypeOf(param) != activityHandlerInfo.ParamTypes[idx] {
-				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", activityHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
-			}
-		}
-
-		if tx, err = tp.client.Tx(tp.ctx); err != nil {
-			return "", err
-		}
-
-		var runEntity *ent.Run
-		// root Run entity that anchored the activity entity despite retries
-		if runEntity, err = tx.
-			Run.
-			Create().
-			SetID(uuid.NewString()).    // immutable
-			SetRunID(uuid.NewString()). // can change if that flow change due to a retry
-			SetType(run.TypeActivity).
-			Save(tp.ctx); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		log.Printf("EnqueueActivity - created run entity %s for %s with params: %v", runEntity.ID, longName, params)
-
-		var activityEntity *ent.Activity
-		if activityEntity, err = tx.
-			Activity.
-			Create().
-			SetID(runEntity.RunID).
-			SetIdentity(string(longName)).
-			SetHandlerName(activityHandlerInfo.HandlerName).
-			SetInput(params).
-			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 1,
-			}).
-			Save(tp.ctx); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		log.Printf("EnqueueActivity - created activity entity %s for %s with params: %v", activityEntity.ID, longName, params)
-
-		// instance of the workflow definition which will be used to create a workflow task and match with the in-memory registry
-		var activityExecution *ent.ActivityExecution
-		if activityExecution, err = tx.ActivityExecution.
-			Create().
-			SetID(uuid.NewString()).
-			SetRunID(runEntity.ID).
-			SetActivity(activityEntity).
-			Save(tp.ctx); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		if _, err = tx.Run.UpdateOneID(runEntity.ID).SetActivity(activityEntity).Save(tp.ctx); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		log.Printf("EnqueueActivity - created activity execution %s for %s with params: %v", activityExecution.ID, longName, params)
-
-		if err = tx.Commit(); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
-			return "", err
-		}
-
-		// we're outside of the execution model, so we care about the activity entity
-		return ActivityID(activityEntity.ID), nil
-	} else {
-		return "", fmt.Errorf("activity %s not found", longName)
-	}
 }
 
 func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc interface{}, params ...interface{}) (WorkflowExecutionID, error) {
@@ -653,7 +538,7 @@ func (tp *Tempolite) enqueueSubWorkflow(ctx TempoliteContext, workflowFunc inter
 	}
 }
 
-func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite) Workflow(workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
@@ -761,22 +646,23 @@ func (tp *Tempolite) EnqueueWorkflow(workflowFunc interface{}, params ...interfa
 	}
 }
 
-func (tp *Tempolite) GetWorkflow(id WorkflowID) (*WorkflowInfo, error) {
+func (tp *Tempolite) GetWorkflow(id WorkflowID) *WorkflowInfo {
 	log.Printf("GetWorkflow - looking for workflow %s", id)
 	info := WorkflowInfo{
 		tp:         tp,
 		WorkflowID: id,
 	}
-	return &info, nil
+	return &info
 }
 
-func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID) (*WorkflowExecutionInfo, error) {
+func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID, err error) *WorkflowExecutionInfo {
 	log.Printf("getWorkflowExecution - looking for workflow execution %s", id)
 	info := WorkflowExecutionInfo{
 		tp:          tp,
 		ExecutionID: id,
+		err:         err,
 	}
-	return &info, nil
+	return &info
 }
 
 func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
@@ -788,13 +674,14 @@ func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
 	return &info, nil
 }
 
-func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID) (*ActivityExecutionInfo, error) {
+func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo {
 	log.Printf("getActivity - looking for activity execution %s", id)
 	info := ActivityExecutionInfo{
 		tp:          tp,
 		ExecutionID: id,
+		err:         err,
 	}
-	return &info, nil
+	return &info
 }
 
 func (tp *Tempolite) GetSideEffect(id string) (*SideEffectInfo, error) {

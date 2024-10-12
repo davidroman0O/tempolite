@@ -80,7 +80,7 @@ func main() {
 
 	// Enqueue the workflow before updating the version
 	orderID1 := "order123"
-	if _, err := tp.EnqueueWorkflow(OrderWorkflow, orderID1); err != nil {
+	if _, err := tp.Workflow(OrderWorkflow, orderID1); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func main() {
 
 	// Enqueue the workflow after updating the version
 	orderID2 := "order456"
-	if _, err := tp.EnqueueWorkflow(OrderWorkflow, orderID2); err != nil {
+	if _, err := tp.Workflow(OrderWorkflow, orderID2); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 

@@ -19,10 +19,14 @@ import (
 type WorkflowInfo struct {
 	tp         *Tempolite
 	WorkflowID WorkflowID
+	err        error
 }
 
 // Try to find the latest workflow execution until it reaches a final state
 func (i *WorkflowInfo) Get(output ...interface{}) error {
+	if i.err != nil {
+		return i.err
+	}
 	// Check if all output parameters are pointers
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
@@ -104,10 +108,16 @@ func (i *WorkflowInfo) Get(output ...interface{}) error {
 type WorkflowExecutionInfo struct {
 	tp          *Tempolite
 	ExecutionID WorkflowExecutionID
+	err         error
 }
 
 // Try to find the workflow execution until it reaches a final state
 func (i *WorkflowExecutionInfo) Get(output ...interface{}) error {
+
+	if i.err != nil {
+		return i.err
+	}
+
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
 			return fmt.Errorf("output parameter at index %d is not a pointer", idx)
@@ -192,9 +202,13 @@ func (i *WorkflowExecutionInfo) Resume() error {
 type ActivityInfo struct {
 	tp         *Tempolite
 	ActivityID ActivityID
+	err        error
 }
 
 func (i *ActivityInfo) Get(output ...interface{}) error {
+	if i.err != nil {
+		return i.err
+	}
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
 			return fmt.Errorf("output parameter at index %d is not a pointer", idx)
@@ -290,10 +304,14 @@ func (i *ActivityInfo) Get(output ...interface{}) error {
 type ActivityExecutionInfo struct {
 	tp          *Tempolite
 	ExecutionID ActivityExecutionID
+	err         error
 }
 
 // Try to find the activity execution until it reaches a final state
 func (i *ActivityExecutionInfo) Get(output ...interface{}) error {
+	if i.err != nil {
+		return i.err
+	}
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
 			return fmt.Errorf("output parameter at index %d is not a pointer", idx)
@@ -310,6 +328,7 @@ func (i *ActivityExecutionInfo) Get(output ...interface{}) error {
 		case <-i.tp.ctx.Done():
 			return i.tp.ctx.Err()
 		case <-ticker.C:
+			fmt.Println("searching id", i.ExecutionID.String())
 			activityExecEntity, err := i.tp.client.ActivityExecution.Query().Where(activityexecution.IDEQ(i.ExecutionID.String())).WithActivity().Only(i.tp.ctx)
 			if err != nil {
 				return err
@@ -389,11 +408,17 @@ type TempoliteContext interface {
 }
 type WorkflowContext struct {
 	TempoliteContext
-	tp           *Tempolite
-	workflowID   string
-	executionID  string
-	runID        string
-	workflowType string
+	tp              *Tempolite
+	workflowID      string
+	executionID     string
+	runID           string
+	workflowType    string
+	activityCounter int
+}
+
+func (ctx *WorkflowContext) NextActivityID() string {
+	ctx.activityCounter++
+	return fmt.Sprintf("%s-%d", ctx.runID, ctx.activityCounter)
 }
 
 func (w WorkflowContext) RunID() string {
@@ -410,6 +435,10 @@ func (w WorkflowContext) ExecutionID() string {
 
 func (w WorkflowContext) EntityType() string {
 	return "workflow"
+}
+
+func (w WorkflowContext) SideEffect(uniqueID string, handler interface{}, inputs ...any) (*SideEffectInfo, error) {
+	return nil, nil
 }
 
 func (w WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
@@ -434,21 +463,25 @@ func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, values ...any) error
 	return nil
 }
 
-func (w WorkflowContext) GetWorkflow(id WorkflowExecutionID) (*WorkflowExecutionInfo, error) {
-	return w.tp.getWorkflowExecution(w, id)
+func (w WorkflowContext) GetWorkflow(id WorkflowExecutionID) *WorkflowExecutionInfo {
+	return w.tp.getWorkflowExecution(w, id, nil)
 }
 
-func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) (*WorkflowExecutionInfo, error) {
+func (w WorkflowContext) ExecuteWorkflow(handler interface{}, inputs ...any) *WorkflowExecutionInfo {
 	id, err := w.tp.enqueueSubWorkflow(w, handler, inputs...)
-	if err != nil {
-		return nil, err
-	}
-	return w.tp.getWorkflowExecution(w, id)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	return w.tp.getWorkflowExecution(w, id, err)
 }
 
-func (w WorkflowContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityInfo, error) {
-	// todo: implement
-	return nil, nil
+func (w WorkflowContext) ExecuteActivity(name HandlerIdentity, inputs ...any) *ActivityExecutionInfo {
+	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
+	if err != nil {
+		log.Printf("Error enqueuing activity execution: %v", err)
+	}
+	fmt.Println("\t \t activity execution id", id, err)
+	return w.tp.getActivityExecution(w, id, err)
 }
 
 func (w WorkflowContext) GetActivity(id string) (*ActivityInfo, error) {
@@ -485,16 +518,14 @@ func (w ActivityContext) EntityType() string {
 	return "activity"
 }
 
-func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) (*ActivityExecutionInfo, error) {
-	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
-	if err != nil {
-		return nil, err
-	}
-	return w.tp.getActivityExecution(w, id)
-}
+// func (w ActivityContext) ExecuteActivity(name HandlerIdentity, inputs ...any) *ActivityExecutionInfo {
+// 	id, err := w.tp.enqueueSubActivityExecution(w, name, inputs...)
 
-func (w ActivityContext) GetActivity(id ActivityExecutionID) (*ActivityExecutionInfo, error) {
-	return w.tp.getActivityExecution(w, id)
+// 	return w.tp.getActivityExecution(w, id, err)
+// }
+
+func (w ActivityContext) GetActivity(id ActivityExecutionID) *ActivityExecutionInfo {
+	return w.tp.getActivityExecution(w, id, nil)
 }
 
 type SideEffectContext struct {

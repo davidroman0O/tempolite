@@ -29,6 +29,7 @@ func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
 		retrypool.WithPanicHandler(tp.workflowOnPanic),
 		retrypool.WithOnRetry(tp.workflowOnRetry),
+		retrypool.WithPanicWorker[*workflowTask](tp.workflowWorkerPanic),
 	}
 
 	workers := []retrypool.Worker[*workflowTask]{}
@@ -41,6 +42,11 @@ func (tp *Tempolite) createWorkflowPool() *retrypool.Pool[*workflowTask] {
 		tp.ctx,
 		workers,
 		opts...)
+}
+
+func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+	log.Printf("workflowWorkerPanic - workerID %d: %v", workerID, err)
+	log.Println(stackTrace)
 }
 
 func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {
@@ -69,13 +75,22 @@ func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*wo
 func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
 
 	// printf with err + retryCount + maxRetry
-	log.Printf("workflowOnFailure: %v, %d, %d", err, task.Data().retryCount, task.Data().maxRetry)
+	log.Printf("workflowOnFailure:  err: %v,  data: %d, maxrety: %d", err, task.Data().retryCount, task.Data().maxRetry)
+
+	total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(task.Data().ctx.workflowID))).Count(tp.ctx)
+	if err != nil {
+		log.Printf("workflowOnFailure: WorkflowExecution.Query failed: %v", err)
+	}
+
+	total = total - 1 // removing myself
+
+	fmt.Printf("workflowOnFailure: total: %d\n", total)
 
 	// Simple retry mechanism
 	// We know in advance the config and the retry value, we can manage in-memory
-	if task.Data().maxRetry > 0 && task.Data().retryCount < task.Data().maxRetry {
-		task.Data().retryCount++
-		fmt.Println("retry it the task: ", err)
+	if task.Data().maxRetry > 0 && total < task.Data().maxRetry {
+
+		fmt.Println("retry it the task: ", task.Data().retryCount, total, err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
 			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
@@ -90,14 +105,23 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
-		return retrypool.DeadTaskActionDoNothing
+		return retrypool.DeadTaskActionForceRetry
 	}
 
 	log.Printf("workflowOnFailure workflow %v - %v: %d", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID)
 
-	if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-		log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
+	// we won't re-try the workflow, probably was an error somewhere
+	if err != nil {
+		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
+		}
+	} else {
+		// not retrying and the there is no error
+		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError("unknown error").Save(tp.ctx); err != nil {
+			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
+		}
 	}
+
 	if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
 		log.Printf("workflowOnSuccess: Workflow.UpdateOneID failed: %v", err)
 	}

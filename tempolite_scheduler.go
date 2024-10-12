@@ -149,7 +149,7 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 	}
 }
 
-func (tp *Tempolite) schedulerExeutionWorkflow() {
+func (tp *Tempolite) schedulerExecutionWorkflow() {
 	defer close(tp.schedulerExecutionWorkflowDone)
 	for {
 		select {
@@ -244,6 +244,8 @@ func (tp *Tempolite) schedulerExeutionWorkflow() {
 
 						task.ctx.executionID = workflowExecution.ID
 						task.retryCount++
+
+						log.Printf("scheduler: retrying (%d) workflow %s of id %v exec id %v with params: %v", task.retryCount, workflowEntity.HandlerName, workflowEntity.ID, contextWorkflow.executionID, workflowEntity.Input)
 
 						// now we notify the workflow enity that we're working
 						if _, err = tp.client.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {

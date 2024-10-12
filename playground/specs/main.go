@@ -1062,6 +1062,10 @@ func Workflow1(ctx WorkflowContext, input1 string, input2 int) (int, int, error)
 		return 0, 0, err
 	}
 
+	ctx.SideEffect("randomize", func(ctx SideEffectContext) (interface{}, error) {
+		return getRandomNumber(ctx, 5, 10)
+	})
+
 	var value int
 	payload, err := seinfo.Get(&value)
 
