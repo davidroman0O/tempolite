@@ -105,6 +105,7 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 		optsComfy = append(optsComfy, comfylite3.WithPath(*cfg.path))
 	} else {
 		optsComfy = append(optsComfy, comfylite3.WithMemory())
+		firstTime = true
 	}
 
 	comfy, err := comfylite3.New(optsComfy...)
