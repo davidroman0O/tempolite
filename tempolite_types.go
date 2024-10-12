@@ -6,6 +6,10 @@ import (
 	"reflect"
 )
 
+const (
+	DefaultVersion = -1 // Equivalent to workflow.DefaultVersion in Temporal
+)
+
 type WorkflowID string
 
 func (s WorkflowID) String() string {
@@ -111,8 +115,6 @@ type HandlerInfo struct {
 	ReturnKinds     []reflect.Kind
 	NumIn           int
 	NumOut          int
-	PkgPath         string
-	Version         string
 }
 
 // func (hi HandlerInfo) ToInterface(data []byte) ([]interface{}, error) {

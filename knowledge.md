@@ -147,10 +147,12 @@ func main() {
     // or even with optional an personal preference
     tp.RegisterWorkflow(v1Workflows.Something, "v1")
     
-    // Or I should do
+    // Or 
+    // I want to setup my workflow just I would setup an http api
     v1Group := tp.WorkflowGroup("v1")
     tp.RegisterWorkflow(v1Workflows.Something)
 
 }
 
 ```
+

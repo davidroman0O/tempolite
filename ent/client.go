@@ -18,6 +18,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -40,6 +41,8 @@ type Client struct {
 	ActivityExecution *ActivityExecutionClient
 	// ExecutionRelationship is the client for interacting with the ExecutionRelationship builders.
 	ExecutionRelationship *ExecutionRelationshipClient
+	// FeatureFlagVersion is the client for interacting with the FeatureFlagVersion builders.
+	FeatureFlagVersion *FeatureFlagVersionClient
 	// Run is the client for interacting with the Run builders.
 	Run *RunClient
 	// Saga is the client for interacting with the Saga builders.
@@ -72,6 +75,7 @@ func (c *Client) init() {
 	c.Activity = NewActivityClient(c.config)
 	c.ActivityExecution = NewActivityExecutionClient(c.config)
 	c.ExecutionRelationship = NewExecutionRelationshipClient(c.config)
+	c.FeatureFlagVersion = NewFeatureFlagVersionClient(c.config)
 	c.Run = NewRunClient(c.config)
 	c.Saga = NewSagaClient(c.config)
 	c.SagaExecution = NewSagaExecutionClient(c.config)
@@ -176,6 +180,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Activity:              NewActivityClient(cfg),
 		ActivityExecution:     NewActivityExecutionClient(cfg),
 		ExecutionRelationship: NewExecutionRelationshipClient(cfg),
+		FeatureFlagVersion:    NewFeatureFlagVersionClient(cfg),
 		Run:                   NewRunClient(cfg),
 		Saga:                  NewSagaClient(cfg),
 		SagaExecution:         NewSagaExecutionClient(cfg),
@@ -207,6 +212,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Activity:              NewActivityClient(cfg),
 		ActivityExecution:     NewActivityExecutionClient(cfg),
 		ExecutionRelationship: NewExecutionRelationshipClient(cfg),
+		FeatureFlagVersion:    NewFeatureFlagVersionClient(cfg),
 		Run:                   NewRunClient(cfg),
 		Saga:                  NewSagaClient(cfg),
 		SagaExecution:         NewSagaExecutionClient(cfg),
@@ -245,9 +251,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.Run, c.Saga,
-		c.SagaExecution, c.SagaStepExecution, c.SideEffect, c.SideEffectExecution,
-		c.Signal, c.Workflow, c.WorkflowExecution,
+		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
+		c.Run, c.Saga, c.SagaExecution, c.SagaStepExecution, c.SideEffect,
+		c.SideEffectExecution, c.Signal, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -257,9 +263,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.Run, c.Saga,
-		c.SagaExecution, c.SagaStepExecution, c.SideEffect, c.SideEffectExecution,
-		c.Signal, c.Workflow, c.WorkflowExecution,
+		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
+		c.Run, c.Saga, c.SagaExecution, c.SagaStepExecution, c.SideEffect,
+		c.SideEffectExecution, c.Signal, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -274,6 +280,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ActivityExecution.mutate(ctx, m)
 	case *ExecutionRelationshipMutation:
 		return c.ExecutionRelationship.mutate(ctx, m)
+	case *FeatureFlagVersionMutation:
+		return c.FeatureFlagVersion.mutate(ctx, m)
 	case *RunMutation:
 		return c.Run.mutate(ctx, m)
 	case *SagaMutation:
@@ -725,6 +733,139 @@ func (c *ExecutionRelationshipClient) mutate(ctx context.Context, m *ExecutionRe
 		return (&ExecutionRelationshipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ExecutionRelationship mutation op: %q", m.Op())
+	}
+}
+
+// FeatureFlagVersionClient is a client for the FeatureFlagVersion schema.
+type FeatureFlagVersionClient struct {
+	config
+}
+
+// NewFeatureFlagVersionClient returns a client for the FeatureFlagVersion from the given config.
+func NewFeatureFlagVersionClient(c config) *FeatureFlagVersionClient {
+	return &FeatureFlagVersionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `featureflagversion.Hooks(f(g(h())))`.
+func (c *FeatureFlagVersionClient) Use(hooks ...Hook) {
+	c.hooks.FeatureFlagVersion = append(c.hooks.FeatureFlagVersion, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `featureflagversion.Intercept(f(g(h())))`.
+func (c *FeatureFlagVersionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FeatureFlagVersion = append(c.inters.FeatureFlagVersion, interceptors...)
+}
+
+// Create returns a builder for creating a FeatureFlagVersion entity.
+func (c *FeatureFlagVersionClient) Create() *FeatureFlagVersionCreate {
+	mutation := newFeatureFlagVersionMutation(c.config, OpCreate)
+	return &FeatureFlagVersionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FeatureFlagVersion entities.
+func (c *FeatureFlagVersionClient) CreateBulk(builders ...*FeatureFlagVersionCreate) *FeatureFlagVersionCreateBulk {
+	return &FeatureFlagVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FeatureFlagVersionClient) MapCreateBulk(slice any, setFunc func(*FeatureFlagVersionCreate, int)) *FeatureFlagVersionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FeatureFlagVersionCreateBulk{err: fmt.Errorf("calling to FeatureFlagVersionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FeatureFlagVersionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FeatureFlagVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FeatureFlagVersion.
+func (c *FeatureFlagVersionClient) Update() *FeatureFlagVersionUpdate {
+	mutation := newFeatureFlagVersionMutation(c.config, OpUpdate)
+	return &FeatureFlagVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FeatureFlagVersionClient) UpdateOne(ffv *FeatureFlagVersion) *FeatureFlagVersionUpdateOne {
+	mutation := newFeatureFlagVersionMutation(c.config, OpUpdateOne, withFeatureFlagVersion(ffv))
+	return &FeatureFlagVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FeatureFlagVersionClient) UpdateOneID(id int) *FeatureFlagVersionUpdateOne {
+	mutation := newFeatureFlagVersionMutation(c.config, OpUpdateOne, withFeatureFlagVersionID(id))
+	return &FeatureFlagVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FeatureFlagVersion.
+func (c *FeatureFlagVersionClient) Delete() *FeatureFlagVersionDelete {
+	mutation := newFeatureFlagVersionMutation(c.config, OpDelete)
+	return &FeatureFlagVersionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FeatureFlagVersionClient) DeleteOne(ffv *FeatureFlagVersion) *FeatureFlagVersionDeleteOne {
+	return c.DeleteOneID(ffv.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FeatureFlagVersionClient) DeleteOneID(id int) *FeatureFlagVersionDeleteOne {
+	builder := c.Delete().Where(featureflagversion.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FeatureFlagVersionDeleteOne{builder}
+}
+
+// Query returns a query builder for FeatureFlagVersion.
+func (c *FeatureFlagVersionClient) Query() *FeatureFlagVersionQuery {
+	return &FeatureFlagVersionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFeatureFlagVersion},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FeatureFlagVersion entity by its id.
+func (c *FeatureFlagVersionClient) Get(ctx context.Context, id int) (*FeatureFlagVersion, error) {
+	return c.Query().Where(featureflagversion.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FeatureFlagVersionClient) GetX(ctx context.Context, id int) *FeatureFlagVersion {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FeatureFlagVersionClient) Hooks() []Hook {
+	return c.hooks.FeatureFlagVersion
+}
+
+// Interceptors returns the client interceptors.
+func (c *FeatureFlagVersionClient) Interceptors() []Interceptor {
+	return c.inters.FeatureFlagVersion
+}
+
+func (c *FeatureFlagVersionClient) mutate(ctx context.Context, m *FeatureFlagVersionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FeatureFlagVersionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FeatureFlagVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FeatureFlagVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FeatureFlagVersionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FeatureFlagVersion mutation op: %q", m.Op())
 	}
 }
 
@@ -2088,13 +2229,13 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Activity, ActivityExecution, ExecutionRelationship, Run, Saga, SagaExecution,
-		SagaStepExecution, SideEffect, SideEffectExecution, Signal, Workflow,
-		WorkflowExecution []ent.Hook
+		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
+		Saga, SagaExecution, SagaStepExecution, SideEffect, SideEffectExecution,
+		Signal, Workflow, WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		Activity, ActivityExecution, ExecutionRelationship, Run, Saga, SagaExecution,
-		SagaStepExecution, SideEffect, SideEffectExecution, Signal, Workflow,
-		WorkflowExecution []ent.Interceptor
+		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
+		Saga, SagaExecution, SagaStepExecution, SideEffect, SideEffectExecution,
+		Signal, Workflow, WorkflowExecution []ent.Interceptor
 	}
 )

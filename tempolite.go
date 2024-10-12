@@ -16,6 +16,7 @@ import (
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
@@ -45,6 +46,8 @@ type Tempolite struct {
 	schedulerExecutionWorkflowDone  chan struct{}
 	schedulerExecutionActivityDone  chan struct{}
 	schedulerSideEffectActivityDone chan struct{}
+
+	versionCache sync.Map
 }
 
 type tempoliteConfig struct {
@@ -143,6 +146,75 @@ func New(ctx context.Context, opts ...tempoliteOption) (*Tempolite, error) {
 	go tp.schedulerExecutionActivity()
 
 	return tp, nil
+}
+
+func (tp *Tempolite) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
+	key := fmt.Sprintf("%s-%s", workflowType, changeID)
+
+	// Check cache first
+	if cachedVersion, ok := tp.versionCache.Load(key); ok {
+		version := cachedVersion.(int)
+		log.Printf("Found cached version %d for key: %s", version, key)
+		// Update version if necessary
+		if version < maxSupported {
+			version = maxSupported
+			tp.versionCache.Store(key, version)
+			log.Printf("Updated cached version to %d for key: %s", version, key)
+		}
+		return version, nil
+	}
+
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	v, err := tx.FeatureFlagVersion.Query().
+		Where(featureflagversion.WorkflowTypeEQ(workflowType)).
+		Where(featureflagversion.ChangeIDEQ(changeID)).
+		Only(tp.ctx)
+
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			return 0, err
+		}
+		// Version not found, create a new one
+		log.Printf("Creating new version for key: %s with value: %d", key, minSupported)
+		v, err = tx.FeatureFlagVersion.Create().
+			SetWorkflowType(workflowType).
+			SetWorkflowID(workflowID).
+			SetChangeID(changeID).
+			SetVersion(minSupported).
+			Save(tp.ctx)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		log.Printf("Found existing version %d for key: %s", v.Version, key)
+		// Update the version if maxSupported is greater
+		if v.Version < maxSupported {
+			v.Version = maxSupported
+			v, err = tx.FeatureFlagVersion.UpdateOne(v).
+				SetVersion(v.Version).
+				SetWorkflowID(workflowID).
+				Save(tp.ctx)
+			if err != nil {
+				return 0, err
+			}
+			log.Printf("Updated version to %d for key: %s", v.Version, key)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	// Update cache
+	tp.versionCache.Store(key, v.Version)
+	log.Printf("Stored version %d in cache for key: %s", v.Version, key)
+
+	return v.Version, nil
 }
 
 func (tp *Tempolite) Close() {

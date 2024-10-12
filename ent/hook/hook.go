@@ -45,6 +45,18 @@ func (f ExecutionRelationshipFunc) Mutate(ctx context.Context, m ent.Mutation) (
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExecutionRelationshipMutation", m)
 }
 
+// The FeatureFlagVersionFunc type is an adapter to allow the use of ordinary
+// function as FeatureFlagVersion mutator.
+type FeatureFlagVersionFunc func(context.Context, *ent.FeatureFlagVersionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FeatureFlagVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FeatureFlagVersionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeatureFlagVersionMutation", m)
+}
+
 // The RunFunc type is an adapter to allow the use of ordinary
 // function as Run mutator.
 type RunFunc func(context.Context, *ent.RunMutation) (ent.Value, error)

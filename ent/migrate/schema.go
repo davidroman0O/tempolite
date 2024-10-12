@@ -72,6 +72,27 @@ var (
 			},
 		},
 	}
+	// FeatureFlagVersionsColumns holds the columns for the "feature_flag_versions" table.
+	FeatureFlagVersionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "workflow_type", Type: field.TypeString},
+		{Name: "workflow_id", Type: field.TypeString},
+		{Name: "change_id", Type: field.TypeString},
+		{Name: "version", Type: field.TypeInt},
+	}
+	// FeatureFlagVersionsTable holds the schema information for the "feature_flag_versions" table.
+	FeatureFlagVersionsTable = &schema.Table{
+		Name:       "feature_flag_versions",
+		Columns:    FeatureFlagVersionsColumns,
+		PrimaryKey: []*schema.Column{FeatureFlagVersionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "featureflagversion_workflow_type_change_id",
+				Unique:  true,
+				Columns: []*schema.Column{FeatureFlagVersionsColumns[1], FeatureFlagVersionsColumns[3]},
+			},
+		},
+	}
 	// RunsColumns holds the columns for the "runs" table.
 	RunsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
@@ -274,6 +295,7 @@ var (
 		ActivitiesTable,
 		ActivityExecutionsTable,
 		ExecutionRelationshipsTable,
+		FeatureFlagVersionsTable,
 		RunsTable,
 		SagasTable,
 		SagaExecutionsTable,

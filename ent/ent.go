@@ -15,6 +15,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -87,6 +88,7 @@ func checkColumn(table, column string) error {
 			activity.Table:              activity.ValidColumn,
 			activityexecution.Table:     activityexecution.ValidColumn,
 			executionrelationship.Table: executionrelationship.ValidColumn,
+			featureflagversion.Table:    featureflagversion.ValidColumn,
 			run.Table:                   run.ValidColumn,
 			saga.Table:                  saga.ValidColumn,
 			sagaexecution.Table:         sagaexecution.ValidColumn,

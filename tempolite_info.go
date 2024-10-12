@@ -387,13 +387,13 @@ type TempoliteContext interface {
 	ExecutionID() string
 	EntityType() string
 }
-
 type WorkflowContext struct {
 	TempoliteContext
-	tp          *Tempolite
-	workflowID  string
-	executionID string
-	runID       string
+	tp           *Tempolite
+	workflowID   string
+	executionID  string
+	runID        string
+	workflowType string
 }
 
 func (w WorkflowContext) RunID() string {
@@ -410,6 +410,17 @@ func (w WorkflowContext) ExecutionID() string {
 
 func (w WorkflowContext) EntityType() string {
 	return "workflow"
+}
+
+func (w WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+	log.Printf("GetVersion called for workflowType: %s, workflowID: %s, changeID: %s, min: %d, max: %d", w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
+	version, err := w.tp.getOrCreateVersion(w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
+	if err != nil {
+		log.Printf("Error getting version for workflowType %s, changeID %s: %v", w.workflowType, changeID, err)
+		return minSupported
+	}
+	log.Printf("GetVersion returned %d for workflowType: %s, changeID: %s", version, w.workflowType, changeID)
+	return version
 }
 
 // Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
