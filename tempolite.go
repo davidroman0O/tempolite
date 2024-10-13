@@ -623,16 +623,6 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, para
 	var err error
 	var tx *ent.Tx
 
-	// Check for existing workflow with the same stepID
-	existingWorkflow, errExisting := tp.client.Workflow.Query().
-		Where(workflow.StepID(fmt.Sprint(stepID))).
-		First(tp.ctx)
-	if errExisting == nil {
-		fmt.Println("===EXISTING WORKFLOW", existingWorkflow)
-		// Workflow already exists, return its ID
-		return WorkflowID(existingWorkflow.ID), nil
-	}
-
 	if value, ok = tp.workflows.Load(handlerIdentity); ok {
 		var workflowHandlerInfo Workflow
 		if workflowHandlerInfo, ok = value.(Workflow); !ok {
