@@ -71,3 +71,26 @@ type primitive interface {
 ```
 
 something like that, so the dev can put whatever it want as identifier of its app for each workflow or activity or sideeffect or saga calls so when it retries then tempolite knows which one is which
+
+## Activities vs Side Effects
+
+I had a hard time to truely and deeply understand the difference between both.
+
+- Activities handle external non-determinism (like network requests)
+- SideEffects handle internal non-determinism (like generating timestamps)
+
+> but but you can just use Activities then it's the same with retries
+
+- Activities often represent expensive and long-running tasks that are external
+- SideEffects are lightweight and used for quick operations within the workflow logic that need to be captured as-is
+
+Basically if you need to enhance the logic of the workflow, use a SideEffect, if you need to feed data to the workflow then it's an Activity. 
+
+> SideEffects are for enhancing or modifying the internal workflow logic (like introducing non-deterministic behavior within the workflow), while Activities are used to bring in external data or interact with systems outside the workflow.
+
+SideEffects are designed to be simple, synchronous operations that directly use the workflow's scope, allowing them to integrate seamlessly with the workflow's internal logic. They are immediately recorded in the workflow history because they introduce non-deterministic behavior (like accessing the current time or generating a random number) that needs to be captured for determinism during replay.
+
+On the other hand, Activities are external calls and do not share the workflow's scope because they operate outside the workflow’s internal logic. They are more complex, potentially long-running, and involve external systems, so they need to be treated differently — with retries, failure handling, and result persistence in history after successful execution.
+
+This is why SideEffects are lightweight and use the workflow’s context directly, while Activities are more independent and operate as separate units with their own lifecycle.
+

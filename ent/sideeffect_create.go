@@ -54,12 +54,6 @@ func (sec *SideEffectCreate) SetNillableStatus(s *sideeffect.Status) *SideEffect
 	return sec
 }
 
-// SetInput sets the "input" field.
-func (sec *SideEffectCreate) SetInput(i []interface{}) *SideEffectCreate {
-	sec.mutation.SetInput(i)
-	return sec
-}
-
 // SetRetryPolicy sets the "retry_policy" field.
 func (sec *SideEffectCreate) SetRetryPolicy(sp schema.RetryPolicy) *SideEffectCreate {
 	sec.mutation.SetRetryPolicy(sp)
@@ -202,9 +196,6 @@ func (sec *SideEffectCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
 		}
 	}
-	if _, ok := sec.mutation.Input(); !ok {
-		return &ValidationError{Name: "input", err: errors.New(`ent: missing required field "SideEffect.input"`)}
-	}
 	if _, ok := sec.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SideEffect.created_at"`)}
 	}
@@ -258,10 +249,6 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 	if value, ok := sec.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
-	}
-	if value, ok := sec.mutation.Input(); ok {
-		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)
-		_node.Input = value
 	}
 	if value, ok := sec.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)

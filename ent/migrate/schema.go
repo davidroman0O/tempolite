@@ -204,7 +204,6 @@ var (
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
-		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},

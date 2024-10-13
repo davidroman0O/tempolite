@@ -452,69 +452,6 @@ func (tp *Tempolite[T]) RegisterActivityFunc(activityFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
-	handlerType := reflect.TypeOf(sideEffectFunc)
-
-	if handlerType.Kind() != reflect.Func {
-		return fmt.Errorf("side effect must be a function")
-	}
-
-	if handlerType.NumIn() < 1 {
-		return fmt.Errorf("side effect function must have at least one input parameter (SideEffectContext)")
-	}
-
-	if handlerType.In(0) != reflect.TypeOf(SideEffectContext[T]{}) {
-		return fmt.Errorf("first parameter of side effect function must be SideEffectContext")
-	}
-
-	// Collect parameter types after the context parameter
-	paramTypes := []reflect.Type{}
-	paramKinds := []reflect.Kind{}
-	for i := 1; i < handlerType.NumIn(); i++ {
-		paramTypes = append(paramTypes, handlerType.In(i))
-		paramKinds = append(paramKinds, handlerType.In(i).Kind())
-	}
-
-	// Collect return types excluding error
-	numOut := handlerType.NumOut()
-	if numOut == 0 {
-		return fmt.Errorf("side effect function must return at least an error")
-	}
-
-	returnTypes := []reflect.Type{}
-	returnKinds := []reflect.Kind{}
-	for i := 0; i < numOut-1; i++ {
-		returnTypes = append(returnTypes, handlerType.Out(i))
-		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
-	}
-
-	// Verify that the last return type is error
-	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
-		return fmt.Errorf("last return value of side effect function must be error")
-	}
-
-	// Generate a unique identifier for the side effect function
-	funcName := runtime.FuncForPC(reflect.ValueOf(sideEffectFunc).Pointer()).Name()
-	handlerIdentity := HandlerIdentity(funcName)
-
-	sideEffect := &SideEffect{
-		HandlerName:     funcName,
-		HandlerLongName: handlerIdentity,
-		Handler:         sideEffectFunc,
-		ParamTypes:      paramTypes,
-		ParamsKinds:     paramKinds,
-		ReturnTypes:     returnTypes,
-		ReturnKinds:     returnKinds,
-		NumIn:           handlerType.NumIn() - 1, // Exclude context
-		NumOut:          numOut - 1,              // Exclude error
-	}
-
-	log.Printf("Registering side effect function %s with name %s", funcName, handlerIdentity)
-
-	tp.sideEffects.Store(sideEffect.HandlerLongName, *sideEffect)
-	return nil
-}
-
 func (tp *Tempolite[T]) IsActivityRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.activities.Load(longName)
 	return ok
@@ -526,20 +463,6 @@ func (tp *Tempolite[T]) RegisterActivity(register ActivityRegister) error {
 		return err
 	}
 	tp.activities.Store(activity.HandlerLongName, *activity)
-	return nil
-}
-
-func (tp *Tempolite[T]) IsSideEffectRegistered(longName HandlerIdentity) bool {
-	_, ok := tp.sideEffects.Load(longName)
-	return ok
-}
-
-func (tp *Tempolite[T]) RegisterSideEffect(register SideEffectRegister) error {
-	sideEffect, err := register()
-	if err != nil {
-		return err
-	}
-	tp.sideEffects.Store(sideEffect.HandlerLongName, *sideEffect)
 	return nil
 }
 
@@ -561,3 +484,80 @@ func (tp *Tempolite[T]) RegisterSaga(register SagaRegister) error {
 	log.Printf("Successfully registered saga with transaction %s and compensation %s", transaction.HandlerName, compensation.HandlerName)
 	return nil
 }
+
+// func (tp *Tempolite[T]) RegisterSideEffectFunc(sideEffectFunc interface{}) error {
+// 	handlerType := reflect.TypeOf(sideEffectFunc)
+
+// 	if handlerType.Kind() != reflect.Func {
+// 		return fmt.Errorf("side effect must be a function")
+// 	}
+
+// 	if handlerType.NumIn() < 1 {
+// 		return fmt.Errorf("side effect function must have at least one input parameter (SideEffectContext)")
+// 	}
+
+// 	if handlerType.In(0) != reflect.TypeOf(SideEffectContext[T]{}) {
+// 		return fmt.Errorf("first parameter of side effect function must be SideEffectContext")
+// 	}
+
+// 	// Collect parameter types after the context parameter
+// 	paramTypes := []reflect.Type{}
+// 	paramKinds := []reflect.Kind{}
+// 	for i := 1; i < handlerType.NumIn(); i++ {
+// 		paramTypes = append(paramTypes, handlerType.In(i))
+// 		paramKinds = append(paramKinds, handlerType.In(i).Kind())
+// 	}
+
+// 	// Collect return types excluding error
+// 	numOut := handlerType.NumOut()
+// 	if numOut == 0 {
+// 		return fmt.Errorf("side effect function must return at least an error")
+// 	}
+
+// 	returnTypes := []reflect.Type{}
+// 	returnKinds := []reflect.Kind{}
+// 	for i := 0; i < numOut-1; i++ {
+// 		returnTypes = append(returnTypes, handlerType.Out(i))
+// 		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
+// 	}
+
+// 	// Verify that the last return type is error
+// 	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
+// 		return fmt.Errorf("last return value of side effect function must be error")
+// 	}
+
+// 	// Generate a unique identifier for the side effect function
+// 	funcName := runtime.FuncForPC(reflect.ValueOf(sideEffectFunc).Pointer()).Name()
+// 	handlerIdentity := HandlerIdentity(funcName)
+
+// 	sideEffect := &SideEffect{
+// 		HandlerName:     funcName,
+// 		HandlerLongName: handlerIdentity,
+// 		Handler:         sideEffectFunc,
+// 		ParamTypes:      paramTypes,
+// 		ParamsKinds:     paramKinds,
+// 		ReturnTypes:     returnTypes,
+// 		ReturnKinds:     returnKinds,
+// 		NumIn:           handlerType.NumIn() - 1, // Exclude context
+// 		NumOut:          numOut - 1,              // Exclude error
+// 	}
+
+// 	log.Printf("Registering side effect function %s with name %s", funcName, handlerIdentity)
+
+// 	tp.sideEffects.Store(sideEffect.HandlerLongName, *sideEffect)
+// 	return nil
+// }
+
+// func (tp *Tempolite[T]) IsSideEffectRegistered(longName HandlerIdentity) bool {
+// 	_, ok := tp.sideEffects.Load(longName)
+// 	return ok
+// }
+
+// func (tp *Tempolite[T]) RegisterSideEffect(register SideEffectRegister) error {
+// 	sideEffect, err := register()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	tp.sideEffects.Store(sideEffect.HandlerLongName, *sideEffect)
+// 	return nil
+// }

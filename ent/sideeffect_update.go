@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
@@ -84,18 +83,6 @@ func (seu *SideEffectUpdate) SetNillableStatus(s *sideeffect.Status) *SideEffect
 	if s != nil {
 		seu.SetStatus(*s)
 	}
-	return seu
-}
-
-// SetInput sets the "input" field.
-func (seu *SideEffectUpdate) SetInput(i []interface{}) *SideEffectUpdate {
-	seu.mutation.SetInput(i)
-	return seu
-}
-
-// AppendInput appends i to the "input" field.
-func (seu *SideEffectUpdate) AppendInput(i []interface{}) *SideEffectUpdate {
-	seu.mutation.AppendInput(i)
 	return seu
 }
 
@@ -270,14 +257,6 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := seu.mutation.Input(); ok {
-		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := seu.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffect.FieldInput, value)
-		})
-	}
 	if value, ok := seu.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)
 	}
@@ -411,18 +390,6 @@ func (seuo *SideEffectUpdateOne) SetNillableStatus(s *sideeffect.Status) *SideEf
 	if s != nil {
 		seuo.SetStatus(*s)
 	}
-	return seuo
-}
-
-// SetInput sets the "input" field.
-func (seuo *SideEffectUpdateOne) SetInput(i []interface{}) *SideEffectUpdateOne {
-	seuo.mutation.SetInput(i)
-	return seuo
-}
-
-// AppendInput appends i to the "input" field.
-func (seuo *SideEffectUpdateOne) AppendInput(i []interface{}) *SideEffectUpdateOne {
-	seuo.mutation.AppendInput(i)
 	return seuo
 }
 
@@ -626,14 +593,6 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
-	}
-	if value, ok := seuo.mutation.Input(); ok {
-		_spec.SetField(sideeffect.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := seuo.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffect.FieldInput, value)
-		})
 	}
 	if value, ok := seuo.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)

@@ -155,7 +155,7 @@ func init() {
 	// sideeffect.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sideeffect.HandlerNameValidator = sideeffectDescHandlerName.Validators[0].(func(string) error)
 	// sideeffectDescCreatedAt is the schema descriptor for created_at field.
-	sideeffectDescCreatedAt := sideeffectFields[8].Descriptor()
+	sideeffectDescCreatedAt := sideeffectFields[7].Descriptor()
 	// sideeffect.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sideeffect.DefaultCreatedAt = sideeffectDescCreatedAt.Default.(func() time.Time)
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()

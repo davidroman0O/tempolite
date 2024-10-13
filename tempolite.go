@@ -20,6 +20,8 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
@@ -38,18 +40,23 @@ type Tempolite[T Identifier] struct {
 	db     *dbSQL.DB
 	client *ent.Client
 
-	workflows    sync.Map
-	activities   sync.Map
-	sideEffects  sync.Map
+	// has to be pre-registered
+	workflows  sync.Map
+	activities sync.Map
+
 	sagas        sync.Map
 	sagaBuilders sync.Map
+
+	// dynamically cached
+	sideEffects             sync.Map
+	sideEffectPool          *retrypool.Pool[*sideEffectTask[T]]
+	schedulerSideEffectDone chan struct{}
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	workflowPool   *retrypool.Pool[*workflowTask[T]]
-	activityPool   *retrypool.Pool[*activityTask[T]]
-	sideEffectPool *retrypool.Pool[*sideEffectTask[T]]
+	workflowPool *retrypool.Pool[*workflowTask[T]]
+	activityPool *retrypool.Pool[*activityTask[T]]
 
 	schedulerExecutionWorkflowDone  chan struct{}
 	schedulerExecutionActivityDone  chan struct{}
@@ -146,11 +153,14 @@ func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite
 		cancel:                         cancel,
 		schedulerExecutionWorkflowDone: make(chan struct{}),
 		schedulerExecutionActivityDone: make(chan struct{}),
+		schedulerSideEffectDone:        make(chan struct{}),
 	}
 
 	tp.workflowPool = tp.createWorkflowPool()
 	tp.activityPool = tp.createActivityPool()
+	tp.sideEffectPool = tp.createSideEffectPool()
 
+	go tp.schedulerExecutionSideEffect()
 	go tp.schedulerExecutionWorkflow()
 	go tp.schedulerExecutionActivity()
 
@@ -229,6 +239,8 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 func (tp *Tempolite[T]) Close() {
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
+	tp.activityPool.Close()
+	tp.sideEffectPool.Close()
 }
 
 func (tp *Tempolite[T]) Wait() error {
@@ -357,8 +369,6 @@ func (tp *Tempolite[T]) enqueueSubActivityExecution(ctx WorkflowContext[T], step
 		return "", fmt.Errorf("error checking for existing stepID: %w", err)
 	}
 
-	fmt.Println("exists", exists)
-
 	var value any
 	var ok bool
 	var tx *ent.Tx
@@ -466,7 +476,6 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
 	}
 
-	fmt.Println("===ENQUEUE SUB WORKFLOW", ctx.RunID(), ctx.EntityID(), fmt.Sprint(stepID), ctx.StepID())
 	// Check for existing sub-workflow with the same stepID within the current workflow
 	exists, err := tp.client.ExecutionRelationship.Query().
 		Where(
@@ -480,20 +489,16 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 		).
 		First(tp.ctx)
 	if err == nil {
-		fmt.Println("===CHECKING WORKFLOW", exists.ChildEntityID)
 		// todo: is there a way to just get the status?
 		act, err := tp.client.Workflow.Get(tp.ctx, exists.ChildEntityID)
 		if err != nil {
-			fmt.Println("===ERROR GETTING WORKFLOW", err)
 			return "", err
 		}
 		if act.Status == workflow.StatusCompleted {
-			fmt.Println("===EXISTING WORKFLOW", exists.ChildEntityID)
 			return WorkflowID(exists.ChildEntityID), nil
 		}
 	} else {
 		if !ent.IsNotFound(err) {
-			fmt.Println("===ERROR CHECKING FOR EXISTING STEP ID", err)
 			return "", fmt.Errorf("error checking for existing stepID: %w", err)
 		}
 	}
@@ -528,8 +533,6 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 		if tx, err = tp.client.Tx(tp.ctx); err != nil {
 			return "", err
 		}
-
-		// fmt.Println("===CREATE SUB WORKFLOW", ctx.ExecutionID(), ctx.RunID(), ctx.EntityID())
 
 		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
 		var workflowEntity *ent.Workflow
@@ -611,7 +614,6 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 
 func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, params ...interface{}) *WorkflowInfo[T] {
 	id, err := tp.executeWorkflow(stepID, workflowFunc, params...)
-	fmt.Println("===WORKFLOW", id, err)
 	return tp.getWorkflowRoot(id, err)
 }
 
@@ -793,23 +795,165 @@ func (tp *Tempolite[T]) getActivityExecution(ctx TempoliteContext, id ActivityEx
 	return &info
 }
 
-func (tp *Tempolite[T]) GetSideEffect(id string) (*SideEffectInfo[T], error) {
-	return tp.getSideEffect(id)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+func (tp *Tempolite[T]) GetSideEffect(id SideEffectID) *SideEffectInfo[T] {
+	return &SideEffectInfo[T]{
+		tp:       tp,
+		EntityID: id,
+	}
 }
 
-func (tp *Tempolite[T]) getSideEffect(id string) (*SideEffectInfo[T], error) {
-	// todo: implement
-	return nil, nil
+func (tp *Tempolite[T]) getSideEffect(ctx TempoliteContext, id SideEffectID, err error) *SideEffectInfo[T] {
+	log.Printf("getSideEffect - looking for side effect %s", id)
+	info := SideEffectInfo[T]{
+		tp:       tp,
+		EntityID: id,
+		err:      err,
+	}
+	return &info
 }
 
-// Side Effects can't fail
-func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, longName HandlerIdentity) (SideEffectExecutionID, error) {
-	return "", nil
+// That's how we should use it
+//
+// ```go
+// var value int
+//
+//	err := ctx.SideEffect("eventual switch", func(ctx SideEffectContext[testIdentifier]) int {
+//		return 420
+//	}).Get(&value)
+//
+// ```
+func (tp *Tempolite[T]) enqueueSubSideEffect(ctx TempoliteContext, stepID T, sideEffectHandler interface{}) (SideEffectID, error) {
+	switch ctx.EntityType() {
+	case "workflow":
+		// Proceed with side effect creation
+	default:
+		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
+	}
+
+	var err error
+	var tx *ent.Tx
+
+	// Generate a unique identifier for the side effect function
+	funcName := runtime.FuncForPC(reflect.ValueOf(sideEffectHandler).Pointer()).Name()
+	handlerIdentity := HandlerIdentity(funcName)
+
+	// Check for existing side effect with the same stepID within the current workflow
+	exists, err := tp.client.ExecutionRelationship.Query().
+		Where(
+			executionrelationship.And(
+				executionrelationship.RunID(ctx.RunID()),
+				executionrelationship.ParentEntityID(ctx.EntityID()),
+				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ParentStepID(ctx.StepID()),
+			),
+			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSideEffect),
+		).
+		First(tp.ctx)
+	if err == nil {
+		sideEffectEntity, err := tp.client.SideEffect.Get(tp.ctx, exists.ChildEntityID)
+		if err != nil {
+			return "", err
+		}
+		if sideEffectEntity.Status == sideeffect.StatusCompleted {
+			return SideEffectID(exists.ChildEntityID), nil
+		}
+	} else if !ent.IsNotFound(err) {
+		return "", fmt.Errorf("error checking for existing stepID: %w", err)
+	}
+
+	if tx, err = tp.client.Tx(tp.ctx); err != nil {
+		return "", err
+	}
+
+	sideEffectEntity, err := tx.SideEffect.
+		Create().
+		SetID(uuid.NewString()).
+		SetStepID(fmt.Sprint(stepID)).
+		SetIdentity(string(handlerIdentity)).
+		SetHandlerName(funcName).
+		SetStatus(sideeffect.StatusPending).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	sideEffectExecution, err := tx.SideEffectExecution.
+		Create().
+		SetID(uuid.NewString()).
+		SetRunID(ctx.RunID()).
+		SetSideEffect(sideEffectEntity).
+		SetStatus(sideeffectexecution.StatusPending).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to create side effect execution: %w", err)
+	}
+
+	_, err = tx.ExecutionRelationship.Create().
+		SetRunID(ctx.RunID()).
+		SetParentEntityID(ctx.EntityID()).
+		SetChildEntityID(sideEffectEntity.ID).
+		SetParentID(ctx.ExecutionID()).
+		SetChildID(sideEffectExecution.ID).
+		SetParentStepID(ctx.StepID()).
+		SetChildStepID(fmt.Sprint(stepID)).
+		SetParentType(executionrelationship.ParentTypeWorkflow).
+		SetChildType(executionrelationship.ChildTypeSideEffect).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	// Analyze the side effect handler
+	handlerType := reflect.TypeOf(sideEffectHandler)
+	if handlerType.Kind() != reflect.Func {
+		return "", fmt.Errorf("side effect must be a function")
+	}
+
+	if handlerType.NumIn() != 1 || handlerType.In(0) != reflect.TypeOf(SideEffectContext[T]{}) {
+		return "", fmt.Errorf("side effect function must have exactly one input parameter of type SideEffectContext[T]")
+	}
+
+	// Collect all return types
+	numOut := handlerType.NumOut()
+	if numOut == 0 {
+		return "", fmt.Errorf("side effect function must return at least one value")
+	}
+
+	returnTypes := make([]reflect.Type, numOut)
+	returnKinds := make([]reflect.Kind, numOut)
+	for i := 0; i < numOut; i++ {
+		returnTypes[i] = handlerType.Out(i)
+		returnKinds[i] = handlerType.Out(i).Kind()
+	}
+
+	// Cache the side effect info
+	tp.sideEffects.Store(sideEffectEntity.ID, SideEffect{
+		HandlerName:     funcName,
+		HandlerLongName: handlerIdentity,
+		Handler:         sideEffectHandler,
+		ReturnTypes:     returnTypes,
+		ReturnKinds:     returnKinds,
+		NumOut:          numOut,
+	})
+
+	log.Printf("Enqueued side effect %s with ID %s", funcName, sideEffectEntity.ID)
+	return SideEffectID(sideEffectEntity.ID), nil
 }
 
-func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, workflowFunc interface{}, input ...interface{}) (*SideEffectInfo[T], error) {
-	// todo: implement
-	return nil, nil
+func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, stepID T, sideEffect interface{}) (SideEffectID, error) {
+	funcName := runtime.FuncForPC(reflect.ValueOf(sideEffect).Pointer()).Name()
+	handlerIdentity := HandlerIdentity(funcName)
+	return tp.enqueueSubSideEffect(ctx, stepID, handlerIdentity)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

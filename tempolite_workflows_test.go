@@ -387,3 +387,65 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	fmt.Println("data: ", number)
 }
+
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSideEffect$ .
+func TestWorkflowSimpleSideEffect(t *testing.T) {
+
+	tp, err := New[testIdentifier](
+		context.Background(),
+		WithPath("./db/tempolite-workflow-sideeffect.db"),
+		WithDestructive(),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tp.Close()
+
+	type workflowData struct {
+		Message string
+	}
+
+	failed := false
+
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+		fmt.Println("localWrkflw: ", failed, input, msg)
+
+		var value int
+		if err := ctx.SideEffect("eventual switch", func(ctx SideEffectContext[testIdentifier]) int {
+			return 69
+		}).Get(&value); err != nil {
+			return -1, err
+		}
+
+		if !failed {
+			failed = true
+			fmt.Println("failed on purpose: ", failed)
+			return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
+		}
+
+		return 69, nil
+	}
+
+	if err := tp.RegisterWorkflow(localWrkflw); err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+
+	tp.workflows.Range(func(key, value any) bool {
+		fmt.Println("key: ", key, "value: ", value)
+		return true
+	})
+
+	var number int
+	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+		t.Fatalf("EnqueueActivityFunc failed: %v", err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+
+	fmt.Println("data: ", number)
+	if number != 69 {
+		t.Fatalf("number: %d", number)
+	}
+}

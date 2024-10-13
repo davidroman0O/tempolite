@@ -6123,8 +6123,6 @@ type SideEffectMutation struct {
 	step_id           *string
 	handler_name      *string
 	status            *sideeffect.Status
-	input             *[]interface{}
-	appendinput       []interface{}
 	retry_policy      *schema.RetryPolicy
 	timeout           *time.Time
 	created_at        *time.Time
@@ -6385,57 +6383,6 @@ func (m *SideEffectMutation) ResetStatus() {
 	m.status = nil
 }
 
-// SetInput sets the "input" field.
-func (m *SideEffectMutation) SetInput(i []interface{}) {
-	m.input = &i
-	m.appendinput = nil
-}
-
-// Input returns the value of the "input" field in the mutation.
-func (m *SideEffectMutation) Input() (r []interface{}, exists bool) {
-	v := m.input
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldInput returns the old "input" field's value of the SideEffect entity.
-// If the SideEffect object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectMutation) OldInput(ctx context.Context) (v []interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInput is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInput requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInput: %w", err)
-	}
-	return oldValue.Input, nil
-}
-
-// AppendInput adds i to the "input" field.
-func (m *SideEffectMutation) AppendInput(i []interface{}) {
-	m.appendinput = append(m.appendinput, i...)
-}
-
-// AppendedInput returns the list of values that were appended to the "input" field in this mutation.
-func (m *SideEffectMutation) AppendedInput() ([]interface{}, bool) {
-	if len(m.appendinput) == 0 {
-		return nil, false
-	}
-	return m.appendinput, true
-}
-
-// ResetInput resets all changes to the "input" field.
-func (m *SideEffectMutation) ResetInput() {
-	m.input = nil
-	m.appendinput = nil
-}
-
 // SetRetryPolicy sets the "retry_policy" field.
 func (m *SideEffectMutation) SetRetryPolicy(sp schema.RetryPolicy) {
 	m.retry_policy = &sp
@@ -6658,7 +6605,7 @@ func (m *SideEffectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 7)
 	if m.identity != nil {
 		fields = append(fields, sideeffect.FieldIdentity)
 	}
@@ -6670,9 +6617,6 @@ func (m *SideEffectMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, sideeffect.FieldStatus)
-	}
-	if m.input != nil {
-		fields = append(fields, sideeffect.FieldInput)
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, sideeffect.FieldRetryPolicy)
@@ -6699,8 +6643,6 @@ func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case sideeffect.FieldStatus:
 		return m.Status()
-	case sideeffect.FieldInput:
-		return m.Input()
 	case sideeffect.FieldRetryPolicy:
 		return m.RetryPolicy()
 	case sideeffect.FieldTimeout:
@@ -6724,8 +6666,6 @@ func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldHandlerName(ctx)
 	case sideeffect.FieldStatus:
 		return m.OldStatus(ctx)
-	case sideeffect.FieldInput:
-		return m.OldInput(ctx)
 	case sideeffect.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
 	case sideeffect.FieldTimeout:
@@ -6768,13 +6708,6 @@ func (m *SideEffectMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
-		return nil
-	case sideeffect.FieldInput:
-		v, ok := value.([]interface{})
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetInput(v)
 		return nil
 	case sideeffect.FieldRetryPolicy:
 		v, ok := value.(schema.RetryPolicy)
@@ -6872,9 +6805,6 @@ func (m *SideEffectMutation) ResetField(name string) error {
 		return nil
 	case sideeffect.FieldStatus:
 		m.ResetStatus()
-		return nil
-	case sideeffect.FieldInput:
-		m.ResetInput()
 		return nil
 	case sideeffect.FieldRetryPolicy:
 		m.ResetRetryPolicy()

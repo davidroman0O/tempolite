@@ -23,8 +23,6 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldInput holds the string denoting the input field in the database.
-	FieldInput = "input"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
 	FieldRetryPolicy = "retry_policy"
 	// FieldTimeout holds the string denoting the timeout field in the database.
@@ -51,7 +49,6 @@ var Columns = []string{
 	FieldStepID,
 	FieldHandlerName,
 	FieldStatus,
-	FieldInput,
 	FieldRetryPolicy,
 	FieldTimeout,
 	FieldCreatedAt,

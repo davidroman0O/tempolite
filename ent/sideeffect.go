@@ -27,8 +27,6 @@ type SideEffect struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sideeffect.Status `json:"status,omitempty"`
-	// Input holds the value of the "input" field.
-	Input []interface{} `json:"input,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Timeout holds the value of the "timeout" field.
@@ -64,7 +62,7 @@ func (*SideEffect) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sideeffect.FieldInput, sideeffect.FieldRetryPolicy:
+		case sideeffect.FieldRetryPolicy:
 			values[i] = new([]byte)
 		case sideeffect.FieldID, sideeffect.FieldIdentity, sideeffect.FieldStepID, sideeffect.FieldHandlerName, sideeffect.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -114,14 +112,6 @@ func (se *SideEffect) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				se.Status = sideeffect.Status(value.String)
-			}
-		case sideeffect.FieldInput:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field input", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &se.Input); err != nil {
-					return fmt.Errorf("unmarshal field input: %w", err)
-				}
 			}
 		case sideeffect.FieldRetryPolicy:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -195,9 +185,6 @@ func (se *SideEffect) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", se.Status))
-	builder.WriteString(", ")
-	builder.WriteString("input=")
-	builder.WriteString(fmt.Sprintf("%v", se.Input))
 	builder.WriteString(", ")
 	builder.WriteString("retry_policy=")
 	builder.WriteString(fmt.Sprintf("%v", se.RetryPolicy))
