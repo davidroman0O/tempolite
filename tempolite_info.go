@@ -476,7 +476,7 @@ func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...an
 	return w.tp.getWorkflow(w, id, err)
 }
 
-func (w WorkflowContext[T]) ExecuteActivityFunc(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
+func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
 	id, err := w.tp.enqueueSubActivtyFunc(w, stepID, handler, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)

@@ -20,7 +20,7 @@ const (
 type identifier string
 
 const (
-	ComputeTaxes = "ComputeTaxes"
+	OpComputeTaxes = "ComputeTaxes"
 )
 
 var codeAfterUpdateOneRuntime atomic.Bool
@@ -34,14 +34,14 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) er
 	if codeAfterUpdateOneRuntime.Load() { // on purpose to create non-deterministic behavior
 		version := ctx.GetVersion(ChangeIDCalculateTax, tempolite.DefaultVersion, 1)
 		if version == tempolite.DefaultVersion {
-			err = ctx.ExecuteActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
+			err = ctx.ActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
 			fmt.Println("Using original logic after update: total without tax.")
 		} else {
-			err = ctx.ExecuteActivityFunc("taxes", ActivityComputeTotalWithTax, orderID, total).Get(&total)
+			err = ctx.ActivityFunc("taxes", ActivityComputeTotalWithTax, orderID, total).Get(&total)
 			fmt.Println("Using new logic: total with tax.")
 		}
 	} else {
-		err = ctx.ExecuteActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
+		err = ctx.ActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
 		fmt.Println("Using original logic before update: total without tax.")
 	}
 
@@ -95,7 +95,7 @@ func main() {
 
 	// Enqueue the workflow before updating the version
 	orderID1 := "order123"
-	if err := tp.Workflow(ComputeTaxes, OrderWorkflow, orderID1).Get(); err != nil {
+	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID1).Get(); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func main() {
 	}
 
 	orderID1 = "order124"
-	tp.Workflow(ComputeTaxes, OrderWorkflow, orderID1) // on purpose, it won't be scheduled, but the next instance will pick it up
+	tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID1) // on purpose, it won't be scheduled, but the next instance will pick it up
 
 	tp.Close()
 
@@ -140,7 +140,7 @@ func main() {
 
 	// Enqueue the workflow after updating the version
 	orderID2 := "order456"
-	if err := tp.Workflow(ComputeTaxes, OrderWorkflow, orderID2).Get(); err != nil {
+	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID2).Get(); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 

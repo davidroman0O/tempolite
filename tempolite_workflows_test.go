@@ -162,7 +162,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 		fmt.Println("localWrkflw: ", input, msg)
 
 		var subnumber int
-		if err := ctx.ExecuteActivityFunc("first", activtfn, 420).Get(&subnumber); err != nil {
+		if err := ctx.ActivityFunc("first", activtfn, 420).Get(&subnumber); err != nil {
 			return err
 		}
 
