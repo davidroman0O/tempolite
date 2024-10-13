@@ -1,5 +1,3 @@
-// File: ./examples/versioning/main.go
-
 package main
 
 import (
