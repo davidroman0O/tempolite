@@ -25,6 +25,9 @@ const (
 
 var codeAfterUpdateOneRuntime atomic.Bool
 var codeAfterUpdateTwoRuntime atomic.Bool
+var errOnPurpose atomic.Bool
+var panicOnPurpose atomic.Bool
+var panicActivity atomic.Bool
 
 // OrderWorkflow is the main workflow function
 func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) error {
@@ -55,10 +58,26 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) er
 }
 
 func ActivityComputeTaxes(ctx tempolite.ActivityContext[identifier], orderID string) (float64, error) {
+	if errOnPurpose.Load() {
+		errOnPurpose.Store(false)
+		return 0, fmt.Errorf("error on purpose ActivityComputeTaxes")
+	}
+	if panicActivity.Load() {
+		panicActivity.Store(false)
+		panic("panic on purpose ActivityComputeTaxes")
+	}
 	return getOrderSubtotal(orderID), nil
 }
 
 func ActivityComputeTotalWithTax(ctx tempolite.ActivityContext[identifier], orderID string, subtotal float64) (float64, error) {
+	if errOnPurpose.Load() {
+		errOnPurpose.Store(false)
+		return 0, fmt.Errorf("error on purpose ActivityComputeTotalWithTax")
+	}
+	if panicActivity.Load() {
+		panicActivity.Store(false)
+		panic("panic on purpose ActivityComputeTotalWithTax")
+	}
 	subtotal = getOrderSubtotal(orderID)
 	tax := calculateTax(subtotal)
 	return subtotal + tax, nil
@@ -66,11 +85,19 @@ func ActivityComputeTotalWithTax(ctx tempolite.ActivityContext[identifier], orde
 }
 
 func getOrderSubtotal(orderID string) float64 {
+	if panicOnPurpose.Load() {
+		panicOnPurpose.Store(false)
+		panic("panic on purpose getOrderSubtotal")
+	}
 	// Placeholder for fetching the order subtotal
 	return 100.0 // Assume a subtotal of $100
 }
 
 func calculateTax(subtotal float64) float64 {
+	if panicOnPurpose.Load() {
+		panicOnPurpose.Store(false)
+		panic("panic on purpose calculateTax")
+	}
 	// Assume a tax rate of 10%
 	return subtotal * 0.10
 }
@@ -92,6 +119,8 @@ func main() {
 	if err := tp.RegisterWorkflow(OrderWorkflow); err != nil {
 		log.Fatalf("Failed to register workflow: %v", err)
 	}
+
+	errOnPurpose.Store(true) // simulate an error in the activity
 
 	// Enqueue the workflow before updating the version
 	orderID1 := "order123"
@@ -137,6 +166,8 @@ func main() {
 	if err := tp.RegisterWorkflow(OrderWorkflow); err != nil {
 		log.Fatalf("Failed to register workflow: %v", err)
 	}
+
+	panicActivity.Store(true) // simulate a panic in the activity
 
 	// Enqueue the workflow after updating the version
 	orderID2 := "order456"
