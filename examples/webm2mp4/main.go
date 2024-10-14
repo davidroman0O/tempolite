@@ -22,7 +22,7 @@ type Webm2Mp4 struct {
 func Workflow(ctx tempolite.WorkflowContext[string], task Webm2Mp4) error {
 
 	var isUrl bool
-	if err := ctx.SideEffect("checkFileOrDelete", func(ctx tempolite.SideEffectContext[string]) bool {
+	if err := ctx.SideEffect("check url or not", func(ctx tempolite.SideEffectContext[string]) bool {
 		return isURL(task.InputFile)
 	}).Get(&isUrl); err != nil {
 		return err
