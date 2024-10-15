@@ -26,7 +26,7 @@ func TestSagaSimple(t *testing.T) {
 
 	tp, err := New[string](
 		context.Background(),
-		WithPath("./db/tempolite-workflow-sideeffect.db"),
+		WithPath("./db/tempolite-workflow-saga.db"),
 		WithDestructive(),
 	)
 	if err != nil {
