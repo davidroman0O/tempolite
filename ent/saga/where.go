@@ -65,9 +65,9 @@ func IDContainsFold(id string) predicate.Saga {
 	return predicate.Saga(sql.FieldContainsFold(FieldID, id))
 }
 
-// Name applies equality check predicate on the "name" field. It's identical to NameEQ.
-func Name(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldEQ(FieldName, v))
+// RunID applies equality check predicate on the "run_id" field. It's identical to RunIDEQ.
+func RunID(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldRunID, v))
 }
 
 // StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
@@ -75,9 +75,9 @@ func StepID(v string) predicate.Saga {
 	return predicate.Saga(sql.FieldEQ(FieldStepID, v))
 }
 
-// Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
-func Timeout(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldEQ(FieldTimeout, v))
+// Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
+func Error(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldError, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -85,69 +85,74 @@ func CreatedAt(v time.Time) predicate.Saga {
 	return predicate.Saga(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// NameEQ applies the EQ predicate on the "name" field.
-func NameEQ(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldEQ(FieldName, v))
+// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
+func UpdatedAt(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
-// NameNEQ applies the NEQ predicate on the "name" field.
-func NameNEQ(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldNEQ(FieldName, v))
+// RunIDEQ applies the EQ predicate on the "run_id" field.
+func RunIDEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldRunID, v))
 }
 
-// NameIn applies the In predicate on the "name" field.
-func NameIn(vs ...string) predicate.Saga {
-	return predicate.Saga(sql.FieldIn(FieldName, vs...))
+// RunIDNEQ applies the NEQ predicate on the "run_id" field.
+func RunIDNEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldNEQ(FieldRunID, v))
 }
 
-// NameNotIn applies the NotIn predicate on the "name" field.
-func NameNotIn(vs ...string) predicate.Saga {
-	return predicate.Saga(sql.FieldNotIn(FieldName, vs...))
+// RunIDIn applies the In predicate on the "run_id" field.
+func RunIDIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldIn(FieldRunID, vs...))
 }
 
-// NameGT applies the GT predicate on the "name" field.
-func NameGT(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldGT(FieldName, v))
+// RunIDNotIn applies the NotIn predicate on the "run_id" field.
+func RunIDNotIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldNotIn(FieldRunID, vs...))
 }
 
-// NameGTE applies the GTE predicate on the "name" field.
-func NameGTE(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldGTE(FieldName, v))
+// RunIDGT applies the GT predicate on the "run_id" field.
+func RunIDGT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGT(FieldRunID, v))
 }
 
-// NameLT applies the LT predicate on the "name" field.
-func NameLT(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldLT(FieldName, v))
+// RunIDGTE applies the GTE predicate on the "run_id" field.
+func RunIDGTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGTE(FieldRunID, v))
 }
 
-// NameLTE applies the LTE predicate on the "name" field.
-func NameLTE(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldLTE(FieldName, v))
+// RunIDLT applies the LT predicate on the "run_id" field.
+func RunIDLT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLT(FieldRunID, v))
 }
 
-// NameContains applies the Contains predicate on the "name" field.
-func NameContains(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldContains(FieldName, v))
+// RunIDLTE applies the LTE predicate on the "run_id" field.
+func RunIDLTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLTE(FieldRunID, v))
 }
 
-// NameHasPrefix applies the HasPrefix predicate on the "name" field.
-func NameHasPrefix(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldHasPrefix(FieldName, v))
+// RunIDContains applies the Contains predicate on the "run_id" field.
+func RunIDContains(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContains(FieldRunID, v))
 }
 
-// NameHasSuffix applies the HasSuffix predicate on the "name" field.
-func NameHasSuffix(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldHasSuffix(FieldName, v))
+// RunIDHasPrefix applies the HasPrefix predicate on the "run_id" field.
+func RunIDHasPrefix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasPrefix(FieldRunID, v))
 }
 
-// NameEqualFold applies the EqualFold predicate on the "name" field.
-func NameEqualFold(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldEqualFold(FieldName, v))
+// RunIDHasSuffix applies the HasSuffix predicate on the "run_id" field.
+func RunIDHasSuffix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasSuffix(FieldRunID, v))
 }
 
-// NameContainsFold applies the ContainsFold predicate on the "name" field.
-func NameContainsFold(v string) predicate.Saga {
-	return predicate.Saga(sql.FieldContainsFold(FieldName, v))
+// RunIDEqualFold applies the EqualFold predicate on the "run_id" field.
+func RunIDEqualFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEqualFold(FieldRunID, v))
+}
+
+// RunIDContainsFold applies the ContainsFold predicate on the "run_id" field.
+func RunIDContainsFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContainsFold(FieldRunID, v))
 }
 
 // StepIDEQ applies the EQ predicate on the "step_id" field.
@@ -215,64 +220,99 @@ func StepIDContainsFold(v string) predicate.Saga {
 	return predicate.Saga(sql.FieldContainsFold(FieldStepID, v))
 }
 
-// RetryPolicyIsNil applies the IsNil predicate on the "retry_policy" field.
-func RetryPolicyIsNil() predicate.Saga {
-	return predicate.Saga(sql.FieldIsNull(FieldRetryPolicy))
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldStatus, v))
 }
 
-// RetryPolicyNotNil applies the NotNil predicate on the "retry_policy" field.
-func RetryPolicyNotNil() predicate.Saga {
-	return predicate.Saga(sql.FieldNotNull(FieldRetryPolicy))
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.Saga {
+	return predicate.Saga(sql.FieldNEQ(FieldStatus, v))
 }
 
-// TimeoutEQ applies the EQ predicate on the "timeout" field.
-func TimeoutEQ(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldEQ(FieldTimeout, v))
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.Saga {
+	return predicate.Saga(sql.FieldIn(FieldStatus, vs...))
 }
 
-// TimeoutNEQ applies the NEQ predicate on the "timeout" field.
-func TimeoutNEQ(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldNEQ(FieldTimeout, v))
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.Saga {
+	return predicate.Saga(sql.FieldNotIn(FieldStatus, vs...))
 }
 
-// TimeoutIn applies the In predicate on the "timeout" field.
-func TimeoutIn(vs ...time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldIn(FieldTimeout, vs...))
+// ErrorEQ applies the EQ predicate on the "error" field.
+func ErrorEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldError, v))
 }
 
-// TimeoutNotIn applies the NotIn predicate on the "timeout" field.
-func TimeoutNotIn(vs ...time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldNotIn(FieldTimeout, vs...))
+// ErrorNEQ applies the NEQ predicate on the "error" field.
+func ErrorNEQ(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldNEQ(FieldError, v))
 }
 
-// TimeoutGT applies the GT predicate on the "timeout" field.
-func TimeoutGT(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldGT(FieldTimeout, v))
+// ErrorIn applies the In predicate on the "error" field.
+func ErrorIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldIn(FieldError, vs...))
 }
 
-// TimeoutGTE applies the GTE predicate on the "timeout" field.
-func TimeoutGTE(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldGTE(FieldTimeout, v))
+// ErrorNotIn applies the NotIn predicate on the "error" field.
+func ErrorNotIn(vs ...string) predicate.Saga {
+	return predicate.Saga(sql.FieldNotIn(FieldError, vs...))
 }
 
-// TimeoutLT applies the LT predicate on the "timeout" field.
-func TimeoutLT(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldLT(FieldTimeout, v))
+// ErrorGT applies the GT predicate on the "error" field.
+func ErrorGT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGT(FieldError, v))
 }
 
-// TimeoutLTE applies the LTE predicate on the "timeout" field.
-func TimeoutLTE(v time.Time) predicate.Saga {
-	return predicate.Saga(sql.FieldLTE(FieldTimeout, v))
+// ErrorGTE applies the GTE predicate on the "error" field.
+func ErrorGTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldGTE(FieldError, v))
 }
 
-// TimeoutIsNil applies the IsNil predicate on the "timeout" field.
-func TimeoutIsNil() predicate.Saga {
-	return predicate.Saga(sql.FieldIsNull(FieldTimeout))
+// ErrorLT applies the LT predicate on the "error" field.
+func ErrorLT(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLT(FieldError, v))
 }
 
-// TimeoutNotNil applies the NotNil predicate on the "timeout" field.
-func TimeoutNotNil() predicate.Saga {
-	return predicate.Saga(sql.FieldNotNull(FieldTimeout))
+// ErrorLTE applies the LTE predicate on the "error" field.
+func ErrorLTE(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldLTE(FieldError, v))
+}
+
+// ErrorContains applies the Contains predicate on the "error" field.
+func ErrorContains(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContains(FieldError, v))
+}
+
+// ErrorHasPrefix applies the HasPrefix predicate on the "error" field.
+func ErrorHasPrefix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasPrefix(FieldError, v))
+}
+
+// ErrorHasSuffix applies the HasSuffix predicate on the "error" field.
+func ErrorHasSuffix(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldHasSuffix(FieldError, v))
+}
+
+// ErrorIsNil applies the IsNil predicate on the "error" field.
+func ErrorIsNil() predicate.Saga {
+	return predicate.Saga(sql.FieldIsNull(FieldError))
+}
+
+// ErrorNotNil applies the NotNil predicate on the "error" field.
+func ErrorNotNil() predicate.Saga {
+	return predicate.Saga(sql.FieldNotNull(FieldError))
+}
+
+// ErrorEqualFold applies the EqualFold predicate on the "error" field.
+func ErrorEqualFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldEqualFold(FieldError, v))
+}
+
+// ErrorContainsFold applies the ContainsFold predicate on the "error" field.
+func ErrorContainsFold(v string) predicate.Saga {
+	return predicate.Saga(sql.FieldContainsFold(FieldError, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -315,21 +355,61 @@ func CreatedAtLTE(v time.Time) predicate.Saga {
 	return predicate.Saga(sql.FieldLTE(FieldCreatedAt, v))
 }
 
-// HasExecutions applies the HasEdge predicate on the "executions" edge.
-func HasExecutions() predicate.Saga {
+// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
+func UpdatedAtEQ(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
+func UpdatedAtNEQ(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldNEQ(FieldUpdatedAt, v))
+}
+
+// UpdatedAtIn applies the In predicate on the "updated_at" field.
+func UpdatedAtIn(vs ...time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldIn(FieldUpdatedAt, vs...))
+}
+
+// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
+func UpdatedAtNotIn(vs ...time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldNotIn(FieldUpdatedAt, vs...))
+}
+
+// UpdatedAtGT applies the GT predicate on the "updated_at" field.
+func UpdatedAtGT(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldGT(FieldUpdatedAt, v))
+}
+
+// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
+func UpdatedAtGTE(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldGTE(FieldUpdatedAt, v))
+}
+
+// UpdatedAtLT applies the LT predicate on the "updated_at" field.
+func UpdatedAtLT(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldLT(FieldUpdatedAt, v))
+}
+
+// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
+func UpdatedAtLTE(v time.Time) predicate.Saga {
+	return predicate.Saga(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// HasSteps applies the HasEdge predicate on the "steps" edge.
+func HasSteps() predicate.Saga {
 	return predicate.Saga(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, StepsTable, StepsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasExecutionsWith applies the HasEdge predicate on the "executions" edge with a given conditions (other predicates).
-func HasExecutionsWith(preds ...predicate.SagaExecution) predicate.Saga {
+// HasStepsWith applies the HasEdge predicate on the "steps" edge with a given conditions (other predicates).
+func HasStepsWith(preds ...predicate.SagaExecution) predicate.Saga {
 	return predicate.Saga(func(s *sql.Selector) {
-		step := newExecutionsStep()
+		step := newStepsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

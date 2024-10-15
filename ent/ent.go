@@ -19,7 +19,6 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
@@ -92,7 +91,6 @@ func checkColumn(table, column string) error {
 			run.Table:                   run.ValidColumn,
 			saga.Table:                  saga.ValidColumn,
 			sagaexecution.Table:         sagaexecution.ValidColumn,
-			sagastepexecution.Table:     sagastepexecution.ValidColumn,
 			sideeffect.Table:            sideeffect.ValidColumn,
 			sideeffectexecution.Table:   sideeffectexecution.ValidColumn,
 			signal.Table:                signal.ValidColumn,

@@ -19,18 +19,20 @@ type Saga struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
-	// Name holds the value of the "name" field.
-	Name string `json:"name,omitempty"`
+	// RunID holds the value of the "run_id" field.
+	RunID string `json:"run_id,omitempty"`
 	// StepID holds the value of the "step_id" field.
 	StepID string `json:"step_id,omitempty"`
-	// Input holds the value of the "input" field.
-	Input []interface{} `json:"input,omitempty"`
-	// RetryPolicy holds the value of the "retry_policy" field.
-	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
-	// Timeout holds the value of the "timeout" field.
-	Timeout time.Time `json:"timeout,omitempty"`
+	// Status holds the value of the "status" field.
+	Status saga.Status `json:"status,omitempty"`
+	// Stores the full saga definition including transactions and compensations
+	SagaDefinition schema.SagaDefinitionData `json:"saga_definition,omitempty"`
+	// Error holds the value of the "error" field.
+	Error string `json:"error,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	// UpdatedAt holds the value of the "updated_at" field.
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SagaQuery when eager-loading is set.
 	Edges        SagaEdges `json:"edges"`
@@ -39,20 +41,20 @@ type Saga struct {
 
 // SagaEdges holds the relations/edges for other nodes in the graph.
 type SagaEdges struct {
-	// Executions holds the value of the executions edge.
-	Executions []*SagaExecution `json:"executions,omitempty"`
+	// Steps holds the value of the steps edge.
+	Steps []*SagaExecution `json:"steps,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool
 }
 
-// ExecutionsOrErr returns the Executions value or an error if the edge
+// StepsOrErr returns the Steps value or an error if the edge
 // was not loaded in eager-loading.
-func (e SagaEdges) ExecutionsOrErr() ([]*SagaExecution, error) {
+func (e SagaEdges) StepsOrErr() ([]*SagaExecution, error) {
 	if e.loadedTypes[0] {
-		return e.Executions, nil
+		return e.Steps, nil
 	}
-	return nil, &NotLoadedError{edge: "executions"}
+	return nil, &NotLoadedError{edge: "steps"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -60,11 +62,11 @@ func (*Saga) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case saga.FieldInput, saga.FieldRetryPolicy:
+		case saga.FieldSagaDefinition:
 			values[i] = new([]byte)
-		case saga.FieldID, saga.FieldName, saga.FieldStepID:
+		case saga.FieldID, saga.FieldRunID, saga.FieldStepID, saga.FieldStatus, saga.FieldError:
 			values[i] = new(sql.NullString)
-		case saga.FieldTimeout, saga.FieldCreatedAt:
+		case saga.FieldCreatedAt, saga.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -87,11 +89,11 @@ func (s *Saga) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.ID = value.String
 			}
-		case saga.FieldName:
+		case saga.FieldRunID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field name", values[i])
+				return fmt.Errorf("unexpected type %T for field run_id", values[i])
 			} else if value.Valid {
-				s.Name = value.String
+				s.RunID = value.String
 			}
 		case saga.FieldStepID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -99,33 +101,37 @@ func (s *Saga) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.StepID = value.String
 			}
-		case saga.FieldInput:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field input", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &s.Input); err != nil {
-					return fmt.Errorf("unmarshal field input: %w", err)
-				}
-			}
-		case saga.FieldRetryPolicy:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field retry_policy", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &s.RetryPolicy); err != nil {
-					return fmt.Errorf("unmarshal field retry_policy: %w", err)
-				}
-			}
-		case saga.FieldTimeout:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field timeout", values[i])
+		case saga.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				s.Timeout = value.Time
+				s.Status = saga.Status(value.String)
+			}
+		case saga.FieldSagaDefinition:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field saga_definition", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &s.SagaDefinition); err != nil {
+					return fmt.Errorf("unmarshal field saga_definition: %w", err)
+				}
+			}
+		case saga.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				s.Error = value.String
 			}
 		case saga.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				s.CreatedAt = value.Time
+			}
+		case saga.FieldUpdatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
+			} else if value.Valid {
+				s.UpdatedAt = value.Time
 			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
@@ -140,9 +146,9 @@ func (s *Saga) Value(name string) (ent.Value, error) {
 	return s.selectValues.Get(name)
 }
 
-// QueryExecutions queries the "executions" edge of the Saga entity.
-func (s *Saga) QueryExecutions() *SagaExecutionQuery {
-	return NewSagaClient(s.config).QueryExecutions(s)
+// QuerySteps queries the "steps" edge of the Saga entity.
+func (s *Saga) QuerySteps() *SagaExecutionQuery {
+	return NewSagaClient(s.config).QuerySteps(s)
 }
 
 // Update returns a builder for updating this Saga.
@@ -168,23 +174,26 @@ func (s *Saga) String() string {
 	var builder strings.Builder
 	builder.WriteString("Saga(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", s.ID))
-	builder.WriteString("name=")
-	builder.WriteString(s.Name)
+	builder.WriteString("run_id=")
+	builder.WriteString(s.RunID)
 	builder.WriteString(", ")
 	builder.WriteString("step_id=")
 	builder.WriteString(s.StepID)
 	builder.WriteString(", ")
-	builder.WriteString("input=")
-	builder.WriteString(fmt.Sprintf("%v", s.Input))
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", s.Status))
 	builder.WriteString(", ")
-	builder.WriteString("retry_policy=")
-	builder.WriteString(fmt.Sprintf("%v", s.RetryPolicy))
+	builder.WriteString("saga_definition=")
+	builder.WriteString(fmt.Sprintf("%v", s.SagaDefinition))
 	builder.WriteString(", ")
-	builder.WriteString("timeout=")
-	builder.WriteString(s.Timeout.Format(time.ANSIC))
+	builder.WriteString("error=")
+	builder.WriteString(s.Error)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(s.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(s.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

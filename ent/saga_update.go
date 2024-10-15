@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
@@ -31,16 +30,16 @@ func (su *SagaUpdate) Where(ps ...predicate.Saga) *SagaUpdate {
 	return su
 }
 
-// SetName sets the "name" field.
-func (su *SagaUpdate) SetName(s string) *SagaUpdate {
-	su.mutation.SetName(s)
+// SetRunID sets the "run_id" field.
+func (su *SagaUpdate) SetRunID(s string) *SagaUpdate {
+	su.mutation.SetRunID(s)
 	return su
 }
 
-// SetNillableName sets the "name" field if the given value is not nil.
-func (su *SagaUpdate) SetNillableName(s *string) *SagaUpdate {
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableRunID(s *string) *SagaUpdate {
 	if s != nil {
-		su.SetName(*s)
+		su.SetRunID(*s)
 	}
 	return su
 }
@@ -59,55 +58,51 @@ func (su *SagaUpdate) SetNillableStepID(s *string) *SagaUpdate {
 	return su
 }
 
-// SetInput sets the "input" field.
-func (su *SagaUpdate) SetInput(i []interface{}) *SagaUpdate {
-	su.mutation.SetInput(i)
+// SetStatus sets the "status" field.
+func (su *SagaUpdate) SetStatus(s saga.Status) *SagaUpdate {
+	su.mutation.SetStatus(s)
 	return su
 }
 
-// AppendInput appends i to the "input" field.
-func (su *SagaUpdate) AppendInput(i []interface{}) *SagaUpdate {
-	su.mutation.AppendInput(i)
-	return su
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (su *SagaUpdate) SetRetryPolicy(sp schema.RetryPolicy) *SagaUpdate {
-	su.mutation.SetRetryPolicy(sp)
-	return su
-}
-
-// SetNillableRetryPolicy sets the "retry_policy" field if the given value is not nil.
-func (su *SagaUpdate) SetNillableRetryPolicy(sp *schema.RetryPolicy) *SagaUpdate {
-	if sp != nil {
-		su.SetRetryPolicy(*sp)
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableStatus(s *saga.Status) *SagaUpdate {
+	if s != nil {
+		su.SetStatus(*s)
 	}
 	return su
 }
 
-// ClearRetryPolicy clears the value of the "retry_policy" field.
-func (su *SagaUpdate) ClearRetryPolicy() *SagaUpdate {
-	su.mutation.ClearRetryPolicy()
+// SetSagaDefinition sets the "saga_definition" field.
+func (su *SagaUpdate) SetSagaDefinition(sdd schema.SagaDefinitionData) *SagaUpdate {
+	su.mutation.SetSagaDefinition(sdd)
 	return su
 }
 
-// SetTimeout sets the "timeout" field.
-func (su *SagaUpdate) SetTimeout(t time.Time) *SagaUpdate {
-	su.mutation.SetTimeout(t)
-	return su
-}
-
-// SetNillableTimeout sets the "timeout" field if the given value is not nil.
-func (su *SagaUpdate) SetNillableTimeout(t *time.Time) *SagaUpdate {
-	if t != nil {
-		su.SetTimeout(*t)
+// SetNillableSagaDefinition sets the "saga_definition" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableSagaDefinition(sdd *schema.SagaDefinitionData) *SagaUpdate {
+	if sdd != nil {
+		su.SetSagaDefinition(*sdd)
 	}
 	return su
 }
 
-// ClearTimeout clears the value of the "timeout" field.
-func (su *SagaUpdate) ClearTimeout() *SagaUpdate {
-	su.mutation.ClearTimeout()
+// SetError sets the "error" field.
+func (su *SagaUpdate) SetError(s string) *SagaUpdate {
+	su.mutation.SetError(s)
+	return su
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableError(s *string) *SagaUpdate {
+	if s != nil {
+		su.SetError(*s)
+	}
+	return su
+}
+
+// ClearError clears the value of the "error" field.
+func (su *SagaUpdate) ClearError() *SagaUpdate {
+	su.mutation.ClearError()
 	return su
 }
 
@@ -125,19 +120,25 @@ func (su *SagaUpdate) SetNillableCreatedAt(t *time.Time) *SagaUpdate {
 	return su
 }
 
-// AddExecutionIDs adds the "executions" edge to the SagaExecution entity by IDs.
-func (su *SagaUpdate) AddExecutionIDs(ids ...string) *SagaUpdate {
-	su.mutation.AddExecutionIDs(ids...)
+// SetUpdatedAt sets the "updated_at" field.
+func (su *SagaUpdate) SetUpdatedAt(t time.Time) *SagaUpdate {
+	su.mutation.SetUpdatedAt(t)
 	return su
 }
 
-// AddExecutions adds the "executions" edges to the SagaExecution entity.
-func (su *SagaUpdate) AddExecutions(s ...*SagaExecution) *SagaUpdate {
+// AddStepIDs adds the "steps" edge to the SagaExecution entity by IDs.
+func (su *SagaUpdate) AddStepIDs(ids ...string) *SagaUpdate {
+	su.mutation.AddStepIDs(ids...)
+	return su
+}
+
+// AddSteps adds the "steps" edges to the SagaExecution entity.
+func (su *SagaUpdate) AddSteps(s ...*SagaExecution) *SagaUpdate {
 	ids := make([]string, len(s))
 	for i := range s {
 		ids[i] = s[i].ID
 	}
-	return su.AddExecutionIDs(ids...)
+	return su.AddStepIDs(ids...)
 }
 
 // Mutation returns the SagaMutation object of the builder.
@@ -145,29 +146,30 @@ func (su *SagaUpdate) Mutation() *SagaMutation {
 	return su.mutation
 }
 
-// ClearExecutions clears all "executions" edges to the SagaExecution entity.
-func (su *SagaUpdate) ClearExecutions() *SagaUpdate {
-	su.mutation.ClearExecutions()
+// ClearSteps clears all "steps" edges to the SagaExecution entity.
+func (su *SagaUpdate) ClearSteps() *SagaUpdate {
+	su.mutation.ClearSteps()
 	return su
 }
 
-// RemoveExecutionIDs removes the "executions" edge to SagaExecution entities by IDs.
-func (su *SagaUpdate) RemoveExecutionIDs(ids ...string) *SagaUpdate {
-	su.mutation.RemoveExecutionIDs(ids...)
+// RemoveStepIDs removes the "steps" edge to SagaExecution entities by IDs.
+func (su *SagaUpdate) RemoveStepIDs(ids ...string) *SagaUpdate {
+	su.mutation.RemoveStepIDs(ids...)
 	return su
 }
 
-// RemoveExecutions removes "executions" edges to SagaExecution entities.
-func (su *SagaUpdate) RemoveExecutions(s ...*SagaExecution) *SagaUpdate {
+// RemoveSteps removes "steps" edges to SagaExecution entities.
+func (su *SagaUpdate) RemoveSteps(s ...*SagaExecution) *SagaUpdate {
 	ids := make([]string, len(s))
 	for i := range s {
 		ids[i] = s[i].ID
 	}
-	return su.RemoveExecutionIDs(ids...)
+	return su.RemoveStepIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (su *SagaUpdate) Save(ctx context.Context) (int, error) {
+	su.defaults()
 	return withHooks(ctx, su.sqlSave, su.mutation, su.hooks)
 }
 
@@ -193,16 +195,24 @@ func (su *SagaUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (su *SagaUpdate) defaults() {
+	if _, ok := su.mutation.UpdatedAt(); !ok {
+		v := saga.UpdateDefaultUpdatedAt()
+		su.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (su *SagaUpdate) check() error {
-	if v, ok := su.mutation.Name(); ok {
-		if err := saga.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Saga.name": %w`, err)}
-		}
-	}
 	if v, ok := su.mutation.StepID(); ok {
 		if err := saga.StepIDValidator(v); err != nil {
 			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Saga.step_id": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.Status(); ok {
+		if err := saga.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Saga.status": %w`, err)}
 		}
 	}
 	return nil
@@ -220,41 +230,36 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			}
 		}
 	}
-	if value, ok := su.mutation.Name(); ok {
-		_spec.SetField(saga.FieldName, field.TypeString, value)
+	if value, ok := su.mutation.RunID(); ok {
+		_spec.SetField(saga.FieldRunID, field.TypeString, value)
 	}
 	if value, ok := su.mutation.StepID(); ok {
 		_spec.SetField(saga.FieldStepID, field.TypeString, value)
 	}
-	if value, ok := su.mutation.Input(); ok {
-		_spec.SetField(saga.FieldInput, field.TypeJSON, value)
+	if value, ok := su.mutation.Status(); ok {
+		_spec.SetField(saga.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := su.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, saga.FieldInput, value)
-		})
+	if value, ok := su.mutation.SagaDefinition(); ok {
+		_spec.SetField(saga.FieldSagaDefinition, field.TypeJSON, value)
 	}
-	if value, ok := su.mutation.RetryPolicy(); ok {
-		_spec.SetField(saga.FieldRetryPolicy, field.TypeJSON, value)
+	if value, ok := su.mutation.Error(); ok {
+		_spec.SetField(saga.FieldError, field.TypeString, value)
 	}
-	if su.mutation.RetryPolicyCleared() {
-		_spec.ClearField(saga.FieldRetryPolicy, field.TypeJSON)
-	}
-	if value, ok := su.mutation.Timeout(); ok {
-		_spec.SetField(saga.FieldTimeout, field.TypeTime, value)
-	}
-	if su.mutation.TimeoutCleared() {
-		_spec.ClearField(saga.FieldTimeout, field.TypeTime)
+	if su.mutation.ErrorCleared() {
+		_spec.ClearField(saga.FieldError, field.TypeString)
 	}
 	if value, ok := su.mutation.CreatedAt(); ok {
 		_spec.SetField(saga.FieldCreatedAt, field.TypeTime, value)
 	}
-	if su.mutation.ExecutionsCleared() {
+	if value, ok := su.mutation.UpdatedAt(); ok {
+		_spec.SetField(saga.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if su.mutation.StepsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
@@ -262,12 +267,12 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !su.mutation.ExecutionsCleared() {
+	if nodes := su.mutation.RemovedStepsIDs(); len(nodes) > 0 && !su.mutation.StepsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
@@ -278,12 +283,12 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.ExecutionsIDs(); len(nodes) > 0 {
+	if nodes := su.mutation.StepsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
@@ -314,16 +319,16 @@ type SagaUpdateOne struct {
 	mutation *SagaMutation
 }
 
-// SetName sets the "name" field.
-func (suo *SagaUpdateOne) SetName(s string) *SagaUpdateOne {
-	suo.mutation.SetName(s)
+// SetRunID sets the "run_id" field.
+func (suo *SagaUpdateOne) SetRunID(s string) *SagaUpdateOne {
+	suo.mutation.SetRunID(s)
 	return suo
 }
 
-// SetNillableName sets the "name" field if the given value is not nil.
-func (suo *SagaUpdateOne) SetNillableName(s *string) *SagaUpdateOne {
+// SetNillableRunID sets the "run_id" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableRunID(s *string) *SagaUpdateOne {
 	if s != nil {
-		suo.SetName(*s)
+		suo.SetRunID(*s)
 	}
 	return suo
 }
@@ -342,55 +347,51 @@ func (suo *SagaUpdateOne) SetNillableStepID(s *string) *SagaUpdateOne {
 	return suo
 }
 
-// SetInput sets the "input" field.
-func (suo *SagaUpdateOne) SetInput(i []interface{}) *SagaUpdateOne {
-	suo.mutation.SetInput(i)
+// SetStatus sets the "status" field.
+func (suo *SagaUpdateOne) SetStatus(s saga.Status) *SagaUpdateOne {
+	suo.mutation.SetStatus(s)
 	return suo
 }
 
-// AppendInput appends i to the "input" field.
-func (suo *SagaUpdateOne) AppendInput(i []interface{}) *SagaUpdateOne {
-	suo.mutation.AppendInput(i)
-	return suo
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (suo *SagaUpdateOne) SetRetryPolicy(sp schema.RetryPolicy) *SagaUpdateOne {
-	suo.mutation.SetRetryPolicy(sp)
-	return suo
-}
-
-// SetNillableRetryPolicy sets the "retry_policy" field if the given value is not nil.
-func (suo *SagaUpdateOne) SetNillableRetryPolicy(sp *schema.RetryPolicy) *SagaUpdateOne {
-	if sp != nil {
-		suo.SetRetryPolicy(*sp)
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableStatus(s *saga.Status) *SagaUpdateOne {
+	if s != nil {
+		suo.SetStatus(*s)
 	}
 	return suo
 }
 
-// ClearRetryPolicy clears the value of the "retry_policy" field.
-func (suo *SagaUpdateOne) ClearRetryPolicy() *SagaUpdateOne {
-	suo.mutation.ClearRetryPolicy()
+// SetSagaDefinition sets the "saga_definition" field.
+func (suo *SagaUpdateOne) SetSagaDefinition(sdd schema.SagaDefinitionData) *SagaUpdateOne {
+	suo.mutation.SetSagaDefinition(sdd)
 	return suo
 }
 
-// SetTimeout sets the "timeout" field.
-func (suo *SagaUpdateOne) SetTimeout(t time.Time) *SagaUpdateOne {
-	suo.mutation.SetTimeout(t)
-	return suo
-}
-
-// SetNillableTimeout sets the "timeout" field if the given value is not nil.
-func (suo *SagaUpdateOne) SetNillableTimeout(t *time.Time) *SagaUpdateOne {
-	if t != nil {
-		suo.SetTimeout(*t)
+// SetNillableSagaDefinition sets the "saga_definition" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableSagaDefinition(sdd *schema.SagaDefinitionData) *SagaUpdateOne {
+	if sdd != nil {
+		suo.SetSagaDefinition(*sdd)
 	}
 	return suo
 }
 
-// ClearTimeout clears the value of the "timeout" field.
-func (suo *SagaUpdateOne) ClearTimeout() *SagaUpdateOne {
-	suo.mutation.ClearTimeout()
+// SetError sets the "error" field.
+func (suo *SagaUpdateOne) SetError(s string) *SagaUpdateOne {
+	suo.mutation.SetError(s)
+	return suo
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableError(s *string) *SagaUpdateOne {
+	if s != nil {
+		suo.SetError(*s)
+	}
+	return suo
+}
+
+// ClearError clears the value of the "error" field.
+func (suo *SagaUpdateOne) ClearError() *SagaUpdateOne {
+	suo.mutation.ClearError()
 	return suo
 }
 
@@ -408,19 +409,25 @@ func (suo *SagaUpdateOne) SetNillableCreatedAt(t *time.Time) *SagaUpdateOne {
 	return suo
 }
 
-// AddExecutionIDs adds the "executions" edge to the SagaExecution entity by IDs.
-func (suo *SagaUpdateOne) AddExecutionIDs(ids ...string) *SagaUpdateOne {
-	suo.mutation.AddExecutionIDs(ids...)
+// SetUpdatedAt sets the "updated_at" field.
+func (suo *SagaUpdateOne) SetUpdatedAt(t time.Time) *SagaUpdateOne {
+	suo.mutation.SetUpdatedAt(t)
 	return suo
 }
 
-// AddExecutions adds the "executions" edges to the SagaExecution entity.
-func (suo *SagaUpdateOne) AddExecutions(s ...*SagaExecution) *SagaUpdateOne {
+// AddStepIDs adds the "steps" edge to the SagaExecution entity by IDs.
+func (suo *SagaUpdateOne) AddStepIDs(ids ...string) *SagaUpdateOne {
+	suo.mutation.AddStepIDs(ids...)
+	return suo
+}
+
+// AddSteps adds the "steps" edges to the SagaExecution entity.
+func (suo *SagaUpdateOne) AddSteps(s ...*SagaExecution) *SagaUpdateOne {
 	ids := make([]string, len(s))
 	for i := range s {
 		ids[i] = s[i].ID
 	}
-	return suo.AddExecutionIDs(ids...)
+	return suo.AddStepIDs(ids...)
 }
 
 // Mutation returns the SagaMutation object of the builder.
@@ -428,25 +435,25 @@ func (suo *SagaUpdateOne) Mutation() *SagaMutation {
 	return suo.mutation
 }
 
-// ClearExecutions clears all "executions" edges to the SagaExecution entity.
-func (suo *SagaUpdateOne) ClearExecutions() *SagaUpdateOne {
-	suo.mutation.ClearExecutions()
+// ClearSteps clears all "steps" edges to the SagaExecution entity.
+func (suo *SagaUpdateOne) ClearSteps() *SagaUpdateOne {
+	suo.mutation.ClearSteps()
 	return suo
 }
 
-// RemoveExecutionIDs removes the "executions" edge to SagaExecution entities by IDs.
-func (suo *SagaUpdateOne) RemoveExecutionIDs(ids ...string) *SagaUpdateOne {
-	suo.mutation.RemoveExecutionIDs(ids...)
+// RemoveStepIDs removes the "steps" edge to SagaExecution entities by IDs.
+func (suo *SagaUpdateOne) RemoveStepIDs(ids ...string) *SagaUpdateOne {
+	suo.mutation.RemoveStepIDs(ids...)
 	return suo
 }
 
-// RemoveExecutions removes "executions" edges to SagaExecution entities.
-func (suo *SagaUpdateOne) RemoveExecutions(s ...*SagaExecution) *SagaUpdateOne {
+// RemoveSteps removes "steps" edges to SagaExecution entities.
+func (suo *SagaUpdateOne) RemoveSteps(s ...*SagaExecution) *SagaUpdateOne {
 	ids := make([]string, len(s))
 	for i := range s {
 		ids[i] = s[i].ID
 	}
-	return suo.RemoveExecutionIDs(ids...)
+	return suo.RemoveStepIDs(ids...)
 }
 
 // Where appends a list predicates to the SagaUpdate builder.
@@ -464,6 +471,7 @@ func (suo *SagaUpdateOne) Select(field string, fields ...string) *SagaUpdateOne 
 
 // Save executes the query and returns the updated Saga entity.
 func (suo *SagaUpdateOne) Save(ctx context.Context) (*Saga, error) {
+	suo.defaults()
 	return withHooks(ctx, suo.sqlSave, suo.mutation, suo.hooks)
 }
 
@@ -489,16 +497,24 @@ func (suo *SagaUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (suo *SagaUpdateOne) defaults() {
+	if _, ok := suo.mutation.UpdatedAt(); !ok {
+		v := saga.UpdateDefaultUpdatedAt()
+		suo.mutation.SetUpdatedAt(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (suo *SagaUpdateOne) check() error {
-	if v, ok := suo.mutation.Name(); ok {
-		if err := saga.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Saga.name": %w`, err)}
-		}
-	}
 	if v, ok := suo.mutation.StepID(); ok {
 		if err := saga.StepIDValidator(v); err != nil {
 			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Saga.step_id": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.Status(); ok {
+		if err := saga.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Saga.status": %w`, err)}
 		}
 	}
 	return nil
@@ -533,41 +549,36 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 			}
 		}
 	}
-	if value, ok := suo.mutation.Name(); ok {
-		_spec.SetField(saga.FieldName, field.TypeString, value)
+	if value, ok := suo.mutation.RunID(); ok {
+		_spec.SetField(saga.FieldRunID, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.StepID(); ok {
 		_spec.SetField(saga.FieldStepID, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.Input(); ok {
-		_spec.SetField(saga.FieldInput, field.TypeJSON, value)
+	if value, ok := suo.mutation.Status(); ok {
+		_spec.SetField(saga.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := suo.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, saga.FieldInput, value)
-		})
+	if value, ok := suo.mutation.SagaDefinition(); ok {
+		_spec.SetField(saga.FieldSagaDefinition, field.TypeJSON, value)
 	}
-	if value, ok := suo.mutation.RetryPolicy(); ok {
-		_spec.SetField(saga.FieldRetryPolicy, field.TypeJSON, value)
+	if value, ok := suo.mutation.Error(); ok {
+		_spec.SetField(saga.FieldError, field.TypeString, value)
 	}
-	if suo.mutation.RetryPolicyCleared() {
-		_spec.ClearField(saga.FieldRetryPolicy, field.TypeJSON)
-	}
-	if value, ok := suo.mutation.Timeout(); ok {
-		_spec.SetField(saga.FieldTimeout, field.TypeTime, value)
-	}
-	if suo.mutation.TimeoutCleared() {
-		_spec.ClearField(saga.FieldTimeout, field.TypeTime)
+	if suo.mutation.ErrorCleared() {
+		_spec.ClearField(saga.FieldError, field.TypeString)
 	}
 	if value, ok := suo.mutation.CreatedAt(); ok {
 		_spec.SetField(saga.FieldCreatedAt, field.TypeTime, value)
 	}
-	if suo.mutation.ExecutionsCleared() {
+	if value, ok := suo.mutation.UpdatedAt(); ok {
+		_spec.SetField(saga.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if suo.mutation.StepsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
@@ -575,12 +586,12 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !suo.mutation.ExecutionsCleared() {
+	if nodes := suo.mutation.RemovedStepsIDs(); len(nodes) > 0 && !suo.mutation.StepsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),
@@ -591,12 +602,12 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.ExecutionsIDs(); len(nodes) > 0 {
+	if nodes := suo.mutation.StepsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   saga.ExecutionsTable,
-			Columns: []string{saga.ExecutionsColumn},
+			Table:   saga.StepsTable,
+			Columns: []string{saga.StepsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(sagaexecution.FieldID, field.TypeString),

@@ -93,18 +93,6 @@ func (f SagaExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaExecutionMutation", m)
 }
 
-// The SagaStepExecutionFunc type is an adapter to allow the use of ordinary
-// function as SagaStepExecution mutator.
-type SagaStepExecutionFunc func(context.Context, *ent.SagaStepExecutionMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f SagaStepExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SagaStepExecutionMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SagaStepExecutionMutation", m)
-}
-
 // The SideEffectFunc type is an adapter to allow the use of ordinary
 // function as SideEffect mutator.
 type SideEffectFunc func(context.Context, *ent.SideEffectMutation) (ent.Value, error)

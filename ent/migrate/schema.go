@@ -131,12 +131,13 @@ var (
 	// SagasColumns holds the columns for the "sagas" table.
 	SagasColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "name", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
 		{Name: "step_id", Type: field.TypeString},
-		{Name: "input", Type: field.TypeJSON},
-		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
-		{Name: "timeout", Type: field.TypeTime, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensating", "Compensated"}, Default: "Pending"},
+		{Name: "saga_definition", Type: field.TypeJSON},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
 	}
 	// SagasTable holds the schema information for the "sagas" table.
 	SagasTable = &schema.Table{
@@ -147,13 +148,14 @@ var (
 	// SagaExecutionsColumns holds the columns for the "saga_executions" table.
 	SagaExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "run_id", Type: field.TypeString, Unique: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensating", "Compensated"}, Default: "Pending"},
-		{Name: "attempt", Type: field.TypeInt, Default: 1},
-		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "handler_name", Type: field.TypeString},
+		{Name: "step_type", Type: field.TypeEnum, Enums: []string{"Transaction", "Compensation"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "sequence", Type: field.TypeInt},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "saga_executions", Type: field.TypeString},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "saga_steps", Type: field.TypeString},
 	}
 	// SagaExecutionsTable holds the schema information for the "saga_executions" table.
 	SagaExecutionsTable = &schema.Table{
@@ -162,37 +164,9 @@ var (
 		PrimaryKey: []*schema.Column{SagaExecutionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "saga_executions_sagas_executions",
-				Columns:    []*schema.Column{SagaExecutionsColumns[7]},
+				Symbol:     "saga_executions_sagas_steps",
+				Columns:    []*schema.Column{SagaExecutionsColumns[8]},
 				RefColumns: []*schema.Column{SagasColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
-	// SagaStepExecutionsColumns holds the columns for the "saga_step_executions" table.
-	SagaStepExecutionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "handler_name", Type: field.TypeString},
-		{Name: "step_type", Type: field.TypeEnum, Enums: []string{"Transaction", "Compensation"}},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensated"}, Default: "Pending"},
-		{Name: "sequence", Type: field.TypeInt},
-		{Name: "attempt", Type: field.TypeInt, Default: 1},
-		{Name: "input", Type: field.TypeJSON},
-		{Name: "output", Type: field.TypeJSON, Nullable: true},
-		{Name: "started_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "saga_execution_steps", Type: field.TypeString},
-	}
-	// SagaStepExecutionsTable holds the schema information for the "saga_step_executions" table.
-	SagaStepExecutionsTable = &schema.Table{
-		Name:       "saga_step_executions",
-		Columns:    SagaStepExecutionsColumns,
-		PrimaryKey: []*schema.Column{SagaStepExecutionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "saga_step_executions_saga_executions_steps",
-				Columns:    []*schema.Column{SagaStepExecutionsColumns[10]},
-				RefColumns: []*schema.Column{SagaExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
@@ -307,7 +281,6 @@ var (
 		RunsTable,
 		SagasTable,
 		SagaExecutionsTable,
-		SagaStepExecutionsTable,
 		SideEffectsTable,
 		SideEffectExecutionsTable,
 		SignalsTable,
@@ -321,7 +294,6 @@ func init() {
 	RunsTable.ForeignKeys[0].RefTable = WorkflowsTable
 	RunsTable.ForeignKeys[1].RefTable = ActivitiesTable
 	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
-	SagaStepExecutionsTable.ForeignKeys[0].RefTable = SagaExecutionsTable
 	SideEffectExecutionsTable.ForeignKeys[0].RefTable = SideEffectsTable
 	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

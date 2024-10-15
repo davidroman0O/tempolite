@@ -19,6 +19,8 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
 	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
 	"github.com/davidroman0O/go-tempolite/ent/run"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
@@ -72,11 +74,10 @@ type Tempolite[T Identifier] struct {
 
 	// Saga are dynamically cached
 	// Simplify the management of the Sagas, if we were to use Activities we would be subject to trickery to manage the flow
-	sagas                     sync.Map
-	transationctionPool       *retrypool.Pool[*transactionTask[T]]
-	compensationPool          *retrypool.Pool[*compensationTask[T]]
-	schedulerTransactionDone  chan struct{}
-	schedulerCompensationDone chan struct{}
+	sagas             sync.Map
+	transactionPool   *retrypool.Pool[*transactionTask[T]]
+	compensationPool  *retrypool.Pool[*compensationTask[T]]
+	schedulerSagaDone chan struct{}
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -175,15 +176,19 @@ func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite
 		schedulerExecutionWorkflowDone: make(chan struct{}),
 		schedulerExecutionActivityDone: make(chan struct{}),
 		schedulerSideEffectDone:        make(chan struct{}),
+		schedulerSagaDone:              make(chan struct{}),
 	}
 
 	tp.workflowPool = tp.createWorkflowPool()
 	tp.activityPool = tp.createActivityPool()
 	tp.sideEffectPool = tp.createSideEffectPool()
+	tp.transactionPool = tp.createTransactionPool()
+	tp.compensationPool = tp.createCompensationPool()
 
 	go tp.schedulerExecutionSideEffect()
 	go tp.schedulerExecutionWorkflow()
 	go tp.schedulerExecutionActivity()
+	go tp.schedulerExecutionSaga()
 
 	return tp, nil
 }
@@ -977,16 +982,117 @@ func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, stepID T, si
 	return tp.enqueueSubSideEffect(ctx, stepID, handlerIdentity)
 }
 
-func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) *SagaInfo[T] {
-	id, err := tp.enqueueSaga(ctx, stepID, sagaID, saga)
+func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, saga *SagaDefinition[T]) *SagaInfo[T] {
+	id, err := tp.enqueueSaga(ctx, stepID, saga)
 	return tp.getSaga(id, err)
 }
 
 // TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
 // Saga only accepts one type of input
-func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) (SagaID, error) {
-	// todo: implement
-	return sagaID, nil
+func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *SagaDefinition[T]) (SagaID, error) {
+	switch ctx.EntityType() {
+	case "workflow":
+		// Proceed with saga creation
+	default:
+		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
+	}
+
+	var err error
+	var tx *ent.Tx
+
+	// Check for existing saga with the same stepID within the current workflow
+	exists, err := tp.client.ExecutionRelationship.Query().
+		Where(
+			executionrelationship.And(
+				executionrelationship.RunID(ctx.RunID()),
+				executionrelationship.ParentEntityID(ctx.EntityID()),
+				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ParentStepID(ctx.StepID()),
+			),
+			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSaga),
+		).
+		First(tp.ctx)
+	if err == nil {
+		sagaEntity, err := tp.client.Saga.Get(tp.ctx, exists.ChildEntityID)
+		if err != nil {
+			return "", err
+		}
+		if sagaEntity.Status == saga.StatusCompleted {
+			return SagaID(exists.ChildEntityID), nil
+		}
+	} else if !ent.IsNotFound(err) {
+		return "", fmt.Errorf("error checking for existing stepID: %w", err)
+	}
+
+	if tx, err = tp.client.Tx(tp.ctx); err != nil {
+		return "", err
+	}
+
+	// Convert SagaHandlerInfo to SagaDefinitionData
+	sagaDefData := schema.SagaDefinitionData{
+		Steps: make([]schema.SagaStepPair, len(sagaDef.HandlerInfo.TransactionInfo)),
+	}
+	for i, txInfo := range sagaDef.HandlerInfo.TransactionInfo {
+		sagaDefData.Steps[i] = schema.SagaStepPair{
+			TransactionHandlerName:  txInfo.HandlerName,
+			CompensationHandlerName: sagaDef.HandlerInfo.CompensationInfo[i].HandlerName,
+		}
+	}
+
+	sagaEntity, err := tx.Saga.
+		Create().
+		SetID(uuid.NewString()).
+		SetRunID(ctx.RunID()).
+		SetStepID(fmt.Sprint(stepID)).
+		SetStatus(saga.StatusPending).
+		SetSagaDefinition(sagaDefData).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	// store the cache
+	tp.sagas.Store(sagaEntity.ID, sagaDef)
+
+	// Create the first transaction step
+	firstStep := sagaDefData.Steps[0]
+	sagaExecution, err := tx.SagaExecution.
+		Create().
+		SetID(uuid.NewString()).
+		SetStatus(sagaexecution.StatusPending).
+		SetStepType(sagaexecution.StepTypeTransaction).
+		SetHandlerName(firstStep.TransactionHandlerName).
+		SetSequence(0).
+		SetSaga(sagaEntity).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to create first saga execution step: %w", err)
+	}
+
+	_, err = tx.ExecutionRelationship.Create().
+		SetRunID(ctx.RunID()).
+		SetParentEntityID(ctx.EntityID()).
+		SetChildEntityID(sagaEntity.ID).
+		SetParentID(ctx.ExecutionID()).
+		SetChildID(sagaExecution.ID).
+		SetParentStepID(ctx.StepID()).
+		SetChildStepID(fmt.Sprint(stepID)).
+		SetParentType(executionrelationship.ParentTypeWorkflow).
+		SetChildType(executionrelationship.ChildTypeSaga).
+		Save(tp.ctx)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	return SagaID(sagaEntity.ID), nil
 }
 
 func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {

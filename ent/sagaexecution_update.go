@@ -10,12 +10,10 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
 
 // SagaExecutionUpdate is the builder for updating SagaExecution entities.
@@ -31,16 +29,30 @@ func (seu *SagaExecutionUpdate) Where(ps ...predicate.SagaExecution) *SagaExecut
 	return seu
 }
 
-// SetRunID sets the "run_id" field.
-func (seu *SagaExecutionUpdate) SetRunID(s string) *SagaExecutionUpdate {
-	seu.mutation.SetRunID(s)
+// SetHandlerName sets the "handler_name" field.
+func (seu *SagaExecutionUpdate) SetHandlerName(s string) *SagaExecutionUpdate {
+	seu.mutation.SetHandlerName(s)
 	return seu
 }
 
-// SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (seu *SagaExecutionUpdate) SetNillableRunID(s *string) *SagaExecutionUpdate {
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableHandlerName(s *string) *SagaExecutionUpdate {
 	if s != nil {
-		seu.SetRunID(*s)
+		seu.SetHandlerName(*s)
+	}
+	return seu
+}
+
+// SetStepType sets the "step_type" field.
+func (seu *SagaExecutionUpdate) SetStepType(st sagaexecution.StepType) *SagaExecutionUpdate {
+	seu.mutation.SetStepType(st)
+	return seu
+}
+
+// SetNillableStepType sets the "step_type" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableStepType(st *sagaexecution.StepType) *SagaExecutionUpdate {
+	if st != nil {
+		seu.SetStepType(*st)
 	}
 	return seu
 }
@@ -59,42 +71,44 @@ func (seu *SagaExecutionUpdate) SetNillableStatus(s *sagaexecution.Status) *Saga
 	return seu
 }
 
-// SetAttempt sets the "attempt" field.
-func (seu *SagaExecutionUpdate) SetAttempt(i int) *SagaExecutionUpdate {
-	seu.mutation.ResetAttempt()
-	seu.mutation.SetAttempt(i)
+// SetSequence sets the "sequence" field.
+func (seu *SagaExecutionUpdate) SetSequence(i int) *SagaExecutionUpdate {
+	seu.mutation.ResetSequence()
+	seu.mutation.SetSequence(i)
 	return seu
 }
 
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (seu *SagaExecutionUpdate) SetNillableAttempt(i *int) *SagaExecutionUpdate {
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableSequence(i *int) *SagaExecutionUpdate {
 	if i != nil {
-		seu.SetAttempt(*i)
+		seu.SetSequence(*i)
 	}
 	return seu
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (seu *SagaExecutionUpdate) AddAttempt(i int) *SagaExecutionUpdate {
-	seu.mutation.AddAttempt(i)
+// AddSequence adds i to the "sequence" field.
+func (seu *SagaExecutionUpdate) AddSequence(i int) *SagaExecutionUpdate {
+	seu.mutation.AddSequence(i)
 	return seu
 }
 
-// SetOutput sets the "output" field.
-func (seu *SagaExecutionUpdate) SetOutput(i []interface{}) *SagaExecutionUpdate {
-	seu.mutation.SetOutput(i)
+// SetError sets the "error" field.
+func (seu *SagaExecutionUpdate) SetError(s string) *SagaExecutionUpdate {
+	seu.mutation.SetError(s)
 	return seu
 }
 
-// AppendOutput appends i to the "output" field.
-func (seu *SagaExecutionUpdate) AppendOutput(i []interface{}) *SagaExecutionUpdate {
-	seu.mutation.AppendOutput(i)
+// SetNillableError sets the "error" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableError(s *string) *SagaExecutionUpdate {
+	if s != nil {
+		seu.SetError(*s)
+	}
 	return seu
 }
 
-// ClearOutput clears the value of the "output" field.
-func (seu *SagaExecutionUpdate) ClearOutput() *SagaExecutionUpdate {
-	seu.mutation.ClearOutput()
+// ClearError clears the value of the "error" field.
+func (seu *SagaExecutionUpdate) ClearError() *SagaExecutionUpdate {
+	seu.mutation.ClearError()
 	return seu
 }
 
@@ -112,9 +126,23 @@ func (seu *SagaExecutionUpdate) SetNillableStartedAt(t *time.Time) *SagaExecutio
 	return seu
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (seu *SagaExecutionUpdate) SetUpdatedAt(t time.Time) *SagaExecutionUpdate {
-	seu.mutation.SetUpdatedAt(t)
+// SetCompletedAt sets the "completed_at" field.
+func (seu *SagaExecutionUpdate) SetCompletedAt(t time.Time) *SagaExecutionUpdate {
+	seu.mutation.SetCompletedAt(t)
+	return seu
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableCompletedAt(t *time.Time) *SagaExecutionUpdate {
+	if t != nil {
+		seu.SetCompletedAt(*t)
+	}
+	return seu
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (seu *SagaExecutionUpdate) ClearCompletedAt() *SagaExecutionUpdate {
+	seu.mutation.ClearCompletedAt()
 	return seu
 }
 
@@ -129,21 +157,6 @@ func (seu *SagaExecutionUpdate) SetSaga(s *Saga) *SagaExecutionUpdate {
 	return seu.SetSagaID(s.ID)
 }
 
-// AddStepIDs adds the "steps" edge to the SagaStepExecution entity by IDs.
-func (seu *SagaExecutionUpdate) AddStepIDs(ids ...string) *SagaExecutionUpdate {
-	seu.mutation.AddStepIDs(ids...)
-	return seu
-}
-
-// AddSteps adds the "steps" edges to the SagaStepExecution entity.
-func (seu *SagaExecutionUpdate) AddSteps(s ...*SagaStepExecution) *SagaExecutionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return seu.AddStepIDs(ids...)
-}
-
 // Mutation returns the SagaExecutionMutation object of the builder.
 func (seu *SagaExecutionUpdate) Mutation() *SagaExecutionMutation {
 	return seu.mutation
@@ -155,30 +168,8 @@ func (seu *SagaExecutionUpdate) ClearSaga() *SagaExecutionUpdate {
 	return seu
 }
 
-// ClearSteps clears all "steps" edges to the SagaStepExecution entity.
-func (seu *SagaExecutionUpdate) ClearSteps() *SagaExecutionUpdate {
-	seu.mutation.ClearSteps()
-	return seu
-}
-
-// RemoveStepIDs removes the "steps" edge to SagaStepExecution entities by IDs.
-func (seu *SagaExecutionUpdate) RemoveStepIDs(ids ...string) *SagaExecutionUpdate {
-	seu.mutation.RemoveStepIDs(ids...)
-	return seu
-}
-
-// RemoveSteps removes "steps" edges to SagaStepExecution entities.
-func (seu *SagaExecutionUpdate) RemoveSteps(s ...*SagaStepExecution) *SagaExecutionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return seu.RemoveStepIDs(ids...)
-}
-
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (seu *SagaExecutionUpdate) Save(ctx context.Context) (int, error) {
-	seu.defaults()
 	return withHooks(ctx, seu.sqlSave, seu.mutation, seu.hooks)
 }
 
@@ -204,19 +195,26 @@ func (seu *SagaExecutionUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (seu *SagaExecutionUpdate) defaults() {
-	if _, ok := seu.mutation.UpdatedAt(); !ok {
-		v := sagaexecution.UpdateDefaultUpdatedAt()
-		seu.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (seu *SagaExecutionUpdate) check() error {
+	if v, ok := seu.mutation.HandlerName(); ok {
+		if err := sagaexecution.HandlerNameValidator(v); err != nil {
+			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.handler_name": %w`, err)}
+		}
+	}
+	if v, ok := seu.mutation.StepType(); ok {
+		if err := sagaexecution.StepTypeValidator(v); err != nil {
+			return &ValidationError{Name: "step_type", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.step_type": %w`, err)}
+		}
+	}
 	if v, ok := seu.mutation.Status(); ok {
 		if err := sagaexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
+		}
+	}
+	if v, ok := seu.mutation.Sequence(); ok {
+		if err := sagaexecution.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.sequence": %w`, err)}
 		}
 	}
 	if seu.mutation.SagaCleared() && len(seu.mutation.SagaIDs()) > 0 {
@@ -237,34 +235,35 @@ func (seu *SagaExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) 
 			}
 		}
 	}
-	if value, ok := seu.mutation.RunID(); ok {
-		_spec.SetField(sagaexecution.FieldRunID, field.TypeString, value)
+	if value, ok := seu.mutation.HandlerName(); ok {
+		_spec.SetField(sagaexecution.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := seu.mutation.StepType(); ok {
+		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
 	}
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := seu.mutation.Attempt(); ok {
-		_spec.SetField(sagaexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := seu.mutation.Sequence(); ok {
+		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := seu.mutation.AddedAttempt(); ok {
-		_spec.AddField(sagaexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := seu.mutation.AddedSequence(); ok {
+		_spec.AddField(sagaexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := seu.mutation.Output(); ok {
-		_spec.SetField(sagaexecution.FieldOutput, field.TypeJSON, value)
+	if value, ok := seu.mutation.Error(); ok {
+		_spec.SetField(sagaexecution.FieldError, field.TypeString, value)
 	}
-	if value, ok := seu.mutation.AppendedOutput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecution.FieldOutput, value)
-		})
-	}
-	if seu.mutation.OutputCleared() {
-		_spec.ClearField(sagaexecution.FieldOutput, field.TypeJSON)
+	if seu.mutation.ErrorCleared() {
+		_spec.ClearField(sagaexecution.FieldError, field.TypeString)
 	}
 	if value, ok := seu.mutation.StartedAt(); ok {
 		_spec.SetField(sagaexecution.FieldStartedAt, field.TypeTime, value)
 	}
-	if value, ok := seu.mutation.UpdatedAt(); ok {
-		_spec.SetField(sagaexecution.FieldUpdatedAt, field.TypeTime, value)
+	if value, ok := seu.mutation.CompletedAt(); ok {
+		_spec.SetField(sagaexecution.FieldCompletedAt, field.TypeTime, value)
+	}
+	if seu.mutation.CompletedAtCleared() {
+		_spec.ClearField(sagaexecution.FieldCompletedAt, field.TypeTime)
 	}
 	if seu.mutation.SagaCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -295,51 +294,6 @@ func (seu *SagaExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if seu.mutation.StepsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seu.mutation.RemovedStepsIDs(); len(nodes) > 0 && !seu.mutation.StepsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seu.mutation.StepsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if n, err = sqlgraph.UpdateNodes(ctx, seu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sagaexecution.Label}
@@ -360,16 +314,30 @@ type SagaExecutionUpdateOne struct {
 	mutation *SagaExecutionMutation
 }
 
-// SetRunID sets the "run_id" field.
-func (seuo *SagaExecutionUpdateOne) SetRunID(s string) *SagaExecutionUpdateOne {
-	seuo.mutation.SetRunID(s)
+// SetHandlerName sets the "handler_name" field.
+func (seuo *SagaExecutionUpdateOne) SetHandlerName(s string) *SagaExecutionUpdateOne {
+	seuo.mutation.SetHandlerName(s)
 	return seuo
 }
 
-// SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (seuo *SagaExecutionUpdateOne) SetNillableRunID(s *string) *SagaExecutionUpdateOne {
+// SetNillableHandlerName sets the "handler_name" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableHandlerName(s *string) *SagaExecutionUpdateOne {
 	if s != nil {
-		seuo.SetRunID(*s)
+		seuo.SetHandlerName(*s)
+	}
+	return seuo
+}
+
+// SetStepType sets the "step_type" field.
+func (seuo *SagaExecutionUpdateOne) SetStepType(st sagaexecution.StepType) *SagaExecutionUpdateOne {
+	seuo.mutation.SetStepType(st)
+	return seuo
+}
+
+// SetNillableStepType sets the "step_type" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableStepType(st *sagaexecution.StepType) *SagaExecutionUpdateOne {
+	if st != nil {
+		seuo.SetStepType(*st)
 	}
 	return seuo
 }
@@ -388,42 +356,44 @@ func (seuo *SagaExecutionUpdateOne) SetNillableStatus(s *sagaexecution.Status) *
 	return seuo
 }
 
-// SetAttempt sets the "attempt" field.
-func (seuo *SagaExecutionUpdateOne) SetAttempt(i int) *SagaExecutionUpdateOne {
-	seuo.mutation.ResetAttempt()
-	seuo.mutation.SetAttempt(i)
+// SetSequence sets the "sequence" field.
+func (seuo *SagaExecutionUpdateOne) SetSequence(i int) *SagaExecutionUpdateOne {
+	seuo.mutation.ResetSequence()
+	seuo.mutation.SetSequence(i)
 	return seuo
 }
 
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (seuo *SagaExecutionUpdateOne) SetNillableAttempt(i *int) *SagaExecutionUpdateOne {
+// SetNillableSequence sets the "sequence" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableSequence(i *int) *SagaExecutionUpdateOne {
 	if i != nil {
-		seuo.SetAttempt(*i)
+		seuo.SetSequence(*i)
 	}
 	return seuo
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (seuo *SagaExecutionUpdateOne) AddAttempt(i int) *SagaExecutionUpdateOne {
-	seuo.mutation.AddAttempt(i)
+// AddSequence adds i to the "sequence" field.
+func (seuo *SagaExecutionUpdateOne) AddSequence(i int) *SagaExecutionUpdateOne {
+	seuo.mutation.AddSequence(i)
 	return seuo
 }
 
-// SetOutput sets the "output" field.
-func (seuo *SagaExecutionUpdateOne) SetOutput(i []interface{}) *SagaExecutionUpdateOne {
-	seuo.mutation.SetOutput(i)
+// SetError sets the "error" field.
+func (seuo *SagaExecutionUpdateOne) SetError(s string) *SagaExecutionUpdateOne {
+	seuo.mutation.SetError(s)
 	return seuo
 }
 
-// AppendOutput appends i to the "output" field.
-func (seuo *SagaExecutionUpdateOne) AppendOutput(i []interface{}) *SagaExecutionUpdateOne {
-	seuo.mutation.AppendOutput(i)
+// SetNillableError sets the "error" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableError(s *string) *SagaExecutionUpdateOne {
+	if s != nil {
+		seuo.SetError(*s)
+	}
 	return seuo
 }
 
-// ClearOutput clears the value of the "output" field.
-func (seuo *SagaExecutionUpdateOne) ClearOutput() *SagaExecutionUpdateOne {
-	seuo.mutation.ClearOutput()
+// ClearError clears the value of the "error" field.
+func (seuo *SagaExecutionUpdateOne) ClearError() *SagaExecutionUpdateOne {
+	seuo.mutation.ClearError()
 	return seuo
 }
 
@@ -441,9 +411,23 @@ func (seuo *SagaExecutionUpdateOne) SetNillableStartedAt(t *time.Time) *SagaExec
 	return seuo
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (seuo *SagaExecutionUpdateOne) SetUpdatedAt(t time.Time) *SagaExecutionUpdateOne {
-	seuo.mutation.SetUpdatedAt(t)
+// SetCompletedAt sets the "completed_at" field.
+func (seuo *SagaExecutionUpdateOne) SetCompletedAt(t time.Time) *SagaExecutionUpdateOne {
+	seuo.mutation.SetCompletedAt(t)
+	return seuo
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableCompletedAt(t *time.Time) *SagaExecutionUpdateOne {
+	if t != nil {
+		seuo.SetCompletedAt(*t)
+	}
+	return seuo
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (seuo *SagaExecutionUpdateOne) ClearCompletedAt() *SagaExecutionUpdateOne {
+	seuo.mutation.ClearCompletedAt()
 	return seuo
 }
 
@@ -458,21 +442,6 @@ func (seuo *SagaExecutionUpdateOne) SetSaga(s *Saga) *SagaExecutionUpdateOne {
 	return seuo.SetSagaID(s.ID)
 }
 
-// AddStepIDs adds the "steps" edge to the SagaStepExecution entity by IDs.
-func (seuo *SagaExecutionUpdateOne) AddStepIDs(ids ...string) *SagaExecutionUpdateOne {
-	seuo.mutation.AddStepIDs(ids...)
-	return seuo
-}
-
-// AddSteps adds the "steps" edges to the SagaStepExecution entity.
-func (seuo *SagaExecutionUpdateOne) AddSteps(s ...*SagaStepExecution) *SagaExecutionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return seuo.AddStepIDs(ids...)
-}
-
 // Mutation returns the SagaExecutionMutation object of the builder.
 func (seuo *SagaExecutionUpdateOne) Mutation() *SagaExecutionMutation {
 	return seuo.mutation
@@ -482,27 +451,6 @@ func (seuo *SagaExecutionUpdateOne) Mutation() *SagaExecutionMutation {
 func (seuo *SagaExecutionUpdateOne) ClearSaga() *SagaExecutionUpdateOne {
 	seuo.mutation.ClearSaga()
 	return seuo
-}
-
-// ClearSteps clears all "steps" edges to the SagaStepExecution entity.
-func (seuo *SagaExecutionUpdateOne) ClearSteps() *SagaExecutionUpdateOne {
-	seuo.mutation.ClearSteps()
-	return seuo
-}
-
-// RemoveStepIDs removes the "steps" edge to SagaStepExecution entities by IDs.
-func (seuo *SagaExecutionUpdateOne) RemoveStepIDs(ids ...string) *SagaExecutionUpdateOne {
-	seuo.mutation.RemoveStepIDs(ids...)
-	return seuo
-}
-
-// RemoveSteps removes "steps" edges to SagaStepExecution entities.
-func (seuo *SagaExecutionUpdateOne) RemoveSteps(s ...*SagaStepExecution) *SagaExecutionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return seuo.RemoveStepIDs(ids...)
 }
 
 // Where appends a list predicates to the SagaExecutionUpdate builder.
@@ -520,7 +468,6 @@ func (seuo *SagaExecutionUpdateOne) Select(field string, fields ...string) *Saga
 
 // Save executes the query and returns the updated SagaExecution entity.
 func (seuo *SagaExecutionUpdateOne) Save(ctx context.Context) (*SagaExecution, error) {
-	seuo.defaults()
 	return withHooks(ctx, seuo.sqlSave, seuo.mutation, seuo.hooks)
 }
 
@@ -546,19 +493,26 @@ func (seuo *SagaExecutionUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (seuo *SagaExecutionUpdateOne) defaults() {
-	if _, ok := seuo.mutation.UpdatedAt(); !ok {
-		v := sagaexecution.UpdateDefaultUpdatedAt()
-		seuo.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (seuo *SagaExecutionUpdateOne) check() error {
+	if v, ok := seuo.mutation.HandlerName(); ok {
+		if err := sagaexecution.HandlerNameValidator(v); err != nil {
+			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.handler_name": %w`, err)}
+		}
+	}
+	if v, ok := seuo.mutation.StepType(); ok {
+		if err := sagaexecution.StepTypeValidator(v); err != nil {
+			return &ValidationError{Name: "step_type", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.step_type": %w`, err)}
+		}
+	}
 	if v, ok := seuo.mutation.Status(); ok {
 		if err := sagaexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
+		}
+	}
+	if v, ok := seuo.mutation.Sequence(); ok {
+		if err := sagaexecution.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.sequence": %w`, err)}
 		}
 	}
 	if seuo.mutation.SagaCleared() && len(seuo.mutation.SagaIDs()) > 0 {
@@ -596,34 +550,35 @@ func (seuo *SagaExecutionUpdateOne) sqlSave(ctx context.Context) (_node *SagaExe
 			}
 		}
 	}
-	if value, ok := seuo.mutation.RunID(); ok {
-		_spec.SetField(sagaexecution.FieldRunID, field.TypeString, value)
+	if value, ok := seuo.mutation.HandlerName(); ok {
+		_spec.SetField(sagaexecution.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := seuo.mutation.StepType(); ok {
+		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
 	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 	}
-	if value, ok := seuo.mutation.Attempt(); ok {
-		_spec.SetField(sagaexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := seuo.mutation.Sequence(); ok {
+		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := seuo.mutation.AddedAttempt(); ok {
-		_spec.AddField(sagaexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := seuo.mutation.AddedSequence(); ok {
+		_spec.AddField(sagaexecution.FieldSequence, field.TypeInt, value)
 	}
-	if value, ok := seuo.mutation.Output(); ok {
-		_spec.SetField(sagaexecution.FieldOutput, field.TypeJSON, value)
+	if value, ok := seuo.mutation.Error(); ok {
+		_spec.SetField(sagaexecution.FieldError, field.TypeString, value)
 	}
-	if value, ok := seuo.mutation.AppendedOutput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecution.FieldOutput, value)
-		})
-	}
-	if seuo.mutation.OutputCleared() {
-		_spec.ClearField(sagaexecution.FieldOutput, field.TypeJSON)
+	if seuo.mutation.ErrorCleared() {
+		_spec.ClearField(sagaexecution.FieldError, field.TypeString)
 	}
 	if value, ok := seuo.mutation.StartedAt(); ok {
 		_spec.SetField(sagaexecution.FieldStartedAt, field.TypeTime, value)
 	}
-	if value, ok := seuo.mutation.UpdatedAt(); ok {
-		_spec.SetField(sagaexecution.FieldUpdatedAt, field.TypeTime, value)
+	if value, ok := seuo.mutation.CompletedAt(); ok {
+		_spec.SetField(sagaexecution.FieldCompletedAt, field.TypeTime, value)
+	}
+	if seuo.mutation.CompletedAtCleared() {
+		_spec.ClearField(sagaexecution.FieldCompletedAt, field.TypeTime)
 	}
 	if seuo.mutation.SagaCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -647,51 +602,6 @@ func (seuo *SagaExecutionUpdateOne) sqlSave(ctx context.Context) (_node *SagaExe
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(saga.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if seuo.mutation.StepsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seuo.mutation.RemovedStepsIDs(); len(nodes) > 0 && !seuo.mutation.StepsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := seuo.mutation.StepsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

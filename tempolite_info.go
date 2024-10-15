@@ -12,6 +12,8 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
@@ -485,9 +487,76 @@ type SagaInfo[T Identifier] struct {
 	err    error
 }
 
-func (i *SagaInfo[T]) Get() ([]interface{}, error) {
-	// todo: implement
-	return nil, nil
+func (i *SagaInfo[T]) Get(output ...interface{}) error {
+	if i.err != nil {
+		return i.err
+	}
+
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+
+	// var value any
+	var ok bool
+	// var sagaHandlerInfo *SagaHandlerInfo
+
+	for {
+		select {
+		case <-i.tp.ctx.Done():
+			return i.tp.ctx.Err()
+		case <-ticker.C:
+			sagaEntity, err := i.tp.client.Saga.Query().
+				Where(saga.IDEQ(i.SagaID.String())).
+				WithSteps().
+				Only(i.tp.ctx)
+			if err != nil {
+				return err
+			}
+
+			if _, ok = i.tp.sagas.Load(sagaEntity.ID); ok {
+				// if sagaHandlerInfo, ok = value.(*SagaHandlerInfo); !ok {
+				// 	log.Printf("scheduler: sagas %s is not handler info", i.SagaID.String())
+				// 	return errors.New("sagas is not handler info")
+				// }
+
+				switch sagaEntity.Status {
+				case saga.StatusCompleted:
+					fmt.Println("searching for saga execution of ", i.SagaID.String())
+					latestExec, err := i.tp.client.SagaExecution.Query().
+						Where(
+							sagaexecution.HasSaga(),
+						).
+						Order(ent.Desc(sagaexecution.FieldStartedAt)).
+						First(i.tp.ctx)
+					if err != nil {
+						if ent.IsNotFound(err) {
+							// Handle the case where no execution is found
+							log.Printf("No execution found for saga %s", i.SagaID)
+							return fmt.Errorf("no execution found for saga %s", i.SagaID)
+						}
+						log.Printf("Error querying saga execution: %v", err)
+						return fmt.Errorf("error querying saga execution: %w", err)
+					}
+
+					switch latestExec.Status {
+					case sagaexecution.StatusCompleted:
+						return nil
+					case sagaexecution.StatusFailed:
+						return errors.New(latestExec.Error)
+					case sagaexecution.StatusPending, sagaexecution.StatusRunning:
+						// The workflow is still in progress
+						// return  errors.New("workflow is still in progress")
+						runtime.Gosched()
+						continue
+					}
+
+				case saga.StatusPending, saga.StatusRunning:
+					runtime.Gosched()
+					continue
+				}
+			}
+			runtime.Gosched()
+		}
+	}
 }
 
 type TempoliteContext interface {

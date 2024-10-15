@@ -8,6 +8,8 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/activity"
 	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/go-tempolite/ent/saga"
+	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
@@ -358,6 +360,97 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 				if _, err = tp.client.SideEffectExecution.UpdateOneID(se.ID).SetStatus(sideeffectexecution.StatusRunning).Save(tp.ctx); err != nil {
 					log.Printf("scheduler: SideEffectExecution.UpdateOneID failed: %v", err)
 					continue
+				}
+			}
+
+			runtime.Gosched()
+		}
+	}
+}
+
+func (tp *Tempolite[T]) schedulerExecutionSaga() {
+	defer close(tp.schedulerSagaDone)
+	for {
+		select {
+		case <-tp.ctx.Done():
+			return
+		default:
+			pendingSagas, err := tp.client.SagaExecution.Query().
+				Where(sagaexecution.StatusEQ(sagaexecution.StatusPending)).
+				Order(ent.Asc(sagaexecution.FieldStartedAt)).
+				WithSaga().
+				Limit(1).
+				All(tp.ctx)
+			if err != nil {
+				log.Printf("scheduler: Saga.Query failed: %v", err)
+				continue
+			}
+
+			for _, sagaExecution := range pendingSagas {
+				sagaHandlerInfo, ok := tp.sagas.Load(sagaExecution.Edges.Saga.ID)
+				if !ok {
+					log.Printf("scheduler: SagaHandlerInfo not found for ID: %s", sagaExecution.Edges.Saga.ID)
+					continue
+				}
+
+				sagaDef := sagaHandlerInfo.(*SagaDefinition[T])
+				transactionTasks := make([]*transactionTask[T], len(sagaDef.HandlerInfo.TransactionInfo))
+				compensationTasks := make([]*compensationTask[T], len(sagaDef.HandlerInfo.CompensationInfo))
+
+				// Prepare all transaction and compensation tasks
+				for i := range sagaDef.HandlerInfo.TransactionInfo {
+					transactionTasks[i] = &transactionTask[T]{
+						ctx:         TransactionContext[T]{},
+						sagaID:      sagaExecution.Edges.Saga.ID,
+						executionID: sagaExecution.ID,
+						stepIndex:   i,
+						handlerName: sagaDef.HandlerInfo.TransactionInfo[i].HandlerName,
+						isLast:      i == len(sagaDef.HandlerInfo.TransactionInfo)-1,
+					}
+
+					compensationTasks[i] = &compensationTask[T]{
+						ctx:         CompensationContext[T]{},
+						sagaID:      sagaExecution.Edges.Saga.ID,
+						executionID: sagaExecution.ID,
+						stepIndex:   i,
+						handlerName: sagaDef.HandlerInfo.CompensationInfo[i].HandlerName,
+						isLast:      i == 0,
+					}
+				}
+
+				// Link tasks
+				for i := 0; i < len(transactionTasks); i++ {
+					if i < len(transactionTasks)-1 {
+						nextIndex := i + 1
+						transactionTasks[i].next = func() error {
+							return tp.transactionPool.Dispatch(transactionTasks[nextIndex])
+						}
+					}
+					currentIndex := i
+					transactionTasks[i].compensate = func() error {
+						return tp.compensationPool.Dispatch(compensationTasks[currentIndex])
+					}
+				}
+
+				for i := len(compensationTasks) - 1; i >= 0; i-- {
+					if i > 0 {
+						nextIndex := i - 1
+						compensationTasks[i].next = func() error {
+							return tp.compensationPool.Dispatch(compensationTasks[nextIndex])
+						}
+					}
+				}
+
+				// Dispatch the first transaction task
+				if err := tp.transactionPool.Dispatch(transactionTasks[0]); err != nil {
+					log.Printf("scheduler: Failed to dispatch first transaction task: %v", err)
+					continue
+				}
+
+				if _, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+					SetStatus(saga.StatusRunning).
+					Save(tp.ctx); err != nil {
+					log.Printf("scheduler: Failed to update saga status: %v", err)
 				}
 			}
 

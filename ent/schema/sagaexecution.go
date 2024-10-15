@@ -8,7 +8,7 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// SagaExecution holds the schema definition for the SagaExecution entity.
+// SagaExecution holds the schema definition for the SagaExecution entity (representing steps).
 type SagaExecution struct {
 	ent.Schema
 }
@@ -18,20 +18,21 @@ func (SagaExecution) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
-		field.String("run_id").
-			Unique(),
+		field.String("handler_name").
+			NotEmpty(),
+		field.Enum("step_type").
+			Values("Transaction", "Compensation"),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Compensating", "Compensated").
+			Values("Pending", "Running", "Completed", "Failed").
 			Default("Pending"),
-		field.Int("attempt").
-			Default(1),
-		field.JSON("output", []interface{}{}).
+		field.Int("sequence").
+			NonNegative(),
+		field.String("error").
 			Optional(),
 		field.Time("started_at").
 			Default(time.Now),
-		field.Time("updated_at").
-			Default(time.Now).
-			UpdateDefault(time.Now),
+		field.Time("completed_at").
+			Optional(),
 	}
 }
 
@@ -39,9 +40,8 @@ func (SagaExecution) Fields() []ent.Field {
 func (SagaExecution) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("saga", Saga.Type).
-			Ref("executions").
+			Ref("steps").
 			Unique().
 			Required(),
-		edge.To("steps", SagaStepExecution.Type),
 	}
 }

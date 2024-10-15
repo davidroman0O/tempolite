@@ -22,7 +22,6 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
@@ -49,8 +48,6 @@ type Client struct {
 	Saga *SagaClient
 	// SagaExecution is the client for interacting with the SagaExecution builders.
 	SagaExecution *SagaExecutionClient
-	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
-	SagaStepExecution *SagaStepExecutionClient
 	// SideEffect is the client for interacting with the SideEffect builders.
 	SideEffect *SideEffectClient
 	// SideEffectExecution is the client for interacting with the SideEffectExecution builders.
@@ -79,7 +76,6 @@ func (c *Client) init() {
 	c.Run = NewRunClient(c.config)
 	c.Saga = NewSagaClient(c.config)
 	c.SagaExecution = NewSagaExecutionClient(c.config)
-	c.SagaStepExecution = NewSagaStepExecutionClient(c.config)
 	c.SideEffect = NewSideEffectClient(c.config)
 	c.SideEffectExecution = NewSideEffectExecutionClient(c.config)
 	c.Signal = NewSignalClient(c.config)
@@ -184,7 +180,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Run:                   NewRunClient(cfg),
 		Saga:                  NewSagaClient(cfg),
 		SagaExecution:         NewSagaExecutionClient(cfg),
-		SagaStepExecution:     NewSagaStepExecutionClient(cfg),
 		SideEffect:            NewSideEffectClient(cfg),
 		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
 		Signal:                NewSignalClient(cfg),
@@ -216,7 +211,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Run:                   NewRunClient(cfg),
 		Saga:                  NewSagaClient(cfg),
 		SagaExecution:         NewSagaExecutionClient(cfg),
-		SagaStepExecution:     NewSagaStepExecutionClient(cfg),
 		SideEffect:            NewSideEffectClient(cfg),
 		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
 		Signal:                NewSignalClient(cfg),
@@ -252,8 +246,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
-		c.Run, c.Saga, c.SagaExecution, c.SagaStepExecution, c.SideEffect,
-		c.SideEffectExecution, c.Signal, c.Workflow, c.WorkflowExecution,
+		c.Run, c.Saga, c.SagaExecution, c.SideEffect, c.SideEffectExecution, c.Signal,
+		c.Workflow, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -264,8 +258,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
-		c.Run, c.Saga, c.SagaExecution, c.SagaStepExecution, c.SideEffect,
-		c.SideEffectExecution, c.Signal, c.Workflow, c.WorkflowExecution,
+		c.Run, c.Saga, c.SagaExecution, c.SideEffect, c.SideEffectExecution, c.Signal,
+		c.Workflow, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -288,8 +282,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Saga.mutate(ctx, m)
 	case *SagaExecutionMutation:
 		return c.SagaExecution.mutate(ctx, m)
-	case *SagaStepExecutionMutation:
-		return c.SagaStepExecution.mutate(ctx, m)
 	case *SideEffectMutation:
 		return c.SideEffect.mutate(ctx, m)
 	case *SideEffectExecutionMutation:
@@ -1142,15 +1134,15 @@ func (c *SagaClient) GetX(ctx context.Context, id string) *Saga {
 	return obj
 }
 
-// QueryExecutions queries the executions edge of a Saga.
-func (c *SagaClient) QueryExecutions(s *Saga) *SagaExecutionQuery {
+// QuerySteps queries the steps edge of a Saga.
+func (c *SagaClient) QuerySteps(s *Saga) *SagaExecutionQuery {
 	query := (&SagaExecutionClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := s.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(saga.Table, saga.FieldID, id),
 			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, saga.ExecutionsTable, saga.ExecutionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, saga.StepsTable, saga.StepsColumn),
 		)
 		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
 		return fromV, nil
@@ -1307,22 +1299,6 @@ func (c *SagaExecutionClient) QuerySaga(se *SagaExecution) *SagaQuery {
 	return query
 }
 
-// QuerySteps queries the steps edge of a SagaExecution.
-func (c *SagaExecutionClient) QuerySteps(se *SagaExecution) *SagaStepExecutionQuery {
-	query := (&SagaStepExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := se.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sagaexecution.Table, sagaexecution.FieldID, id),
-			sqlgraph.To(sagastepexecution.Table, sagastepexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, sagaexecution.StepsTable, sagaexecution.StepsColumn),
-		)
-		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *SagaExecutionClient) Hooks() []Hook {
 	return c.hooks.SagaExecution
@@ -1345,155 +1321,6 @@ func (c *SagaExecutionClient) mutate(ctx context.Context, m *SagaExecutionMutati
 		return (&SagaExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown SagaExecution mutation op: %q", m.Op())
-	}
-}
-
-// SagaStepExecutionClient is a client for the SagaStepExecution schema.
-type SagaStepExecutionClient struct {
-	config
-}
-
-// NewSagaStepExecutionClient returns a client for the SagaStepExecution from the given config.
-func NewSagaStepExecutionClient(c config) *SagaStepExecutionClient {
-	return &SagaStepExecutionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `sagastepexecution.Hooks(f(g(h())))`.
-func (c *SagaStepExecutionClient) Use(hooks ...Hook) {
-	c.hooks.SagaStepExecution = append(c.hooks.SagaStepExecution, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `sagastepexecution.Intercept(f(g(h())))`.
-func (c *SagaStepExecutionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.SagaStepExecution = append(c.inters.SagaStepExecution, interceptors...)
-}
-
-// Create returns a builder for creating a SagaStepExecution entity.
-func (c *SagaStepExecutionClient) Create() *SagaStepExecutionCreate {
-	mutation := newSagaStepExecutionMutation(c.config, OpCreate)
-	return &SagaStepExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of SagaStepExecution entities.
-func (c *SagaStepExecutionClient) CreateBulk(builders ...*SagaStepExecutionCreate) *SagaStepExecutionCreateBulk {
-	return &SagaStepExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *SagaStepExecutionClient) MapCreateBulk(slice any, setFunc func(*SagaStepExecutionCreate, int)) *SagaStepExecutionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &SagaStepExecutionCreateBulk{err: fmt.Errorf("calling to SagaStepExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*SagaStepExecutionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &SagaStepExecutionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for SagaStepExecution.
-func (c *SagaStepExecutionClient) Update() *SagaStepExecutionUpdate {
-	mutation := newSagaStepExecutionMutation(c.config, OpUpdate)
-	return &SagaStepExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *SagaStepExecutionClient) UpdateOne(sse *SagaStepExecution) *SagaStepExecutionUpdateOne {
-	mutation := newSagaStepExecutionMutation(c.config, OpUpdateOne, withSagaStepExecution(sse))
-	return &SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *SagaStepExecutionClient) UpdateOneID(id string) *SagaStepExecutionUpdateOne {
-	mutation := newSagaStepExecutionMutation(c.config, OpUpdateOne, withSagaStepExecutionID(id))
-	return &SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for SagaStepExecution.
-func (c *SagaStepExecutionClient) Delete() *SagaStepExecutionDelete {
-	mutation := newSagaStepExecutionMutation(c.config, OpDelete)
-	return &SagaStepExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *SagaStepExecutionClient) DeleteOne(sse *SagaStepExecution) *SagaStepExecutionDeleteOne {
-	return c.DeleteOneID(sse.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SagaStepExecutionClient) DeleteOneID(id string) *SagaStepExecutionDeleteOne {
-	builder := c.Delete().Where(sagastepexecution.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &SagaStepExecutionDeleteOne{builder}
-}
-
-// Query returns a query builder for SagaStepExecution.
-func (c *SagaStepExecutionClient) Query() *SagaStepExecutionQuery {
-	return &SagaStepExecutionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeSagaStepExecution},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a SagaStepExecution entity by its id.
-func (c *SagaStepExecutionClient) Get(ctx context.Context, id string) (*SagaStepExecution, error) {
-	return c.Query().Where(sagastepexecution.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *SagaStepExecutionClient) GetX(ctx context.Context, id string) *SagaStepExecution {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QuerySagaExecution queries the saga_execution edge of a SagaStepExecution.
-func (c *SagaStepExecutionClient) QuerySagaExecution(sse *SagaStepExecution) *SagaExecutionQuery {
-	query := (&SagaExecutionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := sse.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(sagastepexecution.Table, sagastepexecution.FieldID, id),
-			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, sagastepexecution.SagaExecutionTable, sagastepexecution.SagaExecutionColumn),
-		)
-		fromV = sqlgraph.Neighbors(sse.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *SagaStepExecutionClient) Hooks() []Hook {
-	return c.hooks.SagaStepExecution
-}
-
-// Interceptors returns the client interceptors.
-func (c *SagaStepExecutionClient) Interceptors() []Interceptor {
-	return c.inters.SagaStepExecution
-}
-
-func (c *SagaStepExecutionClient) mutate(ctx context.Context, m *SagaStepExecutionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&SagaStepExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&SagaStepExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&SagaStepExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&SagaStepExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown SagaStepExecution mutation op: %q", m.Op())
 	}
 }
 
@@ -2230,12 +2057,12 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 type (
 	hooks struct {
 		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
-		Saga, SagaExecution, SagaStepExecution, SideEffect, SideEffectExecution,
-		Signal, Workflow, WorkflowExecution []ent.Hook
+		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, Workflow,
+		WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
-		Saga, SagaExecution, SagaStepExecution, SideEffect, SideEffectExecution,
-		Signal, Workflow, WorkflowExecution []ent.Interceptor
+		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, Workflow,
+		WorkflowExecution []ent.Interceptor
 	}
 )

@@ -11,7 +11,6 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
@@ -88,10 +87,6 @@ func init() {
 	run.DefaultCreatedAt = runDescCreatedAt.Default.(func() time.Time)
 	sagaFields := schema.Saga{}.Fields()
 	_ = sagaFields
-	// sagaDescName is the schema descriptor for name field.
-	sagaDescName := sagaFields[1].Descriptor()
-	// saga.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	saga.NameValidator = sagaDescName.Validators[0].(func(string) error)
 	// sagaDescStepID is the schema descriptor for step_id field.
 	sagaDescStepID := sagaFields[2].Descriptor()
 	// saga.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
@@ -100,46 +95,26 @@ func init() {
 	sagaDescCreatedAt := sagaFields[6].Descriptor()
 	// saga.DefaultCreatedAt holds the default value on creation for the created_at field.
 	saga.DefaultCreatedAt = sagaDescCreatedAt.Default.(func() time.Time)
+	// sagaDescUpdatedAt is the schema descriptor for updated_at field.
+	sagaDescUpdatedAt := sagaFields[7].Descriptor()
+	// saga.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	saga.DefaultUpdatedAt = sagaDescUpdatedAt.Default.(func() time.Time)
+	// saga.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	saga.UpdateDefaultUpdatedAt = sagaDescUpdatedAt.UpdateDefault.(func() time.Time)
 	sagaexecutionFields := schema.SagaExecution{}.Fields()
 	_ = sagaexecutionFields
-	// sagaexecutionDescAttempt is the schema descriptor for attempt field.
-	sagaexecutionDescAttempt := sagaexecutionFields[3].Descriptor()
-	// sagaexecution.DefaultAttempt holds the default value on creation for the attempt field.
-	sagaexecution.DefaultAttempt = sagaexecutionDescAttempt.Default.(int)
+	// sagaexecutionDescHandlerName is the schema descriptor for handler_name field.
+	sagaexecutionDescHandlerName := sagaexecutionFields[1].Descriptor()
+	// sagaexecution.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
+	sagaexecution.HandlerNameValidator = sagaexecutionDescHandlerName.Validators[0].(func(string) error)
+	// sagaexecutionDescSequence is the schema descriptor for sequence field.
+	sagaexecutionDescSequence := sagaexecutionFields[4].Descriptor()
+	// sagaexecution.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	sagaexecution.SequenceValidator = sagaexecutionDescSequence.Validators[0].(func(int) error)
 	// sagaexecutionDescStartedAt is the schema descriptor for started_at field.
-	sagaexecutionDescStartedAt := sagaexecutionFields[5].Descriptor()
+	sagaexecutionDescStartedAt := sagaexecutionFields[6].Descriptor()
 	// sagaexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	sagaexecution.DefaultStartedAt = sagaexecutionDescStartedAt.Default.(func() time.Time)
-	// sagaexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	sagaexecutionDescUpdatedAt := sagaexecutionFields[6].Descriptor()
-	// sagaexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	sagaexecution.DefaultUpdatedAt = sagaexecutionDescUpdatedAt.Default.(func() time.Time)
-	// sagaexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	sagaexecution.UpdateDefaultUpdatedAt = sagaexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
-	sagastepexecutionFields := schema.SagaStepExecution{}.Fields()
-	_ = sagastepexecutionFields
-	// sagastepexecutionDescHandlerName is the schema descriptor for handler_name field.
-	sagastepexecutionDescHandlerName := sagastepexecutionFields[1].Descriptor()
-	// sagastepexecution.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
-	sagastepexecution.HandlerNameValidator = sagastepexecutionDescHandlerName.Validators[0].(func(string) error)
-	// sagastepexecutionDescSequence is the schema descriptor for sequence field.
-	sagastepexecutionDescSequence := sagastepexecutionFields[4].Descriptor()
-	// sagastepexecution.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
-	sagastepexecution.SequenceValidator = sagastepexecutionDescSequence.Validators[0].(func(int) error)
-	// sagastepexecutionDescAttempt is the schema descriptor for attempt field.
-	sagastepexecutionDescAttempt := sagastepexecutionFields[5].Descriptor()
-	// sagastepexecution.DefaultAttempt holds the default value on creation for the attempt field.
-	sagastepexecution.DefaultAttempt = sagastepexecutionDescAttempt.Default.(int)
-	// sagastepexecutionDescStartedAt is the schema descriptor for started_at field.
-	sagastepexecutionDescStartedAt := sagastepexecutionFields[8].Descriptor()
-	// sagastepexecution.DefaultStartedAt holds the default value on creation for the started_at field.
-	sagastepexecution.DefaultStartedAt = sagastepexecutionDescStartedAt.Default.(func() time.Time)
-	// sagastepexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	sagastepexecutionDescUpdatedAt := sagastepexecutionFields[9].Descriptor()
-	// sagastepexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	sagastepexecution.DefaultUpdatedAt = sagastepexecutionDescUpdatedAt.Default.(func() time.Time)
-	// sagastepexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	sagastepexecution.UpdateDefaultUpdatedAt = sagastepexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	sideeffectFields := schema.SideEffect{}.Fields()
 	_ = sideeffectFields
 	// sideeffectDescIdentity is the schema descriptor for identity field.

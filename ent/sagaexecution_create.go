@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/sagastepexecution"
 )
 
 // SagaExecutionCreate is the builder for creating a SagaExecution entity.
@@ -22,9 +21,15 @@ type SagaExecutionCreate struct {
 	hooks    []Hook
 }
 
-// SetRunID sets the "run_id" field.
-func (sec *SagaExecutionCreate) SetRunID(s string) *SagaExecutionCreate {
-	sec.mutation.SetRunID(s)
+// SetHandlerName sets the "handler_name" field.
+func (sec *SagaExecutionCreate) SetHandlerName(s string) *SagaExecutionCreate {
+	sec.mutation.SetHandlerName(s)
+	return sec
+}
+
+// SetStepType sets the "step_type" field.
+func (sec *SagaExecutionCreate) SetStepType(st sagaexecution.StepType) *SagaExecutionCreate {
+	sec.mutation.SetStepType(st)
 	return sec
 }
 
@@ -42,23 +47,23 @@ func (sec *SagaExecutionCreate) SetNillableStatus(s *sagaexecution.Status) *Saga
 	return sec
 }
 
-// SetAttempt sets the "attempt" field.
-func (sec *SagaExecutionCreate) SetAttempt(i int) *SagaExecutionCreate {
-	sec.mutation.SetAttempt(i)
+// SetSequence sets the "sequence" field.
+func (sec *SagaExecutionCreate) SetSequence(i int) *SagaExecutionCreate {
+	sec.mutation.SetSequence(i)
 	return sec
 }
 
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (sec *SagaExecutionCreate) SetNillableAttempt(i *int) *SagaExecutionCreate {
-	if i != nil {
-		sec.SetAttempt(*i)
+// SetError sets the "error" field.
+func (sec *SagaExecutionCreate) SetError(s string) *SagaExecutionCreate {
+	sec.mutation.SetError(s)
+	return sec
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (sec *SagaExecutionCreate) SetNillableError(s *string) *SagaExecutionCreate {
+	if s != nil {
+		sec.SetError(*s)
 	}
-	return sec
-}
-
-// SetOutput sets the "output" field.
-func (sec *SagaExecutionCreate) SetOutput(i []interface{}) *SagaExecutionCreate {
-	sec.mutation.SetOutput(i)
 	return sec
 }
 
@@ -76,16 +81,16 @@ func (sec *SagaExecutionCreate) SetNillableStartedAt(t *time.Time) *SagaExecutio
 	return sec
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (sec *SagaExecutionCreate) SetUpdatedAt(t time.Time) *SagaExecutionCreate {
-	sec.mutation.SetUpdatedAt(t)
+// SetCompletedAt sets the "completed_at" field.
+func (sec *SagaExecutionCreate) SetCompletedAt(t time.Time) *SagaExecutionCreate {
+	sec.mutation.SetCompletedAt(t)
 	return sec
 }
 
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (sec *SagaExecutionCreate) SetNillableUpdatedAt(t *time.Time) *SagaExecutionCreate {
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (sec *SagaExecutionCreate) SetNillableCompletedAt(t *time.Time) *SagaExecutionCreate {
 	if t != nil {
-		sec.SetUpdatedAt(*t)
+		sec.SetCompletedAt(*t)
 	}
 	return sec
 }
@@ -105,21 +110,6 @@ func (sec *SagaExecutionCreate) SetSagaID(id string) *SagaExecutionCreate {
 // SetSaga sets the "saga" edge to the Saga entity.
 func (sec *SagaExecutionCreate) SetSaga(s *Saga) *SagaExecutionCreate {
 	return sec.SetSagaID(s.ID)
-}
-
-// AddStepIDs adds the "steps" edge to the SagaStepExecution entity by IDs.
-func (sec *SagaExecutionCreate) AddStepIDs(ids ...string) *SagaExecutionCreate {
-	sec.mutation.AddStepIDs(ids...)
-	return sec
-}
-
-// AddSteps adds the "steps" edges to the SagaStepExecution entity.
-func (sec *SagaExecutionCreate) AddSteps(s ...*SagaStepExecution) *SagaExecutionCreate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
-	}
-	return sec.AddStepIDs(ids...)
 }
 
 // Mutation returns the SagaExecutionMutation object of the builder.
@@ -161,24 +151,29 @@ func (sec *SagaExecutionCreate) defaults() {
 		v := sagaexecution.DefaultStatus
 		sec.mutation.SetStatus(v)
 	}
-	if _, ok := sec.mutation.Attempt(); !ok {
-		v := sagaexecution.DefaultAttempt
-		sec.mutation.SetAttempt(v)
-	}
 	if _, ok := sec.mutation.StartedAt(); !ok {
 		v := sagaexecution.DefaultStartedAt()
 		sec.mutation.SetStartedAt(v)
-	}
-	if _, ok := sec.mutation.UpdatedAt(); !ok {
-		v := sagaexecution.DefaultUpdatedAt()
-		sec.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (sec *SagaExecutionCreate) check() error {
-	if _, ok := sec.mutation.RunID(); !ok {
-		return &ValidationError{Name: "run_id", err: errors.New(`ent: missing required field "SagaExecution.run_id"`)}
+	if _, ok := sec.mutation.HandlerName(); !ok {
+		return &ValidationError{Name: "handler_name", err: errors.New(`ent: missing required field "SagaExecution.handler_name"`)}
+	}
+	if v, ok := sec.mutation.HandlerName(); ok {
+		if err := sagaexecution.HandlerNameValidator(v); err != nil {
+			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.handler_name": %w`, err)}
+		}
+	}
+	if _, ok := sec.mutation.StepType(); !ok {
+		return &ValidationError{Name: "step_type", err: errors.New(`ent: missing required field "SagaExecution.step_type"`)}
+	}
+	if v, ok := sec.mutation.StepType(); ok {
+		if err := sagaexecution.StepTypeValidator(v); err != nil {
+			return &ValidationError{Name: "step_type", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.step_type": %w`, err)}
+		}
 	}
 	if _, ok := sec.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SagaExecution.status"`)}
@@ -188,14 +183,16 @@ func (sec *SagaExecutionCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
 		}
 	}
-	if _, ok := sec.mutation.Attempt(); !ok {
-		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "SagaExecution.attempt"`)}
+	if _, ok := sec.mutation.Sequence(); !ok {
+		return &ValidationError{Name: "sequence", err: errors.New(`ent: missing required field "SagaExecution.sequence"`)}
+	}
+	if v, ok := sec.mutation.Sequence(); ok {
+		if err := sagaexecution.SequenceValidator(v); err != nil {
+			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.sequence": %w`, err)}
+		}
 	}
 	if _, ok := sec.mutation.StartedAt(); !ok {
 		return &ValidationError{Name: "started_at", err: errors.New(`ent: missing required field "SagaExecution.started_at"`)}
-	}
-	if _, ok := sec.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SagaExecution.updated_at"`)}
 	}
 	if len(sec.mutation.SagaIDs()) == 0 {
 		return &ValidationError{Name: "saga", err: errors.New(`ent: missing required edge "SagaExecution.saga"`)}
@@ -235,29 +232,33 @@ func (sec *SagaExecutionCreate) createSpec() (*SagaExecution, *sqlgraph.CreateSp
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := sec.mutation.RunID(); ok {
-		_spec.SetField(sagaexecution.FieldRunID, field.TypeString, value)
-		_node.RunID = value
+	if value, ok := sec.mutation.HandlerName(); ok {
+		_spec.SetField(sagaexecution.FieldHandlerName, field.TypeString, value)
+		_node.HandlerName = value
+	}
+	if value, ok := sec.mutation.StepType(); ok {
+		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
+		_node.StepType = value
 	}
 	if value, ok := sec.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
 	}
-	if value, ok := sec.mutation.Attempt(); ok {
-		_spec.SetField(sagaexecution.FieldAttempt, field.TypeInt, value)
-		_node.Attempt = value
+	if value, ok := sec.mutation.Sequence(); ok {
+		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)
+		_node.Sequence = value
 	}
-	if value, ok := sec.mutation.Output(); ok {
-		_spec.SetField(sagaexecution.FieldOutput, field.TypeJSON, value)
-		_node.Output = value
+	if value, ok := sec.mutation.Error(); ok {
+		_spec.SetField(sagaexecution.FieldError, field.TypeString, value)
+		_node.Error = value
 	}
 	if value, ok := sec.mutation.StartedAt(); ok {
 		_spec.SetField(sagaexecution.FieldStartedAt, field.TypeTime, value)
 		_node.StartedAt = value
 	}
-	if value, ok := sec.mutation.UpdatedAt(); ok {
-		_spec.SetField(sagaexecution.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
+	if value, ok := sec.mutation.CompletedAt(); ok {
+		_spec.SetField(sagaexecution.FieldCompletedAt, field.TypeTime, value)
+		_node.CompletedAt = value
 	}
 	if nodes := sec.mutation.SagaIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -273,23 +274,7 @@ func (sec *SagaExecutionCreate) createSpec() (*SagaExecution, *sqlgraph.CreateSp
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.saga_executions = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := sec.mutation.StepsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   sagaexecution.StepsTable,
-			Columns: []string{sagaexecution.StepsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(sagastepexecution.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
+		_node.saga_steps = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

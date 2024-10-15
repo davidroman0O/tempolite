@@ -26,8 +26,6 @@ type Tx struct {
 	Saga *SagaClient
 	// SagaExecution is the client for interacting with the SagaExecution builders.
 	SagaExecution *SagaExecutionClient
-	// SagaStepExecution is the client for interacting with the SagaStepExecution builders.
-	SagaStepExecution *SagaStepExecutionClient
 	// SideEffect is the client for interacting with the SideEffect builders.
 	SideEffect *SideEffectClient
 	// SideEffectExecution is the client for interacting with the SideEffectExecution builders.
@@ -176,7 +174,6 @@ func (tx *Tx) init() {
 	tx.Run = NewRunClient(tx.config)
 	tx.Saga = NewSagaClient(tx.config)
 	tx.SagaExecution = NewSagaExecutionClient(tx.config)
-	tx.SagaStepExecution = NewSagaStepExecutionClient(tx.config)
 	tx.SideEffect = NewSideEffectClient(tx.config)
 	tx.SideEffectExecution = NewSideEffectExecutionClient(tx.config)
 	tx.Signal = NewSignalClient(tx.config)

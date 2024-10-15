@@ -80,11 +80,5 @@ func TestSaga(t *testing.T) {
 		t.Error("Saga was not stored in Tempolite")
 	}
 
-	// Verify the saga ID format
-	expectedSagaID := tp.generateSagaID(workflowContext, "saga-step")
-	if sagaInfo.SagaID != expectedSagaID {
-		t.Errorf("Expected saga ID %s, got %s", expectedSagaID, sagaInfo.SagaID)
-	}
-
 	/// Yea i think that looks right!
 }

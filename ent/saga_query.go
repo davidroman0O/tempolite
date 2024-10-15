@@ -20,11 +20,11 @@ import (
 // SagaQuery is the builder for querying Saga entities.
 type SagaQuery struct {
 	config
-	ctx            *QueryContext
-	order          []saga.OrderOption
-	inters         []Interceptor
-	predicates     []predicate.Saga
-	withExecutions *SagaExecutionQuery
+	ctx        *QueryContext
+	order      []saga.OrderOption
+	inters     []Interceptor
+	predicates []predicate.Saga
+	withSteps  *SagaExecutionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -61,8 +61,8 @@ func (sq *SagaQuery) Order(o ...saga.OrderOption) *SagaQuery {
 	return sq
 }
 
-// QueryExecutions chains the current query on the "executions" edge.
-func (sq *SagaQuery) QueryExecutions() *SagaExecutionQuery {
+// QuerySteps chains the current query on the "steps" edge.
+func (sq *SagaQuery) QuerySteps() *SagaExecutionQuery {
 	query := (&SagaExecutionClient{config: sq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := sq.prepareQuery(ctx); err != nil {
@@ -75,7 +75,7 @@ func (sq *SagaQuery) QueryExecutions() *SagaExecutionQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(saga.Table, saga.FieldID, selector),
 			sqlgraph.To(sagaexecution.Table, sagaexecution.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, saga.ExecutionsTable, saga.ExecutionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, saga.StepsTable, saga.StepsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
 		return fromU, nil
@@ -270,26 +270,26 @@ func (sq *SagaQuery) Clone() *SagaQuery {
 		return nil
 	}
 	return &SagaQuery{
-		config:         sq.config,
-		ctx:            sq.ctx.Clone(),
-		order:          append([]saga.OrderOption{}, sq.order...),
-		inters:         append([]Interceptor{}, sq.inters...),
-		predicates:     append([]predicate.Saga{}, sq.predicates...),
-		withExecutions: sq.withExecutions.Clone(),
+		config:     sq.config,
+		ctx:        sq.ctx.Clone(),
+		order:      append([]saga.OrderOption{}, sq.order...),
+		inters:     append([]Interceptor{}, sq.inters...),
+		predicates: append([]predicate.Saga{}, sq.predicates...),
+		withSteps:  sq.withSteps.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
 	}
 }
 
-// WithExecutions tells the query-builder to eager-load the nodes that are connected to
-// the "executions" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SagaQuery) WithExecutions(opts ...func(*SagaExecutionQuery)) *SagaQuery {
+// WithSteps tells the query-builder to eager-load the nodes that are connected to
+// the "steps" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SagaQuery) WithSteps(opts ...func(*SagaExecutionQuery)) *SagaQuery {
 	query := (&SagaExecutionClient{config: sq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withExecutions = query
+	sq.withSteps = query
 	return sq
 }
 
@@ -299,12 +299,12 @@ func (sq *SagaQuery) WithExecutions(opts ...func(*SagaExecutionQuery)) *SagaQuer
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		RunID string `json:"run_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Saga.Query().
-//		GroupBy(saga.FieldName).
+//		GroupBy(saga.FieldRunID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (sq *SagaQuery) GroupBy(field string, fields ...string) *SagaGroupBy {
@@ -322,11 +322,11 @@ func (sq *SagaQuery) GroupBy(field string, fields ...string) *SagaGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		RunID string `json:"run_id,omitempty"`
 //	}
 //
 //	client.Saga.Query().
-//		Select(saga.FieldName).
+//		Select(saga.FieldRunID).
 //		Scan(ctx, &v)
 func (sq *SagaQuery) Select(fields ...string) *SagaSelect {
 	sq.ctx.Fields = append(sq.ctx.Fields, fields...)
@@ -372,7 +372,7 @@ func (sq *SagaQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Saga, e
 		nodes       = []*Saga{}
 		_spec       = sq.querySpec()
 		loadedTypes = [1]bool{
-			sq.withExecutions != nil,
+			sq.withSteps != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -393,17 +393,17 @@ func (sq *SagaQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Saga, e
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := sq.withExecutions; query != nil {
-		if err := sq.loadExecutions(ctx, query, nodes,
-			func(n *Saga) { n.Edges.Executions = []*SagaExecution{} },
-			func(n *Saga, e *SagaExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
+	if query := sq.withSteps; query != nil {
+		if err := sq.loadSteps(ctx, query, nodes,
+			func(n *Saga) { n.Edges.Steps = []*SagaExecution{} },
+			func(n *Saga, e *SagaExecution) { n.Edges.Steps = append(n.Edges.Steps, e) }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (sq *SagaQuery) loadExecutions(ctx context.Context, query *SagaExecutionQuery, nodes []*Saga, init func(*Saga), assign func(*Saga, *SagaExecution)) error {
+func (sq *SagaQuery) loadSteps(ctx context.Context, query *SagaExecutionQuery, nodes []*Saga, init func(*Saga), assign func(*Saga, *SagaExecution)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Saga)
 	for i := range nodes {
@@ -415,20 +415,20 @@ func (sq *SagaQuery) loadExecutions(ctx context.Context, query *SagaExecutionQue
 	}
 	query.withFKs = true
 	query.Where(predicate.SagaExecution(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(saga.ExecutionsColumn), fks...))
+		s.Where(sql.InValues(s.C(saga.StepsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.saga_executions
+		fk := n.saga_steps
 		if fk == nil {
-			return fmt.Errorf(`foreign-key "saga_executions" is nil for node %v`, n.ID)
+			return fmt.Errorf(`foreign-key "saga_steps" is nil for node %v`, n.ID)
 		}
 		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "saga_executions" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "saga_steps" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

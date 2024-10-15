@@ -27,9 +27,6 @@ type Saga func(*sql.Selector)
 // SagaExecution is the predicate function for sagaexecution builders.
 type SagaExecution func(*sql.Selector)
 
-// SagaStepExecution is the predicate function for sagastepexecution builders.
-type SagaStepExecution func(*sql.Selector)
-
 // SideEffect is the predicate function for sideeffect builders.
 type SideEffect func(*sql.Selector)
 
