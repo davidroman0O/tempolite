@@ -977,6 +977,27 @@ func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, stepID T, si
 	return tp.enqueueSubSideEffect(ctx, stepID, handlerIdentity)
 }
 
+func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) *SagaInfo[T] {
+	id, err := tp.enqueueSaga(ctx, stepID, sagaID, saga)
+	return tp.getSaga(id, err)
+}
+
+// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
+// Saga only accepts one type of input
+func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) (SagaID, error) {
+	// todo: implement
+	return sagaID, nil
+}
+
+func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
+	// todo: implement
+	return &SagaInfo[T]{
+		tp:     tp,
+		SagaID: id,
+		err:    err,
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
@@ -997,27 +1018,6 @@ func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) (string, error) {
 
 func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) (string, error) {
 	return "", nil
-}
-
-func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) *SagaInfo[T] {
-	id, err := tp.enqueueSaga(ctx, stepID, sagaID, saga)
-	return tp.getSaga(id, err)
-}
-
-// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
-// Saga only accepts one type of input
-func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) (SagaID, error) {
-	// todo: implement
-	return sagaID, nil
-}
-
-func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
-	// todo: implement
-	return &SagaInfo[T]{
-		tp:     tp,
-		SagaID: id,
-		err:    err,
-	}
 }
 
 func (tp *Tempolite[T]) ProduceSignal(id string) chan interface{} {
