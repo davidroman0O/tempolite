@@ -42,7 +42,9 @@ func ActivityB(ctx tempolite.ActivityContext[string]) error {
 
 func main() {
 	ctx := context.Background()
-	tp, err := tempolite.New[string](ctx)
+	tp, err := tempolite.New[string](
+		ctx,
+	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}

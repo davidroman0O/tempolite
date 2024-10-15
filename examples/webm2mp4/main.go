@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/davidroman0O/go-tempolite"
 )
@@ -106,15 +107,22 @@ func CheckDiskOutputFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) e
 
 func Transcoding(ctx tempolite.ActivityContext[string], task Webm2Mp4) error {
 
-	cmd := exec.Command("ffmpeg", "-i", task.InputFile, "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-c:a", "aac", "-b:a", "192k", task.OutputFile)
+	timeout := time.NewTimer(time.Minute)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	select {
+	case <-timeout.C:
+		return fmt.Errorf("transcoding timed out")
+	default:
+		cmd := exec.Command("ffmpeg", "-i", task.InputFile, "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-c:a", "aac", "-b:a", "192k", task.OutputFile)
 
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error during conversion: %v\n", err)
-		return err
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		err := cmd.Run()
+		if err != nil {
+			fmt.Printf("Error during conversion: %v\n", err)
+			return err
+		}
 	}
 
 	return nil
@@ -138,7 +146,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	tp, err := tempolite.New[string](ctx)
+	tp, err := tempolite.New[string](
+		ctx,
+		tempolite.WithPath("./db/webm2mp4.db"),
+	)
 
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)

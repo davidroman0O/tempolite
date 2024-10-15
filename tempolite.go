@@ -29,6 +29,14 @@ import (
 	dbSQL "database/sql"
 )
 
+/// TODO: change the registry functions
+/// - register structs with directly a pointer of the struct, we should guarantee will destroy that pointer
+/// - I don't want to see that AsXXX functions anymore
+///
+/// TODO: change enqueue functions, i don't want to see As[T] functions anymore, you either put the function or an instance of the struct
+///
+/// In documentation warn that struct activities need a particular care since the developer might introduce even more non-deteministic code, it should be used for struct that hold a client/api but not a value what might change the output given the same inputs since it activities won't be replayed if sucessful.
+
 // Trade-off of Tempolite vs Temporal
 // Supporting the same similar concepts but now the exact similar features while having less time and resources implies that knowing how Workflows/Activities/Sideffect are behaving in a deterministic and non-deterministic environment, it is crucial
 // to assign some kind of identifying value to each of the calls so the whole system can works with minimum overhead and just be reliable and predictable. For now it should works for sqlite, but one day... i want the same with no db.
@@ -36,32 +44,45 @@ type Identifier interface {
 	~string | ~int
 }
 
+// TODO: to be renamed as tempoliteEngine since it will be used to rotate/roll new databases when its database size is too big
 type Tempolite[T Identifier] struct {
 	db     *dbSQL.DB
 	client *ent.Client
 
-	// has to be pre-registered
-	workflows  sync.Map
-	activities sync.Map
+	/// TODO: I should make a "register" instance that we can clone to create another instance of Tempolite with the same configuration when the size of the database is too big so we can automatically which new workflows/activities/sideeffects/saga to the new instance
 
-	sagas        sync.Map
-	sagaBuilders sync.Map
+	// Workflows are pre-registered
+	// Deterministic function that should be replayed exactly the same way if successful without triggering code since it will have only the results of the previous execution
+	workflows                      sync.Map
+	workflowPool                   *retrypool.Pool[*workflowTask[T]]
+	schedulerExecutionWorkflowDone chan struct{}
 
-	// dynamically cached
+	// Activities are pre-registered
+	// Un-deterministic function
+	activities                     sync.Map
+	activityPool                   *retrypool.Pool[*activityTask[T]]
+	schedulerExecutionActivityDone chan struct{}
+
+	// SideEffects are dynamically cached
+	// You have to use side effects to guide the flow of a workflow
+	// Help to manage un-deterministic code within a workflow
 	sideEffects             sync.Map
 	sideEffectPool          *retrypool.Pool[*sideEffectTask[T]]
 	schedulerSideEffectDone chan struct{}
 
+	// Saga are dynamically cached
+	// Simplify the management of the Sagas, if we were to use Activities we would be subject to trickery to manage the flow
+	sagas                     sync.Map
+	transationctionPool       *retrypool.Pool[*transactionTask[T]]
+	compensationPool          *retrypool.Pool[*compensationTask[T]]
+	schedulerTransactionDone  chan struct{}
+	schedulerCompensationDone chan struct{}
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	workflowPool *retrypool.Pool[*workflowTask[T]]
-	activityPool *retrypool.Pool[*activityTask[T]]
-
-	schedulerExecutionWorkflowDone  chan struct{}
-	schedulerExecutionActivityDone  chan struct{}
-	schedulerSideEffectActivityDone chan struct{}
-
+	// Versioning system cache
+	// TODO: we should make an analysis at start to know which versions we could cache
 	versionCache sync.Map
 }
 
@@ -958,17 +979,17 @@ func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, stepID T, si
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (tp *Tempolite[T]) GetSaga(id string) (*SagaInfo[T], error) {
-	return tp.getSaga(id)
-}
-
 func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
-func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) (string, error) {
-	return "", nil
+func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) error {
+	return nil
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// STAND BY
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) (string, error) {
 	return "", nil
@@ -978,16 +999,25 @@ func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
 
-// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
-// Saga only accepts one type of input
-func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, input interface{}) (*SagaInfo[T], error) {
-	// todo: implement
-	return nil, nil
+func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) *SagaInfo[T] {
+	id, err := tp.enqueueSaga(ctx, stepID, sagaID, saga)
+	return tp.getSaga(id, err)
 }
 
-func (tp *Tempolite[T]) getSaga(id string) (*SagaInfo[T], error) {
+// TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
+// Saga only accepts one type of input
+func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaID SagaID, saga *SagaDefinition[T]) (SagaID, error) {
 	// todo: implement
-	return nil, nil
+	return sagaID, nil
+}
+
+func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
+	// todo: implement
+	return &SagaInfo[T]{
+		tp:     tp,
+		SagaID: id,
+		err:    err,
+	}
 }
 
 func (tp *Tempolite[T]) ProduceSignal(id string) chan interface{} {

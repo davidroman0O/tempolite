@@ -480,9 +480,9 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 }
 
 type SagaInfo[T Identifier] struct {
-	tp    *Tempolite[T]
-	ID    string
-	RunID string
+	tp     *Tempolite[T]
+	SagaID SagaID
+	err    error
 }
 
 func (i *SagaInfo[T]) Get() ([]interface{}, error) {
