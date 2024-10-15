@@ -368,6 +368,55 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 	}
 }
 
+// We want to make a chain reaction of transactions and compensations
+//
+// T1 --next--> T2 --next--> T3
+//
+//	  |             |
+//	compensate     compensate
+//	  |             |
+//	  v             v
+//	 C1 --next-->  C2 --next--> C1
+//
+// # Which mean
+//
+// Scenario 1: All Transactions Succeed
+// T1 --next--> T2 --next--> T3
+// (No compensations needed)
+//
+// Scenario 2: Failure at T3
+// T1 --next--> T2 --next--> T3
+//
+//	     |
+//	 [Failure]
+//	     |
+//	C2 <-- C1
+//
+// Scenario 3: Failure at T2
+// T1 --next--> T2
+//
+//	    |
+//	[Failure]
+//	    |
+//	   C1
+//
+// Scenario 4: Failure at T1
+// T1
+// |
+// [Failure]
+// (No compensations, since no successful transactions)
+//
+// # So the complete flow would look like that here
+//
+// T1 --next--> T2 --next--> T3
+//
+//	|             |             |
+//
+// compensate    compensate    compensate
+//
+//	 |             |             |
+//	 v             v             v
+//	C1 <--next-- C2 <--next-- C3
 func (tp *Tempolite[T]) schedulerExecutionSaga() {
 	defer close(tp.schedulerSagaDone)
 	for {
@@ -397,48 +446,77 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				transactionTasks := make([]*transactionTask[T], len(sagaDef.HandlerInfo.TransactionInfo))
 				compensationTasks := make([]*compensationTask[T], len(sagaDef.HandlerInfo.CompensationInfo))
 
-				// Prepare all transaction and compensation tasks
-				for i := range sagaDef.HandlerInfo.TransactionInfo {
-					transactionTasks[i] = &transactionTask[T]{
-						ctx:         TransactionContext[T]{},
-						sagaID:      sagaExecution.Edges.Saga.ID,
-						executionID: sagaExecution.ID,
-						stepIndex:   i,
-						handlerName: sagaDef.HandlerInfo.TransactionInfo[i].HandlerName,
-						isLast:      i == len(sagaDef.HandlerInfo.TransactionInfo)-1,
+				// Prepare all the transactions and compensation to be orchestrated in a chain reaction
+				{
+
+					var lastSuccessfulIndex = -1 // Initialize with -1 indicating no transactions have succeeded yet
+
+					// Prepare and link tasks
+					for i := 0; i < len(sagaDef.Steps); i++ {
+						transactionTasks[i] = &transactionTask[T]{
+							ctx:         TransactionContext[T]{},
+							sagaID:      sagaExecution.Edges.Saga.ID,
+							executionID: sagaExecution.ID,
+							stepIndex:   i,
+							handlerName: sagaDef.HandlerInfo.TransactionInfo[i].HandlerName,
+							isLast:      i == len(sagaDef.Steps)-1,
+						}
+
+						// Create compensation tasks for all steps
+						compensationTasks[i] = &compensationTask[T]{
+							ctx:         CompensationContext[T]{},
+							sagaID:      sagaExecution.Edges.Saga.ID,
+							executionID: sagaExecution.ID,
+							stepIndex:   i,
+							handlerName: sagaDef.HandlerInfo.CompensationInfo[i].HandlerName,
+							isLast:      i == 0,
+						}
+
+						// Link transaction to next transaction
+						if i < len(sagaDef.Steps)-1 {
+							nextIndex := i + 1
+							transactionTasks[i].next = func() error {
+								// Before moving to the next transaction, update the last successful index
+								lastSuccessfulIndex = i
+								return tp.transactionPool.Dispatch(transactionTasks[nextIndex])
+							}
+						} else {
+							// For the last transaction
+							transactionTasks[i].next = func() error {
+								// Update last successful index as this is the last transaction
+								lastSuccessfulIndex = i
+								return nil // No next transaction
+							}
+						}
+
+						// Link transaction to its compensation (will adjust this later)
 					}
 
-					compensationTasks[i] = &compensationTask[T]{
-						ctx:         CompensationContext[T]{},
-						sagaID:      sagaExecution.Edges.Saga.ID,
-						executionID: sagaExecution.ID,
-						stepIndex:   i,
-						handlerName: sagaDef.HandlerInfo.CompensationInfo[i].HandlerName,
-						isLast:      i == 0,
-					}
-				}
-
-				// Link tasks
-				for i := 0; i < len(transactionTasks); i++ {
-					if i < len(transactionTasks)-1 {
-						nextIndex := i + 1
-						transactionTasks[i].next = func() error {
-							return tp.transactionPool.Dispatch(transactionTasks[nextIndex])
+					// Adjust the compensate function after setting up the tasks
+					for i := 0; i < len(sagaDef.Steps); i++ {
+						transactionTasks[i].compensate = func() error {
+							if lastSuccessfulIndex >= 0 {
+								// Start compensation from the last successful transaction
+								return tp.compensationPool.Dispatch(compensationTasks[lastSuccessfulIndex])
+							}
+							// No compensation needed if no transactions succeeded
+							return nil
 						}
 					}
-					currentIndex := i
-					transactionTasks[i].compensate = func() error {
-						return tp.compensationPool.Dispatch(compensationTasks[currentIndex])
-					}
-				}
 
-				for i := len(compensationTasks) - 1; i >= 0; i-- {
-					if i > 0 {
-						nextIndex := i - 1
-						compensationTasks[i].next = func() error {
-							return tp.compensationPool.Dispatch(compensationTasks[nextIndex])
+					// Link compensation tasks in reverse order
+					for i := len(sagaDef.Steps) - 1; i >= 0; i-- {
+						if i > 0 {
+							prevIndex := i - 1
+							compensationTasks[i].next = func() error {
+								return tp.compensationPool.Dispatch(compensationTasks[prevIndex])
+							}
+						} else {
+							// Optionally, for the first compensation task, you might decide to loop back or end the chain
+							compensationTasks[i].next = nil
 						}
 					}
+
 				}
 
 				// Dispatch the first transaction task

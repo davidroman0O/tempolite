@@ -18,7 +18,7 @@ func (p testFailureSaga) Transaction(ctx TransactionContext[string]) (interface{
 
 func (p testFailureSaga) Compensation(ctx CompensationContext[string]) (interface{}, error) {
 	log.Println("Compensating for testFailureSaga")
-	return "PaymentCompensated", nil
+	return "FailureSaga", nil
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestSagaSimple$ .
