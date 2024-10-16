@@ -82,10 +82,6 @@ type Tempolite[T Identifier] struct {
 	compensationPool  *retrypool.Pool[*compensationTask[T]]
 	schedulerSagaDone chan struct{}
 
-	// Yield
-	workflowPauseChannels sync.Map
-	listenerDone          chan struct{}
-
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -189,7 +185,6 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		schedulerExecutionActivityDone: make(chan struct{}),
 		schedulerSideEffectDone:        make(chan struct{}),
 		schedulerSagaDone:              make(chan struct{}),
-		listenerDone:                   make(chan struct{}),
 	}
 
 	// Register components

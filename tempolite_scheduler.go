@@ -304,6 +304,12 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 						continue
 					}
 
+					if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+						// TODO: could be a problem if not really dispatched
+						log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
+						continue
+					}
+
 				} else {
 					log.Printf("scheduler: Workflow %s not found", pendingWorkflowExecution.Edges.Workflow.HandlerName)
 					continue
