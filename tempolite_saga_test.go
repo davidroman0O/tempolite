@@ -38,12 +38,13 @@ func TestSagaSimple(t *testing.T) {
 		Message string
 	}
 
+	failure := false
+
 	localWrkflw := func(ctx WorkflowContext[string], input int, msg workflowData) (int, error) {
 
 		sagaBuilder := NewSaga[string]()
 		sagaBuilder.AddStep(testOrderSaga{OrderID: "12345"})
 		sagaBuilder.AddStep(testPaymentSaga{OrderID: "12345"})
-		sagaBuilder.AddStep(testFailureSaga{OrderID: "12345"})
 		saga, err := sagaBuilder.Build()
 		if err != nil {
 			return 0, err
@@ -51,6 +52,11 @@ func TestSagaSimple(t *testing.T) {
 
 		if err := ctx.Saga("saga test", saga).Get(); err != nil {
 			return 0, err
+		}
+
+		if !failure {
+			failure = true
+			return 0, fmt.Errorf("testFailureSaga failed")
 		}
 
 		return 69, nil
