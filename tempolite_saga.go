@@ -38,7 +38,7 @@ func (b *SagaDefinitionBuilder[T]) AddStep(step SagaStep[T]) *SagaDefinitionBuil
 }
 
 // analyzeMethod helper function to create HandlerInfo for a method
-func analyzeMethod(method reflect.Method) (HandlerInfo, error) {
+func analyzeMethod(method reflect.Method, name string) (HandlerInfo, error) {
 	methodType := method.Type
 
 	if methodType.NumIn() < 2 {
@@ -59,9 +59,11 @@ func analyzeMethod(method reflect.Method) (HandlerInfo, error) {
 		returnKinds[i] = methodType.Out(i).Kind()
 	}
 
+	handlerName := fmt.Sprintf("%s.%s", name, method.Name)
+
 	return HandlerInfo{
-		HandlerName:     method.Name,
-		HandlerLongName: HandlerIdentity(fmt.Sprintf("%s.%s", methodType.In(0), method.Name)),
+		HandlerName:     handlerName,
+		HandlerLongName: HandlerIdentity(name),
 		Handler:         method.Func.Interface(),
 		ParamTypes:      paramTypes,
 		ParamsKinds:     paramKinds,
@@ -94,12 +96,12 @@ func (b *SagaDefinitionBuilder[T]) Build() (*SagaDefinition[T], error) {
 			return nil, fmt.Errorf("Compensation method not found for step %d", i)
 		}
 
-		transactionInfo, err := analyzeMethod(transactionMethod)
+		transactionInfo, err := analyzeMethod(transactionMethod, stepType.Name())
 		if err != nil {
 			return nil, fmt.Errorf("error analyzing Transaction method for step %d: %w", i, err)
 		}
 
-		compensationInfo, err := analyzeMethod(compensationMethod)
+		compensationInfo, err := analyzeMethod(compensationMethod, stepType.Name())
 		if err != nil {
 			return nil, fmt.Errorf("error analyzing Compensation method for step %d: %w", i, err)
 		}
