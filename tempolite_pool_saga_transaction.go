@@ -42,23 +42,31 @@ func (tp *Tempolite[T]) createTransactionPool() *retrypool.Pool[*transactionTask
 func (tp *Tempolite[T]) transactionOnSuccess(controller retrypool.WorkerController[*transactionTask[T]], workerID int, worker retrypool.Worker[*transactionTask[T]], task *retrypool.TaskWrapper[*transactionTask[T]]) {
 	log.Printf("Transaction step success: %d %s %s", workerID, task.Data().executionID, task.Data().handlerName)
 
-	_, err := tp.client.SagaExecution.UpdateOneID(task.Data().executionID).
+	_, err := tp.client.SagaExecution.
+		UpdateOneID(task.Data().executionID).
 		SetStatus(sagaexecution.StatusCompleted).
 		Save(tp.ctx)
 	if err != nil {
 		log.Printf("Failed to update saga execution status: %v", err)
+	} else {
+		log.Printf("Updated saga execution status to completed: %s", task.Data().executionID)
 	}
 
 	if task.Data().isLast {
-		_, err := tp.client.Saga.UpdateOneID(task.Data().sagaID).
+		_, err := tp.client.Saga.
+			UpdateOneID(task.Data().sagaID).
 			SetStatus(saga.StatusCompleted).
 			Save(tp.ctx)
 		if err != nil {
 			log.Printf("Failed to update saga status to completed: %v", err)
+		} else {
+			log.Printf("Updated saga status to completed: %s", task.Data().sagaID)
 		}
 	} else if task.Data().next != nil {
 		if err := task.Data().next(); err != nil {
 			log.Printf("Failed to dispatch next transaction task: %v", err)
+		} else {
+			log.Printf("Dispatched next transaction task: %s", task.Data().handlerName)
 		}
 	}
 }

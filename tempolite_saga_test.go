@@ -42,15 +42,15 @@ func TestSagaSimple(t *testing.T) {
 
 		sagaBuilder := NewSaga[string]()
 		sagaBuilder.AddStep(testOrderSaga{OrderID: "12345"})
-		sagaBuilder.AddStep(testPaymentSaga{OrderID: "12345"})
 		sagaBuilder.AddStep(testFailureSaga{OrderID: "12345"})
+		sagaBuilder.AddStep(testPaymentSaga{OrderID: "12345"})
 		saga, err := sagaBuilder.Build()
 		if err != nil {
-			t.Fatalf("Failed to build saga: %v", err)
+			return 0, err
 		}
 
 		if err := ctx.Saga("saga test", saga).Get(); err != nil {
-			t.Fatalf("EnqueueActivityFunc failed: %v", err)
+			return 0, err
 		}
 
 		return 69, nil

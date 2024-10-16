@@ -476,6 +476,22 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 						if i < len(sagaDef.Steps)-1 {
 							nextIndex := i + 1
 							transactionTasks[i].next = func() error {
+								log.Printf("scheduler: Dispatching next transaction task: %s", transactionTasks[nextIndex].handlerName)
+								var transactionExecution *ent.SagaExecution
+								if transactionExecution, err = tp.client.SagaExecution.Create().
+									SetID(uuid.NewString()).
+									SetStatus(sagaexecution.StatusRunning).
+									SetStepType(sagaexecution.StepTypeTransaction).
+									SetHandlerName(sagaDef.HandlerInfo.TransactionInfo[nextIndex].HandlerName).
+									SetSequence(nextIndex).
+									SetSaga(sagaExecution.Edges.Saga).
+									Save(tp.ctx); err != nil {
+									log.Printf("scheduler: Failed to create next transaction task: %v", err)
+									return err
+								}
+
+								transactionTasks[nextIndex].executionID = transactionExecution.ID
+
 								// Before moving to the next transaction, update the last successful index
 								lastSuccessfulIndex = i
 								return tp.transactionPool.Dispatch(transactionTasks[nextIndex])
@@ -496,6 +512,22 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 					for i := 0; i < len(sagaDef.Steps); i++ {
 						transactionTasks[i].compensate = func() error {
 							if lastSuccessfulIndex >= 0 {
+
+								var compensationExecution *ent.SagaExecution
+								if compensationExecution, err = tp.client.SagaExecution.Create().
+									SetID(uuid.NewString()).
+									SetStatus(sagaexecution.StatusRunning).
+									SetStepType(sagaexecution.StepTypeCompensation).
+									SetHandlerName(sagaDef.HandlerInfo.CompensationInfo[lastSuccessfulIndex].HandlerName).
+									SetSequence(lastSuccessfulIndex).
+									SetSaga(sagaExecution.Edges.Saga).
+									Save(tp.ctx); err != nil {
+									log.Printf("scheduler: Failed to create compensation task: %v", err)
+									return err
+								}
+
+								compensationTasks[lastSuccessfulIndex].executionID = compensationExecution.ID
+
 								// Start compensation from the last successful transaction
 								return tp.compensationPool.Dispatch(compensationTasks[lastSuccessfulIndex])
 							}
@@ -509,6 +541,22 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 						if i > 0 {
 							prevIndex := i - 1
 							compensationTasks[i].next = func() error {
+
+								var compensationExecution *ent.SagaExecution
+								if compensationExecution, err = tp.client.SagaExecution.Create().
+									SetID(uuid.NewString()).
+									SetStatus(sagaexecution.StatusRunning).
+									SetStepType(sagaexecution.StepTypeCompensation).
+									SetHandlerName(sagaDef.HandlerInfo.CompensationInfo[prevIndex].HandlerName).
+									SetSequence(prevIndex).
+									SetSaga(sagaExecution.Edges.Saga).
+									Save(tp.ctx); err != nil {
+									log.Printf("scheduler: Failed to create next compensation task: %v", err)
+									return err
+								}
+
+								compensationTasks[prevIndex].executionID = compensationExecution.ID
+
 								return tp.compensationPool.Dispatch(compensationTasks[prevIndex])
 							}
 						} else {
