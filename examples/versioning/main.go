@@ -103,20 +103,17 @@ func calculateTax(subtotal float64) float64 {
 func main() {
 	// Create a new Tempolite instance with a destructive option to reset the database
 	ctx := context.Background()
-	tp, err := tempolite.New[identifier](ctx)
+	tp, err := tempolite.New[identifier](
+		ctx,
+		tempolite.NewRegistry[identifier]().
+			Workflow(OrderWorkflow).
+			ActivityFunc(ActivityComputeTaxes).
+			Build(),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.RegisterActivityFunc(ActivityComputeTaxes); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	// Register the workflow
-	if err := tp.RegisterWorkflow(OrderWorkflow); err != nil {
-		log.Fatalf("Failed to register workflow: %v", err)
-	}
 
 	errOnPurpose.Store(true) // simulate an error in the activity
 
@@ -145,25 +142,18 @@ func main() {
 	fmt.Println("\n--- Updating workflow logic to include tax ---\n")
 
 	ctx = context.Background()
-	tp, err = tempolite.New[identifier](ctx)
+	tp, err = tempolite.New[identifier](
+		ctx,
+		tempolite.NewRegistry[identifier]().
+			Workflow(OrderWorkflow).
+			ActivityFunc(ActivityComputeTaxes).
+			ActivityFunc(ActivityComputeTotalWithTax).
+			Build(),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.RegisterActivityFunc(ActivityComputeTaxes); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	// new activity to support
-	if err := tp.RegisterActivityFunc(ActivityComputeTotalWithTax); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	// Register the workflow
-	if err := tp.RegisterWorkflow(OrderWorkflow); err != nil {
-		log.Fatalf("Failed to register workflow: %v", err)
-	}
 
 	panicActivity.Store(true) // simulate a panic in the activity
 

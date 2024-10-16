@@ -573,12 +573,6 @@ func (w WorkflowContext[T]) GetVersion(changeID string, minSupported, maxSupport
 	return version
 }
 
-// Since I don't want to hide any implementation, when the WorkflowInfo call Pause/Resume, the moment the Yield() is called, the workflow will be paused or resume if called Resume.
-func (w WorkflowContext[T]) Yield() error {
-	// todo: implement - could use ConsumerSignalChannel and ProducerSignalChannel behind the scene
-	return nil
-}
-
 func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], values ...any) error {
 	// todo: implement
 	return nil

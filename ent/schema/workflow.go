@@ -20,7 +20,7 @@ func (Workflow) Fields() []ent.Field {
 			Unique(),
 		field.String("step_id").NotEmpty(),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
+			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled").
 			Default("Pending"),
 		field.String("identity").
 			NotEmpty(),
@@ -29,6 +29,7 @@ func (Workflow) Fields() []ent.Field {
 		field.JSON("input", []interface{}{}),
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
+		field.Bool("is_paused").Default(false),
 		field.Time("timeout").
 			Optional(),
 		field.Time("created_at").

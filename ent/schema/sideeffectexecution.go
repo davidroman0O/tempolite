@@ -18,8 +18,6 @@ func (SideEffectExecution) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
-		field.String("run_id").
-			Unique(),
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed").
 			Default("Pending"),

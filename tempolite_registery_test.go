@@ -39,7 +39,8 @@ func (p testPaymentSaga) Compensation(ctx CompensationContext[string]) (interfac
 }
 
 func TestSaga(t *testing.T) {
-	tp, err := New[string](context.Background())
+
+	tp, err := New[string](context.Background(), NewRegistry[string]().Build())
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}

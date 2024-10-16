@@ -5942,7 +5942,6 @@ type SideEffectExecutionMutation struct {
 	op                 Op
 	typ                string
 	id                 *string
-	run_id             *string
 	status             *sideeffectexecution.Status
 	attempt            *int
 	addattempt         *int
@@ -6061,42 +6060,6 @@ func (m *SideEffectExecutionMutation) IDs(ctx context.Context) ([]string, error)
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetRunID sets the "run_id" field.
-func (m *SideEffectExecutionMutation) SetRunID(s string) {
-	m.run_id = &s
-}
-
-// RunID returns the value of the "run_id" field in the mutation.
-func (m *SideEffectExecutionMutation) RunID() (r string, exists bool) {
-	v := m.run_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRunID returns the old "run_id" field's value of the SideEffectExecution entity.
-// If the SideEffectExecution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionMutation) OldRunID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRunID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
-	}
-	return oldValue.RunID, nil
-}
-
-// ResetRunID resets all changes to the "run_id" field.
-func (m *SideEffectExecutionMutation) ResetRunID() {
-	m.run_id = nil
 }
 
 // SetStatus sets the "status" field.
@@ -6450,10 +6413,7 @@ func (m *SideEffectExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 7)
-	if m.run_id != nil {
-		fields = append(fields, sideeffectexecution.FieldRunID)
-	}
+	fields := make([]string, 0, 6)
 	if m.status != nil {
 		fields = append(fields, sideeffectexecution.FieldStatus)
 	}
@@ -6480,8 +6440,6 @@ func (m *SideEffectExecutionMutation) Fields() []string {
 // schema.
 func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case sideeffectexecution.FieldRunID:
-		return m.RunID()
 	case sideeffectexecution.FieldStatus:
 		return m.Status()
 	case sideeffectexecution.FieldAttempt:
@@ -6503,8 +6461,6 @@ func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case sideeffectexecution.FieldRunID:
-		return m.OldRunID(ctx)
 	case sideeffectexecution.FieldStatus:
 		return m.OldStatus(ctx)
 	case sideeffectexecution.FieldAttempt:
@@ -6526,13 +6482,6 @@ func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string)
 // type.
 func (m *SideEffectExecutionMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case sideeffectexecution.FieldRunID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRunID(v)
-		return nil
 	case sideeffectexecution.FieldStatus:
 		v, ok := value.(sideeffectexecution.Status)
 		if !ok {
@@ -6654,9 +6603,6 @@ func (m *SideEffectExecutionMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SideEffectExecutionMutation) ResetField(name string) error {
 	switch name {
-	case sideeffectexecution.FieldRunID:
-		m.ResetRunID()
-		return nil
 	case sideeffectexecution.FieldStatus:
 		m.ResetStatus()
 		return nil
@@ -7353,6 +7299,7 @@ type WorkflowMutation struct {
 	input             *[]interface{}
 	appendinput       []interface{}
 	retry_policy      *schema.RetryPolicy
+	is_paused         *bool
 	timeout           *time.Time
 	created_at        *time.Time
 	clearedFields     map[string]struct{}
@@ -7712,6 +7659,42 @@ func (m *WorkflowMutation) ResetRetryPolicy() {
 	delete(m.clearedFields, workflow.FieldRetryPolicy)
 }
 
+// SetIsPaused sets the "is_paused" field.
+func (m *WorkflowMutation) SetIsPaused(b bool) {
+	m.is_paused = &b
+}
+
+// IsPaused returns the value of the "is_paused" field in the mutation.
+func (m *WorkflowMutation) IsPaused() (r bool, exists bool) {
+	v := m.is_paused
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsPaused returns the old "is_paused" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldIsPaused(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsPaused is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsPaused requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsPaused: %w", err)
+	}
+	return oldValue.IsPaused, nil
+}
+
+// ResetIsPaused resets all changes to the "is_paused" field.
+func (m *WorkflowMutation) ResetIsPaused() {
+	m.is_paused = nil
+}
+
 // SetTimeout sets the "timeout" field.
 func (m *WorkflowMutation) SetTimeout(t time.Time) {
 	m.timeout = &t
@@ -7885,7 +7868,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.step_id != nil {
 		fields = append(fields, workflow.FieldStepID)
 	}
@@ -7903,6 +7886,9 @@ func (m *WorkflowMutation) Fields() []string {
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, workflow.FieldRetryPolicy)
+	}
+	if m.is_paused != nil {
+		fields = append(fields, workflow.FieldIsPaused)
 	}
 	if m.timeout != nil {
 		fields = append(fields, workflow.FieldTimeout)
@@ -7930,6 +7916,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.Input()
 	case workflow.FieldRetryPolicy:
 		return m.RetryPolicy()
+	case workflow.FieldIsPaused:
+		return m.IsPaused()
 	case workflow.FieldTimeout:
 		return m.Timeout()
 	case workflow.FieldCreatedAt:
@@ -7955,6 +7943,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldInput(ctx)
 	case workflow.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
+	case workflow.FieldIsPaused:
+		return m.OldIsPaused(ctx)
 	case workflow.FieldTimeout:
 		return m.OldTimeout(ctx)
 	case workflow.FieldCreatedAt:
@@ -8009,6 +7999,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRetryPolicy(v)
+		return nil
+	case workflow.FieldIsPaused:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsPaused(v)
 		return nil
 	case workflow.FieldTimeout:
 		v, ok := value.(time.Time)
@@ -8105,6 +8102,9 @@ func (m *WorkflowMutation) ResetField(name string) error {
 		return nil
 	case workflow.FieldRetryPolicy:
 		m.ResetRetryPolicy()
+		return nil
+	case workflow.FieldIsPaused:
+		m.ResetIsPaused()
 		return nil
 	case workflow.FieldTimeout:
 		m.ResetTimeout()

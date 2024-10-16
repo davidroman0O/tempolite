@@ -45,16 +45,20 @@ func TestWorkflowVersioning(t *testing.T) {
 		return result, nil
 	}
 
+	registery := NewRegistry[testIdentifier]().
+		Workflow(testWorkflow).
+		Build()
+
 	var changeFlag1 int32
 	var changeFlag2 bool
 
 	// First run with WithDestructive
-	tp, err := New[testIdentifier](context.Background(), WithPath(dbPath), WithDestructive())
+	tp, err := New[testIdentifier](context.Background(), registery, WithPath(dbPath), WithDestructive())
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.RegisterWorkflow(testWorkflow); err != nil {
+	if err := tp.registerWorkflow(testWorkflow); err != nil {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 
@@ -75,12 +79,12 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Second run, Change1 to version 1
-	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.RegisterWorkflow(testWorkflow); err != nil {
+	if err := tp.registerWorkflow(testWorkflow); err != nil {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 
@@ -102,12 +106,12 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Third run, Change1 to version 2
-	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.RegisterWorkflow(testWorkflow); err != nil {
+	if err := tp.registerWorkflow(testWorkflow); err != nil {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 
@@ -129,12 +133,12 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Fourth run, activate Change2
-	tp, err = New[testIdentifier](context.Background(), WithPath(dbPath))
+	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.RegisterWorkflow(testWorkflow); err != nil {
+	if err := tp.registerWorkflow(testWorkflow); err != nil {
 		t.Fatalf("Failed to register workflow: %v", err)
 	}
 

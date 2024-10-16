@@ -19,9 +19,9 @@ func (ExecutionRelationship) Fields() []ent.Field {
 		field.String("parent_id"),
 		field.String("child_id"),
 		field.Enum("parent_type").
-			Values("workflow", "activity", "saga", "side_effect"),
+			Values("workflow", "activity", "saga", "side_effect", "yield"),
 		field.Enum("child_type").
-			Values("workflow", "activity", "saga", "side_effect"),
+			Values("workflow", "activity", "saga", "side_effect", "yield"),
 		field.String("parent_step_id").NotEmpty(),
 		field.String("child_step_id").NotEmpty(),
 	}

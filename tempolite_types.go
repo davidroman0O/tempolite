@@ -50,6 +50,12 @@ func (s SagaID) String() string {
 	return string(s)
 }
 
+type YieldID string
+
+func (s YieldID) String() string {
+	return string(s)
+}
+
 type HandlerIdentity string
 
 type HandlerInfo struct {

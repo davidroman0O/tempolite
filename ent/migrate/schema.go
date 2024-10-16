@@ -60,8 +60,8 @@ var (
 		{Name: "child_entity_id", Type: field.TypeString},
 		{Name: "parent_id", Type: field.TypeString},
 		{Name: "child_id", Type: field.TypeString},
-		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
-		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect"}},
+		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield"}},
+		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield"}},
 		{Name: "parent_step_id", Type: field.TypeString},
 		{Name: "child_step_id", Type: field.TypeString},
 	}
@@ -191,7 +191,6 @@ var (
 	// SideEffectExecutionsColumns holds the columns for the "side_effect_executions" table.
 	SideEffectExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "run_id", Type: field.TypeString, Unique: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
@@ -208,7 +207,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_executions_side_effects_executions",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[8]},
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
 				RefColumns: []*schema.Column{SideEffectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -233,11 +232,12 @@ var (
 	WorkflowsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "step_id", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "is_paused", Type: field.TypeBool, Default: false},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}

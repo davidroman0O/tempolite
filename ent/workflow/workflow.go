@@ -27,6 +27,8 @@ const (
 	FieldInput = "input"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
 	FieldRetryPolicy = "retry_policy"
+	// FieldIsPaused holds the string denoting the is_paused field in the database.
+	FieldIsPaused = "is_paused"
 	// FieldTimeout holds the string denoting the timeout field in the database.
 	FieldTimeout = "timeout"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -53,6 +55,7 @@ var Columns = []string{
 	FieldHandlerName,
 	FieldInput,
 	FieldRetryPolicy,
+	FieldIsPaused,
 	FieldTimeout,
 	FieldCreatedAt,
 }
@@ -74,6 +77,8 @@ var (
 	IdentityValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
+	// DefaultIsPaused holds the default value on creation for the "is_paused" field.
+	DefaultIsPaused bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -90,7 +95,6 @@ const (
 	StatusRunning   Status = "Running"
 	StatusCompleted Status = "Completed"
 	StatusFailed    Status = "Failed"
-	StatusPaused    Status = "Paused"
 	StatusRetried   Status = "Retried"
 	StatusCancelled Status = "Cancelled"
 )
@@ -102,7 +106,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusRetried, StatusCancelled:
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusRetried, StatusCancelled:
 		return nil
 	default:
 		return fmt.Errorf("workflow: invalid enum value for status field: %q", s)
@@ -135,6 +139,11 @@ func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
 // ByHandlerName orders the results by the handler_name field.
 func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
+}
+
+// ByIsPaused orders the results by the is_paused field.
+func ByIsPaused(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsPaused, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

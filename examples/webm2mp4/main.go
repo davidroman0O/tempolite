@@ -148,31 +148,18 @@ func main() {
 	ctx := context.Background()
 	tp, err := tempolite.New[string](
 		ctx,
+		tempolite.NewRegistry[string]().
+			Workflow(Workflow).
+			ActivityFunc(Transcoding).
+			ActivityFunc(CheckDiskOutputFile).
+			ActivityFunc(CheckDiskInputFile).
+			ActivityFunc(DownloadFile).
+			Build(),
 		tempolite.WithPath("./db/webm2mp4.db"),
 	)
 
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(Transcoding); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(CheckDiskOutputFile); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(CheckDiskInputFile); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(DownloadFile); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterWorkflow(Workflow); err != nil {
-		log.Fatalf("Failed to register workflow: %v", err)
 	}
 
 	if err := tp.Workflow("webm2mp4", Workflow, Webm2Mp4{

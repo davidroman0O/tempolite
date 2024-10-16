@@ -136,15 +136,15 @@ func init() {
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()
 	_ = sideeffectexecutionFields
 	// sideeffectexecutionDescAttempt is the schema descriptor for attempt field.
-	sideeffectexecutionDescAttempt := sideeffectexecutionFields[3].Descriptor()
+	sideeffectexecutionDescAttempt := sideeffectexecutionFields[2].Descriptor()
 	// sideeffectexecution.DefaultAttempt holds the default value on creation for the attempt field.
 	sideeffectexecution.DefaultAttempt = sideeffectexecutionDescAttempt.Default.(int)
 	// sideeffectexecutionDescStartedAt is the schema descriptor for started_at field.
-	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[6].Descriptor()
+	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[5].Descriptor()
 	// sideeffectexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	sideeffectexecution.DefaultStartedAt = sideeffectexecutionDescStartedAt.Default.(func() time.Time)
 	// sideeffectexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[7].Descriptor()
+	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[6].Descriptor()
 	// sideeffectexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	sideeffectexecution.DefaultUpdatedAt = sideeffectexecutionDescUpdatedAt.Default.(func() time.Time)
 	// sideeffectexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -179,8 +179,12 @@ func init() {
 	workflowDescHandlerName := workflowFields[4].Descriptor()
 	// workflow.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	workflow.HandlerNameValidator = workflowDescHandlerName.Validators[0].(func(string) error)
+	// workflowDescIsPaused is the schema descriptor for is_paused field.
+	workflowDescIsPaused := workflowFields[7].Descriptor()
+	// workflow.DefaultIsPaused holds the default value on creation for the is_paused field.
+	workflow.DefaultIsPaused = workflowDescIsPaused.Default.(bool)
 	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[8].Descriptor()
+	workflowDescCreatedAt := workflowFields[9].Descriptor()
 	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()

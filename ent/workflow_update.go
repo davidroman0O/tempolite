@@ -119,6 +119,20 @@ func (wu *WorkflowUpdate) ClearRetryPolicy() *WorkflowUpdate {
 	return wu
 }
 
+// SetIsPaused sets the "is_paused" field.
+func (wu *WorkflowUpdate) SetIsPaused(b bool) *WorkflowUpdate {
+	wu.mutation.SetIsPaused(b)
+	return wu
+}
+
+// SetNillableIsPaused sets the "is_paused" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableIsPaused(b *bool) *WorkflowUpdate {
+	if b != nil {
+		wu.SetIsPaused(*b)
+	}
+	return wu
+}
+
 // SetTimeout sets the "timeout" field.
 func (wu *WorkflowUpdate) SetTimeout(t time.Time) *WorkflowUpdate {
 	wu.mutation.SetTimeout(t)
@@ -284,6 +298,9 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if wu.mutation.RetryPolicyCleared() {
 		_spec.ClearField(workflow.FieldRetryPolicy, field.TypeJSON)
 	}
+	if value, ok := wu.mutation.IsPaused(); ok {
+		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
+	}
 	if value, ok := wu.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)
 	}
@@ -443,6 +460,20 @@ func (wuo *WorkflowUpdateOne) SetNillableRetryPolicy(sp *schema.RetryPolicy) *Wo
 // ClearRetryPolicy clears the value of the "retry_policy" field.
 func (wuo *WorkflowUpdateOne) ClearRetryPolicy() *WorkflowUpdateOne {
 	wuo.mutation.ClearRetryPolicy()
+	return wuo
+}
+
+// SetIsPaused sets the "is_paused" field.
+func (wuo *WorkflowUpdateOne) SetIsPaused(b bool) *WorkflowUpdateOne {
+	wuo.mutation.SetIsPaused(b)
+	return wuo
+}
+
+// SetNillableIsPaused sets the "is_paused" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableIsPaused(b *bool) *WorkflowUpdateOne {
+	if b != nil {
+		wuo.SetIsPaused(*b)
+	}
 	return wuo
 }
 
@@ -640,6 +671,9 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 	}
 	if wuo.mutation.RetryPolicyCleared() {
 		_spec.ClearField(workflow.FieldRetryPolicy, field.TypeJSON)
+	}
+	if value, ok := wuo.mutation.IsPaused(); ok {
+		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
 	}
 	if value, ok := wuo.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)

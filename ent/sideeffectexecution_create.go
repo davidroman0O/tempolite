@@ -21,12 +21,6 @@ type SideEffectExecutionCreate struct {
 	hooks    []Hook
 }
 
-// SetRunID sets the "run_id" field.
-func (seec *SideEffectExecutionCreate) SetRunID(s string) *SideEffectExecutionCreate {
-	seec.mutation.SetRunID(s)
-	return seec
-}
-
 // SetStatus sets the "status" field.
 func (seec *SideEffectExecutionCreate) SetStatus(s sideeffectexecution.Status) *SideEffectExecutionCreate {
 	seec.mutation.SetStatus(s)
@@ -175,9 +169,6 @@ func (seec *SideEffectExecutionCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (seec *SideEffectExecutionCreate) check() error {
-	if _, ok := seec.mutation.RunID(); !ok {
-		return &ValidationError{Name: "run_id", err: errors.New(`ent: missing required field "SideEffectExecution.run_id"`)}
-	}
 	if _, ok := seec.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SideEffectExecution.status"`)}
 	}
@@ -232,10 +223,6 @@ func (seec *SideEffectExecutionCreate) createSpec() (*SideEffectExecution, *sqlg
 	if id, ok := seec.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
-	}
-	if value, ok := seec.mutation.RunID(); ok {
-		_spec.SetField(sideeffectexecution.FieldRunID, field.TypeString, value)
-		_node.RunID = value
 	}
 	if value, ok := seec.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)

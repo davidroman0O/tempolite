@@ -30,20 +30,6 @@ func (seeu *SideEffectExecutionUpdate) Where(ps ...predicate.SideEffectExecution
 	return seeu
 }
 
-// SetRunID sets the "run_id" field.
-func (seeu *SideEffectExecutionUpdate) SetRunID(s string) *SideEffectExecutionUpdate {
-	seeu.mutation.SetRunID(s)
-	return seeu
-}
-
-// SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (seeu *SideEffectExecutionUpdate) SetNillableRunID(s *string) *SideEffectExecutionUpdate {
-	if s != nil {
-		seeu.SetRunID(*s)
-	}
-	return seeu
-}
-
 // SetStatus sets the "status" field.
 func (seeu *SideEffectExecutionUpdate) SetStatus(s sideeffectexecution.Status) *SideEffectExecutionUpdate {
 	seeu.mutation.SetStatus(s)
@@ -220,9 +206,6 @@ func (seeu *SideEffectExecutionUpdate) sqlSave(ctx context.Context) (n int, err 
 			}
 		}
 	}
-	if value, ok := seeu.mutation.RunID(); ok {
-		_spec.SetField(sideeffectexecution.FieldRunID, field.TypeString, value)
-	}
 	if value, ok := seeu.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)
 	}
@@ -302,20 +285,6 @@ type SideEffectExecutionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *SideEffectExecutionMutation
-}
-
-// SetRunID sets the "run_id" field.
-func (seeuo *SideEffectExecutionUpdateOne) SetRunID(s string) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.SetRunID(s)
-	return seeuo
-}
-
-// SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (seeuo *SideEffectExecutionUpdateOne) SetNillableRunID(s *string) *SideEffectExecutionUpdateOne {
-	if s != nil {
-		seeuo.SetRunID(*s)
-	}
-	return seeuo
 }
 
 // SetStatus sets the "status" field.
@@ -523,9 +492,6 @@ func (seeuo *SideEffectExecutionUpdateOne) sqlSave(ctx context.Context) (_node *
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := seeuo.mutation.RunID(); ok {
-		_spec.SetField(sideeffectexecution.FieldRunID, field.TypeString, value)
 	}
 	if value, ok := seeuo.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)

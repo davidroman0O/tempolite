@@ -74,6 +74,20 @@ func (wc *WorkflowCreate) SetNillableRetryPolicy(sp *schema.RetryPolicy) *Workfl
 	return wc
 }
 
+// SetIsPaused sets the "is_paused" field.
+func (wc *WorkflowCreate) SetIsPaused(b bool) *WorkflowCreate {
+	wc.mutation.SetIsPaused(b)
+	return wc
+}
+
+// SetNillableIsPaused sets the "is_paused" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableIsPaused(b *bool) *WorkflowCreate {
+	if b != nil {
+		wc.SetIsPaused(*b)
+	}
+	return wc
+}
+
 // SetTimeout sets the "timeout" field.
 func (wc *WorkflowCreate) SetTimeout(t time.Time) *WorkflowCreate {
 	wc.mutation.SetTimeout(t)
@@ -162,6 +176,10 @@ func (wc *WorkflowCreate) defaults() {
 		v := workflow.DefaultStatus
 		wc.mutation.SetStatus(v)
 	}
+	if _, ok := wc.mutation.IsPaused(); !ok {
+		v := workflow.DefaultIsPaused
+		wc.mutation.SetIsPaused(v)
+	}
 	if _, ok := wc.mutation.CreatedAt(); !ok {
 		v := workflow.DefaultCreatedAt()
 		wc.mutation.SetCreatedAt(v)
@@ -204,6 +222,9 @@ func (wc *WorkflowCreate) check() error {
 	}
 	if _, ok := wc.mutation.Input(); !ok {
 		return &ValidationError{Name: "input", err: errors.New(`ent: missing required field "Workflow.input"`)}
+	}
+	if _, ok := wc.mutation.IsPaused(); !ok {
+		return &ValidationError{Name: "is_paused", err: errors.New(`ent: missing required field "Workflow.is_paused"`)}
 	}
 	if _, ok := wc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Workflow.created_at"`)}
@@ -266,6 +287,10 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflow.FieldRetryPolicy, field.TypeJSON, value)
 		_node.RetryPolicy = value
+	}
+	if value, ok := wc.mutation.IsPaused(); ok {
+		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
+		_node.IsPaused = value
 	}
 	if value, ok := wc.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)

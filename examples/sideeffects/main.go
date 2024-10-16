@@ -44,21 +44,14 @@ func main() {
 	ctx := context.Background()
 	tp, err := tempolite.New[string](
 		ctx,
+		tempolite.NewRegistry[string]().
+			Workflow(Workflow).
+			ActivityFunc(ActivityA).
+			ActivityFunc(ActivityB).
+			Build(),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(ActivityA); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterActivityFunc(ActivityB); err != nil {
-		log.Fatalf("Failed to register activity: %v", err)
-	}
-
-	if err := tp.RegisterWorkflow(Workflow); err != nil {
-		log.Fatalf("Failed to register workflow: %v", err)
 	}
 
 	if err := tp.Workflow("workflow", Workflow).Get(); err != nil {

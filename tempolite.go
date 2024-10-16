@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"entgo.io/ent/dialect"
@@ -38,6 +39,8 @@ import (
 /// TODO: change enqueue functions, i don't want to see As[T] functions anymore, you either put the function or an instance of the struct
 ///
 /// In documentation warn that struct activities need a particular care since the developer might introduce even more non-deteministic code, it should be used for struct that hold a client/api but not a value what might change the output given the same inputs since it activities won't be replayed if sucessful.
+///
+/// TODO: it should not close and wait until workflows AT LEAST reached a yield
 
 // Trade-off of Tempolite vs Temporal
 // Supporting the same similar concepts but now the exact similar features while having less time and resources implies that knowing how Workflows/Activities/Sideffect are behaving in a deterministic and non-deterministic environment, it is crucial
@@ -79,12 +82,21 @@ type Tempolite[T Identifier] struct {
 	compensationPool  *retrypool.Pool[*compensationTask[T]]
 	schedulerSagaDone chan struct{}
 
+	// Yield
+	workflowPauseChannels sync.Map
+	listenerDone          chan struct{}
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	// Versioning system cache
 	// TODO: we should make an analysis at start to know which versions we could cache
 	versionCache sync.Map
+
+	schedulerWorkflowStarted   atomic.Bool
+	schedulerActivityStarted   atomic.Bool
+	schedulerSideEffectStarted atomic.Bool
+	schedulerSagaStarted       atomic.Bool
 }
 
 type tempoliteConfig struct {
@@ -112,7 +124,7 @@ func WithDestructive() tempoliteOption {
 	}
 }
 
-func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite[T], error) {
+func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempoliteOption) (*Tempolite[T], error) {
 	cfg := tempoliteConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -177,6 +189,26 @@ func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite
 		schedulerExecutionActivityDone: make(chan struct{}),
 		schedulerSideEffectDone:        make(chan struct{}),
 		schedulerSagaDone:              make(chan struct{}),
+		listenerDone:                   make(chan struct{}),
+	}
+
+	// Register components
+	for _, workflow := range registry.workflowsFunc {
+		if err := tp.registerWorkflow(workflow); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, activity := range registry.activities {
+		if err := tp.registerActivityFunc(activity); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, activity := range registry.activitiesFunc {
+		if err := tp.registerActivityFunc(activity); err != nil {
+			return nil, err
+		}
 	}
 
 	tp.workflowPool = tp.createWorkflowPool()
@@ -190,7 +222,36 @@ func New[T Identifier](ctx context.Context, opts ...tempoliteOption) (*Tempolite
 	go tp.schedulerExecutionActivity()
 	go tp.schedulerExecutionSaga()
 
+	if err := tp.resumeWorkflows(); err != nil {
+		tp.Close()
+		return nil, err
+	}
+
 	return tp, nil
+}
+
+// Because they were interrupted
+func (tp *Tempolite[T]) resumeWorkflows() error {
+
+	// runningExecutions, err := tp.client.WorkflowExecution.Query().
+	// 	Where(workflowexecution.StatusEQ(workflowexecution.StatusRunning)).
+	// 	All(tp.ctx)
+	// if err != nil {
+	// 	log.Printf("resumeWorkflows: WorkflowExecution.Query failed: %v", err)
+	// 	return err
+	// }
+
+	// for _, exec := range runningExecutions {
+	// 	_, err = tp.client.WorkflowExecution.UpdateOneID(exec.ID).
+	// 		SetStatus(workflowexecution.StatusPending).
+	// 		Save(tp.ctx)
+	// 	if err != nil {
+	// 		log.Printf("resumeWorkflows: WorkflowExecution.UpdateOneID failed: %v", err)
+	// 		return err
+	// 	}
+	// }
+
+	return nil
 }
 
 func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
@@ -267,6 +328,8 @@ func (tp *Tempolite[T]) Close() {
 	tp.workflowPool.Close()
 	tp.activityPool.Close()
 	tp.sideEffectPool.Close()
+	tp.transactionPool.Close()
+	tp.compensationPool.Close()
 }
 
 func (tp *Tempolite[T]) Wait() error {
@@ -276,6 +339,10 @@ func (tp *Tempolite[T]) Wait() error {
 	workflowDone := make(chan error)
 
 	doneSignals := []chan error{activityDone, workflowDone}
+
+	for !tp.schedulerWorkflowStarted.Load() || !tp.schedulerActivityStarted.Load() || !tp.schedulerSideEffectStarted.Load() || !tp.schedulerSagaStarted.Load() {
+		runtime.Gosched()
+	}
 
 	go func() {
 		defer close(activityDone)
@@ -909,7 +976,7 @@ func (tp *Tempolite[T]) enqueueSubSideEffect(ctx TempoliteContext, stepID T, sid
 	sideEffectExecution, err := tx.SideEffectExecution.
 		Create().
 		SetID(uuid.NewString()).
-		SetRunID(ctx.RunID()).
+		// SetRunID(ctx.RunID()).
 		SetSideEffect(sideEffectEntity).
 		SetStatus(sideeffectexecution.StatusPending).
 		Save(tp.ctx)
@@ -1118,12 +1185,36 @@ func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) error {
 /// STAND BY
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) (string, error) {
-	return "", nil
+func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
+	pausedWorkflows, err := tp.client.Workflow.Query().
+		Where(workflow.IsPausedEQ(true)).
+		All(tp.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]WorkflowID, len(pausedWorkflows))
+	for i, wf := range pausedWorkflows {
+		ids[i] = WorkflowID(wf.ID)
+	}
+	return ids, nil
 }
 
-func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) (string, error) {
-	return "", nil
+func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
+	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+		SetIsPaused(true).
+		Save(tp.ctx)
+	return err
+}
+
+func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
+	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+		SetIsPaused(false).
+		Save(tp.ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (tp *Tempolite[T]) ProduceSignal(id string) chan interface{} {

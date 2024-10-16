@@ -34,6 +34,8 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 				continue
 			}
 
+			tp.schedulerActivityStarted.Store(true)
+
 			if len(pendingActivities) == 0 {
 				continue
 			}
@@ -163,13 +165,16 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
 				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
-				Order(ent.Asc(workflowexecution.FieldStartedAt)).WithWorkflow().
+				Order(ent.Asc(workflowexecution.FieldStartedAt)).
+				WithWorkflow().
 				Limit(1).
 				All(tp.ctx)
 			if err != nil {
 				log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
 				continue
 			}
+
+			tp.schedulerWorkflowStarted.Store(true)
 
 			if len(pendingWorkflows) == 0 {
 				continue
@@ -178,7 +183,11 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 			var value any
 			var ok bool
 
+			fmt.Println("pendingWorkflows: ", pendingWorkflows)
+
 			for _, pendingWorkflowExecution := range pendingWorkflows {
+
+				fmt.Println("pendingWorkflowExecution: ", pendingWorkflowExecution)
 
 				var workflowEntity *ent.Workflow
 				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
@@ -323,6 +332,8 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 				continue
 			}
 
+			tp.schedulerSideEffectStarted.Store(true)
+
 			if len(pendingSideEffects) == 0 {
 				continue
 			}
@@ -340,8 +351,8 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 					tp:           tp,
 					sideEffectID: se.Edges.SideEffect.ID,
 					executionID:  se.ID,
-					runID:        se.RunID,
-					stepID:       se.Edges.SideEffect.StepID,
+					// runID:        se.RunID,
+					stepID: se.Edges.SideEffect.StepID,
 				}
 
 				task := &sideEffectTask[T]{
@@ -434,6 +445,8 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				log.Printf("scheduler: Saga.Query failed: %v", err)
 				continue
 			}
+
+			tp.schedulerSagaStarted.Store(true)
 
 			for _, sagaExecution := range pendingSagas {
 				sagaHandlerInfo, ok := tp.sagas.Load(sagaExecution.Edges.Saga.ID)

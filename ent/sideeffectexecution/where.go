@@ -65,11 +65,6 @@ func IDContainsFold(id string) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldContainsFold(FieldID, id))
 }
 
-// RunID applies equality check predicate on the "run_id" field. It's identical to RunIDEQ.
-func RunID(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldEQ(FieldRunID, v))
-}
-
 // Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
 func Attempt(v int) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldEQ(FieldAttempt, v))
@@ -88,71 +83,6 @@ func StartedAt(v time.Time) predicate.SideEffectExecution {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// RunIDEQ applies the EQ predicate on the "run_id" field.
-func RunIDEQ(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldEQ(FieldRunID, v))
-}
-
-// RunIDNEQ applies the NEQ predicate on the "run_id" field.
-func RunIDNEQ(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldNEQ(FieldRunID, v))
-}
-
-// RunIDIn applies the In predicate on the "run_id" field.
-func RunIDIn(vs ...string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldIn(FieldRunID, vs...))
-}
-
-// RunIDNotIn applies the NotIn predicate on the "run_id" field.
-func RunIDNotIn(vs ...string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldNotIn(FieldRunID, vs...))
-}
-
-// RunIDGT applies the GT predicate on the "run_id" field.
-func RunIDGT(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldGT(FieldRunID, v))
-}
-
-// RunIDGTE applies the GTE predicate on the "run_id" field.
-func RunIDGTE(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldGTE(FieldRunID, v))
-}
-
-// RunIDLT applies the LT predicate on the "run_id" field.
-func RunIDLT(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldLT(FieldRunID, v))
-}
-
-// RunIDLTE applies the LTE predicate on the "run_id" field.
-func RunIDLTE(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldLTE(FieldRunID, v))
-}
-
-// RunIDContains applies the Contains predicate on the "run_id" field.
-func RunIDContains(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldContains(FieldRunID, v))
-}
-
-// RunIDHasPrefix applies the HasPrefix predicate on the "run_id" field.
-func RunIDHasPrefix(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldHasPrefix(FieldRunID, v))
-}
-
-// RunIDHasSuffix applies the HasSuffix predicate on the "run_id" field.
-func RunIDHasSuffix(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldHasSuffix(FieldRunID, v))
-}
-
-// RunIDEqualFold applies the EqualFold predicate on the "run_id" field.
-func RunIDEqualFold(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldEqualFold(FieldRunID, v))
-}
-
-// RunIDContainsFold applies the ContainsFold predicate on the "run_id" field.
-func RunIDContainsFold(v string) predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldContainsFold(FieldRunID, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

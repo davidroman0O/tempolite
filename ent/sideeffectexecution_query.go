@@ -299,12 +299,12 @@ func (seeq *SideEffectExecutionQuery) WithSideEffect(opts ...func(*SideEffectQue
 // Example:
 //
 //	var v []struct {
-//		RunID string `json:"run_id,omitempty"`
+//		Status sideeffectexecution.Status `json:"status,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SideEffectExecution.Query().
-//		GroupBy(sideeffectexecution.FieldRunID).
+//		GroupBy(sideeffectexecution.FieldStatus).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (seeq *SideEffectExecutionQuery) GroupBy(field string, fields ...string) *SideEffectExecutionGroupBy {
@@ -322,11 +322,11 @@ func (seeq *SideEffectExecutionQuery) GroupBy(field string, fields ...string) *S
 // Example:
 //
 //	var v []struct {
-//		RunID string `json:"run_id,omitempty"`
+//		Status sideeffectexecution.Status `json:"status,omitempty"`
 //	}
 //
 //	client.SideEffectExecution.Query().
-//		Select(sideeffectexecution.FieldRunID).
+//		Select(sideeffectexecution.FieldStatus).
 //		Scan(ctx, &v)
 func (seeq *SideEffectExecutionQuery) Select(fields ...string) *SideEffectExecutionSelect {
 	seeq.ctx.Fields = append(seeq.ctx.Fields, fields...)

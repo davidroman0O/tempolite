@@ -19,8 +19,6 @@ type SideEffectExecution struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
-	// RunID holds the value of the "run_id" field.
-	RunID string `json:"run_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sideeffectexecution.Status `json:"status,omitempty"`
 	// Attempt holds the value of the "attempt" field.
@@ -69,7 +67,7 @@ func (*SideEffectExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case sideeffectexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case sideeffectexecution.FieldID, sideeffectexecution.FieldRunID, sideeffectexecution.FieldStatus, sideeffectexecution.FieldError:
+		case sideeffectexecution.FieldID, sideeffectexecution.FieldStatus, sideeffectexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case sideeffectexecution.FieldStartedAt, sideeffectexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -95,12 +93,6 @@ func (see *SideEffectExecution) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				see.ID = value.String
-			}
-		case sideeffectexecution.FieldRunID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field run_id", values[i])
-			} else if value.Valid {
-				see.RunID = value.String
 			}
 		case sideeffectexecution.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -188,9 +180,6 @@ func (see *SideEffectExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("SideEffectExecution(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", see.ID))
-	builder.WriteString("run_id=")
-	builder.WriteString(see.RunID)
-	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", see.Status))
 	builder.WriteString(", ")

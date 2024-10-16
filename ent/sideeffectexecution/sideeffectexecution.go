@@ -15,8 +15,6 @@ const (
 	Label = "side_effect_execution"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldRunID holds the string denoting the run_id field in the database.
-	FieldRunID = "run_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldAttempt holds the string denoting the attempt field in the database.
@@ -45,7 +43,6 @@ const (
 // Columns holds all SQL columns for sideeffectexecution fields.
 var Columns = []string{
 	FieldID,
-	FieldRunID,
 	FieldStatus,
 	FieldAttempt,
 	FieldOutput,
@@ -120,11 +117,6 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByRunID orders the results by the run_id field.
-func ByRunID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRunID, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

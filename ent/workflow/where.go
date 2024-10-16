@@ -80,6 +80,11 @@ func HandlerName(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldHandlerName, v))
 }
 
+// IsPaused applies equality check predicate on the "is_paused" field. It's identical to IsPausedEQ.
+func IsPaused(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldIsPaused, v))
+}
+
 // Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
 func Timeout(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldTimeout, v))
@@ -313,6 +318,16 @@ func RetryPolicyIsNil() predicate.Workflow {
 // RetryPolicyNotNil applies the NotNil predicate on the "retry_policy" field.
 func RetryPolicyNotNil() predicate.Workflow {
 	return predicate.Workflow(sql.FieldNotNull(FieldRetryPolicy))
+}
+
+// IsPausedEQ applies the EQ predicate on the "is_paused" field.
+func IsPausedEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldIsPaused, v))
+}
+
+// IsPausedNEQ applies the NEQ predicate on the "is_paused" field.
+func IsPausedNEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldIsPaused, v))
 }
 
 // TimeoutEQ applies the EQ predicate on the "timeout" field.
