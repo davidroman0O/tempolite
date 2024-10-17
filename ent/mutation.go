@@ -7300,6 +7300,7 @@ type WorkflowMutation struct {
 	appendinput       []interface{}
 	retry_policy      *schema.RetryPolicy
 	is_paused         *bool
+	is_ready          *bool
 	timeout           *time.Time
 	created_at        *time.Time
 	clearedFields     map[string]struct{}
@@ -7695,6 +7696,42 @@ func (m *WorkflowMutation) ResetIsPaused() {
 	m.is_paused = nil
 }
 
+// SetIsReady sets the "is_ready" field.
+func (m *WorkflowMutation) SetIsReady(b bool) {
+	m.is_ready = &b
+}
+
+// IsReady returns the value of the "is_ready" field in the mutation.
+func (m *WorkflowMutation) IsReady() (r bool, exists bool) {
+	v := m.is_ready
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsReady returns the old "is_ready" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldIsReady(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsReady is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsReady requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsReady: %w", err)
+	}
+	return oldValue.IsReady, nil
+}
+
+// ResetIsReady resets all changes to the "is_ready" field.
+func (m *WorkflowMutation) ResetIsReady() {
+	m.is_ready = nil
+}
+
 // SetTimeout sets the "timeout" field.
 func (m *WorkflowMutation) SetTimeout(t time.Time) {
 	m.timeout = &t
@@ -7868,7 +7905,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.step_id != nil {
 		fields = append(fields, workflow.FieldStepID)
 	}
@@ -7889,6 +7926,9 @@ func (m *WorkflowMutation) Fields() []string {
 	}
 	if m.is_paused != nil {
 		fields = append(fields, workflow.FieldIsPaused)
+	}
+	if m.is_ready != nil {
+		fields = append(fields, workflow.FieldIsReady)
 	}
 	if m.timeout != nil {
 		fields = append(fields, workflow.FieldTimeout)
@@ -7918,6 +7958,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.RetryPolicy()
 	case workflow.FieldIsPaused:
 		return m.IsPaused()
+	case workflow.FieldIsReady:
+		return m.IsReady()
 	case workflow.FieldTimeout:
 		return m.Timeout()
 	case workflow.FieldCreatedAt:
@@ -7945,6 +7987,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldRetryPolicy(ctx)
 	case workflow.FieldIsPaused:
 		return m.OldIsPaused(ctx)
+	case workflow.FieldIsReady:
+		return m.OldIsReady(ctx)
 	case workflow.FieldTimeout:
 		return m.OldTimeout(ctx)
 	case workflow.FieldCreatedAt:
@@ -8006,6 +8050,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIsPaused(v)
+		return nil
+	case workflow.FieldIsReady:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsReady(v)
 		return nil
 	case workflow.FieldTimeout:
 		v, ok := value.(time.Time)
@@ -8105,6 +8156,9 @@ func (m *WorkflowMutation) ResetField(name string) error {
 		return nil
 	case workflow.FieldIsPaused:
 		m.ResetIsPaused()
+		return nil
+	case workflow.FieldIsReady:
+		m.ResetIsReady()
 		return nil
 	case workflow.FieldTimeout:
 		m.ResetTimeout()

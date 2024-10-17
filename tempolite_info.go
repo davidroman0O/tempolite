@@ -562,6 +562,17 @@ func (w WorkflowContext[T]) EntityType() string {
 	return "workflow"
 }
 
+func (w WorkflowContext[T]) checkIfPaused() error {
+	workflow, err := w.tp.client.Workflow.Get(w.tp.ctx, w.workflowID)
+	if err != nil {
+		return fmt.Errorf("error fetching workflow: %w", err)
+	}
+	if workflow.IsPaused {
+		return ErrWorkflowPaused
+	}
+	return nil
+}
+
 func (w WorkflowContext[T]) GetVersion(changeID string, minSupported, maxSupported int) int {
 	log.Printf("GetVersion called for workflowType: %s, workflowID: %s, changeID: %s, min: %d, max: %d", w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
 	version, err := w.tp.getOrCreateVersion(w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
@@ -583,6 +594,9 @@ func (w WorkflowContext[T]) GetWorkflow(id WorkflowExecutionID) *WorkflowExecuti
 }
 
 func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}) *SideEffectInfo[T] {
+	if err := w.checkIfPaused(); err != nil {
+		return &SideEffectInfo[T]{err: err}
+	}
 	id, err := w.tp.enqueueSubSideEffect(w, stepID, handler)
 	if err != nil {
 		log.Printf("Error enqueuing side effect: %v", err)
@@ -591,11 +605,17 @@ func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}) *SideEffec
 }
 
 func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...any) *WorkflowInfo[T] {
+	if err := w.checkIfPaused(); err != nil {
+		return &WorkflowInfo[T]{err: err}
+	}
 	id, err := w.tp.enqueueSubWorkflow(w, stepID, handler, inputs...)
 	return w.tp.getWorkflow(w, id, err)
 }
 
 func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
+	if err := w.checkIfPaused(); err != nil {
+		return &ActivityInfo[T]{err: err}
+	}
 	id, err := w.tp.enqueueSubActivtyFunc(w, stepID, handler, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
@@ -605,6 +625,9 @@ func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs .
 }
 
 func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo[T] {
+	if err := w.checkIfPaused(); err != nil {
+		return &ActivityInfo[T]{err: err}
+	}
 	id, err := w.tp.enqueueSubActivityExecution(w, stepID, name, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)

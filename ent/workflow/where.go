@@ -85,6 +85,11 @@ func IsPaused(v bool) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldIsPaused, v))
 }
 
+// IsReady applies equality check predicate on the "is_ready" field. It's identical to IsReadyEQ.
+func IsReady(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldIsReady, v))
+}
+
 // Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
 func Timeout(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldTimeout, v))
@@ -328,6 +333,16 @@ func IsPausedEQ(v bool) predicate.Workflow {
 // IsPausedNEQ applies the NEQ predicate on the "is_paused" field.
 func IsPausedNEQ(v bool) predicate.Workflow {
 	return predicate.Workflow(sql.FieldNEQ(FieldIsPaused, v))
+}
+
+// IsReadyEQ applies the EQ predicate on the "is_ready" field.
+func IsReadyEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldIsReady, v))
+}
+
+// IsReadyNEQ applies the NEQ predicate on the "is_ready" field.
+func IsReadyNEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldIsReady, v))
 }
 
 // TimeoutEQ applies the EQ predicate on the "timeout" field.

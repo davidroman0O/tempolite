@@ -485,8 +485,8 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 	}
 }
 
-// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleYield$ .
-func TestWorkflowSimpleYield(t *testing.T) {
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimplePauseResume$ .
+func TestWorkflowSimplePauseResume(t *testing.T) {
 
 	type workflowData struct {
 		Message string
@@ -504,7 +504,9 @@ func TestWorkflowSimpleYield(t *testing.T) {
 
 		log.Println("pausing1")
 
-		ctx.ActivityFunc("pause1", activityWork).Get()
+		if err := ctx.ActivityFunc("pause1", activityWork).Get(); err != nil {
+			return -1, err
+		}
 
 		log.Println("pause1 finished")
 
@@ -513,7 +515,9 @@ func TestWorkflowSimpleYield(t *testing.T) {
 
 		log.Println("pausing2")
 
-		ctx.ActivityFunc("pause2", activityWork).Get()
+		if err := ctx.ActivityFunc("pause2", activityWork).Get(); err != nil {
+			return -1, err
+		}
 
 		log.Println("pause2 finished")
 		<-time.After(1 * time.Second)
@@ -554,20 +558,29 @@ func TestWorkflowSimpleYield(t *testing.T) {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
-	log.Println("\t pause1")
-	if err := tp.PauseWorkflow(workflowInfo.WorkflowID); err != nil {
-		t.Fatalf("PauseWorkflow failed: %v", err)
+	{
+		log.Println("\t pause1")
+		if err := tp.PauseWorkflow(workflowInfo.WorkflowID); err != nil {
+			t.Fatalf("PauseWorkflow failed: %v", err)
+		}
+		fmt.Println("\t\t PAUSED (5s) !!!")
+		<-time.After(5 * time.Second)
 	}
-	<-time.After(2 * time.Second)
-	log.Println("\t resume1")
-	if err := tp.ResumeWorkflow(workflowInfo.WorkflowID); err != nil {
-		t.Fatalf("ResumeWorkflow failed: %v", err)
+
+	{
+		log.Println("\t RESUME1")
+		if err := tp.ResumeWorkflow(workflowInfo.WorkflowID); err != nil {
+			t.Fatalf("ResumeWorkflow failed: %v", err)
+		}
+		<-time.After(time.Second / 2)
+		log.Println("\t PAUSE2!!")
+		if err := tp.PauseWorkflow(workflowInfo.WorkflowID); err != nil {
+			t.Fatalf("Pause failed: %v", err)
+		}
+		<-time.After(5 * time.Second)
 	}
-	<-time.After(time.Second / 2)
-	log.Println("\t pause2")
-	if err := tp.PauseWorkflow(workflowInfo.WorkflowID); err != nil {
-		t.Fatalf("Pause failed: %v", err)
-	}
+
+	fmt.Println("\t\t RESTARTING...")
 
 	{
 		tp.Close() // close the DB and start again
@@ -583,6 +596,7 @@ func TestWorkflowSimpleYield(t *testing.T) {
 			t.Fatalf("RegisterWorkflow failed: %v", err)
 		}
 	}
+	fmt.Println("\t\t RESTARTED !!!")
 
 	pauses, err := tp.ListPausedWorkflows()
 	if err != nil {
@@ -592,7 +606,7 @@ func TestWorkflowSimpleYield(t *testing.T) {
 	for _, pauseworkflow := range pauses {
 		fmt.Println("pauseworkflow: ", pauseworkflow.String())
 	}
-
+	fmt.Println("\t\t RESUMING (it will finish)...")
 	<-time.After(2 * time.Second)
 	log.Println("\t resume2")
 	if err := tp.ResumeWorkflow(workflowInfo.WorkflowID); err != nil {

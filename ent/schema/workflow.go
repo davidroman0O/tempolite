@@ -30,6 +30,7 @@ func (Workflow) Fields() []ent.Field {
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
 		field.Bool("is_paused").Default(false),
+		field.Bool("is_ready").Default(false),
 		field.Time("timeout").
 			Optional(),
 		field.Time("created_at").

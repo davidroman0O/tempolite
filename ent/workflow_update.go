@@ -133,6 +133,20 @@ func (wu *WorkflowUpdate) SetNillableIsPaused(b *bool) *WorkflowUpdate {
 	return wu
 }
 
+// SetIsReady sets the "is_ready" field.
+func (wu *WorkflowUpdate) SetIsReady(b bool) *WorkflowUpdate {
+	wu.mutation.SetIsReady(b)
+	return wu
+}
+
+// SetNillableIsReady sets the "is_ready" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableIsReady(b *bool) *WorkflowUpdate {
+	if b != nil {
+		wu.SetIsReady(*b)
+	}
+	return wu
+}
+
 // SetTimeout sets the "timeout" field.
 func (wu *WorkflowUpdate) SetTimeout(t time.Time) *WorkflowUpdate {
 	wu.mutation.SetTimeout(t)
@@ -300,6 +314,9 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := wu.mutation.IsPaused(); ok {
 		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
+	}
+	if value, ok := wu.mutation.IsReady(); ok {
+		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
 	}
 	if value, ok := wu.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)
@@ -473,6 +490,20 @@ func (wuo *WorkflowUpdateOne) SetIsPaused(b bool) *WorkflowUpdateOne {
 func (wuo *WorkflowUpdateOne) SetNillableIsPaused(b *bool) *WorkflowUpdateOne {
 	if b != nil {
 		wuo.SetIsPaused(*b)
+	}
+	return wuo
+}
+
+// SetIsReady sets the "is_ready" field.
+func (wuo *WorkflowUpdateOne) SetIsReady(b bool) *WorkflowUpdateOne {
+	wuo.mutation.SetIsReady(b)
+	return wuo
+}
+
+// SetNillableIsReady sets the "is_ready" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableIsReady(b *bool) *WorkflowUpdateOne {
+	if b != nil {
+		wuo.SetIsReady(*b)
 	}
 	return wuo
 }
@@ -674,6 +705,9 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 	}
 	if value, ok := wuo.mutation.IsPaused(); ok {
 		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
+	}
+	if value, ok := wuo.mutation.IsReady(); ok {
+		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
 	}
 	if value, ok := wuo.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)

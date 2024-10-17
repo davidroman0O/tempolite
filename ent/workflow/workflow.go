@@ -29,6 +29,8 @@ const (
 	FieldRetryPolicy = "retry_policy"
 	// FieldIsPaused holds the string denoting the is_paused field in the database.
 	FieldIsPaused = "is_paused"
+	// FieldIsReady holds the string denoting the is_ready field in the database.
+	FieldIsReady = "is_ready"
 	// FieldTimeout holds the string denoting the timeout field in the database.
 	FieldTimeout = "timeout"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -56,6 +58,7 @@ var Columns = []string{
 	FieldInput,
 	FieldRetryPolicy,
 	FieldIsPaused,
+	FieldIsReady,
 	FieldTimeout,
 	FieldCreatedAt,
 }
@@ -79,6 +82,8 @@ var (
 	HandlerNameValidator func(string) error
 	// DefaultIsPaused holds the default value on creation for the "is_paused" field.
 	DefaultIsPaused bool
+	// DefaultIsReady holds the default value on creation for the "is_ready" field.
+	DefaultIsReady bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -144,6 +149,11 @@ func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 // ByIsPaused orders the results by the is_paused field.
 func ByIsPaused(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsPaused, opts...).ToFunc()
+}
+
+// ByIsReady orders the results by the is_ready field.
+func ByIsReady(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsReady, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

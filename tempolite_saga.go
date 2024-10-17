@@ -117,6 +117,9 @@ func (b *SagaDefinitionBuilder[T]) Build() (*SagaDefinition[T], error) {
 }
 
 func (w WorkflowContext[T]) Saga(stepID T, saga *SagaDefinition[T]) *SagaInfo[T] {
+	if err := w.checkIfPaused(); err != nil {
+		return &SagaInfo[T]{err: err}
+	}
 	// Generate a unique ID for this saga execution
 	// sagaID := w.tp.generateSagaID(w, stepID)
 

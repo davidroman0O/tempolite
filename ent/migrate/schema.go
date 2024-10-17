@@ -238,6 +238,7 @@ var (
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "is_paused", Type: field.TypeBool, Default: false},
+		{Name: "is_ready", Type: field.TypeBool, Default: false},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}

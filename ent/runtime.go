@@ -183,8 +183,12 @@ func init() {
 	workflowDescIsPaused := workflowFields[7].Descriptor()
 	// workflow.DefaultIsPaused holds the default value on creation for the is_paused field.
 	workflow.DefaultIsPaused = workflowDescIsPaused.Default.(bool)
+	// workflowDescIsReady is the schema descriptor for is_ready field.
+	workflowDescIsReady := workflowFields[8].Descriptor()
+	// workflow.DefaultIsReady holds the default value on creation for the is_ready field.
+	workflow.DefaultIsReady = workflowDescIsReady.Default.(bool)
 	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[9].Descriptor()
+	workflowDescCreatedAt := workflowFields[10].Descriptor()
 	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()

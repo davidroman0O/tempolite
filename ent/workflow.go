@@ -33,6 +33,8 @@ type Workflow struct {
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// IsPaused holds the value of the "is_paused" field.
 	IsPaused bool `json:"is_paused,omitempty"`
+	// IsReady holds the value of the "is_ready" field.
+	IsReady bool `json:"is_ready,omitempty"`
 	// Timeout holds the value of the "timeout" field.
 	Timeout time.Time `json:"timeout,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -68,7 +70,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflow.FieldInput, workflow.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case workflow.FieldIsPaused:
+		case workflow.FieldIsPaused, workflow.FieldIsReady:
 			values[i] = new(sql.NullBool)
 		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName:
 			values[i] = new(sql.NullString)
@@ -140,6 +142,12 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field is_paused", values[i])
 			} else if value.Valid {
 				w.IsPaused = value.Bool
+			}
+		case workflow.FieldIsReady:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_ready", values[i])
+			} else if value.Valid {
+				w.IsReady = value.Bool
 			}
 		case workflow.FieldTimeout:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -214,6 +222,9 @@ func (w *Workflow) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_paused=")
 	builder.WriteString(fmt.Sprintf("%v", w.IsPaused))
+	builder.WriteString(", ")
+	builder.WriteString("is_ready=")
+	builder.WriteString(fmt.Sprintf("%v", w.IsReady))
 	builder.WriteString(", ")
 	builder.WriteString("timeout=")
 	builder.WriteString(w.Timeout.Format(time.ANSIC))

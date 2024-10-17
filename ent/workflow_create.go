@@ -88,6 +88,20 @@ func (wc *WorkflowCreate) SetNillableIsPaused(b *bool) *WorkflowCreate {
 	return wc
 }
 
+// SetIsReady sets the "is_ready" field.
+func (wc *WorkflowCreate) SetIsReady(b bool) *WorkflowCreate {
+	wc.mutation.SetIsReady(b)
+	return wc
+}
+
+// SetNillableIsReady sets the "is_ready" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableIsReady(b *bool) *WorkflowCreate {
+	if b != nil {
+		wc.SetIsReady(*b)
+	}
+	return wc
+}
+
 // SetTimeout sets the "timeout" field.
 func (wc *WorkflowCreate) SetTimeout(t time.Time) *WorkflowCreate {
 	wc.mutation.SetTimeout(t)
@@ -180,6 +194,10 @@ func (wc *WorkflowCreate) defaults() {
 		v := workflow.DefaultIsPaused
 		wc.mutation.SetIsPaused(v)
 	}
+	if _, ok := wc.mutation.IsReady(); !ok {
+		v := workflow.DefaultIsReady
+		wc.mutation.SetIsReady(v)
+	}
 	if _, ok := wc.mutation.CreatedAt(); !ok {
 		v := workflow.DefaultCreatedAt()
 		wc.mutation.SetCreatedAt(v)
@@ -225,6 +243,9 @@ func (wc *WorkflowCreate) check() error {
 	}
 	if _, ok := wc.mutation.IsPaused(); !ok {
 		return &ValidationError{Name: "is_paused", err: errors.New(`ent: missing required field "Workflow.is_paused"`)}
+	}
+	if _, ok := wc.mutation.IsReady(); !ok {
+		return &ValidationError{Name: "is_ready", err: errors.New(`ent: missing required field "Workflow.is_ready"`)}
 	}
 	if _, ok := wc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Workflow.created_at"`)}
@@ -291,6 +312,10 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.IsPaused(); ok {
 		_spec.SetField(workflow.FieldIsPaused, field.TypeBool, value)
 		_node.IsPaused = value
+	}
+	if value, ok := wc.mutation.IsReady(); ok {
+		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
+		_node.IsReady = value
 	}
 	if value, ok := wc.mutation.Timeout(); ok {
 		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)

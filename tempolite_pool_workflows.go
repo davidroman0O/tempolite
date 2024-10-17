@@ -19,9 +19,8 @@ type workflowTask[T Identifier] struct {
 	retryCount  int
 	maxRetry    int
 	retry       func() error
-	// wasPaused      bool
-	// pauseStepID    string
-	// wasPauseStepID T
+
+	isPaused bool
 }
 
 func (tp *Tempolite[T]) createWorkflowPool() *retrypool.Pool[*workflowTask[T]] {
@@ -62,8 +61,19 @@ func (tp *Tempolite[T]) workflowOnRetry(attempt int, err error, task *retrypool.
 }
 
 func (tp *Tempolite[T]) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask[T]], workerID int, worker retrypool.Worker[*workflowTask[T]], task *retrypool.TaskWrapper[*workflowTask[T]]) {
+	if task.Data().isPaused {
+		log.Printf("Workflow %s paused", task.Data().ctx.workflowID)
+		// Update workflow status to paused in the database
+		if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).
+			SetIsPaused(true).
+			SetIsReady(false).
+			Save(tp.ctx); err != nil {
+			log.Printf("Failed to update workflow pause status: %v", err)
+		}
+		return
+	}
 
-	log.Printf("workflowOnSuccess workflow %v - %v: %d", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID)
+	log.Printf("workflowOnSuccess workflow %v - %v: %d - isPaused: %v", task.Data().ctx.workflowID, task.Data().ctx.executionID, workerID, task.Data().isPaused)
 
 	if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusCompleted).
 		Save(tp.ctx); err != nil {
@@ -158,6 +168,12 @@ func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error
 		if !returnedValues[len(returnedValues)-1].IsNil() {
 			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
 		}
+	}
+
+	if errRes == ErrWorkflowPaused {
+		data.isPaused = true
+		fmt.Println("pause detected", data.isPaused)
+		return nil
 	}
 
 	fmt.Println("output to save", res, errRes)

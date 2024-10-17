@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 	"github.com/davidroman0O/retrypool"
 	"github.com/google/uuid"
 
@@ -48,6 +50,8 @@ import (
 type Identifier interface {
 	~string | ~int
 }
+
+var ErrWorkflowPaused = errors.New("workflow is paused")
 
 // TODO: to be renamed as tempoliteEngine since it will be used to rotate/roll new databases when its database size is too big
 type Tempolite[T Identifier] struct {
@@ -93,6 +97,8 @@ type Tempolite[T Identifier] struct {
 	schedulerActivityStarted   atomic.Bool
 	schedulerSideEffectStarted atomic.Bool
 	schedulerSagaStarted       atomic.Bool
+
+	resumeWorkflowsWorkerDone chan struct{}
 }
 
 type tempoliteConfig struct {
@@ -185,6 +191,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		schedulerExecutionActivityDone: make(chan struct{}),
 		schedulerSideEffectDone:        make(chan struct{}),
 		schedulerSagaDone:              make(chan struct{}),
+		resumeWorkflowsWorkerDone:      make(chan struct{}),
 	}
 
 	// Register components
@@ -217,36 +224,154 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 	go tp.schedulerExecutionActivity()
 	go tp.schedulerExecutionSaga()
 
-	if err := tp.resumeWorkflows(); err != nil {
-		tp.Close()
-		return nil, err
-	}
+	go tp.resumeWorkflowsWorker()
 
 	return tp, nil
 }
 
-// Because they were interrupted
-func (tp *Tempolite[T]) resumeWorkflows() error {
+// When workflows were paused, but will be flagged as IsReady
+func (tp *Tempolite[T]) resumeWorkflowsWorker() {
+	ticker := time.NewTicker(time.Second / 16)
+	defer ticker.Stop()
+	defer close(tp.resumeWorkflowsWorkerDone)
+	for {
+		select {
+		case <-tp.ctx.Done():
+			return
+		case <-tp.resumeWorkflowsWorkerDone:
+			return
+		case <-ticker.C:
+			workflows, err := tp.client.Workflow.Query().
+				Where(
+					workflow.StatusEQ(workflow.StatusRunning),
+					workflow.IsPausedEQ(false),
+					workflow.IsReadyEQ(true),
+				).All(tp.ctx)
+			if err != nil {
+				log.Printf("Error querying workflows to resume: %v", err)
+				continue
+			}
 
-	// runningExecutions, err := tp.client.WorkflowExecution.Query().
-	// 	Where(workflowexecution.StatusEQ(workflowexecution.StatusRunning)).
-	// 	All(tp.ctx)
-	// if err != nil {
-	// 	log.Printf("resumeWorkflows: WorkflowExecution.Query failed: %v", err)
-	// 	return err
-	// }
+			for _, wf := range workflows {
+				fmt.Println("Resuming workflow", wf.ID)
+				if err := tp.redispatchWorkflow(WorkflowID(wf.ID)); err != nil {
+					log.Printf("Error redispatching workflow %s: %v", wf.ID, err)
+				}
+				if _, err := tp.client.Workflow.UpdateOne(wf).SetIsReady(false).Save(tp.ctx); err != nil {
+					log.Printf("Error updating workflow %s: %v", wf.ID, err)
+				}
+			}
+		}
+	}
+}
 
-	// for _, exec := range runningExecutions {
-	// 	_, err = tp.client.WorkflowExecution.UpdateOneID(exec.ID).
-	// 		SetStatus(workflowexecution.StatusPending).
-	// 		Save(tp.ctx)
-	// 	if err != nil {
-	// 		log.Printf("resumeWorkflows: WorkflowExecution.UpdateOneID failed: %v", err)
-	// 		return err
-	// 	}
-	// }
+func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
-	return nil
+	wf, err := tp.client.Workflow.Get(tp.ctx, id.String())
+	if err != nil {
+		return fmt.Errorf("error fetching workflow: %w", err)
+	}
+
+	fmt.Println(wf.ID)
+
+	wfEx, err := tp.client.WorkflowExecution.Query().
+		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).
+		WithWorkflow().
+		Order(ent.Desc(workflowexecution.FieldStartedAt)).
+		First(tp.ctx)
+
+	// Create WorkflowContext
+	ctx := WorkflowContext[T]{
+		tp:           tp,
+		workflowID:   wf.ID,
+		executionID:  wfEx.ID,
+		runID:        wfEx.RunID,
+		workflowType: wf.Identity,
+		stepID:       wf.StepID,
+	}
+
+	// Fetch the workflow handler
+	handlerInfo, ok := tp.workflows.Load(HandlerIdentity(wf.Identity))
+	if !ok {
+		return fmt.Errorf("workflow handler not found for %s", wf.Identity)
+	}
+
+	workflowHandler, ok := handlerInfo.(Workflow)
+	if !ok {
+		return fmt.Errorf("invalid workflow handler for %s", wf.Identity)
+	}
+
+	inputs := []interface{}{}
+
+	// TODO: we can probably parallelize this
+	for idx, rawInput := range wf.Input {
+		inputType := workflowHandler.ParamTypes[idx]
+		inputKind := workflowHandler.ParamsKinds[idx]
+
+		realInput, err := convertIO(rawInput, inputType, inputKind)
+		if err != nil {
+			log.Printf("scheduler: convertInput failed: %v", err)
+			continue
+		}
+
+		inputs = append(inputs, realInput)
+	}
+
+	// Create and dispatch the workflow task
+	task := &workflowTask[T]{
+		ctx:         ctx,
+		handlerName: workflowHandler.HandlerLongName,
+		handler:     workflowHandler.Handler,
+		params:      inputs,
+		maxRetry:    wf.RetryPolicy.MaximumAttempts,
+	}
+
+	retryIt := func() error {
+
+		fmt.Println("\t ==Create new workflow from", wf.HandlerName, wfEx.ID)
+
+		// create a new execution for the same workflow
+		var workflowExecution *ent.WorkflowExecution
+		if workflowExecution, err = tp.client.WorkflowExecution.
+			Create().
+			SetID(uuid.NewString()).
+			SetRunID(wfEx.RunID).
+			SetWorkflow(wf).
+			Save(tp.ctx); err != nil {
+			return err
+		}
+
+		task.ctx.executionID = workflowExecution.ID
+		task.retryCount++
+
+		log.Printf("scheduler: retrying (%d) workflow %s of id %v exec id %v with params: %v", task.retryCount, wf.HandlerName, wf.ID, ctx.executionID, wf.Input)
+
+		// now we notify the workflow enity that we're working
+		if _, err = tp.client.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+			log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
+		}
+
+		return nil
+	}
+
+	task.retry = retryIt
+
+	total, err := tp.client.WorkflowExecution.
+		Query().
+		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).Count(tp.ctx)
+	if err != nil {
+		log.Printf("redispatchWorkflow: WorkflowExecution.Query failed: %v", err)
+		return err
+	}
+
+	log.Printf("redispatchWorkflow: total: %d", total)
+
+	// If it's not me
+	if total > 1 {
+		task.retryCount = total
+	}
+
+	return tp.workflowPool.Dispatch(task)
 }
 
 func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
@@ -1198,6 +1323,7 @@ func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
 	_, err := tp.client.Workflow.UpdateOneID(id.String()).
 		SetIsPaused(true).
+		SetIsReady(false).
 		Save(tp.ctx)
 	return err
 }
@@ -1205,6 +1331,7 @@ func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
 func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
 	_, err := tp.client.Workflow.UpdateOneID(id.String()).
 		SetIsPaused(false).
+		SetIsReady(true).
 		Save(tp.ctx)
 	if err != nil {
 		return err
