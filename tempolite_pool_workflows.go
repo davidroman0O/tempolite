@@ -170,7 +170,7 @@ func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error
 		}
 	}
 
-	if errRes == ErrWorkflowPaused {
+	if errRes == errWorkflowPaused {
 		data.isPaused = true
 		fmt.Println("pause detected", data.isPaused)
 		return nil

@@ -42,7 +42,6 @@ import (
 ///
 /// In documentation warn that struct activities need a particular care since the developer might introduce even more non-deteministic code, it should be used for struct that hold a client/api but not a value what might change the output given the same inputs since it activities won't be replayed if sucessful.
 ///
-/// TODO: it should not close and wait until workflows AT LEAST reached a yield
 
 // Trade-off of Tempolite vs Temporal
 // Supporting the same similar concepts but now the exact similar features while having less time and resources implies that knowing how Workflows/Activities/Sideffect are behaving in a deterministic and non-deterministic environment, it is crucial
@@ -51,14 +50,12 @@ type Identifier interface {
 	~string | ~int
 }
 
-var ErrWorkflowPaused = errors.New("workflow is paused")
+var errWorkflowPaused = errors.New("workflow is paused")
 
 // TODO: to be renamed as tempoliteEngine since it will be used to rotate/roll new databases when its database size is too big
 type Tempolite[T Identifier] struct {
 	db     *dbSQL.DB
 	client *ent.Client
-
-	/// TODO: I should make a "register" instance that we can clone to create another instance of Tempolite with the same configuration when the size of the database is too big so we can automatically which new workflows/activities/sideeffects/saga to the new instance
 
 	// Workflows are pre-registered
 	// Deterministic function that should be replayed exactly the same way if successful without triggering code since it will have only the results of the previous execution
@@ -1292,6 +1289,8 @@ func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// STAND BY
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
 	return "", nil
@@ -1301,8 +1300,6 @@ func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) error {
 	return nil
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// STAND BY
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {

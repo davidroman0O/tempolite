@@ -568,7 +568,7 @@ func (w WorkflowContext[T]) checkIfPaused() error {
 		return fmt.Errorf("error fetching workflow: %w", err)
 	}
 	if workflow.IsPaused {
-		return ErrWorkflowPaused
+		return errWorkflowPaused
 	}
 	return nil
 }
