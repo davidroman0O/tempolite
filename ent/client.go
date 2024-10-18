@@ -25,6 +25,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
@@ -54,6 +55,8 @@ type Client struct {
 	SideEffectExecution *SideEffectExecutionClient
 	// Signal is the client for interacting with the Signal builders.
 	Signal *SignalClient
+	// SignalExecution is the client for interacting with the SignalExecution builders.
+	SignalExecution *SignalExecutionClient
 	// Workflow is the client for interacting with the Workflow builders.
 	Workflow *WorkflowClient
 	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
@@ -79,6 +82,7 @@ func (c *Client) init() {
 	c.SideEffect = NewSideEffectClient(c.config)
 	c.SideEffectExecution = NewSideEffectExecutionClient(c.config)
 	c.Signal = NewSignalClient(c.config)
+	c.SignalExecution = NewSignalExecutionClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
 	c.WorkflowExecution = NewWorkflowExecutionClient(c.config)
 }
@@ -183,6 +187,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SideEffect:            NewSideEffectClient(cfg),
 		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
 		Signal:                NewSignalClient(cfg),
+		SignalExecution:       NewSignalExecutionClient(cfg),
 		Workflow:              NewWorkflowClient(cfg),
 		WorkflowExecution:     NewWorkflowExecutionClient(cfg),
 	}, nil
@@ -214,6 +219,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SideEffect:            NewSideEffectClient(cfg),
 		SideEffectExecution:   NewSideEffectExecutionClient(cfg),
 		Signal:                NewSignalClient(cfg),
+		SignalExecution:       NewSignalExecutionClient(cfg),
 		Workflow:              NewWorkflowClient(cfg),
 		WorkflowExecution:     NewWorkflowExecutionClient(cfg),
 	}, nil
@@ -247,7 +253,7 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
 		c.Run, c.Saga, c.SagaExecution, c.SideEffect, c.SideEffectExecution, c.Signal,
-		c.Workflow, c.WorkflowExecution,
+		c.SignalExecution, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -259,7 +265,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Activity, c.ActivityExecution, c.ExecutionRelationship, c.FeatureFlagVersion,
 		c.Run, c.Saga, c.SagaExecution, c.SideEffect, c.SideEffectExecution, c.Signal,
-		c.Workflow, c.WorkflowExecution,
+		c.SignalExecution, c.Workflow, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -288,6 +294,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SideEffectExecution.mutate(ctx, m)
 	case *SignalMutation:
 		return c.Signal.mutate(ctx, m)
+	case *SignalExecutionMutation:
+		return c.SignalExecution.mutate(ctx, m)
 	case *WorkflowMutation:
 		return c.Workflow.mutate(ctx, m)
 	case *WorkflowExecutionMutation:
@@ -1730,6 +1738,22 @@ func (c *SignalClient) GetX(ctx context.Context, id string) *Signal {
 	return obj
 }
 
+// QueryExecutions queries the executions edge of a Signal.
+func (c *SignalClient) QueryExecutions(s *Signal) *SignalExecutionQuery {
+	query := (&SignalExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(signal.Table, signal.FieldID, id),
+			sqlgraph.To(signalexecution.Table, signalexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, signal.ExecutionsTable, signal.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SignalClient) Hooks() []Hook {
 	return c.hooks.Signal
@@ -1752,6 +1776,155 @@ func (c *SignalClient) mutate(ctx context.Context, m *SignalMutation) (Value, er
 		return (&SignalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Signal mutation op: %q", m.Op())
+	}
+}
+
+// SignalExecutionClient is a client for the SignalExecution schema.
+type SignalExecutionClient struct {
+	config
+}
+
+// NewSignalExecutionClient returns a client for the SignalExecution from the given config.
+func NewSignalExecutionClient(c config) *SignalExecutionClient {
+	return &SignalExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `signalexecution.Hooks(f(g(h())))`.
+func (c *SignalExecutionClient) Use(hooks ...Hook) {
+	c.hooks.SignalExecution = append(c.hooks.SignalExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `signalexecution.Intercept(f(g(h())))`.
+func (c *SignalExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SignalExecution = append(c.inters.SignalExecution, interceptors...)
+}
+
+// Create returns a builder for creating a SignalExecution entity.
+func (c *SignalExecutionClient) Create() *SignalExecutionCreate {
+	mutation := newSignalExecutionMutation(c.config, OpCreate)
+	return &SignalExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SignalExecution entities.
+func (c *SignalExecutionClient) CreateBulk(builders ...*SignalExecutionCreate) *SignalExecutionCreateBulk {
+	return &SignalExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SignalExecutionClient) MapCreateBulk(slice any, setFunc func(*SignalExecutionCreate, int)) *SignalExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SignalExecutionCreateBulk{err: fmt.Errorf("calling to SignalExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SignalExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SignalExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SignalExecution.
+func (c *SignalExecutionClient) Update() *SignalExecutionUpdate {
+	mutation := newSignalExecutionMutation(c.config, OpUpdate)
+	return &SignalExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SignalExecutionClient) UpdateOne(se *SignalExecution) *SignalExecutionUpdateOne {
+	mutation := newSignalExecutionMutation(c.config, OpUpdateOne, withSignalExecution(se))
+	return &SignalExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SignalExecutionClient) UpdateOneID(id string) *SignalExecutionUpdateOne {
+	mutation := newSignalExecutionMutation(c.config, OpUpdateOne, withSignalExecutionID(id))
+	return &SignalExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SignalExecution.
+func (c *SignalExecutionClient) Delete() *SignalExecutionDelete {
+	mutation := newSignalExecutionMutation(c.config, OpDelete)
+	return &SignalExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SignalExecutionClient) DeleteOne(se *SignalExecution) *SignalExecutionDeleteOne {
+	return c.DeleteOneID(se.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SignalExecutionClient) DeleteOneID(id string) *SignalExecutionDeleteOne {
+	builder := c.Delete().Where(signalexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SignalExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for SignalExecution.
+func (c *SignalExecutionClient) Query() *SignalExecutionQuery {
+	return &SignalExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSignalExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SignalExecution entity by its id.
+func (c *SignalExecutionClient) Get(ctx context.Context, id string) (*SignalExecution, error) {
+	return c.Query().Where(signalexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SignalExecutionClient) GetX(ctx context.Context, id string) *SignalExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySignal queries the signal edge of a SignalExecution.
+func (c *SignalExecutionClient) QuerySignal(se *SignalExecution) *SignalQuery {
+	query := (&SignalClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := se.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(signalexecution.Table, signalexecution.FieldID, id),
+			sqlgraph.To(signal.Table, signal.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, signalexecution.SignalTable, signalexecution.SignalColumn),
+		)
+		fromV = sqlgraph.Neighbors(se.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SignalExecutionClient) Hooks() []Hook {
+	return c.hooks.SignalExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *SignalExecutionClient) Interceptors() []Interceptor {
+	return c.inters.SignalExecution
+}
+
+func (c *SignalExecutionClient) mutate(ctx context.Context, m *SignalExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SignalExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SignalExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SignalExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SignalExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SignalExecution mutation op: %q", m.Op())
 	}
 }
 
@@ -2057,12 +2230,12 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 type (
 	hooks struct {
 		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
-		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, Workflow,
-		WorkflowExecution []ent.Hook
+		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, SignalExecution,
+		Workflow, WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Activity, ActivityExecution, ExecutionRelationship, FeatureFlagVersion, Run,
-		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, Workflow,
-		WorkflowExecution []ent.Interceptor
+		Saga, SagaExecution, SideEffect, SideEffectExecution, Signal, SignalExecution,
+		Workflow, WorkflowExecution []ent.Interceptor
 	}
 )

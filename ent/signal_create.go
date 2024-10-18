@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 )
 
 // SignalCreate is the builder for creating a Signal entity.
@@ -20,15 +21,9 @@ type SignalCreate struct {
 	hooks    []Hook
 }
 
-// SetName sets the "name" field.
-func (sc *SignalCreate) SetName(s string) *SignalCreate {
-	sc.mutation.SetName(s)
-	return sc
-}
-
-// SetData sets the "data" field.
-func (sc *SignalCreate) SetData(i []interface{}) *SignalCreate {
-	sc.mutation.SetData(i)
+// SetStepID sets the "step_id" field.
+func (sc *SignalCreate) SetStepID(s string) *SignalCreate {
+	sc.mutation.SetStepID(s)
 	return sc
 }
 
@@ -60,16 +55,16 @@ func (sc *SignalCreate) SetNillableCreatedAt(t *time.Time) *SignalCreate {
 	return sc
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (sc *SignalCreate) SetUpdatedAt(t time.Time) *SignalCreate {
-	sc.mutation.SetUpdatedAt(t)
+// SetConsumed sets the "consumed" field.
+func (sc *SignalCreate) SetConsumed(b bool) *SignalCreate {
+	sc.mutation.SetConsumed(b)
 	return sc
 }
 
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (sc *SignalCreate) SetNillableUpdatedAt(t *time.Time) *SignalCreate {
-	if t != nil {
-		sc.SetUpdatedAt(*t)
+// SetNillableConsumed sets the "consumed" field if the given value is not nil.
+func (sc *SignalCreate) SetNillableConsumed(b *bool) *SignalCreate {
+	if b != nil {
+		sc.SetConsumed(*b)
 	}
 	return sc
 }
@@ -78,6 +73,21 @@ func (sc *SignalCreate) SetNillableUpdatedAt(t *time.Time) *SignalCreate {
 func (sc *SignalCreate) SetID(s string) *SignalCreate {
 	sc.mutation.SetID(s)
 	return sc
+}
+
+// AddExecutionIDs adds the "executions" edge to the SignalExecution entity by IDs.
+func (sc *SignalCreate) AddExecutionIDs(ids ...string) *SignalCreate {
+	sc.mutation.AddExecutionIDs(ids...)
+	return sc
+}
+
+// AddExecutions adds the "executions" edges to the SignalExecution entity.
+func (sc *SignalCreate) AddExecutions(s ...*SignalExecution) *SignalCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return sc.AddExecutionIDs(ids...)
 }
 
 // Mutation returns the SignalMutation object of the builder.
@@ -123,20 +133,20 @@ func (sc *SignalCreate) defaults() {
 		v := signal.DefaultCreatedAt()
 		sc.mutation.SetCreatedAt(v)
 	}
-	if _, ok := sc.mutation.UpdatedAt(); !ok {
-		v := signal.DefaultUpdatedAt()
-		sc.mutation.SetUpdatedAt(v)
+	if _, ok := sc.mutation.Consumed(); !ok {
+		v := signal.DefaultConsumed
+		sc.mutation.SetConsumed(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (sc *SignalCreate) check() error {
-	if _, ok := sc.mutation.Name(); !ok {
-		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Signal.name"`)}
+	if _, ok := sc.mutation.StepID(); !ok {
+		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "Signal.step_id"`)}
 	}
-	if v, ok := sc.mutation.Name(); ok {
-		if err := signal.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Signal.name": %w`, err)}
+	if v, ok := sc.mutation.StepID(); ok {
+		if err := signal.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Signal.step_id": %w`, err)}
 		}
 	}
 	if _, ok := sc.mutation.Status(); !ok {
@@ -150,8 +160,8 @@ func (sc *SignalCreate) check() error {
 	if _, ok := sc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Signal.created_at"`)}
 	}
-	if _, ok := sc.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Signal.updated_at"`)}
+	if _, ok := sc.mutation.Consumed(); !ok {
+		return &ValidationError{Name: "consumed", err: errors.New(`ent: missing required field "Signal.consumed"`)}
 	}
 	return nil
 }
@@ -188,13 +198,9 @@ func (sc *SignalCreate) createSpec() (*Signal, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := sc.mutation.Name(); ok {
-		_spec.SetField(signal.FieldName, field.TypeString, value)
-		_node.Name = value
-	}
-	if value, ok := sc.mutation.Data(); ok {
-		_spec.SetField(signal.FieldData, field.TypeJSON, value)
-		_node.Data = value
+	if value, ok := sc.mutation.StepID(); ok {
+		_spec.SetField(signal.FieldStepID, field.TypeString, value)
+		_node.StepID = value
 	}
 	if value, ok := sc.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
@@ -204,9 +210,25 @@ func (sc *SignalCreate) createSpec() (*Signal, *sqlgraph.CreateSpec) {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := sc.mutation.UpdatedAt(); ok {
-		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
+	if value, ok := sc.mutation.Consumed(); ok {
+		_spec.SetField(signal.FieldConsumed, field.TypeBool, value)
+		_node.Consumed = value
+	}
+	if nodes := sc.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

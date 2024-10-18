@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -13,15 +14,17 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 )
 
 // SignalQuery is the builder for querying Signal entities.
 type SignalQuery struct {
 	config
-	ctx        *QueryContext
-	order      []signal.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Signal
+	ctx            *QueryContext
+	order          []signal.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.Signal
+	withExecutions *SignalExecutionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (sq *SignalQuery) Unique(unique bool) *SignalQuery {
 func (sq *SignalQuery) Order(o ...signal.OrderOption) *SignalQuery {
 	sq.order = append(sq.order, o...)
 	return sq
+}
+
+// QueryExecutions chains the current query on the "executions" edge.
+func (sq *SignalQuery) QueryExecutions() *SignalExecutionQuery {
+	query := (&SignalExecutionClient{config: sq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(signal.Table, signal.FieldID, selector),
+			sqlgraph.To(signalexecution.Table, signalexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, signal.ExecutionsTable, signal.ExecutionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Signal entity from the query.
@@ -245,15 +270,27 @@ func (sq *SignalQuery) Clone() *SignalQuery {
 		return nil
 	}
 	return &SignalQuery{
-		config:     sq.config,
-		ctx:        sq.ctx.Clone(),
-		order:      append([]signal.OrderOption{}, sq.order...),
-		inters:     append([]Interceptor{}, sq.inters...),
-		predicates: append([]predicate.Signal{}, sq.predicates...),
+		config:         sq.config,
+		ctx:            sq.ctx.Clone(),
+		order:          append([]signal.OrderOption{}, sq.order...),
+		inters:         append([]Interceptor{}, sq.inters...),
+		predicates:     append([]predicate.Signal{}, sq.predicates...),
+		withExecutions: sq.withExecutions.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
 	}
+}
+
+// WithExecutions tells the query-builder to eager-load the nodes that are connected to
+// the "executions" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SignalQuery) WithExecutions(opts ...func(*SignalExecutionQuery)) *SignalQuery {
+	query := (&SignalExecutionClient{config: sq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sq.withExecutions = query
+	return sq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -262,12 +299,12 @@ func (sq *SignalQuery) Clone() *SignalQuery {
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		StepID string `json:"step_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Signal.Query().
-//		GroupBy(signal.FieldName).
+//		GroupBy(signal.FieldStepID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (sq *SignalQuery) GroupBy(field string, fields ...string) *SignalGroupBy {
@@ -285,11 +322,11 @@ func (sq *SignalQuery) GroupBy(field string, fields ...string) *SignalGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		StepID string `json:"step_id,omitempty"`
 //	}
 //
 //	client.Signal.Query().
-//		Select(signal.FieldName).
+//		Select(signal.FieldStepID).
 //		Scan(ctx, &v)
 func (sq *SignalQuery) Select(fields ...string) *SignalSelect {
 	sq.ctx.Fields = append(sq.ctx.Fields, fields...)
@@ -332,8 +369,11 @@ func (sq *SignalQuery) prepareQuery(ctx context.Context) error {
 
 func (sq *SignalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Signal, error) {
 	var (
-		nodes = []*Signal{}
-		_spec = sq.querySpec()
+		nodes       = []*Signal{}
+		_spec       = sq.querySpec()
+		loadedTypes = [1]bool{
+			sq.withExecutions != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Signal).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (sq *SignalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Signa
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Signal{config: sq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,46 @@ func (sq *SignalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Signa
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := sq.withExecutions; query != nil {
+		if err := sq.loadExecutions(ctx, query, nodes,
+			func(n *Signal) { n.Edges.Executions = []*SignalExecution{} },
+			func(n *Signal, e *SignalExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (sq *SignalQuery) loadExecutions(ctx context.Context, query *SignalExecutionQuery, nodes []*Signal, init func(*Signal), assign func(*Signal, *SignalExecution)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Signal)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.SignalExecution(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(signal.ExecutionsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.signal_executions
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "signal_executions" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "signal_executions" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (sq *SignalQuery) sqlCount(ctx context.Context) (int, error) {

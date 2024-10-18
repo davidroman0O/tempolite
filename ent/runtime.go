@@ -15,6 +15,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
@@ -151,20 +152,30 @@ func init() {
 	sideeffectexecution.UpdateDefaultUpdatedAt = sideeffectexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	signalFields := schema.Signal{}.Fields()
 	_ = signalFields
-	// signalDescName is the schema descriptor for name field.
-	signalDescName := signalFields[1].Descriptor()
-	// signal.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	signal.NameValidator = signalDescName.Validators[0].(func(string) error)
+	// signalDescStepID is the schema descriptor for step_id field.
+	signalDescStepID := signalFields[1].Descriptor()
+	// signal.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	signal.StepIDValidator = signalDescStepID.Validators[0].(func(string) error)
 	// signalDescCreatedAt is the schema descriptor for created_at field.
-	signalDescCreatedAt := signalFields[4].Descriptor()
+	signalDescCreatedAt := signalFields[3].Descriptor()
 	// signal.DefaultCreatedAt holds the default value on creation for the created_at field.
 	signal.DefaultCreatedAt = signalDescCreatedAt.Default.(func() time.Time)
-	// signalDescUpdatedAt is the schema descriptor for updated_at field.
-	signalDescUpdatedAt := signalFields[5].Descriptor()
-	// signal.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	signal.DefaultUpdatedAt = signalDescUpdatedAt.Default.(func() time.Time)
-	// signal.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	signal.UpdateDefaultUpdatedAt = signalDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// signalDescConsumed is the schema descriptor for consumed field.
+	signalDescConsumed := signalFields[4].Descriptor()
+	// signal.DefaultConsumed holds the default value on creation for the consumed field.
+	signal.DefaultConsumed = signalDescConsumed.Default.(bool)
+	signalexecutionFields := schema.SignalExecution{}.Fields()
+	_ = signalexecutionFields
+	// signalexecutionDescStartedAt is the schema descriptor for started_at field.
+	signalexecutionDescStartedAt := signalexecutionFields[5].Descriptor()
+	// signalexecution.DefaultStartedAt holds the default value on creation for the started_at field.
+	signalexecution.DefaultStartedAt = signalexecutionDescStartedAt.Default.(func() time.Time)
+	// signalexecutionDescUpdatedAt is the schema descriptor for updated_at field.
+	signalexecutionDescUpdatedAt := signalexecutionFields[6].Descriptor()
+	// signalexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	signalexecution.DefaultUpdatedAt = signalexecutionDescUpdatedAt.Default.(func() time.Time)
+	// signalexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	signalexecution.UpdateDefaultUpdatedAt = signalexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	workflowFields := schema.Workflow{}.Fields()
 	_ = workflowFields
 	// workflowDescStepID is the schema descriptor for step_id field.

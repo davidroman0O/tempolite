@@ -10,10 +10,10 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 )
 
 // SignalUpdate is the builder for updating Signal entities.
@@ -29,35 +29,17 @@ func (su *SignalUpdate) Where(ps ...predicate.Signal) *SignalUpdate {
 	return su
 }
 
-// SetName sets the "name" field.
-func (su *SignalUpdate) SetName(s string) *SignalUpdate {
-	su.mutation.SetName(s)
+// SetStepID sets the "step_id" field.
+func (su *SignalUpdate) SetStepID(s string) *SignalUpdate {
+	su.mutation.SetStepID(s)
 	return su
 }
 
-// SetNillableName sets the "name" field if the given value is not nil.
-func (su *SignalUpdate) SetNillableName(s *string) *SignalUpdate {
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (su *SignalUpdate) SetNillableStepID(s *string) *SignalUpdate {
 	if s != nil {
-		su.SetName(*s)
+		su.SetStepID(*s)
 	}
-	return su
-}
-
-// SetData sets the "data" field.
-func (su *SignalUpdate) SetData(i []interface{}) *SignalUpdate {
-	su.mutation.SetData(i)
-	return su
-}
-
-// AppendData appends i to the "data" field.
-func (su *SignalUpdate) AppendData(i []interface{}) *SignalUpdate {
-	su.mutation.AppendData(i)
-	return su
-}
-
-// ClearData clears the value of the "data" field.
-func (su *SignalUpdate) ClearData() *SignalUpdate {
-	su.mutation.ClearData()
 	return su
 }
 
@@ -89,10 +71,33 @@ func (su *SignalUpdate) SetNillableCreatedAt(t *time.Time) *SignalUpdate {
 	return su
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (su *SignalUpdate) SetUpdatedAt(t time.Time) *SignalUpdate {
-	su.mutation.SetUpdatedAt(t)
+// SetConsumed sets the "consumed" field.
+func (su *SignalUpdate) SetConsumed(b bool) *SignalUpdate {
+	su.mutation.SetConsumed(b)
 	return su
+}
+
+// SetNillableConsumed sets the "consumed" field if the given value is not nil.
+func (su *SignalUpdate) SetNillableConsumed(b *bool) *SignalUpdate {
+	if b != nil {
+		su.SetConsumed(*b)
+	}
+	return su
+}
+
+// AddExecutionIDs adds the "executions" edge to the SignalExecution entity by IDs.
+func (su *SignalUpdate) AddExecutionIDs(ids ...string) *SignalUpdate {
+	su.mutation.AddExecutionIDs(ids...)
+	return su
+}
+
+// AddExecutions adds the "executions" edges to the SignalExecution entity.
+func (su *SignalUpdate) AddExecutions(s ...*SignalExecution) *SignalUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.AddExecutionIDs(ids...)
 }
 
 // Mutation returns the SignalMutation object of the builder.
@@ -100,9 +105,29 @@ func (su *SignalUpdate) Mutation() *SignalMutation {
 	return su.mutation
 }
 
+// ClearExecutions clears all "executions" edges to the SignalExecution entity.
+func (su *SignalUpdate) ClearExecutions() *SignalUpdate {
+	su.mutation.ClearExecutions()
+	return su
+}
+
+// RemoveExecutionIDs removes the "executions" edge to SignalExecution entities by IDs.
+func (su *SignalUpdate) RemoveExecutionIDs(ids ...string) *SignalUpdate {
+	su.mutation.RemoveExecutionIDs(ids...)
+	return su
+}
+
+// RemoveExecutions removes "executions" edges to SignalExecution entities.
+func (su *SignalUpdate) RemoveExecutions(s ...*SignalExecution) *SignalUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.RemoveExecutionIDs(ids...)
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (su *SignalUpdate) Save(ctx context.Context) (int, error) {
-	su.defaults()
 	return withHooks(ctx, su.sqlSave, su.mutation, su.hooks)
 }
 
@@ -128,19 +153,11 @@ func (su *SignalUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (su *SignalUpdate) defaults() {
-	if _, ok := su.mutation.UpdatedAt(); !ok {
-		v := signal.UpdateDefaultUpdatedAt()
-		su.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (su *SignalUpdate) check() error {
-	if v, ok := su.mutation.Name(); ok {
-		if err := signal.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Signal.name": %w`, err)}
+	if v, ok := su.mutation.StepID(); ok {
+		if err := signal.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Signal.step_id": %w`, err)}
 		}
 	}
 	if v, ok := su.mutation.Status(); ok {
@@ -163,19 +180,8 @@ func (su *SignalUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			}
 		}
 	}
-	if value, ok := su.mutation.Name(); ok {
-		_spec.SetField(signal.FieldName, field.TypeString, value)
-	}
-	if value, ok := su.mutation.Data(); ok {
-		_spec.SetField(signal.FieldData, field.TypeJSON, value)
-	}
-	if value, ok := su.mutation.AppendedData(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, signal.FieldData, value)
-		})
-	}
-	if su.mutation.DataCleared() {
-		_spec.ClearField(signal.FieldData, field.TypeJSON)
+	if value, ok := su.mutation.StepID(); ok {
+		_spec.SetField(signal.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := su.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
@@ -183,8 +189,53 @@ func (su *SignalUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := su.mutation.CreatedAt(); ok {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)
 	}
-	if value, ok := su.mutation.UpdatedAt(); ok {
-		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
+	if value, ok := su.mutation.Consumed(); ok {
+		_spec.SetField(signal.FieldConsumed, field.TypeBool, value)
+	}
+	if su.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !su.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -206,35 +257,17 @@ type SignalUpdateOne struct {
 	mutation *SignalMutation
 }
 
-// SetName sets the "name" field.
-func (suo *SignalUpdateOne) SetName(s string) *SignalUpdateOne {
-	suo.mutation.SetName(s)
+// SetStepID sets the "step_id" field.
+func (suo *SignalUpdateOne) SetStepID(s string) *SignalUpdateOne {
+	suo.mutation.SetStepID(s)
 	return suo
 }
 
-// SetNillableName sets the "name" field if the given value is not nil.
-func (suo *SignalUpdateOne) SetNillableName(s *string) *SignalUpdateOne {
+// SetNillableStepID sets the "step_id" field if the given value is not nil.
+func (suo *SignalUpdateOne) SetNillableStepID(s *string) *SignalUpdateOne {
 	if s != nil {
-		suo.SetName(*s)
+		suo.SetStepID(*s)
 	}
-	return suo
-}
-
-// SetData sets the "data" field.
-func (suo *SignalUpdateOne) SetData(i []interface{}) *SignalUpdateOne {
-	suo.mutation.SetData(i)
-	return suo
-}
-
-// AppendData appends i to the "data" field.
-func (suo *SignalUpdateOne) AppendData(i []interface{}) *SignalUpdateOne {
-	suo.mutation.AppendData(i)
-	return suo
-}
-
-// ClearData clears the value of the "data" field.
-func (suo *SignalUpdateOne) ClearData() *SignalUpdateOne {
-	suo.mutation.ClearData()
 	return suo
 }
 
@@ -266,15 +299,59 @@ func (suo *SignalUpdateOne) SetNillableCreatedAt(t *time.Time) *SignalUpdateOne 
 	return suo
 }
 
-// SetUpdatedAt sets the "updated_at" field.
-func (suo *SignalUpdateOne) SetUpdatedAt(t time.Time) *SignalUpdateOne {
-	suo.mutation.SetUpdatedAt(t)
+// SetConsumed sets the "consumed" field.
+func (suo *SignalUpdateOne) SetConsumed(b bool) *SignalUpdateOne {
+	suo.mutation.SetConsumed(b)
 	return suo
+}
+
+// SetNillableConsumed sets the "consumed" field if the given value is not nil.
+func (suo *SignalUpdateOne) SetNillableConsumed(b *bool) *SignalUpdateOne {
+	if b != nil {
+		suo.SetConsumed(*b)
+	}
+	return suo
+}
+
+// AddExecutionIDs adds the "executions" edge to the SignalExecution entity by IDs.
+func (suo *SignalUpdateOne) AddExecutionIDs(ids ...string) *SignalUpdateOne {
+	suo.mutation.AddExecutionIDs(ids...)
+	return suo
+}
+
+// AddExecutions adds the "executions" edges to the SignalExecution entity.
+func (suo *SignalUpdateOne) AddExecutions(s ...*SignalExecution) *SignalUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.AddExecutionIDs(ids...)
 }
 
 // Mutation returns the SignalMutation object of the builder.
 func (suo *SignalUpdateOne) Mutation() *SignalMutation {
 	return suo.mutation
+}
+
+// ClearExecutions clears all "executions" edges to the SignalExecution entity.
+func (suo *SignalUpdateOne) ClearExecutions() *SignalUpdateOne {
+	suo.mutation.ClearExecutions()
+	return suo
+}
+
+// RemoveExecutionIDs removes the "executions" edge to SignalExecution entities by IDs.
+func (suo *SignalUpdateOne) RemoveExecutionIDs(ids ...string) *SignalUpdateOne {
+	suo.mutation.RemoveExecutionIDs(ids...)
+	return suo
+}
+
+// RemoveExecutions removes "executions" edges to SignalExecution entities.
+func (suo *SignalUpdateOne) RemoveExecutions(s ...*SignalExecution) *SignalUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.RemoveExecutionIDs(ids...)
 }
 
 // Where appends a list predicates to the SignalUpdate builder.
@@ -292,7 +369,6 @@ func (suo *SignalUpdateOne) Select(field string, fields ...string) *SignalUpdate
 
 // Save executes the query and returns the updated Signal entity.
 func (suo *SignalUpdateOne) Save(ctx context.Context) (*Signal, error) {
-	suo.defaults()
 	return withHooks(ctx, suo.sqlSave, suo.mutation, suo.hooks)
 }
 
@@ -318,19 +394,11 @@ func (suo *SignalUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (suo *SignalUpdateOne) defaults() {
-	if _, ok := suo.mutation.UpdatedAt(); !ok {
-		v := signal.UpdateDefaultUpdatedAt()
-		suo.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (suo *SignalUpdateOne) check() error {
-	if v, ok := suo.mutation.Name(); ok {
-		if err := signal.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Signal.name": %w`, err)}
+	if v, ok := suo.mutation.StepID(); ok {
+		if err := signal.StepIDValidator(v); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "Signal.step_id": %w`, err)}
 		}
 	}
 	if v, ok := suo.mutation.Status(); ok {
@@ -370,19 +438,8 @@ func (suo *SignalUpdateOne) sqlSave(ctx context.Context) (_node *Signal, err err
 			}
 		}
 	}
-	if value, ok := suo.mutation.Name(); ok {
-		_spec.SetField(signal.FieldName, field.TypeString, value)
-	}
-	if value, ok := suo.mutation.Data(); ok {
-		_spec.SetField(signal.FieldData, field.TypeJSON, value)
-	}
-	if value, ok := suo.mutation.AppendedData(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, signal.FieldData, value)
-		})
-	}
-	if suo.mutation.DataCleared() {
-		_spec.ClearField(signal.FieldData, field.TypeJSON)
+	if value, ok := suo.mutation.StepID(); ok {
+		_spec.SetField(signal.FieldStepID, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
@@ -390,8 +447,53 @@ func (suo *SignalUpdateOne) sqlSave(ctx context.Context) (_node *Signal, err err
 	if value, ok := suo.mutation.CreatedAt(); ok {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)
 	}
-	if value, ok := suo.mutation.UpdatedAt(); ok {
-		_spec.SetField(signal.FieldUpdatedAt, field.TypeTime, value)
+	if value, ok := suo.mutation.Consumed(); ok {
+		_spec.SetField(signal.FieldConsumed, field.TypeBool, value)
+	}
+	if suo.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !suo.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   signal.ExecutionsTable,
+			Columns: []string{signal.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(signalexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Signal{config: suo.config}
 	_spec.Assign = _node.assignValues

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -14,28 +15,34 @@ const (
 	Label = "signal"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldName holds the string denoting the name field in the database.
-	FieldName = "name"
-	// FieldData holds the string denoting the data field in the database.
-	FieldData = "data"
+	// FieldStepID holds the string denoting the step_id field in the database.
+	FieldStepID = "step_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
+	// FieldConsumed holds the string denoting the consumed field in the database.
+	FieldConsumed = "consumed"
+	// EdgeExecutions holds the string denoting the executions edge name in mutations.
+	EdgeExecutions = "executions"
 	// Table holds the table name of the signal in the database.
 	Table = "signals"
+	// ExecutionsTable is the table that holds the executions relation/edge.
+	ExecutionsTable = "signal_executions"
+	// ExecutionsInverseTable is the table name for the SignalExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "signalexecution" package.
+	ExecutionsInverseTable = "signal_executions"
+	// ExecutionsColumn is the table column denoting the executions relation/edge.
+	ExecutionsColumn = "signal_executions"
 )
 
 // Columns holds all SQL columns for signal fields.
 var Columns = []string{
 	FieldID,
-	FieldName,
-	FieldData,
+	FieldStepID,
 	FieldStatus,
 	FieldCreatedAt,
-	FieldUpdatedAt,
+	FieldConsumed,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -49,14 +56,12 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// NameValidator is a validator for the "name" field. It is called by the builders before save.
-	NameValidator func(string) error
+	// StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	StepIDValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultConsumed holds the default value on creation for the "consumed" field.
+	DefaultConsumed bool
 )
 
 // Status defines the type for the "status" enum field.
@@ -68,8 +73,12 @@ const DefaultStatus = StatusPending
 // Status values.
 const (
 	StatusPending   Status = "Pending"
-	StatusReceived  Status = "Received"
-	StatusProcessed Status = "Processed"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+	StatusPaused    Status = "Paused"
+	StatusRetried   Status = "Retried"
+	StatusCancelled Status = "Cancelled"
 )
 
 func (s Status) String() string {
@@ -79,7 +88,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusReceived, StatusProcessed:
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusPaused, StatusRetried, StatusCancelled:
 		return nil
 	default:
 		return fmt.Errorf("signal: invalid enum value for status field: %q", s)
@@ -94,9 +103,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByName orders the results by the name field.
-func ByName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldName, opts...).ToFunc()
+// ByStepID orders the results by the step_id field.
+func ByStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStepID, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
@@ -109,7 +118,28 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+// ByConsumed orders the results by the consumed field.
+func ByConsumed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConsumed, opts...).ToFunc()
+}
+
+// ByExecutionsCount orders the results by executions count.
+func ByExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newExecutionsStep(), opts...)
+	}
+}
+
+// ByExecutions orders the results by executions terms.
+func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newExecutionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+	)
 }

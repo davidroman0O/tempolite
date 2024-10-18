@@ -60,8 +60,8 @@ var (
 		{Name: "child_entity_id", Type: field.TypeString},
 		{Name: "parent_id", Type: field.TypeString},
 		{Name: "child_id", Type: field.TypeString},
-		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield"}},
-		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield"}},
+		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield", "signal"}},
+		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"workflow", "activity", "saga", "side_effect", "yield", "signal"}},
 		{Name: "parent_step_id", Type: field.TypeString},
 		{Name: "child_step_id", Type: field.TypeString},
 	}
@@ -216,17 +216,41 @@ var (
 	// SignalsColumns holds the columns for the "signals" table.
 	SignalsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
-		{Name: "name", Type: field.TypeString},
-		{Name: "data", Type: field.TypeJSON, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Received", "Processed"}, Default: "Pending"},
+		{Name: "step_id", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "consumed", Type: field.TypeBool, Default: false},
 	}
 	// SignalsTable holds the schema information for the "signals" table.
 	SignalsTable = &schema.Table{
 		Name:       "signals",
 		Columns:    SignalsColumns,
 		PrimaryKey: []*schema.Column{SignalsColumns[0]},
+	}
+	// SignalExecutionsColumns holds the columns for the "signal_executions" table.
+	SignalExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "signal_executions", Type: field.TypeString},
+	}
+	// SignalExecutionsTable holds the schema information for the "signal_executions" table.
+	SignalExecutionsTable = &schema.Table{
+		Name:       "signal_executions",
+		Columns:    SignalExecutionsColumns,
+		PrimaryKey: []*schema.Column{SignalExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "signal_executions_signals_executions",
+				Columns:    []*schema.Column{SignalExecutionsColumns[7]},
+				RefColumns: []*schema.Column{SignalsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 	}
 	// WorkflowsColumns holds the columns for the "workflows" table.
 	WorkflowsColumns = []*schema.Column{
@@ -285,6 +309,7 @@ var (
 		SideEffectsTable,
 		SideEffectExecutionsTable,
 		SignalsTable,
+		SignalExecutionsTable,
 		WorkflowsTable,
 		WorkflowExecutionsTable,
 	}
@@ -296,5 +321,6 @@ func init() {
 	RunsTable.ForeignKeys[1].RefTable = ActivitiesTable
 	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
 	SideEffectExecutionsTable.ForeignKeys[0].RefTable = SideEffectsTable
+	SignalExecutionsTable.ForeignKeys[0].RefTable = SignalsTable
 	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

@@ -19,8 +19,7 @@ type workflowTask[T Identifier] struct {
 	retryCount  int
 	maxRetry    int
 	retry       func() error
-
-	isPaused bool
+	isPaused    bool
 }
 
 func (tp *Tempolite[T]) createWorkflowPool() *retrypool.Pool[*workflowTask[T]] {

@@ -629,3 +629,86 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		t.Fatalf("number: %d", number)
 	}
 }
+
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSignal$ .
+func TestWorkflowSimpleSignal(t *testing.T) {
+
+	type workflowData struct {
+		Message string
+	}
+
+	failure := false
+
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+
+		fmt.Println("signal..")
+		signal := ctx.Signal("waiting data")
+
+		fmt.Println("waiting signal")
+		var value int
+		if err := signal.Receive(ctx, &value); err != nil {
+			return -1, err
+		}
+		fmt.Println("signal received: ", value)
+
+		if !failure {
+			failure = true
+			return -1, fmt.Errorf("on purpose")
+		}
+
+		return 69, nil
+	}
+
+	registery := NewRegistry[testIdentifier]().
+		Workflow(localWrkflw).
+		Build()
+
+	tp, err := New[testIdentifier](
+		context.Background(),
+		registery,
+		WithPath("./db/tempolite-workflow-signal.db"),
+		WithDestructive(),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tp.Close()
+
+	if err := tp.registerWorkflow(localWrkflw); err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+
+	tp.workflows.Range(func(key, value any) bool {
+		fmt.Println("key: ", key, "value: ", value)
+		return true
+	})
+
+	var number int
+	var workflowInfo *WorkflowInfo[testIdentifier]
+	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+		t.Fatalf("EnqueueActivityFunc failed: %v", err)
+	}
+
+	go func() {
+		fmt.Println("waiting 2s")
+		<-time.After(2 * time.Second)
+		fmt.Println("sending signal")
+		if err := tp.PublishSignal(workflowInfo.WorkflowID, "waiting data", 420); err != nil {
+			t.Fatalf("PublishSignal failed: %v", err)
+		}
+		fmt.Println("signal sent")
+	}()
+
+	if err := workflowInfo.Get(&number); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+
+	fmt.Println("data: ", number)
+	if number != 69 {
+		t.Fatalf("number: %d", number)
+	}
+}

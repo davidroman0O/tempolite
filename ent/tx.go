@@ -32,6 +32,8 @@ type Tx struct {
 	SideEffectExecution *SideEffectExecutionClient
 	// Signal is the client for interacting with the Signal builders.
 	Signal *SignalClient
+	// SignalExecution is the client for interacting with the SignalExecution builders.
+	SignalExecution *SignalExecutionClient
 	// Workflow is the client for interacting with the Workflow builders.
 	Workflow *WorkflowClient
 	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
@@ -177,6 +179,7 @@ func (tx *Tx) init() {
 	tx.SideEffect = NewSideEffectClient(tx.config)
 	tx.SideEffectExecution = NewSideEffectExecutionClient(tx.config)
 	tx.Signal = NewSignalClient(tx.config)
+	tx.SignalExecution = NewSignalExecutionClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)
 	tx.WorkflowExecution = NewWorkflowExecutionClient(tx.config)
 }

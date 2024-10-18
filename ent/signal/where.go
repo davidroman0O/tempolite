@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/go-tempolite/ent/predicate"
 )
 
@@ -64,9 +65,9 @@ func IDContainsFold(id string) predicate.Signal {
 	return predicate.Signal(sql.FieldContainsFold(FieldID, id))
 }
 
-// Name applies equality check predicate on the "name" field. It's identical to NameEQ.
-func Name(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldEQ(FieldName, v))
+// StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
+func StepID(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldEQ(FieldStepID, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -74,84 +75,74 @@ func CreatedAt(v time.Time) predicate.Signal {
 	return predicate.Signal(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
-func UpdatedAt(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldEQ(FieldUpdatedAt, v))
+// Consumed applies equality check predicate on the "consumed" field. It's identical to ConsumedEQ.
+func Consumed(v bool) predicate.Signal {
+	return predicate.Signal(sql.FieldEQ(FieldConsumed, v))
 }
 
-// NameEQ applies the EQ predicate on the "name" field.
-func NameEQ(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldEQ(FieldName, v))
+// StepIDEQ applies the EQ predicate on the "step_id" field.
+func StepIDEQ(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldEQ(FieldStepID, v))
 }
 
-// NameNEQ applies the NEQ predicate on the "name" field.
-func NameNEQ(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldNEQ(FieldName, v))
+// StepIDNEQ applies the NEQ predicate on the "step_id" field.
+func StepIDNEQ(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldNEQ(FieldStepID, v))
 }
 
-// NameIn applies the In predicate on the "name" field.
-func NameIn(vs ...string) predicate.Signal {
-	return predicate.Signal(sql.FieldIn(FieldName, vs...))
+// StepIDIn applies the In predicate on the "step_id" field.
+func StepIDIn(vs ...string) predicate.Signal {
+	return predicate.Signal(sql.FieldIn(FieldStepID, vs...))
 }
 
-// NameNotIn applies the NotIn predicate on the "name" field.
-func NameNotIn(vs ...string) predicate.Signal {
-	return predicate.Signal(sql.FieldNotIn(FieldName, vs...))
+// StepIDNotIn applies the NotIn predicate on the "step_id" field.
+func StepIDNotIn(vs ...string) predicate.Signal {
+	return predicate.Signal(sql.FieldNotIn(FieldStepID, vs...))
 }
 
-// NameGT applies the GT predicate on the "name" field.
-func NameGT(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldGT(FieldName, v))
+// StepIDGT applies the GT predicate on the "step_id" field.
+func StepIDGT(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldGT(FieldStepID, v))
 }
 
-// NameGTE applies the GTE predicate on the "name" field.
-func NameGTE(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldGTE(FieldName, v))
+// StepIDGTE applies the GTE predicate on the "step_id" field.
+func StepIDGTE(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldGTE(FieldStepID, v))
 }
 
-// NameLT applies the LT predicate on the "name" field.
-func NameLT(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldLT(FieldName, v))
+// StepIDLT applies the LT predicate on the "step_id" field.
+func StepIDLT(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldLT(FieldStepID, v))
 }
 
-// NameLTE applies the LTE predicate on the "name" field.
-func NameLTE(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldLTE(FieldName, v))
+// StepIDLTE applies the LTE predicate on the "step_id" field.
+func StepIDLTE(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldLTE(FieldStepID, v))
 }
 
-// NameContains applies the Contains predicate on the "name" field.
-func NameContains(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldContains(FieldName, v))
+// StepIDContains applies the Contains predicate on the "step_id" field.
+func StepIDContains(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldContains(FieldStepID, v))
 }
 
-// NameHasPrefix applies the HasPrefix predicate on the "name" field.
-func NameHasPrefix(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldHasPrefix(FieldName, v))
+// StepIDHasPrefix applies the HasPrefix predicate on the "step_id" field.
+func StepIDHasPrefix(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldHasPrefix(FieldStepID, v))
 }
 
-// NameHasSuffix applies the HasSuffix predicate on the "name" field.
-func NameHasSuffix(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldHasSuffix(FieldName, v))
+// StepIDHasSuffix applies the HasSuffix predicate on the "step_id" field.
+func StepIDHasSuffix(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldHasSuffix(FieldStepID, v))
 }
 
-// NameEqualFold applies the EqualFold predicate on the "name" field.
-func NameEqualFold(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldEqualFold(FieldName, v))
+// StepIDEqualFold applies the EqualFold predicate on the "step_id" field.
+func StepIDEqualFold(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldEqualFold(FieldStepID, v))
 }
 
-// NameContainsFold applies the ContainsFold predicate on the "name" field.
-func NameContainsFold(v string) predicate.Signal {
-	return predicate.Signal(sql.FieldContainsFold(FieldName, v))
-}
-
-// DataIsNil applies the IsNil predicate on the "data" field.
-func DataIsNil() predicate.Signal {
-	return predicate.Signal(sql.FieldIsNull(FieldData))
-}
-
-// DataNotNil applies the NotNil predicate on the "data" field.
-func DataNotNil() predicate.Signal {
-	return predicate.Signal(sql.FieldNotNull(FieldData))
+// StepIDContainsFold applies the ContainsFold predicate on the "step_id" field.
+func StepIDContainsFold(v string) predicate.Signal {
+	return predicate.Signal(sql.FieldContainsFold(FieldStepID, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -214,44 +205,37 @@ func CreatedAtLTE(v time.Time) predicate.Signal {
 	return predicate.Signal(sql.FieldLTE(FieldCreatedAt, v))
 }
 
-// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
-func UpdatedAtEQ(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldEQ(FieldUpdatedAt, v))
+// ConsumedEQ applies the EQ predicate on the "consumed" field.
+func ConsumedEQ(v bool) predicate.Signal {
+	return predicate.Signal(sql.FieldEQ(FieldConsumed, v))
 }
 
-// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
-func UpdatedAtNEQ(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldNEQ(FieldUpdatedAt, v))
+// ConsumedNEQ applies the NEQ predicate on the "consumed" field.
+func ConsumedNEQ(v bool) predicate.Signal {
+	return predicate.Signal(sql.FieldNEQ(FieldConsumed, v))
 }
 
-// UpdatedAtIn applies the In predicate on the "updated_at" field.
-func UpdatedAtIn(vs ...time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldIn(FieldUpdatedAt, vs...))
+// HasExecutions applies the HasEdge predicate on the "executions" edge.
+func HasExecutions() predicate.Signal {
+	return predicate.Signal(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
 }
 
-// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
-func UpdatedAtNotIn(vs ...time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldNotIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtGT applies the GT predicate on the "updated_at" field.
-func UpdatedAtGT(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldGT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
-func UpdatedAtGTE(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldGTE(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLT applies the LT predicate on the "updated_at" field.
-func UpdatedAtLT(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldLT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
-func UpdatedAtLTE(v time.Time) predicate.Signal {
-	return predicate.Signal(sql.FieldLTE(FieldUpdatedAt, v))
+// HasExecutionsWith applies the HasEdge predicate on the "executions" edge with a given conditions (other predicates).
+func HasExecutionsWith(preds ...predicate.SignalExecution) predicate.Signal {
+	return predicate.Signal(func(s *sql.Selector) {
+		step := newExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
 
@@ -17,22 +18,21 @@ func (Signal) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			Unique(),
-		field.String("name").
+		field.String("step_id").
 			NotEmpty(),
-		field.JSON("data", []interface{}{}).
-			Optional(),
 		field.Enum("status").
-			Values("Pending", "Received", "Processed").
+			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),
 		field.Time("created_at").
 			Default(time.Now),
-		field.Time("updated_at").
-			Default(time.Now).
-			UpdateDefault(time.Now),
+		field.Bool("consumed").
+			Default(false),
 	}
 }
 
 // Edges of the Signal.
 func (Signal) Edges() []ent.Edge {
-	return []ent.Edge{}
+	return []ent.Edge{
+		edge.To("executions", SignalExecution.Type),
+	}
 }

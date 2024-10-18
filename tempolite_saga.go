@@ -120,18 +120,6 @@ func (w WorkflowContext[T]) Saga(stepID T, saga *SagaDefinition[T]) *SagaInfo[T]
 	if err := w.checkIfPaused(); err != nil {
 		return &SagaInfo[T]{err: err}
 	}
-	// Generate a unique ID for this saga execution
-	// sagaID := w.tp.generateSagaID(w, stepID)
-
-	// Store the SagaHandlerInfo in the sagas sync.Map
-	// w.tp.sagas.Store(sagaID, *saga.HandlerInfo)
-
 	// Enqueue the saga for execution
 	return w.tp.saga(w, stepID, saga)
 }
-
-// // Add this method to the Tempolite struct
-// func (tp *Tempolite[T]) generateSagaID(ctx WorkflowContext[T], stepID T) SagaID {
-// 	// Generate a unique saga ID using WorkflowContext and stepID
-// 	return SagaID(fmt.Sprintf("%s-%s-%s-%v", ctx.runID, ctx.workflowID, ctx.executionID, stepID))
-// }

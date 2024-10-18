@@ -129,6 +129,18 @@ func (f SignalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SignalMutation", m)
 }
 
+// The SignalExecutionFunc type is an adapter to allow the use of ordinary
+// function as SignalExecution mutator.
+type SignalExecutionFunc func(context.Context, *ent.SignalExecutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SignalExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SignalExecutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SignalExecutionMutation", m)
+}
+
 // The WorkflowFunc type is an adapter to allow the use of ordinary
 // function as Workflow mutator.
 type WorkflowFunc func(context.Context, *ent.WorkflowMutation) (ent.Value, error)

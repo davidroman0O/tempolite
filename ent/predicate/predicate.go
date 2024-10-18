@@ -36,6 +36,9 @@ type SideEffectExecution func(*sql.Selector)
 // Signal is the predicate function for signal builders.
 type Signal func(*sql.Selector)
 
+// SignalExecution is the predicate function for signalexecution builders.
+type SignalExecution func(*sql.Selector)
+
 // Workflow is the predicate function for workflow builders.
 type Workflow func(*sql.Selector)
 

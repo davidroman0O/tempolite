@@ -22,6 +22,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 )
@@ -94,6 +95,7 @@ func checkColumn(table, column string) error {
 			sideeffect.Table:            sideeffect.ValidColumn,
 			sideeffectexecution.Table:   sideeffectexecution.ValidColumn,
 			signal.Table:                signal.ValidColumn,
+			signalexecution.Table:       signalexecution.ValidColumn,
 			workflow.Table:              workflow.ValidColumn,
 			workflowexecution.Table:     workflowexecution.ValidColumn,
 		})

@@ -220,7 +220,6 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 	go tp.schedulerExecutionWorkflow()
 	go tp.schedulerExecutionActivity()
 	go tp.schedulerExecutionSaga()
-
 	go tp.resumeWorkflowsWorker()
 
 	return tp, nil
@@ -1288,10 +1287,6 @@ func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
 	}
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/// STAND BY
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
 	return "", nil
 }
@@ -1299,8 +1294,6 @@ func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
 func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) error {
 	return nil
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 	pausedWorkflows, err := tp.client.Workflow.Query().
@@ -1334,9 +1327,4 @@ func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
 		return err
 	}
 	return nil
-}
-
-func (tp *Tempolite[T]) ProduceSignal(id string) chan interface{} {
-	// whatever happen here, we have to create a channel that will then send the data to the other channel used by the consumer ON the correct type!!!
-	return make(chan interface{}, 1)
 }

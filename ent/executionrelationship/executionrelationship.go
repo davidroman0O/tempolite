@@ -82,6 +82,7 @@ const (
 	ParentTypeSaga       ParentType = "saga"
 	ParentTypeSideEffect ParentType = "side_effect"
 	ParentTypeYield      ParentType = "yield"
+	ParentTypeSignal     ParentType = "signal"
 )
 
 func (pt ParentType) String() string {
@@ -91,7 +92,7 @@ func (pt ParentType) String() string {
 // ParentTypeValidator is a validator for the "parent_type" field enum values. It is called by the builders before save.
 func ParentTypeValidator(pt ParentType) error {
 	switch pt {
-	case ParentTypeWorkflow, ParentTypeActivity, ParentTypeSaga, ParentTypeSideEffect, ParentTypeYield:
+	case ParentTypeWorkflow, ParentTypeActivity, ParentTypeSaga, ParentTypeSideEffect, ParentTypeYield, ParentTypeSignal:
 		return nil
 	default:
 		return fmt.Errorf("executionrelationship: invalid enum value for parent_type field: %q", pt)
@@ -108,6 +109,7 @@ const (
 	ChildTypeSaga       ChildType = "saga"
 	ChildTypeSideEffect ChildType = "side_effect"
 	ChildTypeYield      ChildType = "yield"
+	ChildTypeSignal     ChildType = "signal"
 )
 
 func (ct ChildType) String() string {
@@ -117,7 +119,7 @@ func (ct ChildType) String() string {
 // ChildTypeValidator is a validator for the "child_type" field enum values. It is called by the builders before save.
 func ChildTypeValidator(ct ChildType) error {
 	switch ct {
-	case ChildTypeWorkflow, ChildTypeActivity, ChildTypeSaga, ChildTypeSideEffect, ChildTypeYield:
+	case ChildTypeWorkflow, ChildTypeActivity, ChildTypeSaga, ChildTypeSideEffect, ChildTypeYield, ChildTypeSignal:
 		return nil
 	default:
 		return fmt.Errorf("executionrelationship: invalid enum value for child_type field: %q", ct)
