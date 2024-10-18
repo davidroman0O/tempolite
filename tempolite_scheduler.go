@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"fmt"
 	"log"
 	"runtime"
 
@@ -183,11 +182,11 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 			var value any
 			var ok bool
 
-			fmt.Println("pendingWorkflows: ", pendingWorkflows)
+			// fmt.Println("pendingWorkflows: ", pendingWorkflows)
 
 			for _, pendingWorkflowExecution := range pendingWorkflows {
 
-				fmt.Println("pendingWorkflowExecution: ", pendingWorkflowExecution)
+				// fmt.Println("pendingWorkflowExecution: ", pendingWorkflowExecution)
 
 				var workflowEntity *ent.Workflow
 				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
@@ -196,7 +195,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 					continue
 				}
 
-				fmt.Println("workflowEntity: ", workflowEntity)
+				// fmt.Println("workflowEntity: ", workflowEntity)
 
 				if value, ok = tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 					var workflowHandlerInfo Workflow
@@ -243,7 +242,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 					// On retry, we will have to create a new workflow exection
 					retryIt := func() error {
 
-						fmt.Println("\t ==Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
+						// fmt.Println("\t ==Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
 
 						// create a new execution for the same workflow
 						var workflowExecution *ent.WorkflowExecution

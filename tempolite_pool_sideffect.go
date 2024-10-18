@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"reflect"
 
@@ -89,7 +88,7 @@ func (w sideEffectWorker[T]) Run(ctx context.Context, data *sideEffectTask[T]) e
 		res[i] = v.Interface()
 	}
 
-	fmt.Println("\t === res", res)
+	// fmt.Println("\t === res", res)
 
 	if _, err := w.tp.client.SideEffectExecution.UpdateOneID(data.ctx.ExecutionID()).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("sideEffectWorker: SideEffectExecution.Update failed: %v", err)

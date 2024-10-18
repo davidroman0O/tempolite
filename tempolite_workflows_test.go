@@ -20,7 +20,7 @@ func TestWorkflowSimple(t *testing.T) {
 	failed := false
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
-		fmt.Println("localWrkflw: ", input, msg)
+		// fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
 			return fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
@@ -44,7 +44,7 @@ func TestWorkflowSimple(t *testing.T) {
 	defer tp.Close()
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -67,7 +67,7 @@ type testSimpleActivity struct {
 
 func (h testSimpleActivity) Run(ctx ActivityContext[testIdentifier], task testMessageActivitySimple) (int, string, error) {
 
-	fmt.Println("testSimpleActivity: ", task.Message)
+	// fmt.Println("testSimpleActivity: ", task.Message)
 
 	return 420, "cool", nil
 }
@@ -82,7 +82,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 	failed := false
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
-		fmt.Println("localWrkflw: ", input, msg)
+		// fmt.Println("localWrkflw: ", input, msg)
 
 		var number int
 		var str string
@@ -91,7 +91,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 			return err
 		}
 
-		fmt.Println("number: ", number, "str: ", str)
+		// fmt.Println("number: ", number, "str: ", str)
 
 		if !failed {
 			failed = true
@@ -124,7 +124,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -147,7 +147,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 	failed := false
 
 	activtfn := func(ctx ActivityContext[testIdentifier], id int) (int, error) {
-		fmt.Println("activtfn: ", id)
+		// fmt.Println("activtfn: ", id)
 
 		if !failed {
 			failed = true
@@ -157,14 +157,14 @@ func TestWorkflowActivityMore(t *testing.T) {
 	}
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
-		fmt.Println("localWrkflw: ", input, msg)
+		// fmt.Println("localWrkflw: ", input, msg)
 
 		var subnumber int
 		if err := ctx.ActivityFunc("first", activtfn, 420).Get(&subnumber); err != nil {
 			return err
 		}
 
-		fmt.Println("subnumber: ", subnumber)
+		// fmt.Println("subnumber: ", subnumber)
 
 		var number int
 		var str string
@@ -173,7 +173,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 			return err
 		}
 
-		fmt.Println("number: ", number, "str: ", str)
+		// fmt.Println("number: ", number, "str: ", str)
 
 		return nil
 	}
@@ -206,7 +206,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -229,7 +229,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 	failed := false
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
-		fmt.Println("localWrkflw: ", input, msg)
+		// fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
 			return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
@@ -257,7 +257,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -270,7 +270,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailChild$ .
@@ -283,24 +283,24 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 	failed := false
 
 	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
-		fmt.Println("anotherWrk")
+		// fmt.Println("anotherWrk")
 		// If we fail here, then the the info.Get will fail and the parent workflow, will also fail
 		// but does that mean, we should be retried?
 		if !failed {
 			failed = true
-			fmt.Println("failed on purpose: ", failed)
+			// fmt.Println("failed on purpose: ", failed)
 			return fmt.Errorf("on purpose")
 		}
 		return nil
 	}
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
-		fmt.Println("localWrkflw: ", failed, input, msg)
+		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		err := ctx.Workflow("test", anotherWrk).Get()
 
 		if err != nil {
-			fmt.Println("info.Get failed: ", err)
+			// fmt.Println("info.Get failed: ", err)
 			return -1, err
 		}
 		return 420, nil
@@ -331,7 +331,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -344,7 +344,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSubWorkflowInfoGetFailParent$ .
@@ -357,22 +357,22 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 	failed := false
 
 	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
-		fmt.Println("anotherWrk")
+		// fmt.Println("anotherWrk")
 		return nil
 	}
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
-		fmt.Println("localWrkflw: ", failed, input, msg)
+		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		err := ctx.Workflow("test", anotherWrk).Get()
 		if err != nil {
-			fmt.Println("info.Get failed: ", err)
+			// fmt.Println("info.Get failed: ", err)
 			return -1, err
 		}
 
 		if !failed {
 			failed = true
-			fmt.Println("failed on purpose: ", failed)
+			// fmt.Println("failed on purpose: ", failed)
 			return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
 		}
 		return 420, nil
@@ -402,7 +402,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -415,7 +415,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 }
 
 // go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleSideEffect$ .
@@ -428,7 +428,7 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 	failed := false
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
-		fmt.Println("localWrkflw: ", failed, input, msg)
+		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		var value int
 		if err := ctx.SideEffect("eventual switch", func(ctx SideEffectContext[testIdentifier]) int {
@@ -439,7 +439,7 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 
 		if !failed {
 			failed = true
-			fmt.Println("failed on purpose: ", failed)
+			// fmt.Println("failed on purpose: ", failed)
 			return -1, fmt.Errorf("localWrkflw: %d, %s", input, msg.Message)
 		}
 
@@ -466,7 +466,7 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -479,7 +479,7 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 	if number != 69 {
 		t.Fatalf("number: %d", number)
 	}
@@ -563,7 +563,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		if err := tp.PauseWorkflow(workflowInfo.WorkflowID); err != nil {
 			t.Fatalf("PauseWorkflow failed: %v", err)
 		}
-		fmt.Println("\t\t PAUSED (5s) !!!")
+		// fmt.Println("\t\t PAUSED (5s) !!!")
 		<-time.After(5 * time.Second)
 	}
 
@@ -580,7 +580,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		<-time.After(5 * time.Second)
 	}
 
-	fmt.Println("\t\t RESTARTING...")
+	// fmt.Println("\t\t RESTARTING...")
 
 	{
 		tp.Close() // close the DB and start again
@@ -596,7 +596,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 			t.Fatalf("RegisterWorkflow failed: %v", err)
 		}
 	}
-	fmt.Println("\t\t RESTARTED !!!")
+	// fmt.Println("\t\t RESTARTED !!!")
 
 	pauses, err := tp.ListPausedWorkflows()
 	if err != nil {
@@ -606,7 +606,8 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 	for _, pauseworkflow := range pauses {
 		fmt.Println("pauseworkflow: ", pauseworkflow.String())
 	}
-	fmt.Println("\t\t RESUMING (it will finish)...")
+
+	// fmt.Println("\t\t RESUMING (it will finish)...")
 	<-time.After(2 * time.Second)
 	log.Println("\t resume2")
 	if err := tp.ResumeWorkflow(workflowInfo.WorkflowID); err != nil {
@@ -624,7 +625,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 	if number != 69 {
 		t.Fatalf("number: %d", number)
 	}
@@ -641,15 +642,15 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 
-		fmt.Println("signal..")
+		// fmt.Println("signal..")
 		signal := ctx.Signal("waiting data")
 
-		fmt.Println("waiting signal")
+		// fmt.Println("waiting signal")
 		var value int
 		if err := signal.Receive(ctx, &value); err != nil {
 			return -1, err
 		}
-		fmt.Println("signal received: ", value)
+		// fmt.Println("signal received: ", value)
 
 		if !failure {
 			failure = true
@@ -679,7 +680,7 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -690,13 +691,13 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 	}
 
 	go func() {
-		fmt.Println("waiting 2s")
+		// fmt.Println("waiting 2s")
 		<-time.After(2 * time.Second)
-		fmt.Println("sending signal")
+		// fmt.Println("sending signal")
 		if err := tp.PublishSignal(workflowInfo.WorkflowID, "waiting data", 420); err != nil {
 			t.Fatalf("PublishSignal failed: %v", err)
 		}
-		fmt.Println("signal sent")
+		// fmt.Println("signal sent")
 	}()
 
 	if err := workflowInfo.Get(&number); err != nil {
@@ -707,7 +708,7 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 	if number != 69 {
 		t.Fatalf("number: %d", number)
 	}
@@ -759,7 +760,7 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 	}
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -768,14 +769,14 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
-	fmt.Println("waiting 2s")
+	// fmt.Println("waiting 2s")
 	<-time.After(2 * time.Second)
 
 	if err := tp.CancelWorkflow(workflowInfo.WorkflowID); err != nil {
 		t.Fatalf("CancelWorkflow failed: %v", err)
 	}
 
-	fmt.Println("waiting until end")
+	// fmt.Println("waiting until end")
 
 	if err := tp.Wait(); err != nil {
 		t.Fatalf("Wait failed: %v", err)

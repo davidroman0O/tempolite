@@ -66,7 +66,7 @@ func TestSagaSimple(t *testing.T) {
 	defer tp.Close()
 
 	tp.workflows.Range(func(key, value any) bool {
-		fmt.Println("key: ", key, "value: ", value)
+		// fmt.Println("key: ", key, "value: ", value)
 		return true
 	})
 
@@ -79,7 +79,7 @@ func TestSagaSimple(t *testing.T) {
 		t.Fatalf("Wait failed: %v", err)
 	}
 
-	fmt.Println("data: ", number)
+	// fmt.Println("data: ", number)
 	if number != 69 {
 		t.Fatalf("number: %d", number)
 	}

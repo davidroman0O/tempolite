@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/davidroman0O/comfylite3"
@@ -25,18 +24,18 @@ func (s *SomeAgent) trackHandler(ctx context.Context, payload SomeID) (interface
 	// if err := json.Unmarshal(payload, identifier); err != nil {
 	// 	return nil, err
 	// }
-	fmt.Println("TrackHandler", payload)
+	// fmt.Println("TrackHandler", payload)
 	return payload, nil
 }
 
 func handler(ctx context.Context, payload []byte) ([]byte, error) {
 	var identifier SomeID
-	fmt.Println("TrackHandler", string(payload))
+	// fmt.Println("TrackHandler", string(payload))
 	if err := json.Unmarshal(payload, &identifier); err != nil {
-		fmt.Println("TrackHandler failed to unmsharll", err)
+		// fmt.Println("TrackHandler failed to unmsharll", err)
 		return nil, err
 	}
-	fmt.Println("TrackHandler", identifier)
+	// fmt.Println("TrackHandler", identifier)
 	return []byte("Task completed successfully"), nil
 }
 
@@ -84,7 +83,7 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Data", string(data))
+	// fmt.Println("Data", string(data))
 
 	// Wait indefinitely
 	select {}

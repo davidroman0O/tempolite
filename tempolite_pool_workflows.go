@@ -102,7 +102,7 @@ func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[
 	// We know in advance the config and the retry value, we can manage in-memory
 	if task.Data().maxRetry > 0 && total < task.Data().maxRetry {
 
-		fmt.Println("retry it the task: ", task.Data().retryCount, total, err)
+		// fmt.Println("retry it the task: ", task.Data().retryCount, total, err)
 		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
 			log.Printf("workflowOnFailure: WorkflowExecution.Update failed: %v", err)
@@ -171,11 +171,11 @@ func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error
 
 	if errRes == errWorkflowPaused {
 		data.isPaused = true
-		fmt.Println("pause detected", data.isPaused)
+		// fmt.Println("pause detected", data.isPaused)
 		return nil
 	}
 
-	fmt.Println("output to save", res, errRes)
+	// fmt.Println("output to save", res, errRes)
 	if _, err := w.tp.client.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
 		log.Printf("workflowWorker: WorkflowExecution.Update failed: %v", err)
 		return err

@@ -14,7 +14,7 @@ func inspectFunction(fn interface{}) {
 	fnType := reflect.TypeOf(fn)
 
 	if fnType.Kind() != reflect.Func {
-		fmt.Println("Provided value is not a function")
+		// fmt.Println("Provided value is not a function")
 		return
 	}
 
@@ -31,9 +31,9 @@ func inspectFunction(fn interface{}) {
 func main() {
 	inspectFunction(exampleCallback)
 	inspectFunction(func() {
-		fmt.Println("Anonymous function 1")
+		// fmt.Println("Anonymous function 1")
 	})
 	inspectFunction(func() {
-		fmt.Println("Anonymous function 2")
+		// fmt.Println("Anonymous function 2")
 	})
 }

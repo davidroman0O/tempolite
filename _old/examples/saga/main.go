@@ -248,17 +248,17 @@ func main() {
 
 			switch sagaInfo.Status {
 			case tempolite.SagaStatusCompleted:
-				fmt.Println("Vacation booking completed successfully!")
+				// fmt.Println("Vacation booking completed successfully!")
 				return
 			case tempolite.SagaStatusFailed:
-				fmt.Println("Vacation booking failed.")
+				// fmt.Println("Vacation booking failed.")
 				<-time.After(5 * time.Second)
 				return
 			case tempolite.SagaStatusCancelled:
-				fmt.Println("Vacation booking was cancelled.")
+				// fmt.Println("Vacation booking was cancelled.")
 				return
 			case tempolite.SagaStatusTerminated:
-				fmt.Println("Vacation booking was terminated.")
+				// fmt.Println("Vacation booking was terminated.")
 				return
 			default:
 				fmt.Printf("Saga status: %v, current step: %d\n", sagaInfo.Status, sagaInfo.CurrentStep)

@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"reflect"
 
@@ -72,7 +71,7 @@ func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[
 	// We know in advance the config and the retry value, we can manage in-memory
 	if task.Data().maxRetry > 0 && task.Data().retryCount < task.Data().maxRetry {
 		task.Data().retryCount++
-		fmt.Println("retry it the task: ", err)
+		// fmt.Println("retry it the task: ", err)
 		// Just by creating a new activity execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
 			log.Printf("ERROR activityOnFailure: ActivityExecution.Update failed: %v", err)

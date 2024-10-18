@@ -1052,7 +1052,7 @@ func (tp *Tempolite) GetSaga(id string) (*SagaInfo, error) {
 }
 
 func Workflow1(ctx WorkflowContext, input1 string, input2 int) (int, int, error) {
-	fmt.Println("hello ", input1)
+	// fmt.Println("hello ", input1)
 
 	// we're going to switch it
 	seinfo, err := ctx.SideEffect(func(ctx SideEffect) interface{} {
@@ -1085,7 +1085,7 @@ func Workflow1(ctx WorkflowContext, input1 string, input2 int) (int, int, error)
 	}
 
 	if value, ok := payload[0].(int); ok {
-		fmt.Println("Activity1 returned", value)
+		// fmt.Println("Activity1 returned", value)
 	}
 
 	return 1, 2, nil

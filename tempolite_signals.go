@@ -47,7 +47,7 @@ func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value int
 				First(tp.ctx)
 			if err != nil {
 				if ent.IsNotFound(err) {
-					fmt.Println("Signal not completed yet, waiting for next tick")
+					// fmt.Println("Signal not completed yet, waiting for next tick")
 					continue // No completed execution yet, wait for next tick
 				}
 				return fmt.Errorf("error querying signal execution: %w", err)

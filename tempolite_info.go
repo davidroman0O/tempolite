@@ -190,21 +190,6 @@ func (i *WorkflowExecutionInfo[T]) Get(output ...interface{}) error {
 	}
 }
 
-func (i *WorkflowExecutionInfo[T]) Cancel() error {
-	// todo: implement
-	return nil
-}
-
-func (i *WorkflowExecutionInfo[T]) Pause() error {
-	// todo: implement
-	return nil
-}
-
-func (i *WorkflowExecutionInfo[T]) Resume() error {
-	// todo: implement
-	return nil
-}
-
 type ActivityInfo[T Identifier] struct {
 	tp         *Tempolite[T]
 	ActivityID ActivityID
@@ -226,7 +211,7 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 	var value any
 	var ok bool
 	var activityHandlerInfo Activity
-	fmt.Println("searching id", i.ActivityID.String())
+	// fmt.Println("searching id", i.ActivityID.String())
 	for {
 		select {
 		case <-i.tp.ctx.Done():
@@ -234,7 +219,7 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 		case <-ticker.C:
 			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ActivityID.String())).Only(i.tp.ctx)
 			if err != nil {
-				fmt.Println("error searching activity", err)
+				// fmt.Println("error searching activity", err)
 				return err
 			}
 			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
@@ -246,7 +231,7 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 				switch activityEntity.Status {
 				// wait for the confirmation that the workflow entity reached a final state
 				case activity.StatusCompleted, activity.StatusFailed, activity.StatusCancelled:
-					fmt.Println("searching for activity execution of ", i.ActivityID.String())
+					// fmt.Println("searching for activity execution of ", i.ActivityID.String())
 					// Then only get the latest activity execution
 					// Simply because eventually my children can have retries and i need to let them finish
 					latestExec, err := i.tp.client.ActivityExecution.Query().
@@ -334,7 +319,7 @@ func (i *ActivityExecutionInfo[T]) Get(output ...interface{}) error {
 		case <-i.tp.ctx.Done():
 			return i.tp.ctx.Err()
 		case <-ticker.C:
-			fmt.Println("searching id", i.ExecutionID.String())
+			// fmt.Println("searching id", i.ExecutionID.String())
 			activityExecEntity, err := i.tp.client.ActivityExecution.Query().Where(activityexecution.IDEQ(i.ExecutionID.String())).WithActivity().Only(i.tp.ctx)
 			if err != nil {
 				return err
@@ -422,7 +407,7 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 
 				switch sideEffectEntity.Status {
 				case sideeffect.StatusCompleted:
-					fmt.Println("searching for side effect execution of ", i.EntityID.String())
+					// fmt.Println("searching for side effect execution of ", i.EntityID.String())
 					latestExec, err := i.tp.client.SideEffectExecution.Query().
 						Where(
 							sideeffectexecution.HasSideEffect(),
@@ -637,7 +622,7 @@ func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs .
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
 	}
-	fmt.Println("\t \t activity execution id", id, err)
+	// fmt.Println("\t \t activity execution id", id, err)
 	return w.tp.getActivity(w, id, err)
 }
 
@@ -653,13 +638,8 @@ func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inpu
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
 	}
-	fmt.Println("\t \t activity execution id", id, err)
+	// fmt.Println("\t \t activity execution id", id, err)
 	return w.tp.getActivity(w, id, err)
-}
-
-func (w WorkflowContext[T]) GetActivity(id string) (*ActivityInfo[T], error) {
-	// todo: implement
-	return nil, nil
 }
 
 type ActivityContext[T Identifier] struct {
