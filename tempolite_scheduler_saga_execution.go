@@ -175,8 +175,12 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 								// Start compensation from the last successful transaction
 								return tp.compensationPool.Dispatch(compensationTasks[lastSuccessfulIndex])
 							}
+
+							_, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+								SetStatus(saga.StatusFailed).
+								Save(tp.ctx)
 							// No compensation needed if no transactions succeeded
-							return nil
+							return err
 						}
 					}
 

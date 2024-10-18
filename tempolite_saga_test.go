@@ -34,6 +34,7 @@ func TestSagaSimple(t *testing.T) {
 
 		sagaBuilder := NewSaga[string]()
 		sagaBuilder.AddStep(testOrderSaga{OrderID: "12345"})
+		sagaBuilder.AddStep(testFailureSaga{OrderID: "12345"})
 		sagaBuilder.AddStep(testPaymentSaga{OrderID: "12345"})
 		saga, err := sagaBuilder.Build()
 		if err != nil {

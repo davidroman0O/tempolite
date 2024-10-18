@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 
 	"github.com/davidroman0O/go-tempolite"
 )
@@ -14,8 +12,9 @@ type CustomIdentifier string
 
 // OrderData represents the data for an order
 type OrderData struct {
-	OrderID string
-	Amount  float64
+	OrderID      string
+	Amount       float64
+	FailScenario string
 }
 
 // ReserveInventorySaga represents the first step in the saga
@@ -25,9 +24,8 @@ type ReserveInventorySaga struct {
 
 func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
 	log.Printf("Reserving inventory for order %s", s.Data.OrderID)
-	// Simulate inventory reservation
-	if rand.Float32() < 0.3 { // 30% chance of failure
-		return nil, errors.New("inventory reservation failed: out of stock")
+	if s.Data.FailScenario == "inventory" {
+		return nil, fmt.Errorf("inventory reservation failed: out of stock")
 	}
 	return "Inventory reserved", nil
 }
@@ -44,8 +42,8 @@ type ProcessPaymentSaga struct {
 
 func (s ProcessPaymentSaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
 	log.Printf("Processing payment for order %s, amount %.2f", s.Data.OrderID, s.Data.Amount)
-	if s.Data.Amount > 1000 {
-		return nil, errors.New("payment declined: amount too high")
+	if s.Data.FailScenario == "payment" {
+		return nil, fmt.Errorf("payment declined: insufficient funds")
 	}
 	return "Payment processed", nil
 }
@@ -62,9 +60,8 @@ type UpdateLedgerSaga struct {
 
 func (s UpdateLedgerSaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
 	log.Printf("Updating ledger for order %s", s.Data.OrderID)
-	// Simulate ledger update
-	if rand.Float32() < 0.2 { // 20% chance of failure
-		return nil, errors.New("ledger update failed: database error")
+	if s.Data.FailScenario == "ledger" {
+		return nil, fmt.Errorf("ledger update failed: database error")
 	}
 	return "Ledger updated", nil
 }
@@ -102,7 +99,7 @@ func main() {
 		tempolite.NewRegistry[CustomIdentifier]().
 			Workflow(OrderWorkflow).
 			Build(),
-		tempolite.WithPath("./db/tempolite-example-saga.db"),
+		tempolite.WithPath("./tempolite.db"),
 		tempolite.WithDestructive(),
 	)
 	if err != nil {
@@ -110,20 +107,23 @@ func main() {
 	}
 	defer tp.Close()
 
-	// Run multiple orders to demonstrate compensation
-	for i := 1; i <= 5; i++ {
-		orderData := OrderData{
-			OrderID: fmt.Sprintf("ORD-%03d", i),
-			Amount:  float64(500 + i*100), // Varying amounts
-		}
+	// Define test cases
+	testCases := []OrderData{
+		{OrderID: "ORD-001", Amount: 100.00, FailScenario: ""},          // Success case
+		{OrderID: "ORD-002", Amount: 200.00, FailScenario: "inventory"}, // Fail at first step
+		{OrderID: "ORD-003", Amount: 300.00, FailScenario: "payment"},   // Fail at second step
+		{OrderID: "ORD-004", Amount: 400.00, FailScenario: "ledger"},    // Fail at third step
+	}
 
+	for _, orderData := range testCases {
 		var result string
-		err = tp.Workflow(CustomIdentifier(fmt.Sprintf("order-workflow-%d", i)), OrderWorkflow, orderData).Get(&result)
+		err = tp.Workflow(CustomIdentifier(fmt.Sprintf("order-workflow-%s", orderData.OrderID)), OrderWorkflow, orderData).Get(&result)
 		if err != nil {
 			log.Printf("Workflow execution failed for order %s: %v", orderData.OrderID, err)
 		} else {
 			log.Printf("Workflow result for order %s: %s", orderData.OrderID, result)
 		}
+		log.Println("----------------------------------------")
 	}
 
 	if err := tp.Wait(); err != nil {
