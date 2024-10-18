@@ -177,7 +177,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 							}
 
 							_, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
-								SetStatus(saga.StatusFailed).
+								SetStatus(saga.StatusCompensated).
 								Save(tp.ctx)
 							// No compensation needed if no transactions succeeded
 							return err
