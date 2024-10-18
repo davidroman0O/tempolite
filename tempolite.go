@@ -249,7 +249,7 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 			}
 
 			for _, wf := range workflows {
-				fmt.Println("Resuming workflow", wf.ID)
+				// fmt.Println("Resuming workflow", wf.ID)
 				if err := tp.redispatchWorkflow(WorkflowID(wf.ID)); err != nil {
 					log.Printf("Error redispatching workflow %s: %v", wf.ID, err)
 				}
@@ -268,7 +268,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 		return fmt.Errorf("error fetching workflow: %w", err)
 	}
 
-	fmt.Println(wf.ID)
+	// fmt.Println(wf.ID)
 
 	wfEx, err := tp.client.WorkflowExecution.Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).
@@ -324,7 +324,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 	retryIt := func() error {
 
-		fmt.Println("\t ==Create new workflow from", wf.HandlerName, wfEx.ID)
+		// fmt.Println("\t ==Create new workflow from", wf.HandlerName, wfEx.ID)
 
 		// create a new execution for the same workflow
 		var workflowExecution *ent.WorkflowExecution
@@ -756,7 +756,7 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 				MaximumAttempts: 1,
 			}).
 			Save(tp.ctx); err != nil {
-			fmt.Println("ERROR CREATE WORKFLOW", err)
+			// fmt.Println("ERROR CREATE WORKFLOW", err)
 			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
@@ -773,7 +773,7 @@ func (tp *Tempolite[T]) enqueueSubWorkflow(ctx TempoliteContext, stepID T, workf
 			SetRunID(ctx.RunID()).
 			SetWorkflow(workflowEntity).
 			Save(tp.ctx); err != nil {
-			fmt.Println("ERROR CREATE WORKFLOW EXECUTION", err)
+			// fmt.Println("ERROR CREATE WORKFLOW EXECUTION", err)
 			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
@@ -890,7 +890,7 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, para
 				MaximumAttempts: 1,
 			}).
 			Save(tp.ctx); err != nil {
-			fmt.Println("ERROR CREATE WORKFLOW", err)
+			// fmt.Println("ERROR CREATE WORKFLOW", err)
 			if err = tx.Rollback(); err != nil {
 				return "", err
 			}
@@ -1287,14 +1287,6 @@ func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
 	}
 }
 
-func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) (string, error) {
-	return "", nil
-}
-
-func (tp *Tempolite[T]) RemoveWorkflow(id WorkflowID) error {
-	return nil
-}
-
 func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 	pausedWorkflows, err := tp.client.Workflow.Query().
 		Where(workflow.IsPausedEQ(true)).
@@ -1327,4 +1319,100 @@ func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
 		return err
 	}
 	return nil
+}
+
+func (tp *Tempolite[T]) waitPaused(ctx context.Context, id WorkflowID) error {
+	ticker := time.NewTicker(time.Second / 16)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tp.ctx.Done():
+			return tp.ctx.Err()
+		case <-ticker.C:
+			_, err := tp.client.Workflow.Query().Where(workflow.ID(id.String()), workflow.StatusEQ(workflow.StatusPaused)).Only(tp.ctx)
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+func (tp *Tempolite[T]) waitCompleted(ctx context.Context, id WorkflowID) error {
+	ticker := time.NewTicker(time.Second / 16)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tp.ctx.Done():
+			return tp.ctx.Err()
+		case <-ticker.C:
+			_, err := tp.client.Workflow.Query().Where(workflow.ID(id.String()), workflow.StatusEQ(workflow.StatusCompleted)).Only(tp.ctx)
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) error {
+
+	// fmt.Println("cancel pausing")
+	if err := tp.PauseWorkflow(id); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	waiting := make(chan string)
+
+	// fmt.Println("cancel waiting")
+	go func() {
+		if err := tp.waitPaused(ctx, id); err == nil {
+			waiting <- "paused"
+		}
+	}()
+
+	go func() {
+		if err := tp.waitCompleted(ctx, id); err == nil {
+			waiting <- "completed"
+		}
+	}()
+
+	var result string
+
+	select {
+	case result = <-waiting:
+		fmt.Printf("Workflow %s\n", result)
+		cancel()
+	case <-ctx.Done():
+		// fmt.Println("Context cancelled")
+	}
+
+	close(waiting)
+
+	switch result {
+	case "paused":
+		// fmt.Println("ranging")
+		tp.workflowPool.RangeTasks(func(data *workflowTask[T], workerID int, status retrypool.TaskStatus) bool {
+			// fmt.Println("ranging", data.ctx.workflowID, id.String())
+			if data.ctx.workflowID == id.String() {
+				tp.workflowPool.InterruptWorker(workerID, retrypool.WithForcePanic(), retrypool.WithRemoveTask())
+			}
+			return true
+		})
+		// fmt.Println("cancelling")
+	case "completed":
+		// fmt.Println("either way, it was probably a workflow without new commands")
+		return nil
+	}
+
+	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+		SetStatus(workflow.StatusCancelled).
+		Save(tp.ctx)
+
+	return err
 }

@@ -712,3 +712,73 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 		t.Fatalf("number: %d", number)
 	}
 }
+
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleCancel$ .
+func TestWorkflowSimpleCancel(t *testing.T) {
+
+	type workflowData struct {
+		Message string
+	}
+
+	activtyLocal := func(ctx ActivityContext[testIdentifier]) error {
+		<-time.After(time.Second * 5)
+		return nil
+	}
+
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+
+		if err := ctx.ActivityFunc("test", activtyLocal).Get(); err != nil {
+			return -1, err
+		}
+		<-time.After(time.Second * 5)
+		if err := ctx.ActivityFunc("second time", activtyLocal).Get(); err != nil {
+			return -1, err
+		}
+
+		return 69, nil
+	}
+
+	registery := NewRegistry[testIdentifier]().
+		Workflow(localWrkflw).
+		ActivityFunc(activtyLocal).
+		Build()
+
+	tp, err := New[testIdentifier](
+		context.Background(),
+		registery,
+		WithPath("./db/tempolite-workflow-cancel.db"),
+		WithDestructive(),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tp.Close()
+
+	if err := tp.registerWorkflow(localWrkflw); err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+
+	tp.workflows.Range(func(key, value any) bool {
+		fmt.Println("key: ", key, "value: ", value)
+		return true
+	})
+
+	var workflowInfo *WorkflowInfo[testIdentifier]
+	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+		t.Fatalf("EnqueueActivityFunc failed: %v", err)
+	}
+
+	fmt.Println("waiting 2s")
+	<-time.After(2 * time.Second)
+
+	if err := tp.CancelWorkflow(workflowInfo.WorkflowID); err != nil {
+		t.Fatalf("CancelWorkflow failed: %v", err)
+	}
+
+	fmt.Println("waiting until end")
+
+	if err := tp.Wait(); err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+
+}

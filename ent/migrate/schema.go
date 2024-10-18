@@ -256,7 +256,7 @@ var (
 	WorkflowsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "step_id", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
