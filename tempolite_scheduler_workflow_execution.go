@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/davidroman0O/go-tempolite/ent"
@@ -26,7 +25,6 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 				Limit(1).
 				All(tp.ctx)
 			if err != nil {
-				log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
 				continue
 			}
 
@@ -39,26 +37,22 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 			var value any
 			var ok bool
 
-			// fmt.Println("pendingWorkflows: ", pendingWorkflows)
-
 			for _, pendingWorkflowExecution := range pendingWorkflows {
 
-				// fmt.Println("pendingWorkflowExecution: ", pendingWorkflowExecution)
+				tp.logger.Debug(tp.ctx, "Scheduler workflow execution: pending workflow", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
 				var workflowEntity *ent.Workflow
 				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
 					// todo: maybe we can tag the execution as not executable
-					log.Printf("scheduler: Workflow.Get failed: %v", err)
+					tp.logger.Error(tp.ctx, "Scheduler workflow execution: workflow.Get failed", "error", err)
 					continue
 				}
-
-				// fmt.Println("workflowEntity: ", workflowEntity)
 
 				if value, ok = tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 					var workflowHandlerInfo Workflow
 					if workflowHandlerInfo, ok = value.(Workflow); !ok {
 						// could be development bug
-						log.Printf("scheduler: workflow %s is not handler info", workflowEntity.HandlerName)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: workflow handler info not found", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID)
 						continue
 					}
 
@@ -71,7 +65,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 
 						realInput, err := convertIO(rawInput, inputType, inputKind)
 						if err != nil {
-							log.Printf("scheduler: convertInput failed: %v", err)
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInput failed", "error", err)
 							continue
 						}
 
@@ -99,8 +93,6 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 					// On retry, we will have to create a new workflow exection
 					retryIt := func() error {
 
-						// fmt.Println("\t ==Create new workflow from", workflowEntity.HandlerName, pendingWorkflowExecution.ID)
-
 						// create a new execution for the same workflow
 						var workflowExecution *ent.WorkflowExecution
 						if workflowExecution, err = tp.client.WorkflowExecution.
@@ -109,17 +101,21 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 							SetRunID(pendingWorkflowExecution.RunID).
 							SetWorkflow(workflowEntity).
 							Save(tp.ctx); err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: retry create new execution failed", "error", err)
 							return err
 						}
+
+						tp.logger.Debug(tp.ctx, "Scheduler workflow execution: retrying", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", workflowExecution.ID)
 
 						task.ctx.executionID = workflowExecution.ID
 						task.retryCount++
 
-						log.Printf("scheduler: retrying (%d) workflow %s of id %v exec id %v with params: %v", task.retryCount, workflowEntity.HandlerName, workflowEntity.ID, contextWorkflow.executionID, workflowEntity.Input)
+						tp.logger.Debug(tp.ctx, "Scheduler workflow execution: retrying", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", workflowExecution.ID, "retry_count", task.retryCount)
 
 						// now we notify the workflow enity that we're working
 						if _, err = tp.client.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
-							log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: retry update workflow status failed", "error", err)
+							return err
 						}
 
 						return nil
@@ -132,42 +128,40 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 					// well maybe if we crashed, then when re-enqueueing the workflow, we can prepare the retry count and continue our work
 					total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(workflowEntity.ID))).Count(tp.ctx)
 					if err != nil {
-						log.Printf("scheduler: WorkflowExecution.Query failed: %v", err)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.Query total failed", "error", err)
 						continue
 					}
-
-					log.Printf("scheduler: total: %d", total)
 
 					// If it's not me
 					if total > 1 {
 						task.retryCount = total
 					}
 
-					log.Printf("scheduler: Dispatching workflow %s of id %v exec id %v with params: %v", workflowEntity.HandlerName, workflowEntity.ID, contextWorkflow.executionID, workflowEntity.Input)
+					tp.logger.Debug(tp.ctx, "Scheduler workflow execution: Dispatching", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
 					if err := tp.workflowPool.
 						Dispatch(
 							task,
 							retrypool.WithImmediateRetry[*workflowTask[T]](),
 						); err != nil {
-						log.Printf("scheduler: Dispatch failed: %v", err)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
 						continue
 					}
 
 					if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
 						// TODO: could be a problem if not really dispatched
-						log.Printf("scheduler: WorkflowExecution.UpdateOneID failed: %v", err)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.UpdateOneID failed", "error", err)
 						continue
 					}
 
 					if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
 						// TODO: could be a problem if not really dispatched
-						log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Workflow.UpdateOneID failed", "error", err)
 						continue
 					}
 
 				} else {
-					log.Printf("scheduler: Workflow %s not found", pendingWorkflowExecution.Edges.Workflow.HandlerName)
+					tp.logger.Error(tp.ctx, "Workflow not found", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID)
 					continue
 				}
 			}

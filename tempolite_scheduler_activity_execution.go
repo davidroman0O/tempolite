@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/davidroman0O/go-tempolite/ent"
@@ -23,7 +22,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 				Order(ent.Asc(activityexecution.FieldStartedAt)).WithActivity().
 				Limit(1).All(tp.ctx)
 			if err != nil {
-				log.Printf("scheduler: ActivityExecution.Query failed: %v", err)
+				tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Query failed", "error", err)
 				continue
 			}
 
@@ -40,8 +39,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 				var activityEntity *ent.Activity
 				if activityEntity, err = tp.client.Activity.Get(tp.ctx, act.Edges.Activity.ID); err != nil {
-
-					log.Printf("scheduler: Activity.Get failed: %v", err)
+					tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.Get failed", "error", err)
 					continue
 				}
 
@@ -49,7 +47,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 					var activityHandlerInfo Activity
 					if activityHandlerInfo, ok = value.(Activity); !ok {
 						// could be development bug
-						log.Printf("scheduler: activity %s is not handler info", activityEntity.HandlerName)
+						tp.logger.Error(tp.ctx, "scheduler activity execution: activity is missing handler info", "activity", activityEntity.HandlerName)
 						continue
 					}
 
@@ -62,7 +60,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 						realInput, err := convertIO(rawInput, inputType, inputKind)
 						if err != nil {
-							log.Printf("scheduler: convertInput failed: %v", err)
+							tp.logger.Error(tp.ctx, "scheduler activity execution: convertInput failed", "error", err)
 							continue
 						}
 
@@ -96,7 +94,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 							SetRunID(act.RunID).
 							SetActivity(activityEntity).
 							Save(tp.ctx); err != nil {
-							log.Printf("ERROR scheduler: ActivityExecution.Create failed: %v", err)
+							tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Create failed", "error", err)
 							return err
 						}
 
@@ -114,31 +112,29 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 					// well maybe if we crashed, then when re-enqueueing the activity, we can prepare the retry count and continue our work
 					total, err := tp.client.ActivityExecution.Query().Where(activityexecution.HasActivityWith(activity.IDEQ(activityEntity.ID))).Count(tp.ctx)
 					if err != nil {
-						log.Printf("scheduler: ActivityExecution.Query failed: %v", err)
+						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Query failed", "error", err)
 						continue
 					}
-
-					log.Printf("scheduler: total: %d", total)
 
 					// If it's not me
 					if total > 1 {
 						task.retryCount = total
 					}
 
-					log.Printf("scheduler: Dispatching activity %s with params: %v", activityEntity.HandlerName, activityEntity.Input)
+					tp.logger.Debug(tp.ctx, "scheduler: Dispatching activity", "activity", activityEntity.HandlerName, "params", activityEntity.Input)
 
 					if err := tp.activityPool.Dispatch(task); err != nil {
-						log.Printf("scheduler: Dispatch failed: %v", err)
+						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
 						continue
 					}
 
 					if _, err = tp.client.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusRunning).Save(tp.ctx); err != nil {
-						log.Printf("scheduler: ActivityExecution.UpdateOneID failed: %v", err)
+						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed", "error", err)
 						continue
 					}
 
 				} else {
-					log.Printf("scheduler: Activity %s not found", act.Edges.Activity.HandlerName)
+					tp.logger.Error(tp.ctx, "scheduler activity execution: Activity not found", "activity", act.Edges.Activity.HandlerName)
 					continue
 				}
 			}

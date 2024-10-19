@@ -3,7 +3,6 @@ package tempolite
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/davidroman0O/go-tempolite/ent/saga"
 	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
@@ -27,6 +26,7 @@ func (tp *Tempolite[T]) createCompensationPool() *retrypool.Pool[*compensationTa
 		retrypool.WithOnTaskFailure(tp.compensationOnFailure),
 		retrypool.WithPanicHandler(tp.compensationOnPanic),
 		retrypool.WithOnRetry(tp.compensationOnRetry),
+		retrypool.WithPanicWorker[*compensationTask[T]](tp.compensationWorkerPanic),
 	}
 
 	workers := []retrypool.Worker[*compensationTask[T]]{}
@@ -38,14 +38,20 @@ func (tp *Tempolite[T]) createCompensationPool() *retrypool.Pool[*compensationTa
 	return retrypool.New(tp.ctx, workers, opts...)
 }
 
+func (tp *Tempolite[T]) compensationWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+	tp.logger.Debug(tp.ctx, "compensation pool worker panicked", "workerID", workerID, "error", err)
+	tp.logger.Error(tp.ctx, "compensation pool worker panicked", "stackTrace", stackTrace)
+}
+
 func (tp *Tempolite[T]) compensationOnSuccess(controller retrypool.WorkerController[*compensationTask[T]], workerID int, worker retrypool.Worker[*compensationTask[T]], task *retrypool.TaskWrapper[*compensationTask[T]]) {
-	log.Printf("Compensation step success: %d %s %s", workerID, task.Data().executionID, task.Data().handlerName)
+
+	tp.logger.Debug(tp.ctx, "compensation task on success", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
 	_, err := tp.client.SagaExecution.UpdateOneID(task.Data().executionID).
 		SetStatus(sagaexecution.StatusCompleted).
 		Save(tp.ctx)
 	if err != nil {
-		log.Printf("Failed to update saga execution status: %v", err)
+		tp.logger.Error(tp.ctx, "compensation task on success: SagaExecution.Update failed", "error", err)
 	}
 
 	if task.Data().isLast {
@@ -53,49 +59,52 @@ func (tp *Tempolite[T]) compensationOnSuccess(controller retrypool.WorkerControl
 			SetStatus(saga.StatusCompensated).
 			Save(tp.ctx)
 		if err != nil {
-			log.Printf("Failed to update saga status to compensated: %v", err)
+			tp.logger.Error(tp.ctx, "compensation task on success: Saga.Update failed", "error", err)
 		}
 	} else if task.Data().next != nil {
 		if err := task.Data().next(); err != nil {
-			log.Printf("Failed to dispatch next compensation task: %v", err)
+			// TODO: should update the entity status to failed
+			tp.logger.Error(tp.ctx, "Failed to dispatch next compensation task", "error", err)
 		}
 	}
 }
 
 func (tp *Tempolite[T]) compensationOnFailure(controller retrypool.WorkerController[*compensationTask[T]], workerID int, worker retrypool.Worker[*compensationTask[T]], task *retrypool.TaskWrapper[*compensationTask[T]], err error) retrypool.DeadTaskAction {
-	log.Printf("Compensation step failed: %v", err)
+
+	tp.logger.Debug(tp.ctx, "compensation task on failure", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
 	_, updateErr := tp.client.Saga.UpdateOneID(task.Data().sagaID).
 		SetStatus(saga.StatusFailed).
 		Save(tp.ctx)
 	if updateErr != nil {
-		log.Printf("Failed to update saga status to failed: %v", updateErr)
+		tp.logger.Error(tp.ctx, "Failed to update saga status to failed: %v", updateErr)
 	}
 
 	return retrypool.DeadTaskActionAddToDeadTasks
 }
 
 func (tp *Tempolite[T]) compensationOnPanic(task *compensationTask[T], v interface{}, stackTrace string) {
-	log.Printf("Compensation task panicked: %v\nStack trace: %s", v, stackTrace)
+
+	tp.logger.Debug(tp.ctx, "compensation pool task panicked", "task", task, "error", v)
+	tp.logger.Error(tp.ctx, "compensation pool task panicked", "stackTrace", stackTrace)
 
 	_, err := tp.client.SagaExecution.UpdateOneID(task.executionID).
 		SetStatus(sagaexecution.StatusFailed).
 		Save(tp.ctx)
 	if err != nil {
-		log.Printf("Failed to update saga execution status after panic: %v", err)
+		tp.logger.Error(tp.ctx, "Failed to update saga execution status after panic: %v", err)
 	}
 
 	_, err = tp.client.Saga.UpdateOneID(task.sagaID).
 		SetStatus(saga.StatusFailed).
 		Save(tp.ctx)
 	if err != nil {
-		log.Printf("Failed to update saga status to failed after panic: %v", err)
+		tp.logger.Error(tp.ctx, "Failed to update saga status to failed after panic: %v", err)
 	}
 }
 
 func (tp *Tempolite[T]) compensationOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*compensationTask[T]]) {
-	log.Printf("Compensation task retry attempt %d for saga execution %s: %v",
-		attempt, task.Data().executionID, err)
+	tp.logger.Debug(tp.ctx, "compensation task retry", "attempt", attempt, "error", err)
 }
 
 type compensationWorker[T Identifier] struct {
@@ -104,10 +113,11 @@ type compensationWorker[T Identifier] struct {
 }
 
 func (w compensationWorker[T]) Run(ctx context.Context, data *compensationTask[T]) error {
-	log.Printf("Executing compensation step: %s", data.handlerName)
+	w.tp.logger.Debug(ctx, "Executing compensation step", "handlerName", data.handlerName)
 
 	sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
 	if !ok {
+		w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
 		return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
 	}
 	sagaDef := sagaHandlerInfo.(*SagaDefinition[T])
@@ -115,10 +125,11 @@ func (w compensationWorker[T]) Run(ctx context.Context, data *compensationTask[T
 
 	result, err := step.Compensation(data.ctx)
 	if err != nil {
+		w.tp.logger.Error(ctx, "Compensation step failed", "handlerName", data.handlerName, "error", err)
 		return err
 	}
 
-	log.Printf("Compensation step completed: %s, Result: %v", data.handlerName, result)
+	w.tp.logger.Debug(ctx, "Compensation step completed", "handlerName", data.handlerName, "result", result)
 
 	return nil
 }

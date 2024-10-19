@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"context"
-	"log"
 	"reflect"
 
 	"github.com/davidroman0O/go-tempolite/ent/activity"
@@ -27,6 +26,7 @@ func (tp *Tempolite[T]) createActivityPool() *retrypool.Pool[*activityTask[T]] {
 		retrypool.WithOnTaskFailure(tp.activityOnFailure),
 		retrypool.WithPanicHandler(tp.activityOnPanic),
 		retrypool.WithOnRetry(tp.activityOnRetry),
+		retrypool.WithPanicWorker[*activityTask[T]](tp.activityWorkerPanic),
 	}
 
 	workers := []retrypool.Worker[*activityTask[T]]{}
@@ -42,30 +42,36 @@ func (tp *Tempolite[T]) createActivityPool() *retrypool.Pool[*activityTask[T]] {
 
 }
 
+func (tp *Tempolite[T]) activityWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+	tp.logger.Debug(tp.ctx, "activity pool worker panicked", "workerID", workerID, "error", err)
+	tp.logger.Error(tp.ctx, "activity pool worker panicked", "stackTrace", stackTrace)
+}
+
 func (tp *Tempolite[T]) activityOnPanic(task *activityTask[T], v interface{}, stackTrace string) {
-	log.Printf("Task panicked: %v", v)
-	log.Println(stackTrace)
+	tp.logger.Debug(tp.ctx, "activity pool task panicked", "task", task, "error", v)
+	tp.logger.Error(tp.ctx, "activity pool task panicked", "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite[T]) activityOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*activityTask[T]]) {
-	log.Printf("onHandlerTaskRetry: %d, %v", attempt, err)
+	tp.logger.Debug(tp.ctx, "activity pool task retry", "attempt", attempt, "error", err)
 }
 
 func (tp *Tempolite[T]) activityOnSuccess(controller retrypool.WorkerController[*activityTask[T]], workerID int, worker retrypool.Worker[*activityTask[T]], task *retrypool.TaskWrapper[*activityTask[T]]) {
-	log.Printf("activityOnSuccess: %d", workerID)
+	tp.logger.Debug(tp.ctx, "activity task on success", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
+
 	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).
 		Save(tp.ctx); err != nil {
-		log.Printf("ERROR activityOnSuccess: WorkflowExecution.Update failed: %v", err)
+		tp.logger.Error(tp.ctx, "activity task on success: ActivityExecution.Update failed", "error", err)
 	}
 
 	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusCompleted).Save(tp.ctx); err != nil {
-		log.Printf("ERROR activityOnSuccess: Workflow.UpdateOneID failed: %v", err)
+		tp.logger.Error(tp.ctx, "activity task on success: activity.UpdateOneID failed", "error", err)
 	}
 }
 
 func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[*activityTask[T]], workerID int, worker retrypool.Worker[*activityTask[T]], task *retrypool.TaskWrapper[*activityTask[T]], err error) retrypool.DeadTaskAction {
 	// printf with err + retryCount + maxRetry
-	log.Printf("activityOnFailure: %v, %d, %d", err, task.Data().retryCount, task.Data().maxRetry)
+	tp.logger.Error(tp.ctx, "activity task on failure", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
 
 	// Simple retry mechanism
 	// We know in advance the config and the retry value, we can manage in-memory
@@ -74,30 +80,31 @@ func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[
 		// fmt.Println("retry it the task: ", err)
 		// Just by creating a new activity execution, we're incrementing the total count of executions which is the retry count in the database
 		if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
-			log.Printf("ERROR activityOnFailure: ActivityExecution.Update failed: %v", err)
+			tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
 		}
 
 		if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusRetried).Save(tp.ctx); err != nil {
-			log.Printf("ERROR activityOnFailure: activity.UpdateOneID failed: %v", err)
+			tp.logger.Error(tp.ctx, "activity task on failure: activity.UpdateOneID failed", "error", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		if err := task.Data().retry(); err != nil {
-			log.Printf("ERROR activityOnFailure: retry failed: %v", err)
+			// TODO: should change the status of the activity to failed
+			tp.logger.Error(tp.ctx, "activity task on failure: retry failed", "error", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		return retrypool.DeadTaskActionDoNothing
 	}
 
-	log.Printf("activityOnFailure activity %v - %v: %d", task.Data().ctx.executionID, task.Data().ctx.executionID, workerID)
+	tp.logger.Debug(tp.ctx, "activity task on failure", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
 
 	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-		log.Printf("ERROR activityOnFailure: ActivityExecution.Update failed: %v", err)
+		tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
-		log.Printf("ERROR activityOnFailure: activity.UpdateOneID failed: %v", err)
+		tp.logger.Error(tp.ctx, "activity task on failure: activity.UpdateOneID failed", "error", err)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
@@ -110,7 +117,8 @@ type activityWorker[T Identifier] struct {
 }
 
 func (w activityWorker[T]) Run(ctx context.Context, data *activityTask[T]) error {
-	log.Printf("activityWorker: %s, %v", data.handlerName, data.params)
+
+	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "params", data.params)
 
 	values := []reflect.Value{reflect.ValueOf(data.ctx)}
 
@@ -133,8 +141,11 @@ func (w activityWorker[T]) Run(ctx context.Context, data *activityTask[T]) error
 	}
 
 	if _, err := w.tp.client.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
-		log.Printf("activityworker: ActivityExecution.Update failed: %v", err)
+		w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
+		return err
 	}
+
+	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "output", res)
 
 	return errRes
 }

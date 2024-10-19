@@ -73,7 +73,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				Limit(1).
 				All(tp.ctx)
 			if err != nil {
-				log.Printf("scheduler: Saga.Query failed: %v", err)
+				tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaExecution.Query failed", "error", err)
 				continue
 			}
 
@@ -82,7 +82,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 			for _, sagaExecution := range pendingSagas {
 				sagaHandlerInfo, ok := tp.sagas.Load(sagaExecution.Edges.Saga.ID)
 				if !ok {
-					log.Printf("scheduler: SagaHandlerInfo not found for ID: %s", sagaExecution.Edges.Saga.ID)
+					tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaHandlerInfo not found", "sagaID", sagaExecution.Edges.Saga.ID)
 					continue
 				}
 
@@ -130,7 +130,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSequence(nextIndex).
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
-									log.Printf("scheduler: Failed to create next transaction task: %v", err)
+									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create next transaction task", "error", err)
 									return err
 								}
 
@@ -166,7 +166,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSequence(lastSuccessfulIndex).
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
-									log.Printf("scheduler: Failed to create compensation task: %v", err)
+									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create compensation task", "error", err)
 									return err
 								}
 
@@ -179,6 +179,9 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 							_, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
 								SetStatus(saga.StatusCompensated).
 								Save(tp.ctx)
+							if err != nil {
+								tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
+							}
 							// No compensation needed if no transactions succeeded
 							return err
 						}
@@ -199,7 +202,7 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSequence(prevIndex).
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
-									log.Printf("scheduler: Failed to create next compensation task: %v", err)
+									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create next compensation task", "error", err)
 									return err
 								}
 
@@ -217,14 +220,14 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 
 				// Dispatch the first transaction task
 				if err := tp.transactionPool.Dispatch(transactionTasks[0]); err != nil {
-					log.Printf("scheduler: Failed to dispatch first transaction task: %v", err)
+					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to dispatch first transaction task", "error", err)
 					continue
 				}
 
 				if _, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
 					SetStatus(saga.StatusRunning).
 					Save(tp.ctx); err != nil {
-					log.Printf("scheduler: Failed to update saga status: %v", err)
+					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
 				}
 			}
 

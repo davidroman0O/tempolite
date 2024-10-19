@@ -118,6 +118,7 @@ func (b *SagaDefinitionBuilder[T]) Build() (*SagaDefinition[T], error) {
 
 func (w WorkflowContext[T]) Saga(stepID T, saga *SagaDefinition[T]) *SagaInfo[T] {
 	if err := w.checkIfPaused(); err != nil {
+		w.tp.logger.Debug(w.tp.ctx, "Workflow is paused, skipping Saga execution", "stepID", stepID, "error", err)
 		return &SagaInfo[T]{err: err}
 	}
 	// Enqueue the saga for execution

@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/davidroman0O/go-tempolite/ent"
@@ -21,7 +20,7 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 				WithSideEffect().
 				Limit(1).All(tp.ctx)
 			if err != nil {
-				log.Printf("scheduler: SideEffectExecution.Query failed: %v", err)
+				tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.Query failed", "error", err)
 				continue
 			}
 
@@ -34,7 +33,7 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 			for _, se := range pendingSideEffects {
 				sideEffectInfo, ok := tp.sideEffects.Load(se.Edges.SideEffect.ID)
 				if !ok {
-					log.Printf("scheduler: SideEffect %s not found", se.Edges.SideEffect.ID)
+					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffect %s not found", "sideEffectID", se.Edges.SideEffect.ID)
 					continue
 				}
 
@@ -54,15 +53,15 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 					handler:     sideEffect.Handler,
 				}
 
-				log.Printf("scheduler: Dispatching side effect %s", se.Edges.SideEffect.HandlerName)
+				tp.logger.Debug(tp.ctx, "Scheduler sideeffect execution: Dispatching side effect %s", "sideEffectHandler", se.Edges.SideEffect.HandlerName)
 
 				if err := tp.sideEffectPool.Dispatch(task); err != nil {
-					log.Printf("scheduler: Dispatch failed: %v", err)
+					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: Dispatch failed", "error", err)
 					continue
 				}
 
 				if _, err = tp.client.SideEffectExecution.UpdateOneID(se.ID).SetStatus(sideeffectexecution.StatusRunning).Save(tp.ctx); err != nil {
-					log.Printf("scheduler: SideEffectExecution.UpdateOneID failed: %v", err)
+					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.UpdateOneID failed", "error", err)
 					continue
 				}
 			}
