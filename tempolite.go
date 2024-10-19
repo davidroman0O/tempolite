@@ -96,14 +96,23 @@ type Tempolite[T Identifier] struct {
 	schedulerSagaStarted       atomic.Bool
 
 	resumeWorkflowsWorkerDone chan struct{}
+
+	logger Logger
 }
 
 type tempoliteConfig struct {
 	path        *string
 	destructive bool
+	logger      Logger
 }
 
 type tempoliteOption func(*tempoliteConfig)
+
+func WithLogger(logger Logger) tempoliteOption {
+	return func(c *tempoliteConfig) {
+		c.logger = logger
+	}
+}
 
 func WithPath(path string) tempoliteOption {
 	return func(c *tempoliteConfig) {
@@ -129,6 +138,10 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		opt(&cfg)
 	}
 
+	if cfg.logger == nil {
+		cfg.logger = NewDefaultLogger()
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	optsComfy := []comfylite3.ComfyOption{
@@ -137,27 +150,42 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 
 	var firstTime bool
 	if cfg.path != nil {
+		cfg.logger.Debug(ctx, "Database got a path", "path", *cfg.path)
+		cfg.logger.Debug(ctx, "Checking if first time or not", "path", *cfg.path)
 		info, err := os.Stat(*cfg.path)
 		if err == nil && !info.IsDir() {
 			firstTime = false
 		} else {
 			firstTime = true
 		}
+		cfg.logger.Debug(ctx, "Fist timer check %v", firstTime)
 		if cfg.destructive {
-			os.Remove(*cfg.path)
+			cfg.logger.Debug(ctx, "Destructive option triggered", "firstTime", firstTime)
+			if err := os.Remove(*cfg.path); err != nil {
+				if !os.IsNotExist(err) {
+					cfg.logger.Error(ctx, "Error removing file", "error", err)
+					cancel()
+					return nil, err
+				}
+			}
 		}
+		cfg.logger.Debug(ctx, "Creating directory recursively if necessary", "path", *cfg.path)
 		if err := os.MkdirAll(filepath.Dir(*cfg.path), os.ModePerm); err != nil {
+			cfg.logger.Error(ctx, "Error creating directory", "error", err)
 			cancel()
 			return nil, err
 		}
 		optsComfy = append(optsComfy, comfylite3.WithPath(*cfg.path))
 	} else {
+		cfg.logger.Debug(ctx, "Memory database option")
 		optsComfy = append(optsComfy, comfylite3.WithMemory())
 		firstTime = true
 	}
 
+	cfg.logger.Debug(ctx, "Opening/Creating database")
 	comfy, err := comfylite3.New(optsComfy...)
 	if err != nil {
+		cfg.logger.Error(ctx, "Error opening/creating database", "error", err)
 		cancel()
 		return nil, err
 	}
@@ -173,7 +201,9 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 	client := ent.NewClient(ent.Driver(sql.OpenDB(dialect.SQLite, db)))
 
 	if firstTime || (cfg.destructive && cfg.path != nil) {
+		cfg.logger.Debug(ctx, "Creating schema")
 		if err = client.Schema.Create(ctx); err != nil {
+			cfg.logger.Error(ctx, "Error creating schema", "error", err)
 			cancel()
 			return nil, err
 		}
@@ -189,8 +219,10 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		schedulerSideEffectDone:        make(chan struct{}),
 		schedulerSagaDone:              make(chan struct{}),
 		resumeWorkflowsWorkerDone:      make(chan struct{}),
+		logger:                         cfg.logger,
 	}
 
+	tp.logger.Debug(ctx, "Registering workflows functions", "total", len(registry.workflowsFunc))
 	// Register components
 	for _, workflow := range registry.workflowsFunc {
 		if err := tp.registerWorkflow(workflow); err != nil {
@@ -198,28 +230,36 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		}
 	}
 
+	tp.logger.Debug(ctx, "Registering activities", "total", len(registry.activities))
 	for _, activity := range registry.activities {
 		if err := tp.registerActivityFunc(activity); err != nil {
 			return nil, err
 		}
 	}
 
+	tp.logger.Debug(ctx, "Registering activities functions", "total", len(registry.activitiesFunc))
 	for _, activity := range registry.activitiesFunc {
 		if err := tp.registerActivityFunc(activity); err != nil {
 			return nil, err
 		}
 	}
 
+	tp.logger.Debug(ctx, "Creating pools")
 	tp.workflowPool = tp.createWorkflowPool()
 	tp.activityPool = tp.createActivityPool()
 	tp.sideEffectPool = tp.createSideEffectPool()
 	tp.transactionPool = tp.createTransactionPool()
 	tp.compensationPool = tp.createCompensationPool()
 
+	tp.logger.Debug(ctx, "Starting scheduler side effect")
 	go tp.schedulerExecutionSideEffect()
+	tp.logger.Debug(ctx, "Starting scheduler workflow executions")
 	go tp.schedulerExecutionWorkflow()
+	tp.logger.Debug(ctx, "Starting scheduler activity executions")
 	go tp.schedulerExecutionActivity()
+	tp.logger.Debug(ctx, "Starting scheduler saga executions")
 	go tp.schedulerExecutionSaga()
+	tp.logger.Debug(ctx, "Starting resume workflows worker")
 	go tp.resumeWorkflowsWorker()
 
 	return tp, nil
@@ -233,8 +273,10 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 	for {
 		select {
 		case <-tp.ctx.Done():
+			tp.logger.Debug(tp.ctx, "Resume workflows worker due to context done")
 			return
 		case <-tp.resumeWorkflowsWorkerDone:
+			tp.logger.Debug(tp.ctx, "Resume workflows worker done")
 			return
 		case <-ticker.C:
 			workflows, err := tp.client.Workflow.Query().
@@ -244,17 +286,17 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 					workflow.IsReadyEQ(true),
 				).All(tp.ctx)
 			if err != nil {
-				log.Printf("Error querying workflows to resume: %v", err)
+				tp.logger.Error(tp.ctx, "Error querying workflows to resume", "error", err)
 				continue
 			}
 
 			for _, wf := range workflows {
-				// fmt.Println("Resuming workflow", wf.ID)
+				tp.logger.Debug(tp.ctx, "Resuming workflow", "workflowID", wf.ID)
 				if err := tp.redispatchWorkflow(WorkflowID(wf.ID)); err != nil {
-					log.Printf("Error redispatching workflow %s: %v", wf.ID, err)
+					tp.logger.Error(tp.ctx, "Error redispatching workflow", "workflowID", wf.ID, "error", err)
 				}
 				if _, err := tp.client.Workflow.UpdateOne(wf).SetIsReady(false).Save(tp.ctx); err != nil {
-					log.Printf("Error updating workflow %s: %v", wf.ID, err)
+					tp.logger.Error(tp.ctx, "Error updating workflow", "workflowID", wf.ID, "error", err)
 				}
 			}
 		}
@@ -265,16 +307,23 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 	wf, err := tp.client.Workflow.Get(tp.ctx, id.String())
 	if err != nil {
+		tp.logger.Error(tp.ctx, "Error fetching workflow", "workflowID", id, "error", err)
 		return fmt.Errorf("error fetching workflow: %w", err)
 	}
 
-	// fmt.Println(wf.ID)
+	tp.logger.Debug(tp.ctx, "Redispatching workflow", "workflowID", id)
+	tp.logger.Debug(tp.ctx, "Querying workflow execution", "workflowID", id)
 
 	wfEx, err := tp.client.WorkflowExecution.Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).
 		WithWorkflow().
 		Order(ent.Desc(workflowexecution.FieldStartedAt)).
 		First(tp.ctx)
+
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error querying workflow execution", "workflowID", id, "error", err)
+		return fmt.Errorf("error querying workflow execution: %w", err)
+	}
 
 	// Create WorkflowContext
 	ctx := WorkflowContext[T]{
@@ -286,19 +335,24 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 		stepID:       wf.StepID,
 	}
 
+	tp.logger.Debug(tp.ctx, "Getting handler info for workflow", "workflowID", id, "handlerIdentity", wf.Identity)
+
 	// Fetch the workflow handler
 	handlerInfo, ok := tp.workflows.Load(HandlerIdentity(wf.Identity))
 	if !ok {
+		tp.logger.Error(tp.ctx, "Workflow handler not found", "workflowID", id)
 		return fmt.Errorf("workflow handler not found for %s", wf.Identity)
 	}
 
 	workflowHandler, ok := handlerInfo.(Workflow)
 	if !ok {
+		tp.logger.Error(tp.ctx, "Invalid workflow handler", "workflowID", id)
 		return fmt.Errorf("invalid workflow handler for %s", wf.Identity)
 	}
 
 	inputs := []interface{}{}
 
+	tp.logger.Debug(tp.ctx, "Converting inputs", "workflowID", id, "inputs", len(wf.Input))
 	// TODO: we can probably parallelize this
 	for idx, rawInput := range wf.Input {
 		inputType := workflowHandler.ParamTypes[idx]
@@ -306,12 +360,14 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 		realInput, err := convertIO(rawInput, inputType, inputKind)
 		if err != nil {
-			log.Printf("scheduler: convertInput failed: %v", err)
-			continue
+			tp.logger.Error(tp.ctx, "Error converting input", "workflowID", id, "error", err)
+			return err
 		}
 
 		inputs = append(inputs, realInput)
 	}
+
+	tp.logger.Debug(tp.ctx, "Creating workflow task", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
 	// Create and dispatch the workflow task
 	task := &workflowTask[T]{
@@ -324,7 +380,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 	retryIt := func() error {
 
-		// fmt.Println("\t ==Create new workflow from", wf.HandlerName, wfEx.ID)
+		tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
 		// create a new execution for the same workflow
 		var workflowExecution *ent.WorkflowExecution
@@ -334,14 +390,15 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 			SetRunID(wfEx.RunID).
 			SetWorkflow(wf).
 			Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "Error creating workflow execution during retry", "workflowID", id, "error", err)
 			return err
 		}
 
 		task.ctx.executionID = workflowExecution.ID
 		task.retryCount++
+		tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "retryCount", task.retryCount)
 
-		log.Printf("scheduler: retrying (%d) workflow %s of id %v exec id %v with params: %v", task.retryCount, wf.HandlerName, wf.ID, ctx.executionID, wf.Input)
-
+		tp.logger.Debug(tp.ctx, "Dispatching workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "status", workflow.StatusRunning)
 		// now we notify the workflow enity that we're working
 		if _, err = tp.client.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
 			log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
@@ -352,46 +409,53 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 	task.retry = retryIt
 
+	tp.logger.Debug(tp.ctx, "Fetching total execution workflow related to workflow entity", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 	total, err := tp.client.WorkflowExecution.
 		Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).Count(tp.ctx)
 	if err != nil {
-		log.Printf("redispatchWorkflow: WorkflowExecution.Query failed: %v", err)
+		tp.logger.Error(tp.ctx, "Error fetching total execution workflow related to workflow entity", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "error", err)
 		return err
 	}
 
-	log.Printf("redispatchWorkflow: total: %d", total)
+	tp.logger.Debug(tp.ctx, "Total previously created workflow execution", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "total", total)
 
 	// If it's not me
 	if total > 1 {
 		task.retryCount = total
 	}
 
+	tp.logger.Debug(tp.ctx, "Dispatching workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 	return tp.workflowPool.Dispatch(task)
 }
 
 func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
 	key := fmt.Sprintf("%s-%s", workflowType, changeID)
 
+	tp.logger.Debug(tp.ctx, "Checking cache for version", "key", key)
+
 	// Check cache first
 	if cachedVersion, ok := tp.versionCache.Load(key); ok {
 		version := cachedVersion.(int)
-		log.Printf("Found cached version %d for key: %s", version, key)
+		tp.logger.Debug(tp.ctx, "Found cached version", "version", version, "key", key)
 		// Update version if necessary
 		if version < maxSupported {
 			version = maxSupported
 			tp.versionCache.Store(key, version)
-			log.Printf("Updated cached version to %d for key: %s", version, key)
+			tp.logger.Debug(tp.ctx, "Updated cached version", "version", version, "key", key)
 		}
+		tp.logger.Debug(tp.ctx, "Returning cached version", "version", version, "key", key)
 		return version, nil
 	}
 
 	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating transaction when getting or creating version", "error", err)
 		return 0, err
 	}
 	defer tx.Rollback()
 
+	tp.logger.Debug(tp.ctx, "Querying feature flag version", "workflowType", workflowType, "changeID", changeID)
 	v, err := tx.FeatureFlagVersion.Query().
 		Where(featureflagversion.WorkflowTypeEQ(workflowType)).
 		Where(featureflagversion.ChangeIDEQ(changeID)).
@@ -399,8 +463,10 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 
 	if err != nil {
 		if !ent.IsNotFound(err) {
+			tp.logger.Error(tp.ctx, "Error querying feature flag version", "error", err)
 			return 0, err
 		}
+		tp.logger.Debug(tp.ctx, "Creating new version", "workflowType", workflowType, "changeID", changeID, "version", minSupported)
 		// Version not found, create a new one
 		log.Printf("Creating new version for key: %s with value: %d", key, minSupported)
 		v, err = tx.FeatureFlagVersion.Create().
@@ -410,10 +476,12 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 			SetVersion(minSupported).
 			Save(tp.ctx)
 		if err != nil {
+			tp.logger.Error(tp.ctx, "Error creating feature flag version", "error", err)
 			return 0, err
 		}
+		tp.logger.Debug(tp.ctx, "Created new version", "workflowType", workflowType, "changeID", changeID, "version", minSupported)
 	} else {
-		log.Printf("Found existing version %d for key: %s", v.Version, key)
+		tp.logger.Debug(tp.ctx, "Found existing version", "workflowType", workflowType, "changeID", changeID, "version", v.Version)
 		// Update the version if maxSupported is greater
 		if v.Version < maxSupported {
 			v.Version = maxSupported
@@ -422,24 +490,28 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 				SetWorkflowID(workflowID).
 				Save(tp.ctx)
 			if err != nil {
+				tp.logger.Error(tp.ctx, "Error updating feature flag version", "error", err)
 				return 0, err
 			}
-			log.Printf("Updated version to %d for key: %s", v.Version, key)
+			tp.logger.Debug(tp.ctx, "Updated version", "workflowType", workflowType, "changeID", changeID, "version", v.Version)
 		}
 	}
 
+	tp.logger.Debug(tp.ctx, "Committing transaction version", "workflowType", workflowType, "changeID", changeID, "version", v.Version)
 	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "error", err)
 		return 0, err
 	}
 
 	// Update cache
 	tp.versionCache.Store(key, v.Version)
-	log.Printf("Stored version %d in cache for key: %s", v.Version, key)
+	tp.logger.Debug(tp.ctx, "Stored version in cache", "version", v.Version, "key", key)
 
 	return v.Version, nil
 }
 
 func (tp *Tempolite[T]) Close() {
+	tp.logger.Debug(tp.ctx, "Closing Tempolite")
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
 	tp.activityPool.Close()
@@ -453,20 +525,25 @@ func (tp *Tempolite[T]) Wait() error {
 
 	activityDone := make(chan error)
 	workflowDone := make(chan error)
+	sideEffectDone := make(chan error)
+	transactionDone := make(chan error)
+	compensationDone := make(chan error)
 
-	doneSignals := []chan error{activityDone, workflowDone}
+	doneSignals := []chan error{activityDone, workflowDone, sideEffectDone, transactionDone, compensationDone}
 
+	tp.logger.Debug(tp.ctx, "Waiting for scheduler to start")
 	for !tp.schedulerWorkflowStarted.Load() || !tp.schedulerActivityStarted.Load() || !tp.schedulerSideEffectStarted.Load() || !tp.schedulerSagaStarted.Load() {
 		runtime.Gosched()
 	}
+	tp.logger.Debug(tp.ctx, "Waiting for scheduler to start done")
 
 	go func() {
 		defer close(activityDone)
-		defer log.Println("activityDone")
+		defer tp.logger.Debug(tp.ctx, "Finished waiting for activities")
 		activityDone <- tp.activityPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+			tp.logger.Debug(tp.ctx, "Wait Activity Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
 			tp.activityPool.RangeTasks(func(data *activityTask[T], workerID int, status retrypool.TaskStatus) bool {
-				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
+				tp.logger.Debug(tp.ctx, "Activity Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
 			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
@@ -475,36 +552,80 @@ func (tp *Tempolite[T]) Wait() error {
 
 	go func() {
 		defer close(workflowDone)
-		defer log.Println("workflowDone")
+		defer tp.logger.Debug(tp.ctx, "Finished waiting for workflows")
 		workflowDone <- tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			log.Printf("Wait: queueSize: %d, processingCount: %d, deadTaskCount: %d", queueSize, processingCount, deadTaskCount)
+			tp.logger.Debug(tp.ctx, "Wait Workflow Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
 			tp.workflowPool.RangeTasks(func(data *workflowTask[T], workerID int, status retrypool.TaskStatus) bool {
-				log.Printf("RangeTask: workerID: %d, status: %v task: %v", workerID, status, data.handlerName)
+				tp.logger.Debug(tp.ctx, "Workflow Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
 			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
 		}, time.Second)
 	}()
 
+	go func() {
+		defer close(sideEffectDone)
+		defer tp.logger.Debug(tp.ctx, "Finished waiting for side effects")
+		sideEffectDone <- tp.sideEffectPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+			tp.logger.Debug(tp.ctx, "Wait SideEffect Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+			tp.sideEffectPool.RangeTasks(func(data *sideEffectTask[T], workerID int, status retrypool.TaskStatus) bool {
+				tp.logger.Debug(tp.ctx, "SideEffect Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
+				return true
+			})
+			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		}, time.Second)
+	}()
+
+	go func() {
+		defer close(transactionDone)
+		defer tp.logger.Debug(tp.ctx, "Finished waiting for transactions")
+		transactionDone <- tp.transactionPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+			tp.logger.Debug(tp.ctx, "Wait Transaction Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+			tp.transactionPool.RangeTasks(func(data *transactionTask[T], workerID int, status retrypool.TaskStatus) bool {
+				tp.logger.Debug(tp.ctx, "Transaction Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
+				return true
+			})
+			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		}, time.Second)
+	}()
+
+	go func() {
+		defer close(compensationDone)
+		defer tp.logger.Debug(tp.ctx, "Finished waiting for compensations")
+		compensationDone <- tp.compensationPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+			tp.logger.Debug(tp.ctx, "Wait Compensation Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+			tp.compensationPool.RangeTasks(func(data *compensationTask[T], workerID int, status retrypool.TaskStatus) bool {
+				tp.logger.Debug(tp.ctx, "Compensation Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
+				return true
+			})
+			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		}, time.Second)
+	}()
+
+	tp.logger.Debug(tp.ctx, "Waiting for done signals")
 	for _, doneSignal := range doneSignals {
 		if err := <-doneSignal; err != nil {
+			tp.logger.Error(tp.ctx, "Error waiting for done signal", "error", err)
 			return err
 		}
 	}
+
+	tp.logger.Debug(tp.ctx, "Done waiting for signals")
 
 	return nil
 }
 
 func (tp *Tempolite[T]) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
+	tp.logger.Debug(tp.ctx, "Converting inputs", "handlerInfo", handlerInfo)
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
 	for idx, rawInputs := range executionInputs {
 		inputType := handlerInfo.ParamTypes[idx]
 		inputKind := handlerInfo.ParamsKinds[idx]
-		// fmt.Println("inputType: ", inputType, "inputKind: ", inputKind, rawInputs)
+		tp.logger.Debug(tp.ctx, "Converting input", "inputType", inputType, "inputKind", inputKind, "rawInputs", rawInputs)
 		realInput, err := convertIO(rawInputs, inputType, inputKind)
 		if err != nil {
-			log.Printf("get: convertIO failed: %v", err)
+			tp.logger.Error(tp.ctx, "Error converting input", "error", err)
 			return nil, err
 		}
 		outputs = append(outputs, realInput)
@@ -513,15 +634,16 @@ func (tp *Tempolite[T]) convertInputs(handlerInfo HandlerInfo, executionInputs [
 }
 
 func (tp *Tempolite[T]) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+	tp.logger.Debug(tp.ctx, "Converting outputs", "handlerInfo", handlerInfo)
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
 	for idx, rawOutput := range executionOutput {
 		ouputType := handlerInfo.ReturnTypes[idx]
 		outputKind := handlerInfo.ReturnKinds[idx]
-		// fmt.Println("ouputType: ", ouputType, "outputKind: ", outputKind, rawOutput)
+		tp.logger.Debug(tp.ctx, "Converting output", "ouputType", ouputType, "outputKind", outputKind, "rawOutput", rawOutput)
 		realOutput, err := convertIO(rawOutput, ouputType, outputKind)
 		if err != nil {
-			log.Printf("get: convertIO failed: %v", err)
+			tp.logger.Error(tp.ctx, "Error converting output", "error", err)
 			return nil, err
 		}
 		outputs = append(outputs, realOutput)
@@ -530,6 +652,7 @@ func (tp *Tempolite[T]) convertOuputs(handlerInfo HandlerInfo, executionOutput [
 }
 
 func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
+
 	if len(params) != handlerInfo.NumIn {
 		return fmt.Errorf("parameter count mismatch (you probably put the wrong handler): expected %d, got %d", handlerInfo.NumIn, len(params))
 	}
@@ -544,10 +667,12 @@ func verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error
 }
 
 func (tp *Tempolite[T]) enqueueSubActivityExecution(ctx WorkflowContext[T], stepID T, longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
+
 	switch ctx.EntityType() {
 	case "workflow":
 		// nothing
 	default:
+		tp.logger.Error(tp.ctx, "Context entity type not supported", "entityType", ctx.EntityType())
 		return "", fmt.Errorf("context entity type %s not supported", ctx.EntityType())
 	}
 
@@ -1321,7 +1446,7 @@ func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) waitPaused(ctx context.Context, id WorkflowID) error {
+func (tp *Tempolite[T]) waitWorkflowStatus(ctx context.Context, id WorkflowID, status workflow.Status) error {
 	ticker := time.NewTicker(time.Second / 16)
 	for {
 		select {
@@ -1330,25 +1455,7 @@ func (tp *Tempolite[T]) waitPaused(ctx context.Context, id WorkflowID) error {
 		case <-tp.ctx.Done():
 			return tp.ctx.Err()
 		case <-ticker.C:
-			_, err := tp.client.Workflow.Query().Where(workflow.ID(id.String()), workflow.StatusEQ(workflow.StatusPaused)).Only(tp.ctx)
-			if err != nil {
-				continue
-			}
-			return nil
-		}
-	}
-}
-
-func (tp *Tempolite[T]) waitCompleted(ctx context.Context, id WorkflowID) error {
-	ticker := time.NewTicker(time.Second / 16)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-tp.ctx.Done():
-			return tp.ctx.Err()
-		case <-ticker.C:
-			_, err := tp.client.Workflow.Query().Where(workflow.ID(id.String()), workflow.StatusEQ(workflow.StatusCompleted)).Only(tp.ctx)
+			_, err := tp.client.Workflow.Query().Where(workflow.ID(id.String()), workflow.StatusEQ(status)).Only(tp.ctx)
 			if err != nil {
 				continue
 			}
@@ -1371,13 +1478,13 @@ func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) error {
 
 	// fmt.Println("cancel waiting")
 	go func() {
-		if err := tp.waitPaused(ctx, id); err == nil {
+		if err := tp.waitWorkflowStatus(ctx, id, workflow.StatusPaused); err == nil {
 			waiting <- "paused"
 		}
 	}()
 
 	go func() {
-		if err := tp.waitCompleted(ctx, id); err == nil {
+		if err := tp.waitWorkflowStatus(ctx, id, workflow.StatusCompleted); err == nil {
 			waiting <- "completed"
 		}
 	}()

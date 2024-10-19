@@ -99,7 +99,7 @@ func main() {
 		tempolite.NewRegistry[CustomIdentifier]().
 			Workflow(OrderWorkflow).
 			Build(),
-		tempolite.WithPath("./tempolite.db"),
+		tempolite.WithPath("./db/tempolite.db"),
 		tempolite.WithDestructive(),
 	)
 	if err != nil {
