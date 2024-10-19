@@ -16,6 +16,7 @@ type SagaInfo[T Identifier] struct {
 
 func (i *SagaInfo[T]) Get(output ...interface{}) error {
 	if i.err != nil {
+		i.tp.logger.Error(i.tp.ctx, "SagaInfo.Get", "sagaID", i.SagaID, "error", i.err)
 		return i.err
 	}
 
@@ -25,6 +26,7 @@ func (i *SagaInfo[T]) Get(output ...interface{}) error {
 	for {
 		select {
 		case <-i.tp.ctx.Done():
+			i.tp.logger.Error(i.tp.ctx, "SagaInfo.Get: context done", "sagaID", i.SagaID)
 			return i.tp.ctx.Err()
 		case <-ticker.C:
 			sagaEntity, err := i.tp.client.Saga.Query().
@@ -32,17 +34,22 @@ func (i *SagaInfo[T]) Get(output ...interface{}) error {
 				WithSteps().
 				Only(i.tp.ctx)
 			if err != nil {
+				i.tp.logger.Error(i.tp.ctx, "SagaInfo.Get: failed to query saga", "sagaID", i.SagaID, "error", err)
 				return err
 			}
 
 			switch sagaEntity.Status {
 			case saga.StatusCompleted:
+				i.tp.logger.Debug(i.tp.ctx, "SagaInfo.Get: saga completed", "sagaID", i.SagaID)
 				return nil
 			case saga.StatusFailed:
+				i.tp.logger.Debug(i.tp.ctx, "SagaInfo.Get: saga failed", "sagaID", i.SagaID, "error", errors.New(sagaEntity.Error))
 				return errors.New(sagaEntity.Error)
 			case saga.StatusCompensated:
+				i.tp.logger.Debug(i.tp.ctx, "SagaInfo.Get: saga compensated", "sagaID", i.SagaID)
 				return errors.New("saga was compensated")
 			case saga.StatusPending, saga.StatusRunning:
+				i.tp.logger.Debug(i.tp.ctx, "SagaInfo.Get: saga still running", "sagaID", i.SagaID)
 				runtime.Gosched()
 				continue
 			}

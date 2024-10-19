@@ -3,7 +3,6 @@ package tempolite
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"runtime"
 	"time"
@@ -21,10 +20,12 @@ type ActivityInfo[T Identifier] struct {
 
 func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 	if i.err != nil {
+		i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get", "activityID", i.ActivityID, "error", i.err)
 		return i.err
 	}
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
+			i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output parameter is not a pointer", "index", idx)
 			return fmt.Errorf("output parameter at index %d is not a pointer", idx)
 		}
 	}
@@ -34,7 +35,7 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 	var value any
 	var ok bool
 	var activityHandlerInfo Activity
-	// fmt.Println("searching id", i.ActivityID.String())
+
 	for {
 		select {
 		case <-i.tp.ctx.Done():
@@ -42,12 +43,12 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 		case <-ticker.C:
 			activityEntity, err := i.tp.client.Activity.Query().Where(activity.IDEQ(i.ActivityID.String())).Only(i.tp.ctx)
 			if err != nil {
-				// fmt.Println("error searching activity", err)
+				i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: failed to query activity", "activityID", i.ActivityID, "error", err)
 				return err
 			}
 			if value, ok = i.tp.activities.Load(HandlerIdentity(activityEntity.Identity)); ok {
 				if activityHandlerInfo, ok = value.(Activity); !ok {
-					log.Printf("scheduler: activity %s is not handler info", i.ActivityID.String())
+					i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: activity is not handler info", "activityID", i.ActivityID)
 					return errors.New("activity is not handler info")
 				}
 
@@ -66,11 +67,10 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 
 					if err != nil {
 						if ent.IsNotFound(err) {
-							// Handle the case where no execution is found
-							log.Printf("No execution found for activity %s", i.ActivityID)
+							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: no execution found for activity", "activityID", i.ActivityID)
 							return fmt.Errorf("no execution found for activity %s", i.ActivityID)
 						}
-						log.Printf("Error querying activity execution: %v", err)
+						i.tp.logger.Error(i.tp.ctx, "Error querying activity execution", "error", err)
 						return fmt.Errorf("error querying activity execution: %w", err)
 					}
 
@@ -78,9 +78,11 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 					case activityexecution.StatusCompleted:
 						outputs, err := i.tp.convertOuputs(HandlerInfo(activityHandlerInfo), latestExec.Output)
 						if err != nil {
+							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: failed to convert outputs", "error", err)
 							return err
 						}
 						if len(output) != len(outputs) {
+							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output length mismatch", "expected", len(outputs), "got", len(output))
 							return fmt.Errorf("output length mismatch: expected %d, got %d", len(outputs), len(output))
 						}
 
@@ -89,6 +91,7 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 							outputVal := reflect.ValueOf(outputs[idx])
 
 							if outVal.Type() != outputVal.Type() {
+								i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: type mismatch", "index", idx, "expected", outVal.Type(), "got", outputVal.Type())
 								return fmt.Errorf("type mismatch at index %d: expected %v, got %v", idx, outVal.Type(), outputVal.Type())
 							}
 
@@ -96,12 +99,13 @@ func (i *ActivityInfo[T]) Get(output ...interface{}) error {
 						}
 						return nil
 					case activityexecution.StatusFailed:
+						i.tp.logger.Debug(i.tp.ctx, "ActivityInfo.Get: activity failed", "activityID", i.ActivityID, "error", latestExec.Error)
 						return errors.New(latestExec.Error)
 					case activityexecution.StatusRetried:
+						i.tp.logger.Debug(i.tp.ctx, "ActivityInfo.Get: activity was retried", "activityID", i.ActivityID)
 						return errors.New("activity was retried")
 					case activityexecution.StatusPending, activityexecution.StatusRunning:
-						// The workflow is still in progress
-						// return  errors.New("workflow is still in progress")
+						i.tp.logger.Debug(i.tp.ctx, "ActivityInfo.Get: activity is still running", "activityID", i.ActivityID)
 						runtime.Gosched()
 						continue
 					}

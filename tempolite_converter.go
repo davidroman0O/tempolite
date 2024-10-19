@@ -18,7 +18,6 @@ func convertIO(rawInput interface{}, desiredType reflect.Type, desiredKind refle
 	}
 
 	rawValue := reflect.ValueOf(rawInput)
-	// rawKind := rawValue.Kind()
 
 	// If rawInput is already of the desired type, return it
 	if rawValue.Type() == desiredType {

@@ -3,7 +3,6 @@ package tempolite
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"runtime"
 	"time"
@@ -21,6 +20,7 @@ type SideEffectInfo[T Identifier] struct {
 
 func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 	if i.err != nil {
+		i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get", "entityID", i.EntityID, "error", i.err)
 		return i.err
 	}
 
@@ -34,6 +34,7 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 	for {
 		select {
 		case <-i.tp.ctx.Done():
+			i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: context done", "entityID", i.EntityID)
 			return i.tp.ctx.Err()
 		case <-ticker.C:
 			sideEffectEntity, err := i.tp.client.SideEffect.Query().
@@ -41,18 +42,18 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 				WithExecutions().
 				Only(i.tp.ctx)
 			if err != nil {
+				i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: failed to query side effect", "entityID", i.EntityID, "error", err)
 				return err
 			}
 
 			if value, ok = i.tp.sideEffects.Load(sideEffectEntity.ID); ok {
 				if sideeffectHandlerInfo, ok = value.(SideEffect); !ok {
-					log.Printf("scheduler: sideeffect %s is not handler info", i.EntityID.String())
+					i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: sideeffect is not handler info", "entityID", i.EntityID)
 					return errors.New("sideeffect is not handler info")
 				}
 
 				switch sideEffectEntity.Status {
 				case sideeffect.StatusCompleted:
-					// fmt.Println("searching for side effect execution of ", i.EntityID.String())
 					latestExec, err := i.tp.client.SideEffectExecution.Query().
 						Where(
 							sideeffectexecution.HasSideEffect(),
@@ -61,11 +62,10 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 						First(i.tp.ctx)
 					if err != nil {
 						if ent.IsNotFound(err) {
-							// Handle the case where no execution is found
-							log.Printf("No execution found for sideeffect %s", i.EntityID)
+							i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: no execution found for sideeffect", "entityID", i.EntityID)
 							return fmt.Errorf("no execution found for sideeffect %s", i.EntityID)
 						}
-						log.Printf("Error querying sideeffect execution: %v", err)
+						i.tp.logger.Error(i.tp.ctx, "Error querying sideeffect execution", "error", err)
 						return fmt.Errorf("error querying sideeffect execution: %w", err)
 					}
 
@@ -73,10 +73,12 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 					case sideeffectexecution.StatusCompleted:
 						outputs, err := i.tp.convertOuputs(HandlerInfo(sideeffectHandlerInfo), latestExec.Output)
 						if err != nil {
+							i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: failed to convert outputs", "error", err)
 							return err
 						}
 
 						if len(output) != len(outputs) {
+							i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: output length mismatch", "expected", len(outputs), "got", len(output))
 							return fmt.Errorf("output length mismatch: expected %d, got %d", len(outputs), len(output))
 						}
 
@@ -85,6 +87,7 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 							outputVal := reflect.ValueOf(outputs[idx])
 
 							if outVal.Type() != outputVal.Type() {
+								i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get: type mismatch", "index", idx, "expected", outVal.Type(), "got", outputVal.Type())
 								return fmt.Errorf("type mismatch at index %d: expected %v, got %v", idx, outVal.Type(), outputVal.Type())
 							}
 
@@ -92,15 +95,16 @@ func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
 						}
 						return nil
 					case sideeffectexecution.StatusFailed:
+						i.tp.logger.Debug(i.tp.ctx, "SideEffectInfo.Get: sideeffect failed", "entityID", i.EntityID, "error", latestExec.Error)
 						return errors.New(latestExec.Error)
 					case sideeffectexecution.StatusPending, sideeffectexecution.StatusRunning:
-						// The workflow is still in progress
-						// return  errors.New("workflow is still in progress")
+						i.tp.logger.Debug(i.tp.ctx, "SideEffectInfo.Get: sideeffect is still in progress", "entityID", i.EntityID)
 						runtime.Gosched()
 						continue
 					}
 
 				case sideeffect.StatusPending, sideeffect.StatusRunning:
+					i.tp.logger.Debug(i.tp.ctx, "SideEffectInfo.Get: sideeffect is still in progress", "entityID", i.EntityID)
 					runtime.Gosched()
 					continue
 				}
