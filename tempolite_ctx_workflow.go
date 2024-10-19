@@ -81,7 +81,7 @@ func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}) *SideEffec
 		}
 		return &SideEffectInfo[T]{err: err}
 	}
-	id, err := w.tp.enqueueSubSideEffect(w, stepID, handler)
+	id, err := w.tp.enqueueSideEffect(w, stepID, handler)
 	if err != nil {
 		log.Printf("Error enqueuing side effect: %v", err)
 	}
@@ -96,7 +96,7 @@ func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...an
 		}
 		return &WorkflowInfo[T]{err: err}
 	}
-	id, err := w.tp.enqueueSubWorkflow(w, stepID, handler, inputs...)
+	id, err := w.tp.enqueueWorkflow(w, stepID, handler, inputs...)
 	return w.tp.getWorkflow(w, id, err)
 }
 
@@ -108,7 +108,7 @@ func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs .
 		}
 		return &ActivityInfo[T]{err: err}
 	}
-	id, err := w.tp.enqueueSubActivtyFunc(w, stepID, handler, inputs...)
+	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
 	}
@@ -124,7 +124,7 @@ func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inpu
 		}
 		return &ActivityInfo[T]{err: err}
 	}
-	id, err := w.tp.enqueueSubActivityExecution(w, stepID, name, inputs...)
+	id, err := w.tp.enqueueActivity(w, stepID, name, inputs...)
 	if err != nil {
 		log.Printf("Error enqueuing activity execution: %v", err)
 	}
