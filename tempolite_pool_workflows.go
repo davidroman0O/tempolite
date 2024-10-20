@@ -62,24 +62,54 @@ func (tp *Tempolite[T]) workflowOnSuccess(controller retrypool.WorkerController[
 	if task.Data().isPaused {
 		tp.logger.Debug(tp.ctx, "workflow pool task paused", "workflowID", task.Data().ctx.workflowID)
 		// Update workflow status to paused in the database
-		if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).
+		tx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Failed to start transaction for pausing workflow", "workflowID", task.Data().ctx.workflowID, "error", err)
+			return
+		}
+		if _, err := tx.Workflow.UpdateOneID(task.Data().ctx.workflowID).
 			SetIsPaused(true).
 			SetIsReady(false).
 			Save(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "Failed to update workflow pause status", "workflowID", task.Data().ctx.workflowID, "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Failed to commit transaction for pausing workflow", "workflowID", task.Data().ctx.workflowID, "error", err)
 		}
 		return
 	}
 
 	tp.logger.Debug(tp.ctx, "workflow pool task success", "workflowID", task.Data().ctx.workflowID, "executionID", task.Data().ctx.executionID)
 
-	if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusCompleted).
-		Save(tp.ctx); err != nil {
-		tp.logger.Error(tp.ctx, "Failed to update workflow execution status", "executionID", task.Data().ctx.executionID, "error", err)
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for workflow success", "workflowID", task.Data().ctx.workflowID, "error", err)
+		return
 	}
 
-	if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusCompleted).
+		Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to update workflow execution status", "executionID", task.Data().ctx.executionID, "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if _, err := tx.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusCompleted).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "Failed to update workflow status", "workflowID", task.Data().ctx.workflowID, "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction for workflow success", "workflowID", task.Data().ctx.workflowID, "error", err)
 	}
 }
 
@@ -97,14 +127,32 @@ func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[
 	// Simple retry mechanism
 	// We know in advance the config and the retry value, we can manage in-memory
 	if task.Data().maxRetry > 0 && total < task.Data().maxRetry {
-
-		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
-		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", err)
+		tx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Failed to start transaction for workflow retry", "workflowID", task.Data().ctx.workflowID, "error", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
-		if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusRetried).Save(tp.ctx); err != nil {
+		// Just by creating a new workflow execution, we're incrementing the total count of executions which is the retry count in the database
+		if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusRetried).Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
+		if _, err := tx.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusRetried).Save(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "workflow pool task: Workflow.UpdateOneID failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
+		if err := tx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Failed to commit transaction for workflow retry", "workflowID", task.Data().ctx.workflowID, "error", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		if err := task.Data().retry(); err != nil {
@@ -118,19 +166,42 @@ func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[
 	}
 
 	// we won't re-try the workflow, probably was an error somewhere
+	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
-		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for workflow failure", "workflowID", task.Data().ctx.workflowID, "error", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	if err != nil {
+		if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 	} else {
-		// not retrying and the there is no error
-		if _, err := tp.client.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError("unknown error").Save(tp.ctx); err != nil {
+		// not retrying and there is no error
+		if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError("unknown error").Save(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 	}
 
-	if _, err := tp.client.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
+	if _, err := tx.Workflow.UpdateOneID(task.Data().ctx.workflowID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "workflow pool task: Workflow.UpdateOneID failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction for workflow failure", "workflowID", task.Data().ctx.workflowID, "error", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
 	return retrypool.DeadTaskActionDoNothing
@@ -172,8 +243,22 @@ func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error
 	}
 
 	// fmt.Println("output to save", res, errRes)
-	if _, err := w.tp.client.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
+	tx, err := w.tp.client.Tx(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to start transaction for updating workflow execution output", "error", err)
+		return err
+	}
+
+	if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
 		w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating workflow execution output", "error", err)
 		return err
 	}
 

@@ -135,13 +135,17 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 						if _, err = tx.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed when dispatched", "error", err)
-							tx.Rollback()
+							if rerr := tx.Rollback(); rerr != nil {
+								tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+							}
 							continue
 						}
 
 						if _, err = tx.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed when dispatched", "error", err)
-							tx.Rollback()
+							if rerr := tx.Rollback(); rerr != nil {
+								tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+							}
 							continue
 						}
 
@@ -160,13 +164,17 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 					if _, err = tx.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusRunning).Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed", "error", err)
-						tx.Rollback()
+						if rerr := tx.Rollback(); rerr != nil {
+							tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+						}
 						continue
 					}
 
 					if _, err = tx.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusRunning).Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed", "error", err)
-						tx.Rollback()
+						if rerr := tx.Rollback(); rerr != nil {
+							tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+						}
 						continue
 					}
 

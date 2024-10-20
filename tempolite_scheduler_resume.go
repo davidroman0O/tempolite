@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/davidroman0O/go-tempolite/ent"
@@ -81,14 +80,18 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	// Ensure the transaction is rolled back in case of an error
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback()
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction after panic", "error", rerr)
+			}
 			panic(r)
 		}
 	}()
 
 	wf, err := tx.Workflow.Get(tp.ctx, id.String())
 	if err != nil {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Error fetching workflow", "workflowID", id, "error", err)
 		return fmt.Errorf("error fetching workflow: %w", err)
 	}
@@ -103,7 +106,9 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 		First(tp.ctx)
 
 	if err != nil {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Error querying workflow execution", "workflowID", id, "error", err)
 		return fmt.Errorf("error querying workflow execution: %w", err)
 	}
@@ -123,14 +128,18 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	// Fetch the workflow handler
 	handlerInfo, ok := tp.workflows.Load(HandlerIdentity(wf.Identity))
 	if !ok {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Workflow handler not found", "workflowID", id)
 		return fmt.Errorf("workflow handler not found for %s", wf.Identity)
 	}
 
 	workflowHandler, ok := handlerInfo.(Workflow)
 	if !ok {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Invalid workflow handler", "workflowID", id)
 		return fmt.Errorf("invalid workflow handler for %s", wf.Identity)
 	}
@@ -145,7 +154,9 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 		realInput, err := convertIO(rawInput, inputType, inputKind)
 		if err != nil {
-			tx.Rollback()
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
 			tp.logger.Error(tp.ctx, "Error converting input", "workflowID", id, "error", err)
 			return err
 		}
@@ -167,14 +178,24 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	retryIt := func() error {
 		tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
+		// Start a new transaction for the retry operation
+		retryTx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Error starting transaction for retry", "workflowID", id, "error", err)
+			return fmt.Errorf("error starting transaction for retry: %w", err)
+		}
+
 		// create a new execution for the same workflow
 		var workflowExecution *ent.WorkflowExecution
-		if workflowExecution, err = tx.WorkflowExecution.
+		if workflowExecution, err = retryTx.WorkflowExecution.
 			Create().
 			SetID(uuid.NewString()).
 			SetRunID(wfEx.RunID).
 			SetWorkflow(wf).
 			Save(tp.ctx); err != nil {
+			if rerr := retryTx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
 			tp.logger.Error(tp.ctx, "Error creating workflow execution during retry", "workflowID", id, "error", err)
 			return err
 		}
@@ -184,9 +205,19 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 		tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "retryCount", task.retryCount)
 
 		tp.logger.Debug(tp.ctx, "Dispatching workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "status", workflow.StatusRunning)
-		// now we notify the workflow enity that we're working
-		if _, err = tx.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
-			log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
+		// now we notify the workflow entity that we're working
+		if _, err = retryTx.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+			if rerr := retryTx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			tp.logger.Error(tp.ctx, "Error updating workflow status during retry", "workflowID", id, "error", err)
+			return fmt.Errorf("error updating workflow status during retry: %w", err)
+		}
+
+		// Commit the retry transaction
+		if err = retryTx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Error committing retry transaction", "workflowID", id, "error", err)
+			return fmt.Errorf("error committing retry transaction: %w", err)
 		}
 
 		return nil
@@ -199,7 +230,9 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 		Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).Count(tp.ctx)
 	if err != nil {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Error fetching total execution workflow related to workflow entity", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "error", err)
 		return err
 	}
@@ -215,7 +248,9 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 	// Dispatch the workflow task
 	if err := tp.workflowPool.Dispatch(task); err != nil {
-		tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
 		tp.logger.Error(tp.ctx, "Error dispatching workflow task", "workflowID", id, "error", err)
 		return fmt.Errorf("error dispatching workflow task: %w", err)
 	}
