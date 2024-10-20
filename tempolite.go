@@ -428,24 +428,46 @@ func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 }
 
 func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
-	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Workflow.UpdateOneID(id.String()).
 		SetIsPaused(true).
 		SetIsReady(false).
 		Save(tp.ctx)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error pausing workflow", "workflowID", id, "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
 		return err
 	}
 	return nil
 }
 
 func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
-	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Workflow.UpdateOneID(id.String()).
 		SetIsPaused(false).
 		SetIsReady(true).
 		Save(tp.ctx)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error resuming workflow", "workflowID", id, "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
 		return err
 	}
 	return nil
@@ -524,11 +546,23 @@ func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) error {
 		return nil
 	}
 
-	_, err := tp.client.Workflow.UpdateOneID(id.String()).
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Workflow.UpdateOneID(id.String()).
 		SetStatus(workflow.StatusCancelled).
 		Save(tp.ctx)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error cancelling workflow", "workflowID", id, "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
+		return err
 	}
 
 	return err
