@@ -59,13 +59,31 @@ func (tp *Tempolite[T]) activityOnRetry(attempt int, err error, task *retrypool.
 func (tp *Tempolite[T]) activityOnSuccess(controller retrypool.WorkerController[*activityTask[T]], workerID int, worker retrypool.Worker[*activityTask[T]], task *retrypool.TaskWrapper[*activityTask[T]]) {
 	tp.logger.Debug(tp.ctx, "activity task on success", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
 
-	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).
-		Save(tp.ctx); err != nil {
-		tp.logger.Error(tp.ctx, "activity task on success: ActivityExecution.Update failed", "error", err)
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for updating activity status", "error", err)
+		return
 	}
 
-	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tx.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusCompleted).
+		Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "activity task on success: ActivityExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if _, err := tx.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusCompleted).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "activity task on success: activity.UpdateOneID failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
 	}
 }
 
@@ -79,12 +97,30 @@ func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[
 		task.Data().retryCount++
 		// fmt.Println("retry it the task: ", err)
 		// Just by creating a new activity execution, we're incrementing the total count of executions which is the retry count in the database
-		if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
+		tx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Failed to start transaction for activity retry", "error", err)
+			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
-		if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusRetried).Save(tp.ctx); err != nil {
+		if _, err := tx.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusRetried).Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
+		if _, err := tx.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusRetried).Save(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "activity task on failure: activity.UpdateOneID failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return retrypool.DeadTaskActionAddToDeadTasks
+		}
+
+		if err := tx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Failed to commit transaction for activity retry", "error", err)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
@@ -97,14 +133,29 @@ func (tp *Tempolite[T]) activityOnFailure(controller retrypool.WorkerController[
 		return retrypool.DeadTaskActionDoNothing
 	}
 
-	tp.logger.Debug(tp.ctx, "activity task on failure", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
-
-	if _, err := tp.client.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-		tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for updating activity status to failed", "error", err)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
-	if _, err := tp.client.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
+
+	if _, err := tx.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+	if _, err := tx.Activity.UpdateOneID(task.Data().ctx.activityID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "activity task on failure: activity.UpdateOneID failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction for updating activity status to failed", "error", err)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
@@ -140,8 +191,22 @@ func (w activityWorker[T]) Run(ctx context.Context, data *activityTask[T]) error
 		}
 	}
 
-	if _, err := w.tp.client.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
+	tx, err := w.tp.client.Tx(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
+		return err
+	}
+
+	if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
 		w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Failed to commit transaction for updating activity execution output", "error", err)
 		return err
 	}
 

@@ -55,12 +55,30 @@ func (tp *Tempolite[T]) sideEffectOnSuccess(controller retrypool.WorkerControlle
 
 	tp.logger.Debug(tp.ctx, "sideEffect task on success", "workerID", workerID, "runID", task.Data().ctx.RunID(), "entityID", task.Data().ctx.EntityID(), "executionID", task.Data().ctx.ExecutionID(), "handlerName", task.Data().handlerName)
 
-	if _, err := tp.client.SideEffectExecution.UpdateOneID(task.Data().ctx.ExecutionID()).SetStatus(sideeffectexecution.StatusCompleted).Save(tp.ctx); err != nil {
-		tp.logger.Error(tp.ctx, "sideEffect task on success: SideEffectExecution.Update failed", "error", err)
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for side effect success", "error", err)
+		return
 	}
 
-	if _, err := tp.client.SideEffect.UpdateOneID(task.Data().ctx.EntityID()).SetStatus(sideeffect.StatusCompleted).Save(tp.ctx); err != nil {
+	if _, err := tx.SideEffectExecution.UpdateOneID(task.Data().ctx.ExecutionID()).SetStatus(sideeffectexecution.StatusCompleted).Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "sideEffect task on success: SideEffectExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if _, err := tx.SideEffect.UpdateOneID(task.Data().ctx.EntityID()).SetStatus(sideeffect.StatusCompleted).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "sideEffect task on success: SideEffect.UpdateOneID failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction for side effect success", "error", err)
 	}
 }
 
@@ -68,12 +86,31 @@ func (tp *Tempolite[T]) sideEffectOnFailure(controller retrypool.WorkerControlle
 
 	tp.logger.Debug(tp.ctx, "sideEffect task on failure", "workerID", workerID, "runID", task.Data().ctx.RunID(), "entityID", task.Data().ctx.EntityID(), "executionID", task.Data().ctx.ExecutionID(), "handlerName", task.Data().handlerName)
 
-	if _, err := tp.client.SideEffectExecution.UpdateOneID(task.Data().ctx.ExecutionID()).SetStatus(sideeffectexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-		tp.logger.Error(tp.ctx, "sideEffect task on failure: SideEffectExecution.Update failed", "error", err)
+	tx, txErr := tp.client.Tx(tp.ctx)
+	if txErr != nil {
+		tp.logger.Error(tp.ctx, "Failed to start transaction for side effect failure", "error", txErr)
+		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	if _, err := tp.client.SideEffect.UpdateOneID(task.Data().ctx.EntityID()).SetStatus(sideeffect.StatusFailed).Save(tp.ctx); err != nil {
+	if _, err := tx.SideEffectExecution.UpdateOneID(task.Data().ctx.ExecutionID()).SetStatus(sideeffectexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+		tp.logger.Error(tp.ctx, "sideEffect task on failure: SideEffectExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	if _, err := tx.SideEffect.UpdateOneID(task.Data().ctx.EntityID()).SetStatus(sideeffect.StatusFailed).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "sideEffect task on failure: SideEffect.UpdateOneID failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return retrypool.DeadTaskActionAddToDeadTasks
+	}
+
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Failed to commit transaction for side effect failure", "error", err)
+		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
 	return retrypool.DeadTaskActionDoNothing
@@ -95,8 +132,22 @@ func (w sideEffectWorker[T]) Run(ctx context.Context, data *sideEffectTask[T]) e
 		res[i] = v.Interface()
 	}
 
-	if _, err := w.tp.client.SideEffectExecution.UpdateOneID(data.ctx.ExecutionID()).SetOutput(res).Save(w.tp.ctx); err != nil {
+	tx, err := w.tp.client.Tx(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to start transaction for updating side effect execution output", "error", err)
+		return err
+	}
+
+	if _, err := tx.SideEffectExecution.UpdateOneID(data.ctx.ExecutionID()).SetOutput(res).Save(w.tp.ctx); err != nil {
 		w.tp.logger.Error(data.ctx, "sideEffect pool worker run: SideEffectExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating side effect execution output", "error", err)
 		return err
 	}
 
