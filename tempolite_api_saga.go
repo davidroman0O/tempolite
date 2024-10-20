@@ -138,10 +138,6 @@ func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *Sag
 
 	tp.logger.Debug(tp.ctx, "Committing transaction creating saga")
 	if err = tx.Commit(); err != nil {
-		if err := tx.Rollback(); err != nil {
-			tp.logger.Error(tp.ctx, "Error rolling back transaction creating saga", "error", err)
-			return "", err
-		}
 		tp.logger.Error(tp.ctx, "Error committing transaction creating saga", "error", err)
 		return "", err
 	}

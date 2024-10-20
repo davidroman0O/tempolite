@@ -176,9 +176,7 @@ func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longNa
 
 		tp.logger.Debug(tp.ctx, "Committing transaction creating activity", "longName", longName)
 		if err = tx.Commit(); err != nil {
-			if err = tx.Rollback(); err != nil {
-				return "", err
-			}
+			tp.logger.Error(tp.ctx, "Error committing transaction creating activity", "error", err)
 			return "", err
 		}
 

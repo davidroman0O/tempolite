@@ -188,11 +188,6 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 
 	tp.logger.Debug(tp.ctx, "Committing transaction creating side effect", "handlerIdentity", handlerIdentity)
 	if err = tx.Commit(); err != nil {
-		if err := tx.Rollback(); err != nil {
-			tp.sideEffects.Delete(sideEffectEntity.ID)
-			tp.logger.Error(tp.ctx, "Error rolling back transaction creating side effect", "error", err)
-			return "", err
-		}
 		tp.sideEffects.Delete(sideEffectEntity.ID)
 		tp.logger.Error(tp.ctx, "Error committing transaction creating side effect", "error", err)
 		return "", err

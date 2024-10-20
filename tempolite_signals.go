@@ -170,10 +170,6 @@ func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalI
 	}
 
 	if err := tx.Commit(); err != nil {
-		if err := tx.Rollback(); err != nil {
-			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", err)
-			return "", fmt.Errorf("failed to rollback transaction: %w", err)
-		}
 		tp.logger.Error(tp.ctx, "Error committing transaction", "error", err)
 		return "", fmt.Errorf("failed to commit transaction: %w", err)
 	}

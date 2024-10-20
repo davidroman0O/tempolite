@@ -197,10 +197,6 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 
 		tp.logger.Debug(tp.ctx, "Committing transaction creating workflow", "handlerIdentity", handlerIdentity)
 		if err = tx.Commit(); err != nil {
-			if err = tx.Rollback(); err != nil {
-				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow", "error", err)
-				return "", err
-			}
 			tp.logger.Error(tp.ctx, "Error committing transaction creating workflow", "error", err)
 			return "", err
 		}
@@ -332,10 +328,6 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, para
 
 		tp.logger.Debug(tp.ctx, "Commiting transaction creating workflow", "handlerIdentity", handlerIdentity)
 		if err = tx.Commit(); err != nil {
-			if err = tx.Rollback(); err != nil {
-				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow", "error", err)
-				return "", err
-			}
 			tp.logger.Error(tp.ctx, "Error committing transaction creating workflow", "error", err)
 			return "", err
 		}
