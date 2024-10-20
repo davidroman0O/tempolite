@@ -41,8 +41,29 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 				if err := tp.redispatchWorkflow(WorkflowID(wf.ID)); err != nil {
 					tp.logger.Error(tp.ctx, "Error redispatching workflow", "workflowID", wf.ID, "error", err)
 				}
-				if _, err := tp.client.Workflow.UpdateOne(wf).SetIsReady(false).Save(tp.ctx); err != nil {
+
+				tx, err := tp.client.Tx(tp.ctx)
+				if err != nil {
+					tp.logger.Error(tp.ctx, "Error starting transaction for updating workflow", "workflowID", wf.ID, "error", err)
+					continue
+				}
+				tp.logger.Debug(tp.ctx, "Started transaction for updating workflow", "workflowID", wf.ID)
+
+				_, err = tx.Workflow.UpdateOne(wf).SetIsReady(false).Save(tp.ctx)
+				if err != nil {
 					tp.logger.Error(tp.ctx, "Error updating workflow", "workflowID", wf.ID, "error", err)
+					if rollbackErr := tx.Rollback(); rollbackErr != nil {
+						tp.logger.Error(tp.ctx, "Error rolling back transaction", "workflowID", wf.ID, "error", rollbackErr)
+					} else {
+						tp.logger.Debug(tp.ctx, "Successfully rolled back transaction", "workflowID", wf.ID)
+					}
+					continue
+				}
+
+				if err := tx.Commit(); err != nil {
+					tp.logger.Error(tp.ctx, "Error committing transaction for updating workflow", "workflowID", wf.ID, "error", err)
+				} else {
+					tp.logger.Debug(tp.ctx, "Successfully committed transaction for updating workflow", "workflowID", wf.ID)
 				}
 			}
 		}
@@ -50,9 +71,24 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 }
 
 func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
-
-	wf, err := tp.client.Workflow.Get(tp.ctx, id.String())
+	// Start a transaction
+	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
+		tp.logger.Error(tp.ctx, "Error starting transaction", "error", err)
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Ensure the transaction is rolled back in case of an error
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	wf, err := tx.Workflow.Get(tp.ctx, id.String())
+	if err != nil {
+		tx.Rollback()
 		tp.logger.Error(tp.ctx, "Error fetching workflow", "workflowID", id, "error", err)
 		return fmt.Errorf("error fetching workflow: %w", err)
 	}
@@ -60,13 +96,14 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	tp.logger.Debug(tp.ctx, "Redispatching workflow", "workflowID", id)
 	tp.logger.Debug(tp.ctx, "Querying workflow execution", "workflowID", id)
 
-	wfEx, err := tp.client.WorkflowExecution.Query().
+	wfEx, err := tx.WorkflowExecution.Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).
 		WithWorkflow().
 		Order(ent.Desc(workflowexecution.FieldStartedAt)).
 		First(tp.ctx)
 
 	if err != nil {
+		tx.Rollback()
 		tp.logger.Error(tp.ctx, "Error querying workflow execution", "workflowID", id, "error", err)
 		return fmt.Errorf("error querying workflow execution: %w", err)
 	}
@@ -86,12 +123,14 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	// Fetch the workflow handler
 	handlerInfo, ok := tp.workflows.Load(HandlerIdentity(wf.Identity))
 	if !ok {
+		tx.Rollback()
 		tp.logger.Error(tp.ctx, "Workflow handler not found", "workflowID", id)
 		return fmt.Errorf("workflow handler not found for %s", wf.Identity)
 	}
 
 	workflowHandler, ok := handlerInfo.(Workflow)
 	if !ok {
+		tx.Rollback()
 		tp.logger.Error(tp.ctx, "Invalid workflow handler", "workflowID", id)
 		return fmt.Errorf("invalid workflow handler for %s", wf.Identity)
 	}
@@ -106,6 +145,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 		realInput, err := convertIO(rawInput, inputType, inputKind)
 		if err != nil {
+			tx.Rollback()
 			tp.logger.Error(tp.ctx, "Error converting input", "workflowID", id, "error", err)
 			return err
 		}
@@ -125,12 +165,11 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	}
 
 	retryIt := func() error {
-
 		tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
 		// create a new execution for the same workflow
 		var workflowExecution *ent.WorkflowExecution
-		if workflowExecution, err = tp.client.WorkflowExecution.
+		if workflowExecution, err = tx.WorkflowExecution.
 			Create().
 			SetID(uuid.NewString()).
 			SetRunID(wfEx.RunID).
@@ -146,7 +185,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 
 		tp.logger.Debug(tp.ctx, "Dispatching workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "status", workflow.StatusRunning)
 		// now we notify the workflow enity that we're working
-		if _, err = tp.client.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+		if _, err = tx.Workflow.UpdateOneID(ctx.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
 			log.Printf("scheduler: Workflow.UpdateOneID failed: %v", err)
 		}
 
@@ -156,10 +195,11 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	task.retry = retryIt
 
 	tp.logger.Debug(tp.ctx, "Fetching total execution workflow related to workflow entity", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
-	total, err := tp.client.WorkflowExecution.
+	total, err := tx.WorkflowExecution.
 		Query().
 		Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(wf.ID))).Count(tp.ctx)
 	if err != nil {
+		tx.Rollback()
 		tp.logger.Error(tp.ctx, "Error fetching total execution workflow related to workflow entity", "workflowID", id, "handlerName", workflowHandler.HandlerLongName, "error", err)
 		return err
 	}
@@ -172,5 +212,19 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	}
 
 	tp.logger.Debug(tp.ctx, "Dispatching workflow", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
-	return tp.workflowPool.Dispatch(task)
+
+	// Dispatch the workflow task
+	if err := tp.workflowPool.Dispatch(task); err != nil {
+		tx.Rollback()
+		tp.logger.Error(tp.ctx, "Error dispatching workflow task", "workflowID", id, "error", err)
+		return fmt.Errorf("error dispatching workflow task: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
 }
