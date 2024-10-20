@@ -90,9 +90,8 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				transactionTasks := make([]*transactionTask[T], len(sagaDef.HandlerInfo.TransactionInfo))
 				compensationTasks := make([]*compensationTask[T], len(sagaDef.HandlerInfo.CompensationInfo))
 
-				// Prepare all the transactions and compensation to be orchestrated in a chain reaction
+				// Prepare and link tasks
 				{
-
 					var lastSuccessfulIndex = -1 // Initialize with -1 indicating no transactions have succeeded yet
 
 					// Prepare and link tasks
@@ -121,8 +120,14 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 							nextIndex := i + 1
 							transactionTasks[i].next = func() error {
 								log.Printf("scheduler: Dispatching next transaction task: %s", transactionTasks[nextIndex].handlerName)
+								tx, err := tp.client.Tx(tp.ctx)
+								if err != nil {
+									tp.logger.Error(tp.ctx, "Failed to start transaction for next transaction task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Started transaction for next transaction task")
 								var transactionExecution *ent.SagaExecution
-								if transactionExecution, err = tp.client.SagaExecution.Create().
+								if transactionExecution, err = tx.SagaExecution.Create().
 									SetID(uuid.NewString()).
 									SetStatus(sagaexecution.StatusRunning).
 									SetStepType(sagaexecution.StepTypeTransaction).
@@ -131,8 +136,18 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
 									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create next transaction task", "error", err)
+									if rerr := tx.Rollback(); rerr != nil {
+										tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+									} else {
+										tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+									}
 									return err
 								}
+								if err = tx.Commit(); err != nil {
+									tp.logger.Error(tp.ctx, "Failed to commit transaction for next transaction task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Successfully committed transaction for next transaction task")
 
 								transactionTasks[nextIndex].executionID = transactionExecution.ID
 
@@ -156,9 +171,14 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 					for i := 0; i < len(sagaDef.Steps); i++ {
 						transactionTasks[i].compensate = func() error {
 							if lastSuccessfulIndex >= 0 {
-
+								tx, err := tp.client.Tx(tp.ctx)
+								if err != nil {
+									tp.logger.Error(tp.ctx, "Failed to start transaction for compensation task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Started transaction for compensation task")
 								var compensationExecution *ent.SagaExecution
-								if compensationExecution, err = tp.client.SagaExecution.Create().
+								if compensationExecution, err = tx.SagaExecution.Create().
 									SetID(uuid.NewString()).
 									SetStatus(sagaexecution.StatusRunning).
 									SetStepType(sagaexecution.StepTypeCompensation).
@@ -167,8 +187,18 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
 									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create compensation task", "error", err)
+									if rerr := tx.Rollback(); rerr != nil {
+										tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+									} else {
+										tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+									}
 									return err
 								}
+								if err = tx.Commit(); err != nil {
+									tp.logger.Error(tp.ctx, "Failed to commit transaction for compensation task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Successfully committed transaction for compensation task")
 
 								compensationTasks[lastSuccessfulIndex].executionID = compensationExecution.ID
 
@@ -176,14 +206,30 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 								return tp.compensationPool.Dispatch(compensationTasks[lastSuccessfulIndex])
 							}
 
-							_, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+							tx, err := tp.client.Tx(tp.ctx)
+							if err != nil {
+								tp.logger.Error(tp.ctx, "Failed to start transaction for updating saga status", "error", err)
+								return err
+							}
+							tp.logger.Debug(tp.ctx, "Started transaction for updating saga status")
+							_, err = tx.Saga.UpdateOne(sagaExecution.Edges.Saga).
 								SetStatus(saga.StatusCompensated).
 								Save(tp.ctx)
 							if err != nil {
 								tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
+								if rerr := tx.Rollback(); rerr != nil {
+									tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+								} else {
+									tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+								}
+								return err
 							}
-							// No compensation needed if no transactions succeeded
-							return err
+							if err = tx.Commit(); err != nil {
+								tp.logger.Error(tp.ctx, "Failed to commit transaction for updating saga status", "error", err)
+								return err
+							}
+							tp.logger.Debug(tp.ctx, "Successfully committed transaction for updating saga status")
+							return nil
 						}
 					}
 
@@ -192,9 +238,14 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 						if i > 0 {
 							prevIndex := i - 1
 							compensationTasks[i].next = func() error {
-
+								tx, err := tp.client.Tx(tp.ctx)
+								if err != nil {
+									tp.logger.Error(tp.ctx, "Failed to start transaction for next compensation task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Started transaction for next compensation task")
 								var compensationExecution *ent.SagaExecution
-								if compensationExecution, err = tp.client.SagaExecution.Create().
+								if compensationExecution, err = tx.SagaExecution.Create().
 									SetID(uuid.NewString()).
 									SetStatus(sagaexecution.StatusRunning).
 									SetStepType(sagaexecution.StepTypeCompensation).
@@ -203,8 +254,18 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 									SetSaga(sagaExecution.Edges.Saga).
 									Save(tp.ctx); err != nil {
 									tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to create next compensation task", "error", err)
+									if rerr := tx.Rollback(); rerr != nil {
+										tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+									} else {
+										tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+									}
 									return err
 								}
+								if err = tx.Commit(); err != nil {
+									tp.logger.Error(tp.ctx, "Failed to commit transaction for next compensation task", "error", err)
+									return err
+								}
+								tp.logger.Debug(tp.ctx, "Successfully committed transaction for next compensation task")
 
 								compensationTasks[prevIndex].executionID = compensationExecution.ID
 
@@ -221,20 +282,54 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				// Dispatch the first transaction task
 				if err := tp.transactionPool.Dispatch(transactionTasks[0]); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to dispatch first transaction task", "error", err)
-					if _, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+					tx, err := tp.client.Tx(tp.ctx)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Failed to start transaction for updating saga status after dispatch failure", "error", err)
+						continue
+					}
+					tp.logger.Debug(tp.ctx, "Started transaction for updating saga status after dispatch failure")
+					if _, err := tx.Saga.UpdateOne(sagaExecution.Edges.Saga).
 						SetStatus(saga.StatusFailed).
 						SetError(err.Error()).
 						Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
+						if rerr := tx.Rollback(); rerr != nil {
+							tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+						} else {
+							tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+						}
+						continue
 					}
+					if err := tx.Commit(); err != nil {
+						tp.logger.Error(tp.ctx, "Failed to commit transaction for updating saga status after dispatch failure", "error", err)
+						continue
+					}
+					tp.logger.Debug(tp.ctx, "Successfully committed transaction for updating saga status after dispatch failure")
 					continue
 				}
 
-				if _, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+				tx, err := tp.client.Tx(tp.ctx)
+				if err != nil {
+					tp.logger.Error(tp.ctx, "Failed to start transaction for updating saga status to running", "error", err)
+					continue
+				}
+				tp.logger.Debug(tp.ctx, "Started transaction for updating saga status to running")
+				if _, err := tx.Saga.UpdateOne(sagaExecution.Edges.Saga).
 					SetStatus(saga.StatusRunning).
 					Save(tp.ctx); err != nil {
-					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
+					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status to running", "error", err)
+					if rerr := tx.Rollback(); rerr != nil {
+						tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+					} else {
+						tp.logger.Debug(tp.ctx, "Successfully rolled back transaction")
+					}
+					continue
 				}
+				if err := tx.Commit(); err != nil {
+					tp.logger.Error(tp.ctx, "Failed to commit transaction for updating saga status to running", "error", err)
+					continue
+				}
+				tp.logger.Debug(tp.ctx, "Successfully committed transaction for updating saga status to running")
 			}
 
 			runtime.Gosched()
