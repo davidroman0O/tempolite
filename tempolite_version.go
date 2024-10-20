@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/davidroman0O/go-tempolite/ent"
 	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
@@ -32,10 +31,20 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 		tp.logger.Error(tp.ctx, "Error creating transaction when getting or creating version", "error", err)
 		return 0, err
 	}
-	defer tx.Rollback()
+
+	var v *ent.FeatureFlagVersion
+
+	defer func() {
+		if err != nil {
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+				err = fmt.Errorf("rollback error: %v (original error: %v)", rerr, err)
+			}
+		}
+	}()
 
 	tp.logger.Debug(tp.ctx, "Querying feature flag version", "workflowType", workflowType, "changeID", changeID)
-	v, err := tx.FeatureFlagVersion.Query().
+	v, err = tx.FeatureFlagVersion.Query().
 		Where(featureflagversion.WorkflowTypeEQ(workflowType)).
 		Where(featureflagversion.ChangeIDEQ(changeID)).
 		Only(tp.ctx)
@@ -47,7 +56,6 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 		}
 		tp.logger.Debug(tp.ctx, "Creating new version", "workflowType", workflowType, "changeID", changeID, "version", minSupported)
 		// Version not found, create a new one
-		log.Printf("Creating new version for key: %s with value: %d", key, minSupported)
 		v, err = tx.FeatureFlagVersion.Create().
 			SetWorkflowType(workflowType).
 			SetWorkflowID(workflowID).
@@ -77,7 +85,7 @@ func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID st
 	}
 
 	tp.logger.Debug(tp.ctx, "Committing transaction version", "workflowType", workflowType, "changeID", changeID, "version", v.Version)
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		tp.logger.Error(tp.ctx, "Error committing transaction", "error", err)
 		return 0, err
 	}
