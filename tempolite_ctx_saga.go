@@ -5,11 +5,6 @@ type TransactionContext[T Identifier] struct {
 	tp *Tempolite[T]
 }
 
-func (w TransactionContext[T]) GetActivity(id string) (*ActivityInfo[T], error) {
-	// todo: implement
-	return nil, nil
-}
-
 func (w TransactionContext[T]) EntityType() string {
 	return "transaction"
 }

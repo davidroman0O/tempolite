@@ -87,7 +87,6 @@ type Tempolite[T Identifier] struct {
 	cancel context.CancelFunc
 
 	// Versioning system cache
-	// TODO: we should make an analysis at start to know which versions we could cache
 	versionCache sync.Map
 
 	schedulerWorkflowStarted   atomic.Bool
