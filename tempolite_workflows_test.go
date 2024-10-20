@@ -783,3 +783,68 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 	}
 
 }
+
+// go test -timeout 30s -v -count=1 -run ^TestWorkflowSimpleContinueAsNew$ .
+func TestWorkflowSimpleContinueAsNew(t *testing.T) {
+
+	type workflowData struct {
+		Message string
+	}
+
+	activtyLocal := func(ctx ActivityContext[testIdentifier]) error {
+		return nil
+	}
+
+	once := false
+
+	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+
+		if err := ctx.ActivityFunc("test", activtyLocal).Get(); err != nil {
+			return -1, err
+		}
+
+		if !once {
+			once = true
+			fmt.Println("continue as new")
+			return 69, ctx.ContinueAsNew(ctx, "continue-me", input, msg)
+		}
+
+		fmt.Println("done")
+		return 69, nil
+	}
+
+	registery := NewRegistry[testIdentifier]().
+		Workflow(localWrkflw).
+		ActivityFunc(activtyLocal).
+		Build()
+
+	tp, err := New[testIdentifier](
+		context.Background(),
+		registery,
+		WithPath("./db/tempolite-workflow-continueasnew.db"),
+		WithDestructive(),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tp.Close()
+
+	if err := tp.registerWorkflow(localWrkflw); err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+
+	var workflowInfo *WorkflowInfo[testIdentifier]
+	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+		t.Fatalf("EnqueueActivityFunc failed: %v", err)
+	}
+
+	<-time.After(2 * time.Second)
+
+	if err := workflowInfo.Get(); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+}

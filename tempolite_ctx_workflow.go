@@ -8,17 +8,34 @@ import (
 
 type WorkflowContext[T Identifier] struct {
 	TempoliteContext
-	tp           *Tempolite[T]
-	workflowID   string
-	executionID  string
-	runID        string
-	workflowType string
-	stepID       string
+	tp              *Tempolite[T]
+	workflowID      string
+	executionID     string
+	runID           string
+	workflowType    string
+	stepID          string
+	handlerIdentity HandlerIdentity
 }
 
-func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], values ...any) error {
-	// todo: implement continue as new
-	return nil
+func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, values ...any) error {
+	if err := w.checkIfPaused(); err != nil { // we will come back later anyway
+		if uerr := w.setExecutionAsPaused(); uerr != nil {
+			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
+			return uerr
+		}
+		return err
+	}
+
+	if value, ok := w.tp.workflows.Load(w.handlerIdentity); ok {
+		handler := value.(Workflow)
+		_, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, values...)
+		if err != nil {
+			w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
+		}
+		return err
+	}
+
+	return fmt.Errorf("failed to continue as new")
 }
 
 func (w WorkflowContext[T]) RunID() string {

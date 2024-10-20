@@ -73,12 +73,13 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 					}
 
 					contextWorkflow := WorkflowContext[T]{
-						tp:           tp,
-						workflowID:   workflowEntity.ID,
-						executionID:  pendingWorkflowExecution.ID,
-						runID:        pendingWorkflowExecution.RunID,
-						workflowType: workflowEntity.Identity,
-						stepID:       workflowEntity.StepID,
+						tp:              tp,
+						workflowID:      workflowEntity.ID,
+						executionID:     pendingWorkflowExecution.ID,
+						runID:           pendingWorkflowExecution.RunID,
+						workflowType:    workflowEntity.Identity,
+						stepID:          workflowEntity.StepID,
+						handlerIdentity: HandlerIdentity(workflowEntity.Identity),
 					}
 
 					task := &workflowTask[T]{

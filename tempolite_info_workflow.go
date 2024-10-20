@@ -68,6 +68,9 @@ func (i *WorkflowInfo[T]) Get(output ...interface{}) error {
 					}
 					switch latestExec.Status {
 					case workflowexecution.StatusCompleted:
+						if len(output) == 0 {
+							return nil
+						}
 						outputs, err := i.tp.convertOuputs(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 						if err != nil {
 							i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: failed to convert outputs", "error", err)
