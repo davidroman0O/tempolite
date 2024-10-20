@@ -4,6 +4,7 @@ import (
 	"runtime"
 
 	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
 	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 )
 
@@ -57,11 +58,25 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 
 				if err := tp.sideEffectPool.Dispatch(task); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: Dispatch failed", "error", err)
+					if _, err = tp.client.SideEffectExecution.UpdateOneID(se.ID).SetStatus(sideeffectexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.UpdateOneID failed", "error", err)
+						continue
+					}
+
+					if _, err = tp.client.SideEffect.UpdateOneID(se.Edges.SideEffect.ID).SetStatus(sideeffect.StatusFailed).Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffect.UpdateOneID failed", "error", err)
+						continue
+					}
 					continue
 				}
 
 				if _, err = tp.client.SideEffectExecution.UpdateOneID(se.ID).SetStatus(sideeffectexecution.StatusRunning).Save(tp.ctx); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.UpdateOneID failed", "error", err)
+					continue
+				}
+
+				if _, err = tp.client.SideEffect.UpdateOneID(se.Edges.SideEffect.ID).SetStatus(sideeffect.StatusRunning).Save(tp.ctx); err != nil {
+					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffect.UpdateOneID failed", "error", err)
 					continue
 				}
 			}

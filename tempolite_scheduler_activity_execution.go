@@ -125,11 +125,25 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 					if err := tp.activityPool.Dispatch(task); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
+						if _, err = tp.client.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+							tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed when dispatched", "error", err)
+							continue
+						}
+
+						if _, err = tp.client.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
+							tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed when dispatched", "error", err)
+							continue
+						}
 						continue
 					}
 
 					if _, err = tp.client.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusRunning).Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed", "error", err)
+						continue
+					}
+
+					if _, err = tp.client.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusRunning).Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed", "error", err)
 						continue
 					}
 

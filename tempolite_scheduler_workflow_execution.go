@@ -146,17 +146,23 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 							retrypool.WithImmediateRetry[*workflowTask[T]](),
 						); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
+						if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.UpdateOneID failed when failed to dispatch", "error", err)
+							continue
+						}
+						if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Workflow.UpdateOneID failed when failed to dispatch", "error", err)
+							continue
+						}
 						continue
 					}
 
 					if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
-						// TODO: could be a problem if not really dispatched
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.UpdateOneID failed", "error", err)
 						continue
 					}
 
 					if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
-						// TODO: could be a problem if not really dispatched
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Workflow.UpdateOneID failed", "error", err)
 						continue
 					}

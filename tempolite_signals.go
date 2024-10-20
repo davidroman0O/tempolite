@@ -250,6 +250,7 @@ func (s *SignalInfo[T]) Receive(ctx WorkflowContext[T], value interface{}) error
 			// Decode the JSON value into the provided pointer
 			if err := json.Unmarshal([]byte(jsonValue), value); err != nil {
 				s.tp.logger.Error(ctx.tp.ctx, "Signal info error decoding signal value", "error", err)
+				// TODO: might be a case for failure
 				return fmt.Errorf("error decoding signal value: %w", err)
 			}
 

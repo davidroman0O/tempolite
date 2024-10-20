@@ -221,6 +221,12 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 				// Dispatch the first transaction task
 				if err := tp.transactionPool.Dispatch(transactionTasks[0]); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to dispatch first transaction task", "error", err)
+					if _, err := tp.client.Saga.UpdateOne(sagaExecution.Edges.Saga).
+						SetStatus(saga.StatusFailed).
+						SetError(err.Error()).
+						Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to update saga status", "error", err)
+					}
 					continue
 				}
 
