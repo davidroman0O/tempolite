@@ -125,26 +125,53 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 
 					if err := tp.activityPool.Dispatch(task); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
-						if _, err = tp.client.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+
+						// Start transaction for status updates
+						tx, err := tp.client.Tx(tp.ctx)
+						if err != nil {
+							tp.logger.Error(tp.ctx, "Failed to start transaction for status updates", "error", err)
+							continue
+						}
+
+						if _, err = tx.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed when dispatched", "error", err)
+							tx.Rollback()
 							continue
 						}
 
-						if _, err = tp.client.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
+						if _, err = tx.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusFailed).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed when dispatched", "error", err)
+							tx.Rollback()
 							continue
+						}
+
+						if err = tx.Commit(); err != nil {
+							tp.logger.Error(tp.ctx, "Failed to commit transaction for status updates", "error", err)
 						}
 						continue
 					}
 
-					if _, err = tp.client.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusRunning).Save(tp.ctx); err != nil {
-						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed", "error", err)
+					// Start transaction for status updates
+					tx, err := tp.client.Tx(tp.ctx)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Failed to start transaction for status updates", "error", err)
 						continue
 					}
 
-					if _, err = tp.client.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusRunning).Save(tp.ctx); err != nil {
-						tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed", "error", err)
+					if _, err = tx.ActivityExecution.UpdateOneID(act.ID).SetStatus(activityexecution.StatusRunning).Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.UpdateOneID failed", "error", err)
+						tx.Rollback()
 						continue
+					}
+
+					if _, err = tx.Activity.UpdateOneID(activityEntity.ID).SetStatus(activity.StatusRunning).Save(tp.ctx); err != nil {
+						tp.logger.Error(tp.ctx, "scheduler activity execution: Activity.UpdateOne failed", "error", err)
+						tx.Rollback()
+						continue
+					}
+
+					if err = tx.Commit(); err != nil {
+						tp.logger.Error(tp.ctx, "Failed to commit transaction for status updates", "error", err)
 					}
 
 				} else {
