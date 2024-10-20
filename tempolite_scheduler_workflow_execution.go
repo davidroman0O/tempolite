@@ -17,7 +17,6 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 		case <-tp.ctx.Done():
 			return
 		default:
-
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
 				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
 				Order(ent.Asc(workflowexecution.FieldStartedAt)).
@@ -38,12 +37,10 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 			var ok bool
 
 			for _, pendingWorkflowExecution := range pendingWorkflows {
-
 				tp.logger.Debug(tp.ctx, "Scheduler workflow execution: pending workflow", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
 				var workflowEntity *ent.Workflow
 				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
-					// todo: maybe we can tag the execution as not executable
 					tp.logger.Error(tp.ctx, "Scheduler workflow execution: workflow.Get failed", "error", err)
 					continue
 				}
@@ -51,25 +48,14 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 				if value, ok = tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 					var workflowHandlerInfo Workflow
 					if workflowHandlerInfo, ok = value.(Workflow); !ok {
-						// could be development bug
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: workflow handler info not found", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID)
 						continue
 					}
 
-					inputs := []interface{}{}
-
-					// TODO: we can probably parallelize this
-					for idx, rawInput := range workflowEntity.Input {
-						inputType := workflowHandlerInfo.ParamTypes[idx]
-						inputKind := workflowHandlerInfo.ParamsKinds[idx]
-
-						realInput, err := convertIO(rawInput, inputType, inputKind)
-						if err != nil {
-							tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInput failed", "error", err)
-							continue
-						}
-
-						inputs = append(inputs, realInput)
+					inputs, err := tp.convertInputs(HandlerInfo(workflowHandlerInfo), workflowEntity.Input)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInputs failed", "error", err)
+						continue
 					}
 
 					contextWorkflow := WorkflowContext[T]{
@@ -91,19 +77,20 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 						retryCount:  0,
 					}
 
-					// On retry, we will have to create a new workflow exection
 					retryIt := func() error {
-
-						// create a new execution for the same workflow
+						tx, err := tp.client.Tx(tp.ctx)
+						if err != nil {
+							return err
+						}
 						var workflowExecution *ent.WorkflowExecution
-						if workflowExecution, err = tp.client.WorkflowExecution.
+						if workflowExecution, err = tx.WorkflowExecution.
 							Create().
 							SetID(uuid.NewString()).
 							SetRunID(pendingWorkflowExecution.RunID).
 							SetWorkflow(workflowEntity).
 							Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: retry create new execution failed", "error", err)
-							return err
+							return tx.Rollback()
 						}
 
 						tp.logger.Debug(tp.ctx, "Scheduler workflow execution: retrying", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", workflowExecution.ID)
@@ -113,60 +100,77 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 
 						tp.logger.Debug(tp.ctx, "Scheduler workflow execution: retrying", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", workflowExecution.ID, "retry_count", task.retryCount)
 
-						// now we notify the workflow enity that we're working
-						if _, err = tp.client.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+						if _, err = tx.Workflow.UpdateOneID(contextWorkflow.workflowID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: retry update workflow status failed", "error", err)
-							return err
+							return tx.Rollback()
 						}
 
-						return nil
+						return tx.Commit()
 					}
 
 					task.retry = retryIt
 
-					// query the count of how many workflow execution exists related to the workflowEntity
-					// > but but why are you getting the count?!?!
-					// well maybe if we crashed, then when re-enqueueing the workflow, we can prepare the retry count and continue our work
 					total, err := tp.client.WorkflowExecution.Query().Where(workflowexecution.HasWorkflowWith(workflow.IDEQ(workflowEntity.ID))).Count(tp.ctx)
 					if err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.Query total failed", "error", err)
 						continue
 					}
 
-					// If it's not me
 					if total > 1 {
 						task.retryCount = total
 					}
 
 					tp.logger.Debug(tp.ctx, "Scheduler workflow execution: Dispatching", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
-					if err := tp.workflowPool.
-						Dispatch(
-							task,
-							retrypool.WithImmediateRetry[*workflowTask[T]](),
-						); err != nil {
+					if err := tp.workflowPool.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask[T]]()); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
-						if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+						tx, txErr := tp.client.Tx(tp.ctx)
+						if txErr != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to start transaction", "error", txErr)
+							continue
+						}
+						if _, err = tx.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.UpdateOneID failed when failed to dispatch", "error", err)
+							if rollbackErr := tx.Rollback(); rollbackErr != nil {
+								tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to rollback transaction", "error", rollbackErr)
+							}
 							continue
 						}
-						if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
+						if _, err = tx.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusFailed).Save(tp.ctx); err != nil {
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Workflow.UpdateOneID failed when failed to dispatch", "error", err)
+							if rollbackErr := tx.Rollback(); rollbackErr != nil {
+								tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to rollback transaction", "error", rollbackErr)
+							}
 							continue
+						}
+						if err = tx.Commit(); err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to commit transaction", "error", err)
 						}
 						continue
 					}
 
-					if _, err = tp.client.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
+					tx, err := tp.client.Tx(tp.ctx)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to start transaction", "error", err)
+						continue
+					}
+					if _, err = tx.WorkflowExecution.UpdateOneID(pendingWorkflowExecution.ID).SetStatus(workflowexecution.StatusRunning).Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: WorkflowExecution.UpdateOneID failed", "error", err)
+						if rollbackErr := tx.Rollback(); rollbackErr != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to rollback transaction", "error", rollbackErr)
+						}
 						continue
 					}
-
-					if _, err = tp.client.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
+					if _, err = tx.Workflow.UpdateOneID(workflowEntity.ID).SetStatus(workflow.StatusRunning).Save(tp.ctx); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Workflow.UpdateOneID failed", "error", err)
+						if rollbackErr := tx.Rollback(); rollbackErr != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to rollback transaction", "error", rollbackErr)
+						}
 						continue
 					}
-
+					if err = tx.Commit(); err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to commit transaction", "error", err)
+					}
 				} else {
 					tp.logger.Error(tp.ctx, "Workflow not found", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID)
 					continue

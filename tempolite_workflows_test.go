@@ -840,11 +840,17 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 
 	<-time.After(2 * time.Second)
 
-	if err := workflowInfo.Get(); err != nil {
+	var number int
+	if err := workflowInfo.Get(&number); err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
 	if err := tp.Wait(); err != nil {
 		t.Fatalf("Wait failed: %v", err)
 	}
+
+	if number != 69 {
+		t.Fatalf("number: %d", number)
+	}
+
 }
