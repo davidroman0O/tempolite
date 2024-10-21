@@ -9374,6 +9374,7 @@ type WorkflowExecutionMutation struct {
 	output          *[]interface{}
 	appendoutput    []interface{}
 	error           *string
+	is_replay       *bool
 	started_at      *time.Time
 	updated_at      *time.Time
 	clearedFields   map[string]struct{}
@@ -9674,6 +9675,42 @@ func (m *WorkflowExecutionMutation) ResetError() {
 	delete(m.clearedFields, workflowexecution.FieldError)
 }
 
+// SetIsReplay sets the "is_replay" field.
+func (m *WorkflowExecutionMutation) SetIsReplay(b bool) {
+	m.is_replay = &b
+}
+
+// IsReplay returns the value of the "is_replay" field in the mutation.
+func (m *WorkflowExecutionMutation) IsReplay() (r bool, exists bool) {
+	v := m.is_replay
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsReplay returns the old "is_replay" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldIsReplay(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsReplay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsReplay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsReplay: %w", err)
+	}
+	return oldValue.IsReplay, nil
+}
+
+// ResetIsReplay resets all changes to the "is_replay" field.
+func (m *WorkflowExecutionMutation) ResetIsReplay() {
+	m.is_replay = nil
+}
+
 // SetStartedAt sets the "started_at" field.
 func (m *WorkflowExecutionMutation) SetStartedAt(t time.Time) {
 	m.started_at = &t
@@ -9819,7 +9856,7 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.run_id != nil {
 		fields = append(fields, workflowexecution.FieldRunID)
 	}
@@ -9831,6 +9868,9 @@ func (m *WorkflowExecutionMutation) Fields() []string {
 	}
 	if m.error != nil {
 		fields = append(fields, workflowexecution.FieldError)
+	}
+	if m.is_replay != nil {
+		fields = append(fields, workflowexecution.FieldIsReplay)
 	}
 	if m.started_at != nil {
 		fields = append(fields, workflowexecution.FieldStartedAt)
@@ -9854,6 +9894,8 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.Output()
 	case workflowexecution.FieldError:
 		return m.Error()
+	case workflowexecution.FieldIsReplay:
+		return m.IsReplay()
 	case workflowexecution.FieldStartedAt:
 		return m.StartedAt()
 	case workflowexecution.FieldUpdatedAt:
@@ -9875,6 +9917,8 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldOutput(ctx)
 	case workflowexecution.FieldError:
 		return m.OldError(ctx)
+	case workflowexecution.FieldIsReplay:
+		return m.OldIsReplay(ctx)
 	case workflowexecution.FieldStartedAt:
 		return m.OldStartedAt(ctx)
 	case workflowexecution.FieldUpdatedAt:
@@ -9915,6 +9959,13 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetError(v)
+		return nil
+	case workflowexecution.FieldIsReplay:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsReplay(v)
 		return nil
 	case workflowexecution.FieldStartedAt:
 		v, ok := value.(time.Time)
@@ -10005,6 +10056,9 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 		return nil
 	case workflowexecution.FieldError:
 		m.ResetError()
+		return nil
+	case workflowexecution.FieldIsReplay:
+		m.ResetIsReplay()
 		return nil
 	case workflowexecution.FieldStartedAt:
 		m.ResetStartedAt()

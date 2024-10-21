@@ -61,6 +61,20 @@ func (wec *WorkflowExecutionCreate) SetNillableError(s *string) *WorkflowExecuti
 	return wec
 }
 
+// SetIsReplay sets the "is_replay" field.
+func (wec *WorkflowExecutionCreate) SetIsReplay(b bool) *WorkflowExecutionCreate {
+	wec.mutation.SetIsReplay(b)
+	return wec
+}
+
+// SetNillableIsReplay sets the "is_replay" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableIsReplay(b *bool) *WorkflowExecutionCreate {
+	if b != nil {
+		wec.SetIsReplay(*b)
+	}
+	return wec
+}
+
 // SetStartedAt sets the "started_at" field.
 func (wec *WorkflowExecutionCreate) SetStartedAt(t time.Time) *WorkflowExecutionCreate {
 	wec.mutation.SetStartedAt(t)
@@ -145,6 +159,10 @@ func (wec *WorkflowExecutionCreate) defaults() {
 		v := workflowexecution.DefaultStatus
 		wec.mutation.SetStatus(v)
 	}
+	if _, ok := wec.mutation.IsReplay(); !ok {
+		v := workflowexecution.DefaultIsReplay
+		wec.mutation.SetIsReplay(v)
+	}
 	if _, ok := wec.mutation.StartedAt(); !ok {
 		v := workflowexecution.DefaultStartedAt()
 		wec.mutation.SetStartedAt(v)
@@ -167,6 +185,9 @@ func (wec *WorkflowExecutionCreate) check() error {
 		if err := workflowexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.status": %w`, err)}
 		}
+	}
+	if _, ok := wec.mutation.IsReplay(); !ok {
+		return &ValidationError{Name: "is_replay", err: errors.New(`ent: missing required field "WorkflowExecution.is_replay"`)}
 	}
 	if _, ok := wec.mutation.StartedAt(); !ok {
 		return &ValidationError{Name: "started_at", err: errors.New(`ent: missing required field "WorkflowExecution.started_at"`)}
@@ -227,6 +248,10 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 	if value, ok := wec.mutation.Error(); ok {
 		_spec.SetField(workflowexecution.FieldError, field.TypeString, value)
 		_node.Error = value
+	}
+	if value, ok := wec.mutation.IsReplay(); ok {
+		_spec.SetField(workflowexecution.FieldIsReplay, field.TypeBool, value)
+		_node.IsReplay = value
 	}
 	if value, ok := wec.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)

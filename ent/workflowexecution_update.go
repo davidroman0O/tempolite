@@ -96,6 +96,20 @@ func (weu *WorkflowExecutionUpdate) ClearError() *WorkflowExecutionUpdate {
 	return weu
 }
 
+// SetIsReplay sets the "is_replay" field.
+func (weu *WorkflowExecutionUpdate) SetIsReplay(b bool) *WorkflowExecutionUpdate {
+	weu.mutation.SetIsReplay(b)
+	return weu
+}
+
+// SetNillableIsReplay sets the "is_replay" field if the given value is not nil.
+func (weu *WorkflowExecutionUpdate) SetNillableIsReplay(b *bool) *WorkflowExecutionUpdate {
+	if b != nil {
+		weu.SetIsReplay(*b)
+	}
+	return weu
+}
+
 // SetStartedAt sets the "started_at" field.
 func (weu *WorkflowExecutionUpdate) SetStartedAt(t time.Time) *WorkflowExecutionUpdate {
 	weu.mutation.SetStartedAt(t)
@@ -222,6 +236,9 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	if weu.mutation.ErrorCleared() {
 		_spec.ClearField(workflowexecution.FieldError, field.TypeString)
 	}
+	if value, ok := weu.mutation.IsReplay(); ok {
+		_spec.SetField(workflowexecution.FieldIsReplay, field.TypeBool, value)
+	}
 	if value, ok := weu.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)
 	}
@@ -340,6 +357,20 @@ func (weuo *WorkflowExecutionUpdateOne) SetNillableError(s *string) *WorkflowExe
 // ClearError clears the value of the "error" field.
 func (weuo *WorkflowExecutionUpdateOne) ClearError() *WorkflowExecutionUpdateOne {
 	weuo.mutation.ClearError()
+	return weuo
+}
+
+// SetIsReplay sets the "is_replay" field.
+func (weuo *WorkflowExecutionUpdateOne) SetIsReplay(b bool) *WorkflowExecutionUpdateOne {
+	weuo.mutation.SetIsReplay(b)
+	return weuo
+}
+
+// SetNillableIsReplay sets the "is_replay" field if the given value is not nil.
+func (weuo *WorkflowExecutionUpdateOne) SetNillableIsReplay(b *bool) *WorkflowExecutionUpdateOne {
+	if b != nil {
+		weuo.SetIsReplay(*b)
+	}
 	return weuo
 }
 
@@ -498,6 +529,9 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 	}
 	if weuo.mutation.ErrorCleared() {
 		_spec.ClearField(workflowexecution.FieldError, field.TypeString)
+	}
+	if value, ok := weuo.mutation.IsReplay(); ok {
+		_spec.SetField(workflowexecution.FieldIsReplay, field.TypeBool, value)
 	}
 	if value, ok := weuo.mutation.StartedAt(); ok {
 		_spec.SetField(workflowexecution.FieldStartedAt, field.TypeTime, value)

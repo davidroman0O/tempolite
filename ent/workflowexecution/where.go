@@ -75,6 +75,11 @@ func Error(v string) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldEQ(FieldError, v))
 }
 
+// IsReplay applies equality check predicate on the "is_replay" field. It's identical to IsReplayEQ.
+func IsReplay(v bool) predicate.WorkflowExecution {
+	return predicate.WorkflowExecution(sql.FieldEQ(FieldIsReplay, v))
+}
+
 // StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
 func StartedAt(v time.Time) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldEQ(FieldStartedAt, v))
@@ -253,6 +258,16 @@ func ErrorEqualFold(v string) predicate.WorkflowExecution {
 // ErrorContainsFold applies the ContainsFold predicate on the "error" field.
 func ErrorContainsFold(v string) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldContainsFold(FieldError, v))
+}
+
+// IsReplayEQ applies the EQ predicate on the "is_replay" field.
+func IsReplayEQ(v bool) predicate.WorkflowExecution {
+	return predicate.WorkflowExecution(sql.FieldEQ(FieldIsReplay, v))
+}
+
+// IsReplayNEQ applies the NEQ predicate on the "is_replay" field.
+func IsReplayNEQ(v bool) predicate.WorkflowExecution {
+	return predicate.WorkflowExecution(sql.FieldNEQ(FieldIsReplay, v))
 }
 
 // StartedAtEQ applies the EQ predicate on the "started_at" field.

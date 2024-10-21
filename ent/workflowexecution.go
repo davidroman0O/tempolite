@@ -27,6 +27,8 @@ type WorkflowExecution struct {
 	Output []interface{} `json:"output,omitempty"`
 	// Error holds the value of the "error" field.
 	Error string `json:"error,omitempty"`
+	// IsReplay holds the value of the "is_replay" field.
+	IsReplay bool `json:"is_replay,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt time.Time `json:"started_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -65,6 +67,8 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflowexecution.FieldOutput:
 			values[i] = new([]byte)
+		case workflowexecution.FieldIsReplay:
+			values[i] = new(sql.NullBool)
 		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus, workflowexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case workflowexecution.FieldStartedAt, workflowexecution.FieldUpdatedAt:
@@ -117,6 +121,12 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field error", values[i])
 			} else if value.Valid {
 				we.Error = value.String
+			}
+		case workflowexecution.FieldIsReplay:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_replay", values[i])
+			} else if value.Valid {
+				we.IsReplay = value.Bool
 			}
 		case workflowexecution.FieldStartedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -189,6 +199,9 @@ func (we *WorkflowExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("error=")
 	builder.WriteString(we.Error)
+	builder.WriteString(", ")
+	builder.WriteString("is_replay=")
+	builder.WriteString(fmt.Sprintf("%v", we.IsReplay))
 	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(we.StartedAt.Format(time.ANSIC))

@@ -204,12 +204,16 @@ func init() {
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()
 	_ = workflowexecutionFields
+	// workflowexecutionDescIsReplay is the schema descriptor for is_replay field.
+	workflowexecutionDescIsReplay := workflowexecutionFields[5].Descriptor()
+	// workflowexecution.DefaultIsReplay holds the default value on creation for the is_replay field.
+	workflowexecution.DefaultIsReplay = workflowexecutionDescIsReplay.Default.(bool)
 	// workflowexecutionDescStartedAt is the schema descriptor for started_at field.
-	workflowexecutionDescStartedAt := workflowexecutionFields[5].Descriptor()
+	workflowexecutionDescStartedAt := workflowexecutionFields[6].Descriptor()
 	// workflowexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	workflowexecution.DefaultStartedAt = workflowexecutionDescStartedAt.Default.(func() time.Time)
 	// workflowexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowexecutionDescUpdatedAt := workflowexecutionFields[6].Descriptor()
+	workflowexecutionDescUpdatedAt := workflowexecutionFields[7].Descriptor()
 	// workflowexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	workflowexecution.DefaultUpdatedAt = workflowexecutionDescUpdatedAt.Default.(func() time.Time)
 	// workflowexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

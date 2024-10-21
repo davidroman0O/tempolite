@@ -23,6 +23,8 @@ const (
 	FieldOutput = "output"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
+	// FieldIsReplay holds the string denoting the is_replay field in the database.
+	FieldIsReplay = "is_replay"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
 	FieldStartedAt = "started_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldOutput,
 	FieldError,
+	FieldIsReplay,
 	FieldStartedAt,
 	FieldUpdatedAt,
 }
@@ -73,6 +76,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultIsReplay holds the default value on creation for the "is_replay" field.
+	DefaultIsReplay bool
 	// DefaultStartedAt holds the default value on creation for the "started_at" field.
 	DefaultStartedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -133,6 +138,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByError orders the results by the error field.
 func ByError(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldError, opts...).ToFunc()
+}
+
+// ByIsReplay orders the results by the is_replay field.
+func ByIsReplay(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsReplay, opts...).ToFunc()
 }
 
 // ByStartedAt orders the results by the started_at field.

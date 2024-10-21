@@ -295,6 +295,7 @@ var (
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "is_replay", Type: field.TypeBool, Default: false},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "workflow_executions", Type: field.TypeString},
@@ -307,7 +308,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_executions_workflows_executions",
-				Columns:    []*schema.Column{WorkflowExecutionsColumns[7]},
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[8]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

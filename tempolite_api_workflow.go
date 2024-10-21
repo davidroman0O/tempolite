@@ -433,3 +433,69 @@ func (tp *Tempolite[T]) retryWorkflow(workflowID WorkflowID) (WorkflowID, error)
 	tp.logger.Info(tp.ctx, "Workflow retry created successfully", "originalWorkflowID", workflowID, "newWorkflowID", newWf.ID)
 	return WorkflowID(newWf.ID), nil
 }
+
+func (tp *Tempolite[T]) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+	tp.logger.Debug(tp.ctx, "Replaying workflow", "workflowID", workflowID)
+	id, err := tp.replayWorkflow(workflowID)
+	return tp.getWorkflowRoot(id, err)
+}
+
+func (tp *Tempolite[T]) replayWorkflow(workflowID WorkflowID) (WorkflowID, error) {
+	// Find the original workflow
+	originalWf, err := tp.client.Workflow.Get(tp.ctx, workflowID.String())
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error finding original workflow", "error", err)
+		return "", fmt.Errorf("error finding original workflow: %w", err)
+	}
+
+	// Check if the workflow is in a final state
+	if originalWf.Status != workflow.StatusCompleted && originalWf.Status != workflow.StatusFailed {
+		tp.logger.Error(tp.ctx, "Cannot replay workflow that is not completed or failed", "status", originalWf.Status)
+		return "", fmt.Errorf("cannot replay workflow that is not completed or failed")
+	}
+
+	// Start a transaction
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error starting transaction", "error", err)
+		return "", fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Create a new workflow execution for the existing workflow
+	newExecution, err := tx.WorkflowExecution.
+		Create().
+		SetID(uuid.New().String()).
+		SetRunID(originalWf.ID).
+		SetWorkflow(originalWf).
+		SetStatus(workflowexecution.StatusPending).
+		SetIsReplay(true).
+		Save(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating new workflow execution", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return "", fmt.Errorf("error creating new workflow execution: %w", err)
+	}
+
+	// Update the workflow status to running
+	_, err = tx.Workflow.UpdateOne(originalWf).
+		SetStatus(workflow.StatusRunning).
+		Save(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error updating workflow status", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return "", fmt.Errorf("error updating workflow status: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "error", err)
+		return "", fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	tp.logger.Info(tp.ctx, "Workflow replay created successfully", "workflowID", workflowID, "newExecutionID", newExecution.ID)
+	return workflowID, nil
+}

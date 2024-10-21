@@ -26,6 +26,8 @@ func (WorkflowExecution) Fields() []ent.Field {
 			Optional(),
 		field.String("error").
 			Optional(),
+		field.Bool("is_replay").
+			Default(false),
 		field.Time("started_at").
 			Default(time.Now),
 		field.Time("updated_at").
