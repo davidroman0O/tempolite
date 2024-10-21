@@ -48,7 +48,7 @@ func TestWorkflowSimple(t *testing.T) {
 		return true
 	})
 
-	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
+	if err := tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		return true
 	})
 
-	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
+	if err := tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -210,7 +210,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 		return true
 	})
 
-	if err := tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(); err != nil {
+	if err := tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -262,7 +262,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 	})
 
 	var number int
-	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+	if err = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -336,7 +336,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 	})
 
 	var number int
-	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+	if err = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -407,7 +407,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 	})
 
 	var number int
-	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+	if err = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -471,7 +471,7 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 	})
 
 	var number int
-	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+	if err = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -554,7 +554,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 	var number int
 	var workflowInfo *WorkflowInfo[testIdentifier]
-	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -686,7 +686,7 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 
 	var number int
 	var workflowInfo *WorkflowInfo[testIdentifier]
-	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -765,7 +765,7 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 	})
 
 	var workflowInfo *WorkflowInfo[testIdentifier]
-	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 
@@ -834,7 +834,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 	}
 
 	var workflowInfo *WorkflowInfo[testIdentifier]
-	if workflowInfo = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}); err != nil {
+	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 

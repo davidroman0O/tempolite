@@ -19,7 +19,7 @@ type compensationTask[T Identifier] struct {
 	next        func() error
 }
 
-func (tp *Tempolite[T]) createCompensationPool() *retrypool.Pool[*compensationTask[T]] {
+func (tp *Tempolite[T]) createCompensationPool(countWorkers int) *retrypool.Pool[*compensationTask[T]] {
 	opts := []retrypool.Option[*compensationTask[T]]{
 		retrypool.WithAttempts[*compensationTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.compensationOnSuccess),
@@ -31,7 +31,7 @@ func (tp *Tempolite[T]) createCompensationPool() *retrypool.Pool[*compensationTa
 
 	workers := []retrypool.Worker[*compensationTask[T]]{}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < countWorkers; i++ {
 		workers = append(workers, compensationWorker[T]{id: i, tp: tp})
 	}
 

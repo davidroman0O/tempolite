@@ -72,7 +72,7 @@ func TestSagaSimple(t *testing.T) {
 	})
 
 	var number int
-	if err = tp.Workflow("test", localWrkflw, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
+	if err = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}).Get(&number); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
 

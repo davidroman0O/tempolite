@@ -19,7 +19,7 @@ type activityTask[T Identifier] struct {
 	retry       func() error
 }
 
-func (tp *Tempolite[T]) createActivityPool() *retrypool.Pool[*activityTask[T]] {
+func (tp *Tempolite[T]) createActivityPool(countWorkers int) *retrypool.Pool[*activityTask[T]] {
 	opts := []retrypool.Option[*activityTask[T]]{
 		retrypool.WithAttempts[*activityTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.activityOnSuccess),
@@ -31,7 +31,7 @@ func (tp *Tempolite[T]) createActivityPool() *retrypool.Pool[*activityTask[T]] {
 
 	workers := []retrypool.Worker[*activityTask[T]]{}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < countWorkers; i++ {
 		workers = append(workers, activityWorker[T]{id: i, tp: tp})
 	}
 

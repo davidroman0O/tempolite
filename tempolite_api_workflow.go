@@ -13,6 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, opts tempoliteWorkflowConfig, params ...interface{}) *WorkflowInfo[T] {
+func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo[T] {
+	tp.logger.Debug(tp.ctx, "Workflow", "stepID", stepID)
+	id, err := tp.executeWorkflow(stepID, workflowFunc, options, params...)
+	return tp.getWorkflowRoot(id, err)
+}
+
 func (tp *Tempolite[T]) GetWorkflow(id WorkflowID) *WorkflowInfo[T] {
 	tp.logger.Debug(tp.ctx, "GetWorkflow", "workflowID", id)
 	info := WorkflowInfo[T]{
@@ -210,13 +217,7 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 	}
 }
 
-func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, params ...interface{}) *WorkflowInfo[T] {
-	tp.logger.Debug(tp.ctx, "Workflow", "stepID", stepID)
-	id, err := tp.executeWorkflow(stepID, workflowFunc, params...)
-	return tp.getWorkflowRoot(id, err)
-}
-
-func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
@@ -274,6 +275,30 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, para
 			return "", err
 		}
 
+		retryPolicyConfig := schema.RetryPolicy{
+			MaximumAttempts: 1,
+		}
+
+		if options != nil {
+			config := tempoliteWorkflowConfig{}
+			for _, opt := range options {
+				opt(&config)
+			}
+
+			if config.retryMaximumAttempts > 0 {
+				retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
+			}
+			if config.retryInitialInterval > 0 {
+				retryPolicyConfig.InitialInterval = config.retryInitialInterval
+			}
+			if config.retryBackoffCoefficient > 0 {
+				retryPolicyConfig.BackoffCoefficient = config.retryBackoffCoefficient
+			}
+			if config.maximumInterval > 0 {
+				retryPolicyConfig.MaximumInterval = config.maximumInterval
+			}
+		}
+
 		tp.logger.Debug(tp.ctx, "Creating workflow entity")
 		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
 		var workflowEntity *ent.Workflow
@@ -285,9 +310,7 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, para
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
-			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 1,
-			}).
+			SetRetryPolicy(retryPolicyConfig).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow entity", "error", err)

@@ -20,7 +20,7 @@ type workflowTask[T Identifier] struct {
 	isPaused    bool
 }
 
-func (tp *Tempolite[T]) createWorkflowPool() *retrypool.Pool[*workflowTask[T]] {
+func (tp *Tempolite[T]) createWorkflowPool(countWorkers int) *retrypool.Pool[*workflowTask[T]] {
 
 	opts := []retrypool.Option[*workflowTask[T]]{
 		retrypool.WithAttempts[*workflowTask[T]](1),
@@ -33,7 +33,7 @@ func (tp *Tempolite[T]) createWorkflowPool() *retrypool.Pool[*workflowTask[T]] {
 
 	workers := []retrypool.Worker[*workflowTask[T]]{}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < countWorkers; i++ {
 		workers = append(workers, workflowWorker[T]{id: i, tp: tp})
 	}
 

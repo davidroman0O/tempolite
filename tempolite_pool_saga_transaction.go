@@ -20,7 +20,7 @@ type transactionTask[T Identifier] struct {
 	compensate  func() error
 }
 
-func (tp *Tempolite[T]) createTransactionPool() *retrypool.Pool[*transactionTask[T]] {
+func (tp *Tempolite[T]) createTransactionPool(countWorkers int) *retrypool.Pool[*transactionTask[T]] {
 	opts := []retrypool.Option[*transactionTask[T]]{
 		retrypool.WithAttempts[*transactionTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.transactionOnSuccess),
@@ -32,7 +32,7 @@ func (tp *Tempolite[T]) createTransactionPool() *retrypool.Pool[*transactionTask
 
 	workers := []retrypool.Worker[*transactionTask[T]]{}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < countWorkers; i++ {
 		workers = append(workers, transactionWorker[T]{id: i, tp: tp})
 	}
 

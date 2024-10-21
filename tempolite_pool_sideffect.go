@@ -15,7 +15,7 @@ type sideEffectTask[T Identifier] struct {
 	handlerName HandlerIdentity
 }
 
-func (tp *Tempolite[T]) createSideEffectPool() *retrypool.Pool[*sideEffectTask[T]] {
+func (tp *Tempolite[T]) createSideEffectPool(countWorkers int) *retrypool.Pool[*sideEffectTask[T]] {
 	opts := []retrypool.Option[*sideEffectTask[T]]{
 		retrypool.WithAttempts[*sideEffectTask[T]](1),
 		retrypool.WithOnTaskSuccess(tp.sideEffectOnSuccess),
@@ -27,7 +27,7 @@ func (tp *Tempolite[T]) createSideEffectPool() *retrypool.Pool[*sideEffectTask[T
 
 	workers := []retrypool.Worker[*sideEffectTask[T]]{}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < countWorkers; i++ {
 		workers = append(workers, sideEffectWorker[T]{id: i, tp: tp})
 	}
 

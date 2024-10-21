@@ -94,7 +94,7 @@ func main() {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.Workflow("ytdl", Workflow, YtDl{
+	if err := tp.Workflow("ytdl", Workflow, nil, YtDl{
 		Url: *youtubeURL,
 	}).Get(); err != nil {
 		log.Fatalf("Failed to start workflow: %v", err)

@@ -119,7 +119,7 @@ func main() {
 
 	// Enqueue the workflow before updating the version
 	orderID1 := "order123"
-	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID1).Get(); err != nil {
+	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, nil, orderID1).Get(); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func main() {
 	}
 
 	orderID1 = "order124"
-	tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID1) // on purpose, it won't be scheduled, but the next instance will pick it up
+	tp.Workflow(OpComputeTaxes, OrderWorkflow, nil, orderID1) // on purpose, it won't be scheduled, but the next instance will pick it up
 
 	tp.Close()
 
@@ -159,7 +159,7 @@ func main() {
 
 	// Enqueue the workflow after updating the version
 	orderID2 := "order456"
-	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, orderID2).Get(); err != nil {
+	if err := tp.Workflow(OpComputeTaxes, OrderWorkflow, nil, orderID2).Get(); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 

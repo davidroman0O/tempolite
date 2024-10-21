@@ -63,7 +63,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	}
 
 	var result string
-	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
+	err = tp.Workflow("test", testWorkflow, nil, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 1
 
-	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
+	err = tp.Workflow("test", testWorkflow, nil, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestWorkflowVersioning(t *testing.T) {
 
 	changeFlag1 = 2
 
-	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
+	err = tp.Workflow("test", testWorkflow, nil, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	changeFlag1 = 0
 	changeFlag2 = true
 
-	err = tp.Workflow("test", testWorkflow, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
+	err = tp.Workflow("test", testWorkflow, nil, testWorkflowInput{changeFlag1, changeFlag2}).Get(&result)
 	if err != nil {
 		t.Fatalf("EnqueueWorkflow failed: %v", err)
 	}

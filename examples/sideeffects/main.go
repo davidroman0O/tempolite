@@ -54,7 +54,7 @@ func main() {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.Workflow("workflow", Workflow).Get(); err != nil {
+	if err := tp.Workflow("workflow", Workflow, nil).Get(); err != nil {
 		log.Fatalf("Failed to enqueue workflow: %v", err)
 	}
 

@@ -87,40 +87,14 @@ type Tempolite[T Identifier] struct {
 	logger Logger
 }
 
-type tempoliteConfig struct {
-	path        *string
-	destructive bool
-	logger      Logger
-}
-
-type tempoliteOption func(*tempoliteConfig)
-
-func WithLogger(logger Logger) tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.logger = logger
-	}
-}
-
-func WithPath(path string) tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.path = &path
-	}
-}
-
-func WithMemory() tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.path = nil
-	}
-}
-
-func WithDestructive() tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.destructive = true
-	}
-}
-
 func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempoliteOption) (*Tempolite[T], error) {
-	cfg := tempoliteConfig{}
+	cfg := tempoliteConfig{
+		initialWorkflowsWorkers:    5,
+		initialActivityWorkers:     5,
+		initialSideEffectWorkers:   5,
+		initialTransctionWorkers:   5,
+		initialCompensationWorkers: 5,
+	}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -177,6 +151,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		return nil, err
 	}
 
+	//	TODO: think how should I allow sql.DB option
 	db := comfylite3.OpenDB(
 		comfy,
 		comfylite3.WithOption("_fk=1"),
@@ -232,11 +207,11 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 	}
 
 	tp.logger.Debug(ctx, "Creating pools")
-	tp.workflowPool = tp.createWorkflowPool()
-	tp.activityPool = tp.createActivityPool()
-	tp.sideEffectPool = tp.createSideEffectPool()
-	tp.transactionPool = tp.createTransactionPool()
-	tp.compensationPool = tp.createCompensationPool()
+	tp.workflowPool = tp.createWorkflowPool(cfg.initialWorkflowsWorkers)
+	tp.activityPool = tp.createActivityPool(cfg.initialActivityWorkers)
+	tp.sideEffectPool = tp.createSideEffectPool(cfg.initialSideEffectWorkers)
+	tp.transactionPool = tp.createTransactionPool(cfg.initialTransctionWorkers)
+	tp.compensationPool = tp.createCompensationPool(cfg.initialCompensationWorkers)
 
 	tp.logger.Debug(ctx, "Starting scheduler side effect")
 	go tp.schedulerExecutionSideEffect()
