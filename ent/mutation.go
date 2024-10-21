@@ -8040,6 +8040,11 @@ type WorkflowMutation struct {
 	clearedcontinued_from bool
 	continued_to          *string
 	clearedcontinued_to   bool
+	retried_from          *string
+	clearedretried_from   bool
+	retried_to            map[string]struct{}
+	removedretried_to     map[string]struct{}
+	clearedretried_to     bool
 	done                  bool
 	oldValue              func(context.Context) (*Workflow, error)
 	predicates            []predicate.Workflow
@@ -8599,6 +8604,55 @@ func (m *WorkflowMutation) ResetContinuedFromID() {
 	delete(m.clearedFields, workflow.FieldContinuedFromID)
 }
 
+// SetRetriedFromID sets the "retried_from_id" field.
+func (m *WorkflowMutation) SetRetriedFromID(s string) {
+	m.retried_from = &s
+}
+
+// RetriedFromID returns the value of the "retried_from_id" field in the mutation.
+func (m *WorkflowMutation) RetriedFromID() (r string, exists bool) {
+	v := m.retried_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetriedFromID returns the old "retried_from_id" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldRetriedFromID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetriedFromID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetriedFromID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetriedFromID: %w", err)
+	}
+	return oldValue.RetriedFromID, nil
+}
+
+// ClearRetriedFromID clears the value of the "retried_from_id" field.
+func (m *WorkflowMutation) ClearRetriedFromID() {
+	m.retried_from = nil
+	m.clearedFields[workflow.FieldRetriedFromID] = struct{}{}
+}
+
+// RetriedFromIDCleared returns if the "retried_from_id" field was cleared in this mutation.
+func (m *WorkflowMutation) RetriedFromIDCleared() bool {
+	_, ok := m.clearedFields[workflow.FieldRetriedFromID]
+	return ok
+}
+
+// ResetRetriedFromID resets all changes to the "retried_from_id" field.
+func (m *WorkflowMutation) ResetRetriedFromID() {
+	m.retried_from = nil
+	delete(m.clearedFields, workflow.FieldRetriedFromID)
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by ids.
 func (m *WorkflowMutation) AddExecutionIDs(ids ...string) {
 	if m.executions == nil {
@@ -8719,6 +8773,87 @@ func (m *WorkflowMutation) ResetContinuedTo() {
 	m.clearedcontinued_to = false
 }
 
+// ClearRetriedFrom clears the "retried_from" edge to the Workflow entity.
+func (m *WorkflowMutation) ClearRetriedFrom() {
+	m.clearedretried_from = true
+	m.clearedFields[workflow.FieldRetriedFromID] = struct{}{}
+}
+
+// RetriedFromCleared reports if the "retried_from" edge to the Workflow entity was cleared.
+func (m *WorkflowMutation) RetriedFromCleared() bool {
+	return m.RetriedFromIDCleared() || m.clearedretried_from
+}
+
+// RetriedFromIDs returns the "retried_from" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RetriedFromID instead. It exists only for internal usage by the builders.
+func (m *WorkflowMutation) RetriedFromIDs() (ids []string) {
+	if id := m.retried_from; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRetriedFrom resets all changes to the "retried_from" edge.
+func (m *WorkflowMutation) ResetRetriedFrom() {
+	m.retried_from = nil
+	m.clearedretried_from = false
+}
+
+// AddRetriedToIDs adds the "retried_to" edge to the Workflow entity by ids.
+func (m *WorkflowMutation) AddRetriedToIDs(ids ...string) {
+	if m.retried_to == nil {
+		m.retried_to = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.retried_to[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRetriedTo clears the "retried_to" edge to the Workflow entity.
+func (m *WorkflowMutation) ClearRetriedTo() {
+	m.clearedretried_to = true
+}
+
+// RetriedToCleared reports if the "retried_to" edge to the Workflow entity was cleared.
+func (m *WorkflowMutation) RetriedToCleared() bool {
+	return m.clearedretried_to
+}
+
+// RemoveRetriedToIDs removes the "retried_to" edge to the Workflow entity by IDs.
+func (m *WorkflowMutation) RemoveRetriedToIDs(ids ...string) {
+	if m.removedretried_to == nil {
+		m.removedretried_to = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.retried_to, ids[i])
+		m.removedretried_to[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRetriedTo returns the removed IDs of the "retried_to" edge to the Workflow entity.
+func (m *WorkflowMutation) RemovedRetriedToIDs() (ids []string) {
+	for id := range m.removedretried_to {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RetriedToIDs returns the "retried_to" edge IDs in the mutation.
+func (m *WorkflowMutation) RetriedToIDs() (ids []string) {
+	for id := range m.retried_to {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRetriedTo resets all changes to the "retried_to" edge.
+func (m *WorkflowMutation) ResetRetriedTo() {
+	m.retried_to = nil
+	m.clearedretried_to = false
+	m.removedretried_to = nil
+}
+
 // Where appends a list predicates to the WorkflowMutation builder.
 func (m *WorkflowMutation) Where(ps ...predicate.Workflow) {
 	m.predicates = append(m.predicates, ps...)
@@ -8753,7 +8888,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.step_id != nil {
 		fields = append(fields, workflow.FieldStepID)
 	}
@@ -8787,6 +8922,9 @@ func (m *WorkflowMutation) Fields() []string {
 	if m.continued_from != nil {
 		fields = append(fields, workflow.FieldContinuedFromID)
 	}
+	if m.retried_from != nil {
+		fields = append(fields, workflow.FieldRetriedFromID)
+	}
 	return fields
 }
 
@@ -8817,6 +8955,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case workflow.FieldContinuedFromID:
 		return m.ContinuedFromID()
+	case workflow.FieldRetriedFromID:
+		return m.RetriedFromID()
 	}
 	return nil, false
 }
@@ -8848,6 +8988,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCreatedAt(ctx)
 	case workflow.FieldContinuedFromID:
 		return m.OldContinuedFromID(ctx)
+	case workflow.FieldRetriedFromID:
+		return m.OldRetriedFromID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Workflow field %s", name)
 }
@@ -8934,6 +9076,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetContinuedFromID(v)
 		return nil
+	case workflow.FieldRetriedFromID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetriedFromID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow field %s", name)
 }
@@ -8973,6 +9122,9 @@ func (m *WorkflowMutation) ClearedFields() []string {
 	if m.FieldCleared(workflow.FieldContinuedFromID) {
 		fields = append(fields, workflow.FieldContinuedFromID)
 	}
+	if m.FieldCleared(workflow.FieldRetriedFromID) {
+		fields = append(fields, workflow.FieldRetriedFromID)
+	}
 	return fields
 }
 
@@ -8995,6 +9147,9 @@ func (m *WorkflowMutation) ClearField(name string) error {
 		return nil
 	case workflow.FieldContinuedFromID:
 		m.ClearContinuedFromID()
+		return nil
+	case workflow.FieldRetriedFromID:
+		m.ClearRetriedFromID()
 		return nil
 	}
 	return fmt.Errorf("unknown Workflow nullable field %s", name)
@@ -9037,13 +9192,16 @@ func (m *WorkflowMutation) ResetField(name string) error {
 	case workflow.FieldContinuedFromID:
 		m.ResetContinuedFromID()
 		return nil
+	case workflow.FieldRetriedFromID:
+		m.ResetRetriedFromID()
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.executions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
 	}
@@ -9052,6 +9210,12 @@ func (m *WorkflowMutation) AddedEdges() []string {
 	}
 	if m.continued_to != nil {
 		edges = append(edges, workflow.EdgeContinuedTo)
+	}
+	if m.retried_from != nil {
+		edges = append(edges, workflow.EdgeRetriedFrom)
+	}
+	if m.retried_to != nil {
+		edges = append(edges, workflow.EdgeRetriedTo)
 	}
 	return edges
 }
@@ -9074,15 +9238,28 @@ func (m *WorkflowMutation) AddedIDs(name string) []ent.Value {
 		if id := m.continued_to; id != nil {
 			return []ent.Value{*id}
 		}
+	case workflow.EdgeRetriedFrom:
+		if id := m.retried_from; id != nil {
+			return []ent.Value{*id}
+		}
+	case workflow.EdgeRetriedTo:
+		ids := make([]ent.Value, 0, len(m.retried_to))
+		for id := range m.retried_to {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.removedexecutions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
+	}
+	if m.removedretried_to != nil {
+		edges = append(edges, workflow.EdgeRetriedTo)
 	}
 	return edges
 }
@@ -9097,13 +9274,19 @@ func (m *WorkflowMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case workflow.EdgeRetriedTo:
+		ids := make([]ent.Value, 0, len(m.removedretried_to))
+		for id := range m.removedretried_to {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.clearedexecutions {
 		edges = append(edges, workflow.EdgeExecutions)
 	}
@@ -9112,6 +9295,12 @@ func (m *WorkflowMutation) ClearedEdges() []string {
 	}
 	if m.clearedcontinued_to {
 		edges = append(edges, workflow.EdgeContinuedTo)
+	}
+	if m.clearedretried_from {
+		edges = append(edges, workflow.EdgeRetriedFrom)
+	}
+	if m.clearedretried_to {
+		edges = append(edges, workflow.EdgeRetriedTo)
 	}
 	return edges
 }
@@ -9126,6 +9315,10 @@ func (m *WorkflowMutation) EdgeCleared(name string) bool {
 		return m.clearedcontinued_from
 	case workflow.EdgeContinuedTo:
 		return m.clearedcontinued_to
+	case workflow.EdgeRetriedFrom:
+		return m.clearedretried_from
+	case workflow.EdgeRetriedTo:
+		return m.clearedretried_to
 	}
 	return false
 }
@@ -9139,6 +9332,9 @@ func (m *WorkflowMutation) ClearEdge(name string) error {
 		return nil
 	case workflow.EdgeContinuedTo:
 		m.ClearContinuedTo()
+		return nil
+	case workflow.EdgeRetriedFrom:
+		m.ClearRetriedFrom()
 		return nil
 	}
 	return fmt.Errorf("unknown Workflow unique edge %s", name)
@@ -9156,6 +9352,12 @@ func (m *WorkflowMutation) ResetEdge(name string) error {
 		return nil
 	case workflow.EdgeContinuedTo:
 		m.ResetContinuedTo()
+		return nil
+	case workflow.EdgeRetriedFrom:
+		m.ResetRetriedFrom()
+		return nil
+	case workflow.EdgeRetriedTo:
+		m.ResetRetriedTo()
 		return nil
 	}
 	return fmt.Errorf("unknown Workflow edge %s", name)

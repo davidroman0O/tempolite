@@ -266,6 +266,7 @@ var (
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "continued_from_id", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "retried_from_id", Type: field.TypeString, Nullable: true},
 	}
 	// WorkflowsTable holds the schema information for the "workflows" table.
 	WorkflowsTable = &schema.Table{
@@ -276,6 +277,12 @@ var (
 			{
 				Symbol:     "workflows_workflows_continued_to",
 				Columns:    []*schema.Column{WorkflowsColumns[11]},
+				RefColumns: []*schema.Column{WorkflowsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "workflows_workflows_retried_to",
+				Columns:    []*schema.Column{WorkflowsColumns[12]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -332,5 +339,6 @@ func init() {
 	SideEffectExecutionsTable.ForeignKeys[0].RefTable = SideEffectsTable
 	SignalExecutionsTable.ForeignKeys[0].RefTable = SignalsTable
 	WorkflowsTable.ForeignKeys[0].RefTable = WorkflowsTable
+	WorkflowsTable.ForeignKeys[1].RefTable = WorkflowsTable
 	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

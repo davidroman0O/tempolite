@@ -2084,6 +2084,38 @@ func (c *WorkflowClient) QueryContinuedTo(w *Workflow) *WorkflowQuery {
 	return query
 }
 
+// QueryRetriedFrom queries the retried_from edge of a Workflow.
+func (c *WorkflowClient) QueryRetriedFrom(w *Workflow) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, workflow.RetriedFromTable, workflow.RetriedFromColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryRetriedTo queries the retried_to edge of a Workflow.
+func (c *WorkflowClient) QueryRetriedTo(w *Workflow) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflow.RetriedToTable, workflow.RetriedToColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *WorkflowClient) Hooks() []Hook {
 	return c.hooks.Workflow

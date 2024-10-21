@@ -41,6 +41,8 @@ type Workflow struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// ID of the workflow this one was continued from
 	ContinuedFromID string `json:"continued_from_id,omitempty"`
+	// ID of the workflow this one was retried from
+	RetriedFromID *string `json:"retried_from_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the WorkflowQuery when eager-loading is set.
 	Edges        WorkflowEdges `json:"edges"`
@@ -55,9 +57,13 @@ type WorkflowEdges struct {
 	ContinuedFrom *Workflow `json:"continued_from,omitempty"`
 	// ContinuedTo holds the value of the continued_to edge.
 	ContinuedTo *Workflow `json:"continued_to,omitempty"`
+	// RetriedFrom holds the value of the retried_from edge.
+	RetriedFrom *Workflow `json:"retried_from,omitempty"`
+	// RetriedTo holds the value of the retried_to edge.
+	RetriedTo []*Workflow `json:"retried_to,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [5]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -91,6 +97,26 @@ func (e WorkflowEdges) ContinuedToOrErr() (*Workflow, error) {
 	return nil, &NotLoadedError{edge: "continued_to"}
 }
 
+// RetriedFromOrErr returns the RetriedFrom value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e WorkflowEdges) RetriedFromOrErr() (*Workflow, error) {
+	if e.RetriedFrom != nil {
+		return e.RetriedFrom, nil
+	} else if e.loadedTypes[3] {
+		return nil, &NotFoundError{label: workflow.Label}
+	}
+	return nil, &NotLoadedError{edge: "retried_from"}
+}
+
+// RetriedToOrErr returns the RetriedTo value or an error if the edge
+// was not loaded in eager-loading.
+func (e WorkflowEdges) RetriedToOrErr() ([]*Workflow, error) {
+	if e.loadedTypes[4] {
+		return e.RetriedTo, nil
+	}
+	return nil, &NotLoadedError{edge: "retried_to"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Workflow) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -100,7 +126,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflow.FieldIsPaused, workflow.FieldIsReady:
 			values[i] = new(sql.NullBool)
-		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldContinuedFromID:
+		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldContinuedFromID, workflow.FieldRetriedFromID:
 			values[i] = new(sql.NullString)
 		case workflow.FieldTimeout, workflow.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -195,6 +221,13 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				w.ContinuedFromID = value.String
 			}
+		case workflow.FieldRetriedFromID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field retried_from_id", values[i])
+			} else if value.Valid {
+				w.RetriedFromID = new(string)
+				*w.RetriedFromID = value.String
+			}
 		default:
 			w.selectValues.Set(columns[i], values[i])
 		}
@@ -221,6 +254,16 @@ func (w *Workflow) QueryContinuedFrom() *WorkflowQuery {
 // QueryContinuedTo queries the "continued_to" edge of the Workflow entity.
 func (w *Workflow) QueryContinuedTo() *WorkflowQuery {
 	return NewWorkflowClient(w.config).QueryContinuedTo(w)
+}
+
+// QueryRetriedFrom queries the "retried_from" edge of the Workflow entity.
+func (w *Workflow) QueryRetriedFrom() *WorkflowQuery {
+	return NewWorkflowClient(w.config).QueryRetriedFrom(w)
+}
+
+// QueryRetriedTo queries the "retried_to" edge of the Workflow entity.
+func (w *Workflow) QueryRetriedTo() *WorkflowQuery {
+	return NewWorkflowClient(w.config).QueryRetriedTo(w)
 }
 
 // Update returns a builder for updating this Workflow.
@@ -278,6 +321,11 @@ func (w *Workflow) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("continued_from_id=")
 	builder.WriteString(w.ContinuedFromID)
+	builder.WriteString(", ")
+	if v := w.RetriedFromID; v != nil {
+		builder.WriteString("retried_from_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -38,6 +38,10 @@ func (Workflow) Fields() []ent.Field {
 		field.String("continued_from_id").
 			Optional().
 			Comment("ID of the workflow this one was continued from"),
+		field.String("retried_from_id").
+			Optional().
+			Comment("ID of the workflow this one was retried from").
+			Nillable(),
 	}
 }
 
@@ -49,6 +53,10 @@ func (Workflow) Edges() []ent.Edge {
 			Unique().
 			From("continued_from").
 			Field("continued_from_id").
+			Unique(),
+		edge.To("retried_to", Workflow.Type).
+			From("retried_from").
+			Field("retried_from_id").
 			Unique(),
 	}
 }

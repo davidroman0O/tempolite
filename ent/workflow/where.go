@@ -105,6 +105,11 @@ func ContinuedFromID(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldContinuedFromID, v))
 }
 
+// RetriedFromID applies equality check predicate on the "retried_from_id" field. It's identical to RetriedFromIDEQ.
+func RetriedFromID(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldRetriedFromID, v))
+}
+
 // StepIDEQ applies the EQ predicate on the "step_id" field.
 func StepIDEQ(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldStepID, v))
@@ -515,6 +520,81 @@ func ContinuedFromIDContainsFold(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldContinuedFromID, v))
 }
 
+// RetriedFromIDEQ applies the EQ predicate on the "retried_from_id" field.
+func RetriedFromIDEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDNEQ applies the NEQ predicate on the "retried_from_id" field.
+func RetriedFromIDNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDIn applies the In predicate on the "retried_from_id" field.
+func RetriedFromIDIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldRetriedFromID, vs...))
+}
+
+// RetriedFromIDNotIn applies the NotIn predicate on the "retried_from_id" field.
+func RetriedFromIDNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldRetriedFromID, vs...))
+}
+
+// RetriedFromIDGT applies the GT predicate on the "retried_from_id" field.
+func RetriedFromIDGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDGTE applies the GTE predicate on the "retried_from_id" field.
+func RetriedFromIDGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDLT applies the LT predicate on the "retried_from_id" field.
+func RetriedFromIDLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDLTE applies the LTE predicate on the "retried_from_id" field.
+func RetriedFromIDLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDContains applies the Contains predicate on the "retried_from_id" field.
+func RetriedFromIDContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDHasPrefix applies the HasPrefix predicate on the "retried_from_id" field.
+func RetriedFromIDHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDHasSuffix applies the HasSuffix predicate on the "retried_from_id" field.
+func RetriedFromIDHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDIsNil applies the IsNil predicate on the "retried_from_id" field.
+func RetriedFromIDIsNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldIsNull(FieldRetriedFromID))
+}
+
+// RetriedFromIDNotNil applies the NotNil predicate on the "retried_from_id" field.
+func RetriedFromIDNotNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotNull(FieldRetriedFromID))
+}
+
+// RetriedFromIDEqualFold applies the EqualFold predicate on the "retried_from_id" field.
+func RetriedFromIDEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldRetriedFromID, v))
+}
+
+// RetriedFromIDContainsFold applies the ContainsFold predicate on the "retried_from_id" field.
+func RetriedFromIDContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldRetriedFromID, v))
+}
+
 // HasExecutions applies the HasEdge predicate on the "executions" edge.
 func HasExecutions() predicate.Workflow {
 	return predicate.Workflow(func(s *sql.Selector) {
@@ -576,6 +656,52 @@ func HasContinuedTo() predicate.Workflow {
 func HasContinuedToWith(preds ...predicate.Workflow) predicate.Workflow {
 	return predicate.Workflow(func(s *sql.Selector) {
 		step := newContinuedToStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRetriedFrom applies the HasEdge predicate on the "retried_from" edge.
+func HasRetriedFrom() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, RetriedFromTable, RetriedFromColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRetriedFromWith applies the HasEdge predicate on the "retried_from" edge with a given conditions (other predicates).
+func HasRetriedFromWith(preds ...predicate.Workflow) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newRetriedFromStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRetriedTo applies the HasEdge predicate on the "retried_to" edge.
+func HasRetriedTo() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, RetriedToTable, RetriedToColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRetriedToWith applies the HasEdge predicate on the "retried_to" edge with a given conditions (other predicates).
+func HasRetriedToWith(preds ...predicate.Workflow) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newRetriedToStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

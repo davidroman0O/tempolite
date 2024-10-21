@@ -201,6 +201,26 @@ func (wu *WorkflowUpdate) ClearContinuedFromID() *WorkflowUpdate {
 	return wu
 }
 
+// SetRetriedFromID sets the "retried_from_id" field.
+func (wu *WorkflowUpdate) SetRetriedFromID(s string) *WorkflowUpdate {
+	wu.mutation.SetRetriedFromID(s)
+	return wu
+}
+
+// SetNillableRetriedFromID sets the "retried_from_id" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableRetriedFromID(s *string) *WorkflowUpdate {
+	if s != nil {
+		wu.SetRetriedFromID(*s)
+	}
+	return wu
+}
+
+// ClearRetriedFromID clears the value of the "retried_from_id" field.
+func (wu *WorkflowUpdate) ClearRetriedFromID() *WorkflowUpdate {
+	wu.mutation.ClearRetriedFromID()
+	return wu
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by IDs.
 func (wu *WorkflowUpdate) AddExecutionIDs(ids ...string) *WorkflowUpdate {
 	wu.mutation.AddExecutionIDs(ids...)
@@ -240,6 +260,26 @@ func (wu *WorkflowUpdate) SetContinuedTo(w *Workflow) *WorkflowUpdate {
 	return wu.SetContinuedToID(w.ID)
 }
 
+// SetRetriedFrom sets the "retried_from" edge to the Workflow entity.
+func (wu *WorkflowUpdate) SetRetriedFrom(w *Workflow) *WorkflowUpdate {
+	return wu.SetRetriedFromID(w.ID)
+}
+
+// AddRetriedToIDs adds the "retried_to" edge to the Workflow entity by IDs.
+func (wu *WorkflowUpdate) AddRetriedToIDs(ids ...string) *WorkflowUpdate {
+	wu.mutation.AddRetriedToIDs(ids...)
+	return wu
+}
+
+// AddRetriedTo adds the "retried_to" edges to the Workflow entity.
+func (wu *WorkflowUpdate) AddRetriedTo(w ...*Workflow) *WorkflowUpdate {
+	ids := make([]string, len(w))
+	for i := range w {
+		ids[i] = w[i].ID
+	}
+	return wu.AddRetriedToIDs(ids...)
+}
+
 // Mutation returns the WorkflowMutation object of the builder.
 func (wu *WorkflowUpdate) Mutation() *WorkflowMutation {
 	return wu.mutation
@@ -276,6 +316,33 @@ func (wu *WorkflowUpdate) ClearContinuedFrom() *WorkflowUpdate {
 func (wu *WorkflowUpdate) ClearContinuedTo() *WorkflowUpdate {
 	wu.mutation.ClearContinuedTo()
 	return wu
+}
+
+// ClearRetriedFrom clears the "retried_from" edge to the Workflow entity.
+func (wu *WorkflowUpdate) ClearRetriedFrom() *WorkflowUpdate {
+	wu.mutation.ClearRetriedFrom()
+	return wu
+}
+
+// ClearRetriedTo clears all "retried_to" edges to the Workflow entity.
+func (wu *WorkflowUpdate) ClearRetriedTo() *WorkflowUpdate {
+	wu.mutation.ClearRetriedTo()
+	return wu
+}
+
+// RemoveRetriedToIDs removes the "retried_to" edge to Workflow entities by IDs.
+func (wu *WorkflowUpdate) RemoveRetriedToIDs(ids ...string) *WorkflowUpdate {
+	wu.mutation.RemoveRetriedToIDs(ids...)
+	return wu
+}
+
+// RemoveRetriedTo removes "retried_to" edges to Workflow entities.
+func (wu *WorkflowUpdate) RemoveRetriedTo(w ...*Workflow) *WorkflowUpdate {
+	ids := make([]string, len(w))
+	for i := range w {
+		ids[i] = w[i].ID
+	}
+	return wu.RemoveRetriedToIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -486,6 +553,80 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if wu.mutation.RetriedFromCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   workflow.RetriedFromTable,
+			Columns: []string{workflow.RetriedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wu.mutation.RetriedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   workflow.RetriedFromTable,
+			Columns: []string{workflow.RetriedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wu.mutation.RetriedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wu.mutation.RemovedRetriedToIDs(); len(nodes) > 0 && !wu.mutation.RetriedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wu.mutation.RetriedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, wu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{workflow.Label}
@@ -676,6 +817,26 @@ func (wuo *WorkflowUpdateOne) ClearContinuedFromID() *WorkflowUpdateOne {
 	return wuo
 }
 
+// SetRetriedFromID sets the "retried_from_id" field.
+func (wuo *WorkflowUpdateOne) SetRetriedFromID(s string) *WorkflowUpdateOne {
+	wuo.mutation.SetRetriedFromID(s)
+	return wuo
+}
+
+// SetNillableRetriedFromID sets the "retried_from_id" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableRetriedFromID(s *string) *WorkflowUpdateOne {
+	if s != nil {
+		wuo.SetRetriedFromID(*s)
+	}
+	return wuo
+}
+
+// ClearRetriedFromID clears the value of the "retried_from_id" field.
+func (wuo *WorkflowUpdateOne) ClearRetriedFromID() *WorkflowUpdateOne {
+	wuo.mutation.ClearRetriedFromID()
+	return wuo
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by IDs.
 func (wuo *WorkflowUpdateOne) AddExecutionIDs(ids ...string) *WorkflowUpdateOne {
 	wuo.mutation.AddExecutionIDs(ids...)
@@ -715,6 +876,26 @@ func (wuo *WorkflowUpdateOne) SetContinuedTo(w *Workflow) *WorkflowUpdateOne {
 	return wuo.SetContinuedToID(w.ID)
 }
 
+// SetRetriedFrom sets the "retried_from" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) SetRetriedFrom(w *Workflow) *WorkflowUpdateOne {
+	return wuo.SetRetriedFromID(w.ID)
+}
+
+// AddRetriedToIDs adds the "retried_to" edge to the Workflow entity by IDs.
+func (wuo *WorkflowUpdateOne) AddRetriedToIDs(ids ...string) *WorkflowUpdateOne {
+	wuo.mutation.AddRetriedToIDs(ids...)
+	return wuo
+}
+
+// AddRetriedTo adds the "retried_to" edges to the Workflow entity.
+func (wuo *WorkflowUpdateOne) AddRetriedTo(w ...*Workflow) *WorkflowUpdateOne {
+	ids := make([]string, len(w))
+	for i := range w {
+		ids[i] = w[i].ID
+	}
+	return wuo.AddRetriedToIDs(ids...)
+}
+
 // Mutation returns the WorkflowMutation object of the builder.
 func (wuo *WorkflowUpdateOne) Mutation() *WorkflowMutation {
 	return wuo.mutation
@@ -751,6 +932,33 @@ func (wuo *WorkflowUpdateOne) ClearContinuedFrom() *WorkflowUpdateOne {
 func (wuo *WorkflowUpdateOne) ClearContinuedTo() *WorkflowUpdateOne {
 	wuo.mutation.ClearContinuedTo()
 	return wuo
+}
+
+// ClearRetriedFrom clears the "retried_from" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) ClearRetriedFrom() *WorkflowUpdateOne {
+	wuo.mutation.ClearRetriedFrom()
+	return wuo
+}
+
+// ClearRetriedTo clears all "retried_to" edges to the Workflow entity.
+func (wuo *WorkflowUpdateOne) ClearRetriedTo() *WorkflowUpdateOne {
+	wuo.mutation.ClearRetriedTo()
+	return wuo
+}
+
+// RemoveRetriedToIDs removes the "retried_to" edge to Workflow entities by IDs.
+func (wuo *WorkflowUpdateOne) RemoveRetriedToIDs(ids ...string) *WorkflowUpdateOne {
+	wuo.mutation.RemoveRetriedToIDs(ids...)
+	return wuo
+}
+
+// RemoveRetriedTo removes "retried_to" edges to Workflow entities.
+func (wuo *WorkflowUpdateOne) RemoveRetriedTo(w ...*Workflow) *WorkflowUpdateOne {
+	ids := make([]string, len(w))
+	for i := range w {
+		ids[i] = w[i].ID
+	}
+	return wuo.RemoveRetriedToIDs(ids...)
 }
 
 // Where appends a list predicates to the WorkflowUpdate builder.
@@ -981,6 +1189,80 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 			Inverse: false,
 			Table:   workflow.ContinuedToTable,
 			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wuo.mutation.RetriedFromCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   workflow.RetriedFromTable,
+			Columns: []string{workflow.RetriedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wuo.mutation.RetriedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   workflow.RetriedFromTable,
+			Columns: []string{workflow.RetriedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wuo.mutation.RetriedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wuo.mutation.RemovedRetriedToIDs(); len(nodes) > 0 && !wuo.mutation.RetriedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wuo.mutation.RetriedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),

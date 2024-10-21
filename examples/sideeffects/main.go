@@ -4,63 +4,77 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 
 	"github.com/davidroman0O/go-tempolite"
 )
 
-func Workflow(ctx tempolite.WorkflowContext[string]) error {
+type CustomIdentifier string
 
-	var pathAOrB bool
-	if err := ctx.SideEffect("switch", func(ctx tempolite.SideEffectContext[string]) bool {
-		return true
-	}).Get(&pathAOrB); err != nil {
-		return err
-	}
-
-	if pathAOrB {
-		if err := ctx.ActivityFunc("activityA", ActivityA).Get(); err != nil {
-			return err
-		}
-	} else {
-		if err := ctx.ActivityFunc("activityb", ActivityB).Get(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+func RandomNumberActivity(ctx tempolite.ActivityContext[CustomIdentifier], max int) (int, error) {
+	return rand.Intn(max), nil
 }
 
-func ActivityA(ctx tempolite.ActivityContext[string]) error {
-	fmt.Println("Activity A")
-	return nil
+func ProcessNumberActivity(ctx tempolite.ActivityContext[CustomIdentifier], num int) (string, error) {
+	if num%2 == 0 {
+		return fmt.Sprintf("%d is even", num), nil
+	}
+	return fmt.Sprintf("%d is odd", num), nil
 }
 
-func ActivityB(ctx tempolite.ActivityContext[string]) error {
-	fmt.Println("Activity B")
-	return nil
+func ComplexWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], maxNumber int) (string, error) {
+	var randomNumber int
+	err := ctx.ActivityFunc("random-number", RandomNumberActivity, maxNumber).Get(&randomNumber)
+	if err != nil {
+		return "", err
+	}
+
+	var shouldDouble bool
+	err = ctx.SideEffect("should-double", func(ctx tempolite.SideEffectContext[CustomIdentifier]) bool {
+		return rand.Float32() < 0.5
+	}).Get(&shouldDouble)
+	if err != nil {
+		return "", err
+	}
+
+	if shouldDouble {
+		randomNumber *= 2
+	}
+
+	var result string
+	err = ctx.ActivityFunc("process-number", ProcessNumberActivity, randomNumber).Get(&result)
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
 }
 
 func main() {
-	ctx := context.Background()
-	tp, err := tempolite.New[string](
-		ctx,
-		tempolite.NewRegistry[string]().
-			Workflow(Workflow).
-			ActivityFunc(ActivityA).
-			ActivityFunc(ActivityB).
+	tp, err := tempolite.New[CustomIdentifier](
+		context.Background(),
+		tempolite.NewRegistry[CustomIdentifier]().
+			Workflow(ComplexWorkflow).
+			ActivityFunc(RandomNumberActivity).
+			ActivityFunc(ProcessNumberActivity).
 			Build(),
+		tempolite.WithPath("./tempolite_complex.db"),
+		tempolite.WithDestructive(),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
+	defer tp.Close()
 
-	if err := tp.Workflow("workflow", Workflow, nil).Get(); err != nil {
-		log.Fatalf("Failed to enqueue workflow: %v", err)
+	var result string
+	err = tp.Workflow("complex-workflow", ComplexWorkflow, nil, 100).Get(&result)
+	if err != nil {
+		log.Fatalf("Workflow execution failed: %v", err)
 	}
+
+	fmt.Println("Workflow result:", result)
 
 	if err := tp.Wait(); err != nil {
-		log.Fatalf("Failed to wait for Tempolite instance: %v", err)
+		log.Fatalf("Error waiting for tasks to complete: %v", err)
 	}
-
-	tp.Close()
 }

@@ -144,6 +144,20 @@ func (wc *WorkflowCreate) SetNillableContinuedFromID(s *string) *WorkflowCreate 
 	return wc
 }
 
+// SetRetriedFromID sets the "retried_from_id" field.
+func (wc *WorkflowCreate) SetRetriedFromID(s string) *WorkflowCreate {
+	wc.mutation.SetRetriedFromID(s)
+	return wc
+}
+
+// SetNillableRetriedFromID sets the "retried_from_id" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableRetriedFromID(s *string) *WorkflowCreate {
+	if s != nil {
+		wc.SetRetriedFromID(*s)
+	}
+	return wc
+}
+
 // SetID sets the "id" field.
 func (wc *WorkflowCreate) SetID(s string) *WorkflowCreate {
 	wc.mutation.SetID(s)
@@ -187,6 +201,26 @@ func (wc *WorkflowCreate) SetNillableContinuedToID(id *string) *WorkflowCreate {
 // SetContinuedTo sets the "continued_to" edge to the Workflow entity.
 func (wc *WorkflowCreate) SetContinuedTo(w *Workflow) *WorkflowCreate {
 	return wc.SetContinuedToID(w.ID)
+}
+
+// SetRetriedFrom sets the "retried_from" edge to the Workflow entity.
+func (wc *WorkflowCreate) SetRetriedFrom(w *Workflow) *WorkflowCreate {
+	return wc.SetRetriedFromID(w.ID)
+}
+
+// AddRetriedToIDs adds the "retried_to" edge to the Workflow entity by IDs.
+func (wc *WorkflowCreate) AddRetriedToIDs(ids ...string) *WorkflowCreate {
+	wc.mutation.AddRetriedToIDs(ids...)
+	return wc
+}
+
+// AddRetriedTo adds the "retried_to" edges to the Workflow entity.
+func (wc *WorkflowCreate) AddRetriedTo(w ...*Workflow) *WorkflowCreate {
+	ids := make([]string, len(w))
+	for i := range w {
+		ids[i] = w[i].ID
+	}
+	return wc.AddRetriedToIDs(ids...)
 }
 
 // Mutation returns the WorkflowMutation object of the builder.
@@ -402,6 +436,39 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 			Inverse: false,
 			Table:   workflow.ContinuedToTable,
 			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := wc.mutation.RetriedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   workflow.RetriedFromTable,
+			Columns: []string{workflow.RetriedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.RetriedFromID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := wc.mutation.RetriedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflow.RetriedToTable,
+			Columns: []string{workflow.RetriedToColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),

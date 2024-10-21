@@ -37,12 +37,18 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldContinuedFromID holds the string denoting the continued_from_id field in the database.
 	FieldContinuedFromID = "continued_from_id"
+	// FieldRetriedFromID holds the string denoting the retried_from_id field in the database.
+	FieldRetriedFromID = "retried_from_id"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
 	// EdgeContinuedFrom holds the string denoting the continued_from edge name in mutations.
 	EdgeContinuedFrom = "continued_from"
 	// EdgeContinuedTo holds the string denoting the continued_to edge name in mutations.
 	EdgeContinuedTo = "continued_to"
+	// EdgeRetriedFrom holds the string denoting the retried_from edge name in mutations.
+	EdgeRetriedFrom = "retried_from"
+	// EdgeRetriedTo holds the string denoting the retried_to edge name in mutations.
+	EdgeRetriedTo = "retried_to"
 	// Table holds the table name of the workflow in the database.
 	Table = "workflows"
 	// ExecutionsTable is the table that holds the executions relation/edge.
@@ -60,6 +66,14 @@ const (
 	ContinuedToTable = "workflows"
 	// ContinuedToColumn is the table column denoting the continued_to relation/edge.
 	ContinuedToColumn = "continued_from_id"
+	// RetriedFromTable is the table that holds the retried_from relation/edge.
+	RetriedFromTable = "workflows"
+	// RetriedFromColumn is the table column denoting the retried_from relation/edge.
+	RetriedFromColumn = "retried_from_id"
+	// RetriedToTable is the table that holds the retried_to relation/edge.
+	RetriedToTable = "workflows"
+	// RetriedToColumn is the table column denoting the retried_to relation/edge.
+	RetriedToColumn = "retried_from_id"
 )
 
 // Columns holds all SQL columns for workflow fields.
@@ -76,6 +90,7 @@ var Columns = []string{
 	FieldTimeout,
 	FieldCreatedAt,
 	FieldContinuedFromID,
+	FieldRetriedFromID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -187,6 +202,11 @@ func ByContinuedFromID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContinuedFromID, opts...).ToFunc()
 }
 
+// ByRetriedFromID orders the results by the retried_from_id field.
+func ByRetriedFromID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetriedFromID, opts...).ToFunc()
+}
+
 // ByExecutionsCount orders the results by executions count.
 func ByExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -214,6 +234,27 @@ func ByContinuedToField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newContinuedToStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByRetriedFromField orders the results by retried_from field.
+func ByRetriedFromField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRetriedFromStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByRetriedToCount orders the results by retried_to count.
+func ByRetriedToCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRetriedToStep(), opts...)
+	}
+}
+
+// ByRetriedTo orders the results by retried_to terms.
+func ByRetriedTo(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRetriedToStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -233,5 +274,19 @@ func newContinuedToStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.O2O, false, ContinuedToTable, ContinuedToColumn),
+	)
+}
+func newRetriedFromStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, RetriedFromTable, RetriedFromColumn),
+	)
+}
+func newRetriedToStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, RetriedToTable, RetriedToColumn),
 	)
 }

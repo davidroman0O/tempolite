@@ -10,6 +10,7 @@ import (
 	"github.com/davidroman0O/go-tempolite/ent/run"
 	"github.com/davidroman0O/go-tempolite/ent/schema"
 	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 	"github.com/google/uuid"
 )
 
@@ -362,4 +363,73 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, opti
 		tp.logger.Error(tp.ctx, "Workflow not found", "handlerIdentity", handlerIdentity)
 		return "", fmt.Errorf("workflow %s not found", handlerIdentity)
 	}
+}
+
+// RetryWorkflow initiates the retry process and returns a WorkflowInfo
+func (tp *Tempolite[T]) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+	tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", workflowID)
+	id, err := tp.retryWorkflow(workflowID)
+	return tp.getWorkflowRoot(id, err)
+}
+
+// retryWorkflow handles the actual retry logic
+func (tp *Tempolite[T]) retryWorkflow(workflowID WorkflowID) (WorkflowID, error) {
+	// Find the original workflow
+	originalWf, err := tp.client.Workflow.Get(tp.ctx, workflowID.String())
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error finding original workflow", "error", err)
+		return "", fmt.Errorf("error finding original workflow: %w", err)
+	}
+
+	// Start a transaction
+	tx, err := tp.client.Tx(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error starting transaction", "error", err)
+		return "", fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Create a new workflow as a retry of the original
+	newWf, err := tx.Workflow.
+		Create().
+		SetID(uuid.New().String()).
+		SetStepID(originalWf.StepID).
+		SetStatus(workflow.StatusPending).
+		SetIdentity(originalWf.Identity).
+		SetHandlerName(originalWf.HandlerName).
+		SetInput(originalWf.Input).
+		SetRetryPolicy(originalWf.RetryPolicy).
+		SetRetriedFromID(originalWf.ID).
+		Save(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating new workflow", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return "", fmt.Errorf("error creating new workflow: %w", err)
+	}
+
+	// Create a new workflow execution for the new workflow
+	_, err = tx.WorkflowExecution.
+		Create().
+		SetID(uuid.New().String()).
+		SetRunID(newWf.ID).
+		SetWorkflow(newWf).
+		SetStatus(workflowexecution.StatusPending).
+		Save(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating new workflow execution", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Error rolling back transaction", "error", rerr)
+		}
+		return "", fmt.Errorf("error creating new workflow execution: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		tp.logger.Error(tp.ctx, "Error committing transaction", "error", err)
+		return "", fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	tp.logger.Info(tp.ctx, "Workflow retry created successfully", "originalWorkflowID", workflowID, "newWorkflowID", newWf.ID)
+	return WorkflowID(newWf.ID), nil
 }

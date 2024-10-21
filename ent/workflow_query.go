@@ -27,6 +27,8 @@ type WorkflowQuery struct {
 	withExecutions    *WorkflowExecutionQuery
 	withContinuedFrom *WorkflowQuery
 	withContinuedTo   *WorkflowQuery
+	withRetriedFrom   *WorkflowQuery
+	withRetriedTo     *WorkflowQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -122,6 +124,50 @@ func (wq *WorkflowQuery) QueryContinuedTo() *WorkflowQuery {
 			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
 			sqlgraph.To(workflow.Table, workflow.FieldID),
 			sqlgraph.Edge(sqlgraph.O2O, false, workflow.ContinuedToTable, workflow.ContinuedToColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryRetriedFrom chains the current query on the "retried_from" edge.
+func (wq *WorkflowQuery) QueryRetriedFrom() *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := wq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := wq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, workflow.RetriedFromTable, workflow.RetriedFromColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryRetriedTo chains the current query on the "retried_to" edge.
+func (wq *WorkflowQuery) QueryRetriedTo() *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := wq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := wq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflow.RetriedToTable, workflow.RetriedToColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
 		return fromU, nil
@@ -324,6 +370,8 @@ func (wq *WorkflowQuery) Clone() *WorkflowQuery {
 		withExecutions:    wq.withExecutions.Clone(),
 		withContinuedFrom: wq.withContinuedFrom.Clone(),
 		withContinuedTo:   wq.withContinuedTo.Clone(),
+		withRetriedFrom:   wq.withRetriedFrom.Clone(),
+		withRetriedTo:     wq.withRetriedTo.Clone(),
 		// clone intermediate query.
 		sql:  wq.sql.Clone(),
 		path: wq.path,
@@ -360,6 +408,28 @@ func (wq *WorkflowQuery) WithContinuedTo(opts ...func(*WorkflowQuery)) *Workflow
 		opt(query)
 	}
 	wq.withContinuedTo = query
+	return wq
+}
+
+// WithRetriedFrom tells the query-builder to eager-load the nodes that are connected to
+// the "retried_from" edge. The optional arguments are used to configure the query builder of the edge.
+func (wq *WorkflowQuery) WithRetriedFrom(opts ...func(*WorkflowQuery)) *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	wq.withRetriedFrom = query
+	return wq
+}
+
+// WithRetriedTo tells the query-builder to eager-load the nodes that are connected to
+// the "retried_to" edge. The optional arguments are used to configure the query builder of the edge.
+func (wq *WorkflowQuery) WithRetriedTo(opts ...func(*WorkflowQuery)) *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	wq.withRetriedTo = query
 	return wq
 }
 
@@ -441,10 +511,12 @@ func (wq *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 	var (
 		nodes       = []*Workflow{}
 		_spec       = wq.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [5]bool{
 			wq.withExecutions != nil,
 			wq.withContinuedFrom != nil,
 			wq.withContinuedTo != nil,
+			wq.withRetriedFrom != nil,
+			wq.withRetriedTo != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -481,6 +553,19 @@ func (wq *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 	if query := wq.withContinuedTo; query != nil {
 		if err := wq.loadContinuedTo(ctx, query, nodes, nil,
 			func(n *Workflow, e *Workflow) { n.Edges.ContinuedTo = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := wq.withRetriedFrom; query != nil {
+		if err := wq.loadRetriedFrom(ctx, query, nodes, nil,
+			func(n *Workflow, e *Workflow) { n.Edges.RetriedFrom = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := wq.withRetriedTo; query != nil {
+		if err := wq.loadRetriedTo(ctx, query, nodes,
+			func(n *Workflow) { n.Edges.RetriedTo = []*Workflow{} },
+			func(n *Workflow, e *Workflow) { n.Edges.RetriedTo = append(n.Edges.RetriedTo, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -574,6 +659,71 @@ func (wq *WorkflowQuery) loadContinuedTo(ctx context.Context, query *WorkflowQue
 	}
 	return nil
 }
+func (wq *WorkflowQuery) loadRetriedFrom(ctx context.Context, query *WorkflowQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *Workflow)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Workflow)
+	for i := range nodes {
+		if nodes[i].RetriedFromID == nil {
+			continue
+		}
+		fk := *nodes[i].RetriedFromID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(workflow.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "retried_from_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (wq *WorkflowQuery) loadRetriedTo(ctx context.Context, query *WorkflowQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *Workflow)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Workflow)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(workflow.FieldRetriedFromID)
+	}
+	query.Where(predicate.Workflow(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(workflow.RetriedToColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.RetriedFromID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "retried_from_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "retried_from_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 
 func (wq *WorkflowQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := wq.querySpec()
@@ -602,6 +752,9 @@ func (wq *WorkflowQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if wq.withContinuedFrom != nil {
 			_spec.Node.AddColumnOnce(workflow.FieldContinuedFromID)
+		}
+		if wq.withRetriedFrom != nil {
+			_spec.Node.AddColumnOnce(workflow.FieldRetriedFromID)
 		}
 	}
 	if ps := wq.predicates; len(ps) > 0 {
