@@ -51,10 +51,19 @@ func main() {
 	go func() {
 		for i := 0; i < 3; i++ {
 			time.Sleep(2 * time.Second)
-			err := tp.PublishSignal(workflowInfo.WorkflowID, "continue-signal", true)
+
+			// Get the latest workflow execution ID before publishing the signal
+			latestWorkflowID, err := tp.GetLatestWorkflowExecution(workflowInfo.WorkflowID)
 			if err != nil {
-				log.Printf("Failed to publish signal: %v", err)
+				log.Printf("Failed to get latest workflow execution: %v\n", err)
+				continue
 			}
+
+			err = tp.PublishSignal(latestWorkflowID, "continue-signal", true)
+			if err != nil {
+				log.Printf("Failed to publish signal: %v\n", err)
+			}
+			log.Printf("Published signal to workflow: %s\n", latestWorkflowID)
 		}
 	}()
 
@@ -68,4 +77,11 @@ func main() {
 	if err := tp.Wait(); err != nil {
 		log.Fatalf("Error waiting for tasks to complete: %v", err)
 	}
+
+	latestWorkflowID, err := tp.GetLatestWorkflowExecution(workflowInfo.WorkflowID)
+	if err != nil {
+		log.Printf("Failed to get latest workflow execution: %v\n", err)
+		return
+	}
+	fmt.Println("Latest workflow is", latestWorkflowID)
 }
