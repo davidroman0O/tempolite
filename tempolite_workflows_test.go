@@ -79,6 +79,8 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		Message string
 	}
 
+	workerActivity := testSimpleActivity{}
+
 	failed := false
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
@@ -86,7 +88,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 
 		var number int
 		var str string
-		err := ctx.ExecuteActivity("test", As[testSimpleActivity, testIdentifier](), testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		err := ctx.Activity("test", workerActivity.Run, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
 		if err != nil {
 			return err
 		}
@@ -103,6 +105,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
+		Activity(workerActivity.Run).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -115,13 +118,6 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerActivity(AsActivity[testSimpleActivity, testIdentifier](testSimpleActivity{SpecialValue: "test"})); err != nil {
-		t.Fatalf("RegisterActivity failed: %v", err)
-	}
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
@@ -146,6 +142,8 @@ func TestWorkflowActivityMore(t *testing.T) {
 
 	failed := false
 
+	workerActivity := testSimpleActivity{}
+
 	activtfn := func(ctx ActivityContext[testIdentifier], id int) (int, error) {
 		// fmt.Println("activtfn: ", id)
 
@@ -160,7 +158,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 		// fmt.Println("localWrkflw: ", input, msg)
 
 		var subnumber int
-		if err := ctx.ActivityFunc("first", activtfn, 420).Get(&subnumber); err != nil {
+		if err := ctx.Activity("first", activtfn, 420).Get(&subnumber); err != nil {
 			return err
 		}
 
@@ -168,7 +166,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 
 		var number int
 		var str string
-		err := ctx.ExecuteActivity("second", As[testSimpleActivity, testIdentifier](), testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		err := ctx.Activity("second", workerActivity.Run, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
 		if err != nil {
 			return err
 		}
@@ -180,7 +178,8 @@ func TestWorkflowActivityMore(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
-		ActivityFunc(activtfn).
+		Activity(activtfn).
+		Activity(workerActivity.Run).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -193,17 +192,6 @@ func TestWorkflowActivityMore(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerActivityFunc(activtfn); err != nil {
-		t.Fatalf("RegisterActivityFunc failed: %v", err)
-	}
-
-	if err := tp.registerActivity(AsActivity[testSimpleActivity, testIdentifier](testSimpleActivity{SpecialValue: "test"})); err != nil {
-		t.Fatalf("RegisterActivity failed: %v", err)
-	}
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
@@ -251,10 +239,6 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
@@ -322,14 +306,6 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 	}
 	defer tp.Close()
 
-	if err := tp.registerWorkflow(anotherWrk); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
-
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
 		return true
@@ -380,6 +356,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
+		Workflow(anotherWrk).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -392,14 +369,6 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerWorkflow(anotherWrk); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
@@ -461,10 +430,6 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 	}
 	defer tp.Close()
 
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
-
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
 		return true
@@ -504,7 +469,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 		log.Println("pausing1")
 
-		if err := ctx.ActivityFunc("pause1", activityWork).Get(); err != nil {
+		if err := ctx.Activity("pause1", activityWork).Get(); err != nil {
 			return -1, err
 		}
 
@@ -515,7 +480,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 		log.Println("pausing2")
 
-		if err := ctx.ActivityFunc("pause2", activityWork).Get(); err != nil {
+		if err := ctx.Activity("pause2", activityWork).Get(); err != nil {
 			return -1, err
 		}
 
@@ -529,7 +494,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
-		ActivityFunc(activityWork).
+		Activity(activityWork).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -542,10 +507,6 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		log.Println("key: ", key, "value: ", value)
@@ -591,9 +552,6 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("New failed: %v", err)
-		}
-		if err := tp.registerWorkflow(localWrkflw); err != nil {
-			t.Fatalf("RegisterWorkflow failed: %v", err)
 		}
 	}
 	// fmt.Println("\t\t RESTARTED !!!")
@@ -675,10 +633,6 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 	}
 	defer tp.Close()
 
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
-
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
 		return true
@@ -728,11 +682,11 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 
-		if err := ctx.ActivityFunc("test", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
 			return -1, err
 		}
 		<-time.After(time.Second * 5)
-		if err := ctx.ActivityFunc("second time", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("second time", activtyLocal).Get(); err != nil {
 			return -1, err
 		}
 
@@ -741,7 +695,7 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
-		ActivityFunc(activtyLocal).
+		Activity(activtyLocal).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -754,10 +708,6 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	tp.workflows.Range(func(key, value any) bool {
 		// fmt.Println("key: ", key, "value: ", value)
@@ -799,7 +749,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 
 	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
 
-		if err := ctx.ActivityFunc("test", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
 			return -1, err
 		}
 
@@ -815,7 +765,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 
 	registery := NewRegistry[testIdentifier]().
 		Workflow(localWrkflw).
-		ActivityFunc(activtyLocal).
+		Activity(activtyLocal).
 		Build()
 
 	tp, err := New[testIdentifier](
@@ -828,10 +778,6 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 	defer tp.Close()
-
-	if err := tp.registerWorkflow(localWrkflw); err != nil {
-		t.Fatalf("RegisterWorkflow failed: %v", err)
-	}
 
 	var workflowInfo *WorkflowInfo[testIdentifier]
 	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {

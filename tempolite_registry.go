@@ -7,6 +7,8 @@ import (
 	"runtime"
 )
 
+type SideEffect HandlerInfo
+
 type Workflow HandlerInfo
 
 func As[T any, Y Identifier]() HandlerIdentity {
@@ -17,19 +19,6 @@ func As[T any, Y Identifier]() HandlerIdentity {
 type Activity HandlerInfo
 
 type ActivityRegister func() (*Activity, error)
-
-func AsActivity[T any, Y Identifier](instance ...T) ActivityRegister {
-	dataType := reflect.TypeOf((*T)(nil)).Elem()
-
-	var defaultInstance T
-	if len(instance) > 0 {
-		defaultInstance = instance[0]
-	} else {
-		defaultInstance = reflect.Zero(dataType).Interface().(T)
-	}
-
-	return activityRegisterType[T, Y](dataType, defaultInstance)
-}
 
 func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T) ActivityRegister {
 	return func() (*Activity, error) {
@@ -92,8 +81,6 @@ func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T
 		return act, nil
 	}
 }
-
-type SideEffect HandlerInfo
 
 func (tp *Tempolite[T]) registerWorkflow(workflowFunc interface{}) error {
 	handlerType := reflect.TypeOf(workflowFunc)
@@ -158,7 +145,7 @@ func (tp *Tempolite[T]) registerWorkflow(workflowFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) registerActivityFunc(activityFunc interface{}) error {
+func (tp *Tempolite[T]) registerActivity(activityFunc interface{}) error {
 	handlerType := reflect.TypeOf(activityFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -224,13 +211,4 @@ func (tp *Tempolite[T]) registerActivityFunc(activityFunc interface{}) error {
 func (tp *Tempolite[T]) IsActivityRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.activities.Load(longName)
 	return ok
-}
-
-func (tp *Tempolite[T]) registerActivity(register ActivityRegister) error {
-	activity, err := register()
-	if err != nil {
-		return err
-	}
-	tp.activities.Store(activity.HandlerLongName, *activity)
-	return nil
 }

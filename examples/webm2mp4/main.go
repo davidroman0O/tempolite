@@ -32,24 +32,24 @@ func Workflow(ctx tempolite.WorkflowContext[string], task Webm2Mp4) error {
 	var intputFile string
 
 	if isUrl {
-		if err := ctx.ActivityFunc("downloadFile", DownloadFile, task).Get(&intputFile); err != nil {
+		if err := ctx.Activity("downloadFile", DownloadFile, task).Get(&intputFile); err != nil {
 			return err
 		}
 	} else {
-		if err := ctx.ActivityFunc("checkDiskInputFile", CheckDiskInputFile, task).Get(&intputFile); err != nil {
+		if err := ctx.Activity("checkDiskInputFile", CheckDiskInputFile, task).Get(&intputFile); err != nil {
 			return err
 		}
 	}
 
 	task.InputFile = intputFile
 
-	if err := ctx.ActivityFunc("checkDiskOutputFile", CheckDiskOutputFile, task).Get(); err != nil {
+	if err := ctx.Activity("checkDiskOutputFile", CheckDiskOutputFile, task).Get(); err != nil {
 		return err
 	}
 
 	defer fmt.Printf("Conversion completed: %s -> %s\n", task.InputFile, task.OutputFile)
 
-	return ctx.ActivityFunc("transcoding", Transcoding, task).Get()
+	return ctx.Activity("transcoding", Transcoding, task).Get()
 }
 
 func DownloadFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) (string, error) {
@@ -150,10 +150,10 @@ func main() {
 		ctx,
 		tempolite.NewRegistry[string]().
 			Workflow(Workflow).
-			ActivityFunc(Transcoding).
-			ActivityFunc(CheckDiskOutputFile).
-			ActivityFunc(CheckDiskInputFile).
-			ActivityFunc(DownloadFile).
+			Activity(Transcoding).
+			Activity(CheckDiskOutputFile).
+			Activity(CheckDiskInputFile).
+			Activity(DownloadFile).
 			Build(),
 		tempolite.WithPath("./db/webm2mp4.db"),
 	)

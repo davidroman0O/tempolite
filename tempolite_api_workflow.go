@@ -454,6 +454,16 @@ func (tp *Tempolite[T]) replayWorkflow(workflowID WorkflowID) (WorkflowID, error
 		return "", fmt.Errorf("cannot replay workflow that is not completed or failed")
 	}
 
+	// Find the last execution of the workflow
+	lastExecution, err := tp.client.WorkflowExecution.Query().
+		Where(workflowexecution.HasWorkflowWith(workflow.ID(originalWf.ID))).
+		Order(ent.Desc(workflowexecution.FieldStartedAt)).
+		First(tp.ctx)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error finding last execution of workflow", "error", err)
+		return "", fmt.Errorf("error finding last execution of workflow: %w", err)
+	}
+
 	// Start a transaction
 	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
@@ -465,7 +475,7 @@ func (tp *Tempolite[T]) replayWorkflow(workflowID WorkflowID) (WorkflowID, error
 	newExecution, err := tx.WorkflowExecution.
 		Create().
 		SetID(uuid.New().String()).
-		SetRunID(originalWf.ID).
+		SetRunID(lastExecution.RunID).
 		SetWorkflow(originalWf).
 		SetStatus(workflowexecution.StatusPending).
 		SetIsReplay(true).

@@ -21,7 +21,7 @@ func Workflow(ctx tempolite.WorkflowContext[string], task YtDl) error {
 
 	defer fmt.Printf("Conversion completed: %s \n", task.Url)
 
-	return ctx.ActivityFunc("ytdl", Download, task).Get()
+	return ctx.Activity("ytdl", Download, task).Get()
 }
 
 func Download(ctx tempolite.ActivityContext[string], task YtDl) error {
@@ -85,7 +85,7 @@ func main() {
 		ctx,
 		tempolite.NewRegistry[string]().
 			Workflow(Workflow).
-			ActivityFunc(Download).
+			Activity(Download).
 			Build(),
 		tempolite.WithPath("./db/yt.db"),
 	)

@@ -194,14 +194,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 
 	tp.logger.Debug(ctx, "Registering activities", "total", len(registry.activities))
 	for _, activity := range registry.activities {
-		if err := tp.registerActivityFunc(activity); err != nil {
-			return nil, err
-		}
-	}
-
-	tp.logger.Debug(ctx, "Registering activities functions", "total", len(registry.activitiesFunc))
-	for _, activity := range registry.activitiesFunc {
-		if err := tp.registerActivityFunc(activity); err != nil {
+		if err := tp.registerActivity(activity); err != nil {
 			return nil, err
 		}
 	}

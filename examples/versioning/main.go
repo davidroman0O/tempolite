@@ -35,14 +35,14 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) er
 	if codeAfterUpdateOneRuntime.Load() { // on purpose to create non-deterministic behavior
 		version := ctx.GetVersion(ChangeIDCalculateTax, tempolite.DefaultVersion, 1)
 		if version == tempolite.DefaultVersion {
-			err = ctx.ActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
+			err = ctx.Activity("taxes", ActivityComputeTaxes, orderID).Get(&total)
 			fmt.Println("Using original logic after update: total without tax.")
 		} else {
-			err = ctx.ActivityFunc("taxes", ActivityComputeTotalWithTax, orderID, total).Get(&total)
+			err = ctx.Activity("taxes", ActivityComputeTotalWithTax, orderID, total).Get(&total)
 			fmt.Println("Using new logic: total with tax.")
 		}
 	} else {
-		err = ctx.ActivityFunc("taxes", ActivityComputeTaxes, orderID).Get(&total)
+		err = ctx.Activity("taxes", ActivityComputeTaxes, orderID).Get(&total)
 		fmt.Println("Using original logic before update: total without tax.")
 	}
 
@@ -107,7 +107,7 @@ func main() {
 		ctx,
 		tempolite.NewRegistry[identifier]().
 			Workflow(OrderWorkflow).
-			ActivityFunc(ActivityComputeTaxes).
+			Activity(ActivityComputeTaxes).
 			Build(),
 	)
 	if err != nil {
@@ -146,8 +146,8 @@ func main() {
 		ctx,
 		tempolite.NewRegistry[identifier]().
 			Workflow(OrderWorkflow).
-			ActivityFunc(ActivityComputeTaxes).
-			ActivityFunc(ActivityComputeTotalWithTax).
+			Activity(ActivityComputeTaxes).
+			Activity(ActivityComputeTotalWithTax).
 			Build(),
 	)
 	if err != nil {

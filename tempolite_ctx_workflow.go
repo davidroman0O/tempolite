@@ -155,7 +155,7 @@ func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...an
 	return w.tp.getWorkflow(w, id, err)
 }
 
-func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
+func (w WorkflowContext[T]) Activity(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
@@ -170,17 +170,17 @@ func (w WorkflowContext[T]) ActivityFunc(stepID T, handler interface{}, inputs .
 	return w.tp.getActivity(w, id, err)
 }
 
-func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo[T] {
-	if err := w.checkIfPaused(); err != nil {
-		if uerr := w.setExecutionAsPaused(); uerr != nil {
-			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &ActivityInfo[T]{err: uerr}
-		}
-		return &ActivityInfo[T]{err: err}
-	}
-	id, err := w.tp.enqueueActivity(w, stepID, name, inputs...)
-	if err != nil {
-		w.tp.logger.Error(w.tp.ctx, "Error enqueuing activity", "error", err)
-	}
-	return w.tp.getActivity(w, id, err)
-}
+// func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo[T] {
+// 	if err := w.checkIfPaused(); err != nil {
+// 		if uerr := w.setExecutionAsPaused(); uerr != nil {
+// 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
+// 			return &ActivityInfo[T]{err: uerr}
+// 		}
+// 		return &ActivityInfo[T]{err: err}
+// 	}
+// 	id, err := w.tp.enqueueActivity(w, stepID, name, inputs...)
+// 	if err != nil {
+// 		w.tp.logger.Error(w.tp.ctx, "Error enqueuing activity", "error", err)
+// 	}
+// 	return w.tp.getActivity(w, id, err)
+// }

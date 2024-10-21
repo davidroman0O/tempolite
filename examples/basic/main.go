@@ -18,7 +18,7 @@ func SimpleWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], input strin
 	var result string
 	// Inspired by how Ansible can name their steps, you use the stepID to identify the step
 	// It becomes pretty useful when you have tons of activities in your workflow you quickly know what is doing what
-	err := ctx.ActivityFunc("simple-activity", SimpleActivity, input).Get(&result)
+	err := ctx.Activity("simple-activity", SimpleActivity, input).Get(&result)
 	if err != nil {
 		return "", err
 	}
@@ -31,7 +31,7 @@ func main() {
 		context.Background(),
 		tempolite.NewRegistry[CustomIdentifier](). // you can create a registry of workflows and activities that you can then re-use on another Tempolite instance
 								Workflow(SimpleWorkflow).
-								ActivityFunc(SimpleActivity).
+								Activity(SimpleActivity).
 								Build(),
 		tempolite.WithPath("./tempolite.db"),      // once you executed it once, go check the db!
 		tempolite.WithDestructive(),               // means it will attempt to destroy the previous path db at starts

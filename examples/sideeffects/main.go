@@ -24,7 +24,7 @@ func ProcessNumberActivity(ctx tempolite.ActivityContext[CustomIdentifier], num 
 
 func ComplexWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], maxNumber int) (string, error) {
 	var randomNumber int
-	err := ctx.ActivityFunc("random-number", RandomNumberActivity, maxNumber).Get(&randomNumber)
+	err := ctx.Activity("random-number", RandomNumberActivity, maxNumber).Get(&randomNumber)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +42,7 @@ func ComplexWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], maxNumber 
 	}
 
 	var result string
-	err = ctx.ActivityFunc("process-number", ProcessNumberActivity, randomNumber).Get(&result)
+	err = ctx.Activity("process-number", ProcessNumberActivity, randomNumber).Get(&result)
 	if err != nil {
 		return "", err
 	}
@@ -55,10 +55,10 @@ func main() {
 		context.Background(),
 		tempolite.NewRegistry[CustomIdentifier]().
 			Workflow(ComplexWorkflow).
-			ActivityFunc(RandomNumberActivity).
-			ActivityFunc(ProcessNumberActivity).
+			Activity(RandomNumberActivity).
+			Activity(ProcessNumberActivity).
 			Build(),
-		tempolite.WithPath("./tempolite_complex.db"),
+		tempolite.WithPath("./db/tempolite-side-effects.db"),
 		tempolite.WithDestructive(),
 	)
 	if err != nil {
