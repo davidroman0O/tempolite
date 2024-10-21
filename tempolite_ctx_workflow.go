@@ -18,7 +18,8 @@ type WorkflowContext[T Identifier] struct {
 }
 
 func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, values ...any) error {
-	if err := w.checkIfPaused(); err != nil { // we will come back later anyway
+	// Check if the workflow is paused
+	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
 			return uerr
@@ -28,14 +29,45 @@ func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, valu
 
 	if value, ok := w.tp.workflows.Load(w.handlerIdentity); ok {
 		handler := value.(Workflow)
-		_, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, values...)
+		newWorkflowID, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, values...)
 		if err != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
+			return fmt.Errorf("failed to enqueue new workflow: %w", err)
 		}
-		return err
+
+		// Start a transaction
+		tx, err := w.tp.client.Tx(w.tp.ctx)
+		if err != nil {
+			w.tp.logger.Error(w.tp.ctx, "Error starting transaction", "error", err)
+			return fmt.Errorf("failed to start transaction: %w", err)
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
+
+		// Update the new workflow with the continuation relationship
+		if err := tx.Workflow.UpdateOneID(string(newWorkflowID)).
+			SetContinuedFromID(w.workflowID).
+			Exec(w.tp.ctx); err != nil {
+			tx.Rollback()
+			w.tp.logger.Error(w.tp.ctx, "Error updating new workflow", "error", err)
+			return fmt.Errorf("failed to update new workflow: %w", err)
+		}
+
+		// Commit the transaction
+		if err := tx.Commit(); err != nil {
+			w.tp.logger.Error(w.tp.ctx, "Error committing transaction", "error", err)
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
+
+		w.tp.logger.Info(w.tp.ctx, "Workflow continued as new", "oldWorkflowID", w.workflowID, "newWorkflowID", newWorkflowID)
+		return nil
 	}
 
-	return fmt.Errorf("failed to continue as new")
+	w.tp.logger.Error(w.tp.ctx, "Failed to continue as new: workflow not found", "handlerIdentity", w.handlerIdentity)
+	return fmt.Errorf("failed to continue as new: workflow not found")
 }
 
 func (w WorkflowContext[T]) RunID() string {

@@ -14,6 +14,14 @@ import (
 )
 
 func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value interface{}) error {
+	tp.logger.Debug(tp.ctx, "Publishing signal", "workflowID", workflowID, "stepID", stepID)
+
+	latestWorkflowID, err := tp.GetLatestWorkflowExecution(workflowID)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error getting latest workflow execution", "error", err)
+		return fmt.Errorf("failed to get latest workflow execution: %w", err)
+	}
+
 	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
 
@@ -27,7 +35,7 @@ func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value int
 			// Check if there is a workflowID and stepId in the execution relationship
 			relationship, err := tp.client.ExecutionRelationship.Query().
 				Where(
-					executionrelationship.ParentEntityID(workflowID.String()),
+					executionrelationship.ParentEntityID(latestWorkflowID.String()),
 					executionrelationship.ChildStepID(fmt.Sprint(stepID)),
 					executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSignal),
 				).
@@ -72,6 +80,8 @@ func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value int
 				tp.logger.Error(tp.ctx, "Publish to signal error updating signal execution", "error", err)
 				return fmt.Errorf("error updating signal execution: %w", err)
 			}
+
+			tp.logger.Info(tp.ctx, "Signal published successfully", "workflowID", latestWorkflowID, "stepID", stepID)
 
 			return nil
 		}

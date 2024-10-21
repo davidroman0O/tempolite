@@ -265,12 +265,21 @@ var (
 		{Name: "is_ready", Type: field.TypeBool, Default: false},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "continued_from_id", Type: field.TypeString, Unique: true, Nullable: true},
 	}
 	// WorkflowsTable holds the schema information for the "workflows" table.
 	WorkflowsTable = &schema.Table{
 		Name:       "workflows",
 		Columns:    WorkflowsColumns,
 		PrimaryKey: []*schema.Column{WorkflowsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "workflows_workflows_continued_to",
+				Columns:    []*schema.Column{WorkflowsColumns[11]},
+				RefColumns: []*schema.Column{WorkflowsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 	}
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
 	WorkflowExecutionsColumns = []*schema.Column{
@@ -322,5 +331,6 @@ func init() {
 	SagaExecutionsTable.ForeignKeys[0].RefTable = SagasTable
 	SideEffectExecutionsTable.ForeignKeys[0].RefTable = SideEffectsTable
 	SignalExecutionsTable.ForeignKeys[0].RefTable = SignalsTable
+	WorkflowsTable.ForeignKeys[0].RefTable = WorkflowsTable
 	WorkflowExecutionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 }

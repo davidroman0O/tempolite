@@ -100,6 +100,11 @@ func CreatedAt(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// ContinuedFromID applies equality check predicate on the "continued_from_id" field. It's identical to ContinuedFromIDEQ.
+func ContinuedFromID(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldContinuedFromID, v))
+}
+
 // StepIDEQ applies the EQ predicate on the "step_id" field.
 func StepIDEQ(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldStepID, v))
@@ -435,6 +440,81 @@ func CreatedAtLTE(v time.Time) predicate.Workflow {
 	return predicate.Workflow(sql.FieldLTE(FieldCreatedAt, v))
 }
 
+// ContinuedFromIDEQ applies the EQ predicate on the "continued_from_id" field.
+func ContinuedFromIDEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDNEQ applies the NEQ predicate on the "continued_from_id" field.
+func ContinuedFromIDNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDIn applies the In predicate on the "continued_from_id" field.
+func ContinuedFromIDIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldContinuedFromID, vs...))
+}
+
+// ContinuedFromIDNotIn applies the NotIn predicate on the "continued_from_id" field.
+func ContinuedFromIDNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldContinuedFromID, vs...))
+}
+
+// ContinuedFromIDGT applies the GT predicate on the "continued_from_id" field.
+func ContinuedFromIDGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDGTE applies the GTE predicate on the "continued_from_id" field.
+func ContinuedFromIDGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDLT applies the LT predicate on the "continued_from_id" field.
+func ContinuedFromIDLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDLTE applies the LTE predicate on the "continued_from_id" field.
+func ContinuedFromIDLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDContains applies the Contains predicate on the "continued_from_id" field.
+func ContinuedFromIDContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDHasPrefix applies the HasPrefix predicate on the "continued_from_id" field.
+func ContinuedFromIDHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDHasSuffix applies the HasSuffix predicate on the "continued_from_id" field.
+func ContinuedFromIDHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDIsNil applies the IsNil predicate on the "continued_from_id" field.
+func ContinuedFromIDIsNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldIsNull(FieldContinuedFromID))
+}
+
+// ContinuedFromIDNotNil applies the NotNil predicate on the "continued_from_id" field.
+func ContinuedFromIDNotNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotNull(FieldContinuedFromID))
+}
+
+// ContinuedFromIDEqualFold applies the EqualFold predicate on the "continued_from_id" field.
+func ContinuedFromIDEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldContinuedFromID, v))
+}
+
+// ContinuedFromIDContainsFold applies the ContainsFold predicate on the "continued_from_id" field.
+func ContinuedFromIDContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldContinuedFromID, v))
+}
+
 // HasExecutions applies the HasEdge predicate on the "executions" edge.
 func HasExecutions() predicate.Workflow {
 	return predicate.Workflow(func(s *sql.Selector) {
@@ -450,6 +530,52 @@ func HasExecutions() predicate.Workflow {
 func HasExecutionsWith(preds ...predicate.WorkflowExecution) predicate.Workflow {
 	return predicate.Workflow(func(s *sql.Selector) {
 		step := newExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasContinuedFrom applies the HasEdge predicate on the "continued_from" edge.
+func HasContinuedFrom() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, ContinuedFromTable, ContinuedFromColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasContinuedFromWith applies the HasEdge predicate on the "continued_from" edge with a given conditions (other predicates).
+func HasContinuedFromWith(preds ...predicate.Workflow) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newContinuedFromStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasContinuedTo applies the HasEdge predicate on the "continued_to" edge.
+func HasContinuedTo() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ContinuedToTable, ContinuedToColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasContinuedToWith applies the HasEdge predicate on the "continued_to" edge with a given conditions (other predicates).
+func HasContinuedToWith(preds ...predicate.Workflow) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newContinuedToStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

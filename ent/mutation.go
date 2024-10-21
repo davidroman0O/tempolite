@@ -8018,27 +8018,31 @@ func (m *SignalExecutionMutation) ResetEdge(name string) error {
 // WorkflowMutation represents an operation that mutates the Workflow nodes in the graph.
 type WorkflowMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *string
-	step_id           *string
-	status            *workflow.Status
-	identity          *string
-	handler_name      *string
-	input             *[]interface{}
-	appendinput       []interface{}
-	retry_policy      *schema.RetryPolicy
-	is_paused         *bool
-	is_ready          *bool
-	timeout           *time.Time
-	created_at        *time.Time
-	clearedFields     map[string]struct{}
-	executions        map[string]struct{}
-	removedexecutions map[string]struct{}
-	clearedexecutions bool
-	done              bool
-	oldValue          func(context.Context) (*Workflow, error)
-	predicates        []predicate.Workflow
+	op                    Op
+	typ                   string
+	id                    *string
+	step_id               *string
+	status                *workflow.Status
+	identity              *string
+	handler_name          *string
+	input                 *[]interface{}
+	appendinput           []interface{}
+	retry_policy          *schema.RetryPolicy
+	is_paused             *bool
+	is_ready              *bool
+	timeout               *time.Time
+	created_at            *time.Time
+	clearedFields         map[string]struct{}
+	executions            map[string]struct{}
+	removedexecutions     map[string]struct{}
+	clearedexecutions     bool
+	continued_from        *string
+	clearedcontinued_from bool
+	continued_to          *string
+	clearedcontinued_to   bool
+	done                  bool
+	oldValue              func(context.Context) (*Workflow, error)
+	predicates            []predicate.Workflow
 }
 
 var _ ent.Mutation = (*WorkflowMutation)(nil)
@@ -8546,6 +8550,55 @@ func (m *WorkflowMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetContinuedFromID sets the "continued_from_id" field.
+func (m *WorkflowMutation) SetContinuedFromID(s string) {
+	m.continued_from = &s
+}
+
+// ContinuedFromID returns the value of the "continued_from_id" field in the mutation.
+func (m *WorkflowMutation) ContinuedFromID() (r string, exists bool) {
+	v := m.continued_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContinuedFromID returns the old "continued_from_id" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldContinuedFromID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContinuedFromID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContinuedFromID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContinuedFromID: %w", err)
+	}
+	return oldValue.ContinuedFromID, nil
+}
+
+// ClearContinuedFromID clears the value of the "continued_from_id" field.
+func (m *WorkflowMutation) ClearContinuedFromID() {
+	m.continued_from = nil
+	m.clearedFields[workflow.FieldContinuedFromID] = struct{}{}
+}
+
+// ContinuedFromIDCleared returns if the "continued_from_id" field was cleared in this mutation.
+func (m *WorkflowMutation) ContinuedFromIDCleared() bool {
+	_, ok := m.clearedFields[workflow.FieldContinuedFromID]
+	return ok
+}
+
+// ResetContinuedFromID resets all changes to the "continued_from_id" field.
+func (m *WorkflowMutation) ResetContinuedFromID() {
+	m.continued_from = nil
+	delete(m.clearedFields, workflow.FieldContinuedFromID)
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by ids.
 func (m *WorkflowMutation) AddExecutionIDs(ids ...string) {
 	if m.executions == nil {
@@ -8600,6 +8653,72 @@ func (m *WorkflowMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
+// ClearContinuedFrom clears the "continued_from" edge to the Workflow entity.
+func (m *WorkflowMutation) ClearContinuedFrom() {
+	m.clearedcontinued_from = true
+	m.clearedFields[workflow.FieldContinuedFromID] = struct{}{}
+}
+
+// ContinuedFromCleared reports if the "continued_from" edge to the Workflow entity was cleared.
+func (m *WorkflowMutation) ContinuedFromCleared() bool {
+	return m.ContinuedFromIDCleared() || m.clearedcontinued_from
+}
+
+// ContinuedFromIDs returns the "continued_from" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContinuedFromID instead. It exists only for internal usage by the builders.
+func (m *WorkflowMutation) ContinuedFromIDs() (ids []string) {
+	if id := m.continued_from; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContinuedFrom resets all changes to the "continued_from" edge.
+func (m *WorkflowMutation) ResetContinuedFrom() {
+	m.continued_from = nil
+	m.clearedcontinued_from = false
+}
+
+// SetContinuedToID sets the "continued_to" edge to the Workflow entity by id.
+func (m *WorkflowMutation) SetContinuedToID(id string) {
+	m.continued_to = &id
+}
+
+// ClearContinuedTo clears the "continued_to" edge to the Workflow entity.
+func (m *WorkflowMutation) ClearContinuedTo() {
+	m.clearedcontinued_to = true
+}
+
+// ContinuedToCleared reports if the "continued_to" edge to the Workflow entity was cleared.
+func (m *WorkflowMutation) ContinuedToCleared() bool {
+	return m.clearedcontinued_to
+}
+
+// ContinuedToID returns the "continued_to" edge ID in the mutation.
+func (m *WorkflowMutation) ContinuedToID() (id string, exists bool) {
+	if m.continued_to != nil {
+		return *m.continued_to, true
+	}
+	return
+}
+
+// ContinuedToIDs returns the "continued_to" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContinuedToID instead. It exists only for internal usage by the builders.
+func (m *WorkflowMutation) ContinuedToIDs() (ids []string) {
+	if id := m.continued_to; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContinuedTo resets all changes to the "continued_to" edge.
+func (m *WorkflowMutation) ResetContinuedTo() {
+	m.continued_to = nil
+	m.clearedcontinued_to = false
+}
+
 // Where appends a list predicates to the WorkflowMutation builder.
 func (m *WorkflowMutation) Where(ps ...predicate.Workflow) {
 	m.predicates = append(m.predicates, ps...)
@@ -8634,7 +8753,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.step_id != nil {
 		fields = append(fields, workflow.FieldStepID)
 	}
@@ -8665,6 +8784,9 @@ func (m *WorkflowMutation) Fields() []string {
 	if m.created_at != nil {
 		fields = append(fields, workflow.FieldCreatedAt)
 	}
+	if m.continued_from != nil {
+		fields = append(fields, workflow.FieldContinuedFromID)
+	}
 	return fields
 }
 
@@ -8693,6 +8815,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.Timeout()
 	case workflow.FieldCreatedAt:
 		return m.CreatedAt()
+	case workflow.FieldContinuedFromID:
+		return m.ContinuedFromID()
 	}
 	return nil, false
 }
@@ -8722,6 +8846,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTimeout(ctx)
 	case workflow.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
+	case workflow.FieldContinuedFromID:
+		return m.OldContinuedFromID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Workflow field %s", name)
 }
@@ -8801,6 +8927,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedAt(v)
 		return nil
+	case workflow.FieldContinuedFromID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContinuedFromID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow field %s", name)
 }
@@ -8837,6 +8970,9 @@ func (m *WorkflowMutation) ClearedFields() []string {
 	if m.FieldCleared(workflow.FieldTimeout) {
 		fields = append(fields, workflow.FieldTimeout)
 	}
+	if m.FieldCleared(workflow.FieldContinuedFromID) {
+		fields = append(fields, workflow.FieldContinuedFromID)
+	}
 	return fields
 }
 
@@ -8856,6 +8992,9 @@ func (m *WorkflowMutation) ClearField(name string) error {
 		return nil
 	case workflow.FieldTimeout:
 		m.ClearTimeout()
+		return nil
+	case workflow.FieldContinuedFromID:
+		m.ClearContinuedFromID()
 		return nil
 	}
 	return fmt.Errorf("unknown Workflow nullable field %s", name)
@@ -8895,15 +9034,24 @@ func (m *WorkflowMutation) ResetField(name string) error {
 	case workflow.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
+	case workflow.FieldContinuedFromID:
+		m.ResetContinuedFromID()
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 3)
 	if m.executions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
+	}
+	if m.continued_from != nil {
+		edges = append(edges, workflow.EdgeContinuedFrom)
+	}
+	if m.continued_to != nil {
+		edges = append(edges, workflow.EdgeContinuedTo)
 	}
 	return edges
 }
@@ -8918,13 +9066,21 @@ func (m *WorkflowMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case workflow.EdgeContinuedFrom:
+		if id := m.continued_from; id != nil {
+			return []ent.Value{*id}
+		}
+	case workflow.EdgeContinuedTo:
+		if id := m.continued_to; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 3)
 	if m.removedexecutions != nil {
 		edges = append(edges, workflow.EdgeExecutions)
 	}
@@ -8947,9 +9103,15 @@ func (m *WorkflowMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 3)
 	if m.clearedexecutions {
 		edges = append(edges, workflow.EdgeExecutions)
+	}
+	if m.clearedcontinued_from {
+		edges = append(edges, workflow.EdgeContinuedFrom)
+	}
+	if m.clearedcontinued_to {
+		edges = append(edges, workflow.EdgeContinuedTo)
 	}
 	return edges
 }
@@ -8960,6 +9122,10 @@ func (m *WorkflowMutation) EdgeCleared(name string) bool {
 	switch name {
 	case workflow.EdgeExecutions:
 		return m.clearedexecutions
+	case workflow.EdgeContinuedFrom:
+		return m.clearedcontinued_from
+	case workflow.EdgeContinuedTo:
+		return m.clearedcontinued_to
 	}
 	return false
 }
@@ -8968,6 +9134,12 @@ func (m *WorkflowMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *WorkflowMutation) ClearEdge(name string) error {
 	switch name {
+	case workflow.EdgeContinuedFrom:
+		m.ClearContinuedFrom()
+		return nil
+	case workflow.EdgeContinuedTo:
+		m.ClearContinuedTo()
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow unique edge %s", name)
 }
@@ -8978,6 +9150,12 @@ func (m *WorkflowMutation) ResetEdge(name string) error {
 	switch name {
 	case workflow.EdgeExecutions:
 		m.ResetExecutions()
+		return nil
+	case workflow.EdgeContinuedFrom:
+		m.ResetContinuedFrom()
+		return nil
+	case workflow.EdgeContinuedTo:
+		m.ResetContinuedTo()
 		return nil
 	}
 	return fmt.Errorf("unknown Workflow edge %s", name)

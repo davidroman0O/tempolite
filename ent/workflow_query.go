@@ -20,11 +20,13 @@ import (
 // WorkflowQuery is the builder for querying Workflow entities.
 type WorkflowQuery struct {
 	config
-	ctx            *QueryContext
-	order          []workflow.OrderOption
-	inters         []Interceptor
-	predicates     []predicate.Workflow
-	withExecutions *WorkflowExecutionQuery
+	ctx               *QueryContext
+	order             []workflow.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.Workflow
+	withExecutions    *WorkflowExecutionQuery
+	withContinuedFrom *WorkflowQuery
+	withContinuedTo   *WorkflowQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -76,6 +78,50 @@ func (wq *WorkflowQuery) QueryExecutions() *WorkflowExecutionQuery {
 			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
 			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ExecutionsTable, workflow.ExecutionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryContinuedFrom chains the current query on the "continued_from" edge.
+func (wq *WorkflowQuery) QueryContinuedFrom() *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := wq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := wq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, workflow.ContinuedFromTable, workflow.ContinuedFromColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryContinuedTo chains the current query on the "continued_to" edge.
+func (wq *WorkflowQuery) QueryContinuedTo() *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := wq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := wq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, workflow.ContinuedToTable, workflow.ContinuedToColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(wq.driver.Dialect(), step)
 		return fromU, nil
@@ -270,12 +316,14 @@ func (wq *WorkflowQuery) Clone() *WorkflowQuery {
 		return nil
 	}
 	return &WorkflowQuery{
-		config:         wq.config,
-		ctx:            wq.ctx.Clone(),
-		order:          append([]workflow.OrderOption{}, wq.order...),
-		inters:         append([]Interceptor{}, wq.inters...),
-		predicates:     append([]predicate.Workflow{}, wq.predicates...),
-		withExecutions: wq.withExecutions.Clone(),
+		config:            wq.config,
+		ctx:               wq.ctx.Clone(),
+		order:             append([]workflow.OrderOption{}, wq.order...),
+		inters:            append([]Interceptor{}, wq.inters...),
+		predicates:        append([]predicate.Workflow{}, wq.predicates...),
+		withExecutions:    wq.withExecutions.Clone(),
+		withContinuedFrom: wq.withContinuedFrom.Clone(),
+		withContinuedTo:   wq.withContinuedTo.Clone(),
 		// clone intermediate query.
 		sql:  wq.sql.Clone(),
 		path: wq.path,
@@ -290,6 +338,28 @@ func (wq *WorkflowQuery) WithExecutions(opts ...func(*WorkflowExecutionQuery)) *
 		opt(query)
 	}
 	wq.withExecutions = query
+	return wq
+}
+
+// WithContinuedFrom tells the query-builder to eager-load the nodes that are connected to
+// the "continued_from" edge. The optional arguments are used to configure the query builder of the edge.
+func (wq *WorkflowQuery) WithContinuedFrom(opts ...func(*WorkflowQuery)) *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	wq.withContinuedFrom = query
+	return wq
+}
+
+// WithContinuedTo tells the query-builder to eager-load the nodes that are connected to
+// the "continued_to" edge. The optional arguments are used to configure the query builder of the edge.
+func (wq *WorkflowQuery) WithContinuedTo(opts ...func(*WorkflowQuery)) *WorkflowQuery {
+	query := (&WorkflowClient{config: wq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	wq.withContinuedTo = query
 	return wq
 }
 
@@ -371,8 +441,10 @@ func (wq *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 	var (
 		nodes       = []*Workflow{}
 		_spec       = wq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [3]bool{
 			wq.withExecutions != nil,
+			wq.withContinuedFrom != nil,
+			wq.withContinuedTo != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -397,6 +469,18 @@ func (wq *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 		if err := wq.loadExecutions(ctx, query, nodes,
 			func(n *Workflow) { n.Edges.Executions = []*WorkflowExecution{} },
 			func(n *Workflow, e *WorkflowExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := wq.withContinuedFrom; query != nil {
+		if err := wq.loadContinuedFrom(ctx, query, nodes, nil,
+			func(n *Workflow, e *Workflow) { n.Edges.ContinuedFrom = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := wq.withContinuedTo; query != nil {
+		if err := wq.loadContinuedTo(ctx, query, nodes, nil,
+			func(n *Workflow, e *Workflow) { n.Edges.ContinuedTo = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -434,6 +518,62 @@ func (wq *WorkflowQuery) loadExecutions(ctx context.Context, query *WorkflowExec
 	}
 	return nil
 }
+func (wq *WorkflowQuery) loadContinuedFrom(ctx context.Context, query *WorkflowQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *Workflow)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Workflow)
+	for i := range nodes {
+		fk := nodes[i].ContinuedFromID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(workflow.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "continued_from_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (wq *WorkflowQuery) loadContinuedTo(ctx context.Context, query *WorkflowQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *Workflow)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Workflow)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(workflow.FieldContinuedFromID)
+	}
+	query.Where(predicate.Workflow(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(workflow.ContinuedToColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.ContinuedFromID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "continued_from_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 
 func (wq *WorkflowQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := wq.querySpec()
@@ -459,6 +599,9 @@ func (wq *WorkflowQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != workflow.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if wq.withContinuedFrom != nil {
+			_spec.Node.AddColumnOnce(workflow.FieldContinuedFromID)
 		}
 	}
 	if ps := wq.predicates; len(ps) > 0 {

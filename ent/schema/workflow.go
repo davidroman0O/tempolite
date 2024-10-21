@@ -35,6 +35,9 @@ func (Workflow) Fields() []ent.Field {
 			Optional(),
 		field.Time("created_at").
 			Default(time.Now),
+		field.String("continued_from_id").
+			Optional().
+			Comment("ID of the workflow this one was continued from"),
 	}
 }
 
@@ -42,5 +45,10 @@ func (Workflow) Fields() []ent.Field {
 func (Workflow) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("executions", WorkflowExecution.Type),
+		edge.To("continued_to", Workflow.Type).
+			Unique().
+			From("continued_from").
+			Field("continued_from_id").
+			Unique(),
 	}
 }

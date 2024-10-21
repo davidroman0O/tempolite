@@ -35,8 +35,14 @@ const (
 	FieldTimeout = "timeout"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldContinuedFromID holds the string denoting the continued_from_id field in the database.
+	FieldContinuedFromID = "continued_from_id"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
+	// EdgeContinuedFrom holds the string denoting the continued_from edge name in mutations.
+	EdgeContinuedFrom = "continued_from"
+	// EdgeContinuedTo holds the string denoting the continued_to edge name in mutations.
+	EdgeContinuedTo = "continued_to"
 	// Table holds the table name of the workflow in the database.
 	Table = "workflows"
 	// ExecutionsTable is the table that holds the executions relation/edge.
@@ -46,6 +52,14 @@ const (
 	ExecutionsInverseTable = "workflow_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "workflow_executions"
+	// ContinuedFromTable is the table that holds the continued_from relation/edge.
+	ContinuedFromTable = "workflows"
+	// ContinuedFromColumn is the table column denoting the continued_from relation/edge.
+	ContinuedFromColumn = "continued_from_id"
+	// ContinuedToTable is the table that holds the continued_to relation/edge.
+	ContinuedToTable = "workflows"
+	// ContinuedToColumn is the table column denoting the continued_to relation/edge.
+	ContinuedToColumn = "continued_from_id"
 )
 
 // Columns holds all SQL columns for workflow fields.
@@ -61,6 +75,7 @@ var Columns = []string{
 	FieldIsReady,
 	FieldTimeout,
 	FieldCreatedAt,
+	FieldContinuedFromID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -167,6 +182,11 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
+// ByContinuedFromID orders the results by the continued_from_id field.
+func ByContinuedFromID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContinuedFromID, opts...).ToFunc()
+}
+
 // ByExecutionsCount orders the results by executions count.
 func ByExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -180,10 +200,38 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByContinuedFromField orders the results by continued_from field.
+func ByContinuedFromField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newContinuedFromStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByContinuedToField orders the results by continued_to field.
+func ByContinuedToField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newContinuedToStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newExecutionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+	)
+}
+func newContinuedFromStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, true, ContinuedFromTable, ContinuedFromColumn),
+	)
+}
+func newContinuedToStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, ContinuedToTable, ContinuedToColumn),
 	)
 }

@@ -385,6 +385,44 @@ func (tp *Tempolite[T]) verifyHandlerAndParams(handlerInfo HandlerInfo, params [
 	return nil
 }
 
+func (tp *Tempolite[T]) GetLatestWorkflowExecution(originalWorkflowID WorkflowID) (WorkflowID, error) {
+	tp.logger.Debug(tp.ctx, "Getting latest workflow execution", "originalWorkflowID", originalWorkflowID)
+
+	currentID := originalWorkflowID
+	for {
+		w, err := tp.client.Workflow.Query().
+			Where(workflow.ID(string(currentID))).
+			Only(tp.ctx)
+
+		if err != nil {
+			if ent.IsNotFound(err) {
+				tp.logger.Error(tp.ctx, "Workflow not found", "workflowID", currentID)
+				return "", fmt.Errorf("workflow not found: %w", err)
+			}
+			tp.logger.Error(tp.ctx, "Error querying workflow", "error", err)
+			return "", fmt.Errorf("error querying workflow: %w", err)
+		}
+
+		// Check if this workflow has been continued
+		continuedWorkflow, err := tp.client.Workflow.Query().
+			Where(workflow.ContinuedFromID(w.ID)).
+			Only(tp.ctx)
+
+		if err != nil {
+			if ent.IsNotFound(err) {
+				// This is the latest workflow in the chain
+				tp.logger.Debug(tp.ctx, "Found latest workflow execution", "latestWorkflowID", currentID)
+				return currentID, nil
+			}
+			tp.logger.Error(tp.ctx, "Error querying continued workflow", "error", err)
+			return "", fmt.Errorf("error querying continued workflow: %w", err)
+		}
+
+		// Move to the next workflow in the chain
+		currentID = WorkflowID(continuedWorkflow.ID)
+	}
+}
+
 func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 	pausedWorkflows, err := tp.client.Workflow.Query().
 		Where(workflow.IsPausedEQ(true)).

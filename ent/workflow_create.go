@@ -130,6 +130,20 @@ func (wc *WorkflowCreate) SetNillableCreatedAt(t *time.Time) *WorkflowCreate {
 	return wc
 }
 
+// SetContinuedFromID sets the "continued_from_id" field.
+func (wc *WorkflowCreate) SetContinuedFromID(s string) *WorkflowCreate {
+	wc.mutation.SetContinuedFromID(s)
+	return wc
+}
+
+// SetNillableContinuedFromID sets the "continued_from_id" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableContinuedFromID(s *string) *WorkflowCreate {
+	if s != nil {
+		wc.SetContinuedFromID(*s)
+	}
+	return wc
+}
+
 // SetID sets the "id" field.
 func (wc *WorkflowCreate) SetID(s string) *WorkflowCreate {
 	wc.mutation.SetID(s)
@@ -149,6 +163,30 @@ func (wc *WorkflowCreate) AddExecutions(w ...*WorkflowExecution) *WorkflowCreate
 		ids[i] = w[i].ID
 	}
 	return wc.AddExecutionIDs(ids...)
+}
+
+// SetContinuedFrom sets the "continued_from" edge to the Workflow entity.
+func (wc *WorkflowCreate) SetContinuedFrom(w *Workflow) *WorkflowCreate {
+	return wc.SetContinuedFromID(w.ID)
+}
+
+// SetContinuedToID sets the "continued_to" edge to the Workflow entity by ID.
+func (wc *WorkflowCreate) SetContinuedToID(id string) *WorkflowCreate {
+	wc.mutation.SetContinuedToID(id)
+	return wc
+}
+
+// SetNillableContinuedToID sets the "continued_to" edge to the Workflow entity by ID if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableContinuedToID(id *string) *WorkflowCreate {
+	if id != nil {
+		wc = wc.SetContinuedToID(*id)
+	}
+	return wc
+}
+
+// SetContinuedTo sets the "continued_to" edge to the Workflow entity.
+func (wc *WorkflowCreate) SetContinuedTo(w *Workflow) *WorkflowCreate {
+	return wc.SetContinuedToID(w.ID)
 }
 
 // Mutation returns the WorkflowMutation object of the builder.
@@ -334,6 +372,39 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := wc.mutation.ContinuedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   workflow.ContinuedFromTable,
+			Columns: []string{workflow.ContinuedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.ContinuedFromID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := wc.mutation.ContinuedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   workflow.ContinuedToTable,
+			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

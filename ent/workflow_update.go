@@ -181,6 +181,26 @@ func (wu *WorkflowUpdate) SetNillableCreatedAt(t *time.Time) *WorkflowUpdate {
 	return wu
 }
 
+// SetContinuedFromID sets the "continued_from_id" field.
+func (wu *WorkflowUpdate) SetContinuedFromID(s string) *WorkflowUpdate {
+	wu.mutation.SetContinuedFromID(s)
+	return wu
+}
+
+// SetNillableContinuedFromID sets the "continued_from_id" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableContinuedFromID(s *string) *WorkflowUpdate {
+	if s != nil {
+		wu.SetContinuedFromID(*s)
+	}
+	return wu
+}
+
+// ClearContinuedFromID clears the value of the "continued_from_id" field.
+func (wu *WorkflowUpdate) ClearContinuedFromID() *WorkflowUpdate {
+	wu.mutation.ClearContinuedFromID()
+	return wu
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by IDs.
 func (wu *WorkflowUpdate) AddExecutionIDs(ids ...string) *WorkflowUpdate {
 	wu.mutation.AddExecutionIDs(ids...)
@@ -194,6 +214,30 @@ func (wu *WorkflowUpdate) AddExecutions(w ...*WorkflowExecution) *WorkflowUpdate
 		ids[i] = w[i].ID
 	}
 	return wu.AddExecutionIDs(ids...)
+}
+
+// SetContinuedFrom sets the "continued_from" edge to the Workflow entity.
+func (wu *WorkflowUpdate) SetContinuedFrom(w *Workflow) *WorkflowUpdate {
+	return wu.SetContinuedFromID(w.ID)
+}
+
+// SetContinuedToID sets the "continued_to" edge to the Workflow entity by ID.
+func (wu *WorkflowUpdate) SetContinuedToID(id string) *WorkflowUpdate {
+	wu.mutation.SetContinuedToID(id)
+	return wu
+}
+
+// SetNillableContinuedToID sets the "continued_to" edge to the Workflow entity by ID if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableContinuedToID(id *string) *WorkflowUpdate {
+	if id != nil {
+		wu = wu.SetContinuedToID(*id)
+	}
+	return wu
+}
+
+// SetContinuedTo sets the "continued_to" edge to the Workflow entity.
+func (wu *WorkflowUpdate) SetContinuedTo(w *Workflow) *WorkflowUpdate {
+	return wu.SetContinuedToID(w.ID)
 }
 
 // Mutation returns the WorkflowMutation object of the builder.
@@ -220,6 +264,18 @@ func (wu *WorkflowUpdate) RemoveExecutions(w ...*WorkflowExecution) *WorkflowUpd
 		ids[i] = w[i].ID
 	}
 	return wu.RemoveExecutionIDs(ids...)
+}
+
+// ClearContinuedFrom clears the "continued_from" edge to the Workflow entity.
+func (wu *WorkflowUpdate) ClearContinuedFrom() *WorkflowUpdate {
+	wu.mutation.ClearContinuedFrom()
+	return wu
+}
+
+// ClearContinuedTo clears the "continued_to" edge to the Workflow entity.
+func (wu *WorkflowUpdate) ClearContinuedTo() *WorkflowUpdate {
+	wu.mutation.ClearContinuedTo()
+	return wu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -365,6 +421,64 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wu.mutation.ContinuedFromCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   workflow.ContinuedFromTable,
+			Columns: []string{workflow.ContinuedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wu.mutation.ContinuedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   workflow.ContinuedFromTable,
+			Columns: []string{workflow.ContinuedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wu.mutation.ContinuedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   workflow.ContinuedToTable,
+			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wu.mutation.ContinuedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   workflow.ContinuedToTable,
+			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -542,6 +656,26 @@ func (wuo *WorkflowUpdateOne) SetNillableCreatedAt(t *time.Time) *WorkflowUpdate
 	return wuo
 }
 
+// SetContinuedFromID sets the "continued_from_id" field.
+func (wuo *WorkflowUpdateOne) SetContinuedFromID(s string) *WorkflowUpdateOne {
+	wuo.mutation.SetContinuedFromID(s)
+	return wuo
+}
+
+// SetNillableContinuedFromID sets the "continued_from_id" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableContinuedFromID(s *string) *WorkflowUpdateOne {
+	if s != nil {
+		wuo.SetContinuedFromID(*s)
+	}
+	return wuo
+}
+
+// ClearContinuedFromID clears the value of the "continued_from_id" field.
+func (wuo *WorkflowUpdateOne) ClearContinuedFromID() *WorkflowUpdateOne {
+	wuo.mutation.ClearContinuedFromID()
+	return wuo
+}
+
 // AddExecutionIDs adds the "executions" edge to the WorkflowExecution entity by IDs.
 func (wuo *WorkflowUpdateOne) AddExecutionIDs(ids ...string) *WorkflowUpdateOne {
 	wuo.mutation.AddExecutionIDs(ids...)
@@ -555,6 +689,30 @@ func (wuo *WorkflowUpdateOne) AddExecutions(w ...*WorkflowExecution) *WorkflowUp
 		ids[i] = w[i].ID
 	}
 	return wuo.AddExecutionIDs(ids...)
+}
+
+// SetContinuedFrom sets the "continued_from" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) SetContinuedFrom(w *Workflow) *WorkflowUpdateOne {
+	return wuo.SetContinuedFromID(w.ID)
+}
+
+// SetContinuedToID sets the "continued_to" edge to the Workflow entity by ID.
+func (wuo *WorkflowUpdateOne) SetContinuedToID(id string) *WorkflowUpdateOne {
+	wuo.mutation.SetContinuedToID(id)
+	return wuo
+}
+
+// SetNillableContinuedToID sets the "continued_to" edge to the Workflow entity by ID if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableContinuedToID(id *string) *WorkflowUpdateOne {
+	if id != nil {
+		wuo = wuo.SetContinuedToID(*id)
+	}
+	return wuo
+}
+
+// SetContinuedTo sets the "continued_to" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) SetContinuedTo(w *Workflow) *WorkflowUpdateOne {
+	return wuo.SetContinuedToID(w.ID)
 }
 
 // Mutation returns the WorkflowMutation object of the builder.
@@ -581,6 +739,18 @@ func (wuo *WorkflowUpdateOne) RemoveExecutions(w ...*WorkflowExecution) *Workflo
 		ids[i] = w[i].ID
 	}
 	return wuo.RemoveExecutionIDs(ids...)
+}
+
+// ClearContinuedFrom clears the "continued_from" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) ClearContinuedFrom() *WorkflowUpdateOne {
+	wuo.mutation.ClearContinuedFrom()
+	return wuo
+}
+
+// ClearContinuedTo clears the "continued_to" edge to the Workflow entity.
+func (wuo *WorkflowUpdateOne) ClearContinuedTo() *WorkflowUpdateOne {
+	wuo.mutation.ClearContinuedTo()
+	return wuo
 }
 
 // Where appends a list predicates to the WorkflowUpdate builder.
@@ -756,6 +926,64 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wuo.mutation.ContinuedFromCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   workflow.ContinuedFromTable,
+			Columns: []string{workflow.ContinuedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wuo.mutation.ContinuedFromIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   workflow.ContinuedFromTable,
+			Columns: []string{workflow.ContinuedFromColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if wuo.mutation.ContinuedToCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   workflow.ContinuedToTable,
+			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := wuo.mutation.ContinuedToIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   workflow.ContinuedToTable,
+			Columns: []string{workflow.ContinuedToColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -39,6 +39,8 @@ type Workflow struct {
 	Timeout time.Time `json:"timeout,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	// ID of the workflow this one was continued from
+	ContinuedFromID string `json:"continued_from_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the WorkflowQuery when eager-loading is set.
 	Edges        WorkflowEdges `json:"edges"`
@@ -49,9 +51,13 @@ type Workflow struct {
 type WorkflowEdges struct {
 	// Executions holds the value of the executions edge.
 	Executions []*WorkflowExecution `json:"executions,omitempty"`
+	// ContinuedFrom holds the value of the continued_from edge.
+	ContinuedFrom *Workflow `json:"continued_from,omitempty"`
+	// ContinuedTo holds the value of the continued_to edge.
+	ContinuedTo *Workflow `json:"continued_to,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [3]bool
 }
 
 // ExecutionsOrErr returns the Executions value or an error if the edge
@@ -63,6 +69,28 @@ func (e WorkflowEdges) ExecutionsOrErr() ([]*WorkflowExecution, error) {
 	return nil, &NotLoadedError{edge: "executions"}
 }
 
+// ContinuedFromOrErr returns the ContinuedFrom value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e WorkflowEdges) ContinuedFromOrErr() (*Workflow, error) {
+	if e.ContinuedFrom != nil {
+		return e.ContinuedFrom, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: workflow.Label}
+	}
+	return nil, &NotLoadedError{edge: "continued_from"}
+}
+
+// ContinuedToOrErr returns the ContinuedTo value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e WorkflowEdges) ContinuedToOrErr() (*Workflow, error) {
+	if e.ContinuedTo != nil {
+		return e.ContinuedTo, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: workflow.Label}
+	}
+	return nil, &NotLoadedError{edge: "continued_to"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Workflow) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -72,7 +100,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflow.FieldIsPaused, workflow.FieldIsReady:
 			values[i] = new(sql.NullBool)
-		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName:
+		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldContinuedFromID:
 			values[i] = new(sql.NullString)
 		case workflow.FieldTimeout, workflow.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -161,6 +189,12 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				w.CreatedAt = value.Time
 			}
+		case workflow.FieldContinuedFromID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field continued_from_id", values[i])
+			} else if value.Valid {
+				w.ContinuedFromID = value.String
+			}
 		default:
 			w.selectValues.Set(columns[i], values[i])
 		}
@@ -177,6 +211,16 @@ func (w *Workflow) Value(name string) (ent.Value, error) {
 // QueryExecutions queries the "executions" edge of the Workflow entity.
 func (w *Workflow) QueryExecutions() *WorkflowExecutionQuery {
 	return NewWorkflowClient(w.config).QueryExecutions(w)
+}
+
+// QueryContinuedFrom queries the "continued_from" edge of the Workflow entity.
+func (w *Workflow) QueryContinuedFrom() *WorkflowQuery {
+	return NewWorkflowClient(w.config).QueryContinuedFrom(w)
+}
+
+// QueryContinuedTo queries the "continued_to" edge of the Workflow entity.
+func (w *Workflow) QueryContinuedTo() *WorkflowQuery {
+	return NewWorkflowClient(w.config).QueryContinuedTo(w)
 }
 
 // Update returns a builder for updating this Workflow.
@@ -231,6 +275,9 @@ func (w *Workflow) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(w.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("continued_from_id=")
+	builder.WriteString(w.ContinuedFromID)
 	builder.WriteByte(')')
 	return builder.String()
 }

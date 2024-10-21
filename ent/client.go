@@ -2052,6 +2052,38 @@ func (c *WorkflowClient) QueryExecutions(w *Workflow) *WorkflowExecutionQuery {
 	return query
 }
 
+// QueryContinuedFrom queries the continued_from edge of a Workflow.
+func (c *WorkflowClient) QueryContinuedFrom(w *Workflow) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, workflow.ContinuedFromTable, workflow.ContinuedFromColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryContinuedTo queries the continued_to edge of a Workflow.
+func (c *WorkflowClient) QueryContinuedTo(w *Workflow) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := w.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, workflow.ContinuedToTable, workflow.ContinuedToColumn),
+		)
+		fromV = sqlgraph.Neighbors(w.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *WorkflowClient) Hooks() []Hook {
 	return c.hooks.Workflow
