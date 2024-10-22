@@ -105,9 +105,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	optsComfy := []comfylite3.ComfyOption{
-		comfylite3.WithBuffer(77777),
-	}
+	optsComfy := []comfylite3.ComfyOption{}
 
 	var firstTime bool
 	if cfg.path != nil {
