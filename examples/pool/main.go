@@ -29,7 +29,7 @@ func simpleWorkflow(ctx tempolite.WorkflowContext[ExampleID], iteration int) (in
 }
 
 func main() {
-	dir := "./tempolite-pool-demo"
+	dir := "./db/tempolite-pool-demo"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Fatalf("Failed to create directory: %v", err)
 	}

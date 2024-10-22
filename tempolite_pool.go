@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+type TempolitePoolOptions struct {
+	MaxFileSize  int64  // in bytes
+	MaxPageCount int64  // in pages
+	BaseFolder   string // base folder path
+	BaseName     string // base name for database files
+}
+
 type TempolitePool[T Identifier] struct {
 	mu sync.RWMutex
 
@@ -27,6 +34,10 @@ type TempolitePool[T Identifier] struct {
 	registry      *Registry[T]
 	tempoliteOpts []tempoliteOption
 
+	// File cache
+	latestDBCache atomic.Pointer[string]
+	cacheMu       sync.RWMutex
+
 	// Coordination
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -36,13 +47,48 @@ type TempolitePool[T Identifier] struct {
 	rotateMu sync.RWMutex
 }
 
-type TempolitePoolOptions struct {
-	MaxFileSize  int64  // in bytes
-	MaxPageCount int64  // in pages
-	BaseFolder   string // base folder path
-	BaseName     string // base name for database files
+func (p *TempolitePool[T]) findLatestDatabase() (string, error) {
+	// Check cache first
+	if latest := p.latestDBCache.Load(); latest != nil {
+		// Verify the file still exists
+		if _, err := os.Stat(*latest); err == nil {
+			return *latest, nil
+		}
+	}
+
+	// Cache miss or file doesn't exist, do the full lookup
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+
+	pattern := filepath.Join(p.baseFolder, fmt.Sprintf("%s_*.db", p.baseName))
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to glob database files: %w", err)
+	}
+
+	if len(matches) == 0 {
+		p.latestDBCache.Store(nil)
+		return "", nil
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		iInfo, _ := os.Stat(matches[i])
+		jInfo, _ := os.Stat(matches[j])
+		return iInfo.ModTime().After(jInfo.ModTime())
+	})
+
+	p.latestDBCache.Store(&matches[0])
+	return matches[0], nil
 }
 
+func (p *TempolitePool[T]) createNewDatabase() string {
+	timestamp := time.Now().Unix()
+	path := filepath.Join(p.baseFolder, fmt.Sprintf("%s_%d.db", p.baseName, timestamp))
+	p.latestDBCache.Store(&path)
+	return path
+}
+
+// Rest of the implementation remains exactly the same as the original
 func NewTempolitePool[T Identifier](ctx context.Context, registry *Registry[T], poolOpts TempolitePoolOptions, tempoliteOpts ...tempoliteOption) (*TempolitePool[T], error) {
 	if poolOpts.BaseFolder == "" {
 		return nil, fmt.Errorf("base folder is required")
@@ -99,31 +145,6 @@ func (p *TempolitePool[T]) monitorSize() {
 			}
 		}
 	}
-}
-
-func (p *TempolitePool[T]) findLatestDatabase() (string, error) {
-	pattern := filepath.Join(p.baseFolder, fmt.Sprintf("%s_*.db", p.baseName))
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return "", fmt.Errorf("failed to glob database files: %w", err)
-	}
-
-	if len(matches) == 0 {
-		return "", nil
-	}
-
-	sort.Slice(matches, func(i, j int) bool {
-		iInfo, _ := os.Stat(matches[i])
-		jInfo, _ := os.Stat(matches[j])
-		return iInfo.ModTime().After(jInfo.ModTime())
-	})
-
-	return matches[0], nil
-}
-
-func (p *TempolitePool[T]) createNewDatabase() string {
-	timestamp := time.Now().Unix()
-	return filepath.Join(p.baseFolder, fmt.Sprintf("%s_%d.db", p.baseName, timestamp))
 }
 
 func (p *TempolitePool[T]) checkLimits() (bool, error) {
