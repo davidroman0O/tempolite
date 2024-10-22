@@ -245,3 +245,298 @@ registry := tempolite.NewRegistry[OrderID]().
 ```
 
 The key difference? Worker-based activities can share resources and maintain state between executions, while function-based activities are stateless.
+
+### Understanding Activity Inputs and Outputs
+
+Activities are flexible with their inputs and outputs, following these rules:
+
+1. First parameter must be the activity context
+2. Can have any number of additional input parameters
+3. Must return at least an error as the last return value
+4. Can return any number of values before the error
+
+Here's an example showing different activity signatures:
+
+```go
+// Minimal activity: just context and error
+func SimpleActivity(ctx tempolite.ActivityContext[OrderID]) error {
+    return nil
+}
+
+// Single input, single output + error
+func CalculateTotal(ctx tempolite.ActivityContext[OrderID], orderID string) (float64, error) {
+    return 99.99, nil
+}
+
+// Multiple inputs, multiple outputs + error
+func ProcessOrder(
+    ctx tempolite.ActivityContext[OrderID],
+    orderID string,
+    amount float64,
+    options map[string]string,
+) (string, float64, []string, error) {
+    return "processed", 99.99, []string{"item1", "item2"}, nil
+}
+```
+
+When using activities, you must:
+1. Provide all input parameters when calling the activity
+2. Provide pointers for all outputs (except error) when calling Get
+
+```go
+func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+    // Activity with multiple inputs
+    activityInfo := ctx.Activity(
+        "process",
+        ProcessOrder,
+        orderID,
+        99.99,
+        map[string]string{"priority": "high"},
+    )
+
+    // Must provide pointers for ALL outputs
+    var (
+        status string
+        finalAmount float64
+        items []string
+    )
+    if err := activityInfo.Get(&status, &finalAmount, &items); err != nil {
+        return err
+    }
+
+    return nil
+}
+```
+
+The same pattern applies to workflows:
+
+```go
+// Workflow can have multiple inputs and outputs
+func ComplexWorkflow(
+    ctx tempolite.WorkflowContext[OrderID],
+    orderID string,
+    amount float64,
+) (string, float64, error) {
+    // Workflow logic here
+    return "completed", amount * 1.1, nil
+}
+
+// When starting the workflow
+workflowInfo := tp.Workflow(
+    "complex",
+    ComplexWorkflow,
+    nil,
+    "order-123",
+    99.99,
+)
+
+// When getting results
+var (
+    status string
+    finalAmount float64
+)
+if err := workflowInfo.Get(&status, &finalAmount); err != nil {
+    log.Fatal(err)
+}
+```
+
+If you don't provide enough pointer arguments to `Get()` or provide the wrong types, Tempolite will return an error. This helps ensure type safety and correct handling of all outputs.
+
+## Smart Execution: How Tempolite Handles Retries and Replays
+
+When a workflow fails or is replayed, Tempolite is smart about re-execution. Let's say you have this workflow:
+
+```go
+func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+    // Generate tracking number
+    var trackingNum string
+    if err := ctx.SideEffect("tracking", GenerateTrackingNumber).Get(&trackingNum); err != nil {
+        return err
+    }
+
+    // Process payment
+    if err := ctx.Activity("payment", ProcessPayment, 100.0).Get(); err != nil {
+        return err
+    }
+
+    // This activity fails
+    if err := ctx.Activity("shipping", ShipOrder, orderID).Get(); err != nil {
+        return err
+    }
+    
+    return nil
+}
+```
+
+If the shipping activity fails and the workflow retries, Tempolite won't re-execute the successful side effect or payment activity. Instead, it'll use the stored results from the previous execution. This ensures:
+- No double-charging customers
+- Consistent tracking numbers
+- Preservation of successful work
+- Deterministic execution on replay
+
+The same behavior applies when you manually replay a workflow using `ReplayWorkflow` - all previously successful operations return their original results.
+
+## Retry vs Replay: Understanding the Difference
+
+Tempolite offers two ways to handle workflow recovery:
+
+### Retry Workflow
+
+When you use `RetryWorkflow`, you're saying "start this workflow fresh with the same inputs." It creates a completely new workflow instance:
+
+```go
+// Start a fresh workflow with the same inputs
+newWorkflowInfo := tp.RetryWorkflow(workflowID)
+```
+
+This is perfect when:
+- You want to start from scratch
+- Previous results should be discarded
+- You're debugging issues
+- You need different execution parameters
+
+### Replay Workflow
+
+`ReplayWorkflow` is different - it creates a new execution of the existing workflow, continuing from where it left off:
+
+```go
+// Continue the existing workflow
+replayInfo := tp.ReplayWorkflow(workflowID)
+```
+
+Use replay when:
+- You want to continue a paused workflow
+- You're debugging workflow behavior
+- You want to preserve the original workflow's decisions
+- You need to verify deterministic execution
+
+## Long-Running Workflows with ContinueAsNew
+
+Some workflows run for a long time or loop indefinitely. For these cases, use `ContinueAsNew` to create a fresh workflow instance while maintaining logical continuity:
+
+```go
+func MonitoringWorkflow(ctx tempolite.WorkflowContext[OrderID], iteration int) error {
+    // Do some monitoring work...
+    
+    if iteration >= 1000 {
+        // Create a fresh workflow instance with a clean history
+        return ctx.ContinueAsNew(ctx, "continue", iteration + 1)
+    }
+    
+    return nil
+}
+```
+
+Why use ContinueAsNew?
+- Prevents workflow history from growing too large
+- Maintains logical workflow continuity
+- Perfect for recurring tasks
+- Helps with workflow versioning
+
+## Signals: Handling External Events
+
+Signals let your workflows communicate with the outside world:
+
+```go
+func ApprovalWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+    // Wait for manager approval
+    var approved bool
+    if err := ctx.Signal("approval").Receive(ctx, &approved); err != nil {
+        return err
+    }
+
+    if approved {
+        return ctx.Activity("process", ProcessOrder, orderID).Get()
+    }
+    return nil
+}
+
+// In your manager approval service:
+tp.PublishSignal(workflowID, "approval", true)
+```
+
+## Sagas: Managing Complex Transactions
+
+Sagas help you manage sequences of operations where each step might need to be undone:
+
+```go
+type OrderStep struct {
+    OrderID string
+}
+
+func (s OrderStep) Transaction(ctx tempolite.TransactionContext[OrderID]) (interface{}, error) {
+    // Process the order
+    return "Order processed", nil
+}
+
+func (s OrderStep) Compensation(ctx tempolite.CompensationContext[OrderID]) (interface{}, error) {
+    // Undo the order processing
+    return "Order cancelled", nil
+}
+
+func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+    saga := tempolite.NewSaga[OrderID]().
+        AddStep(OrderStep{OrderID: orderID}).
+        Build()
+
+    return ctx.Saga("process-order", saga).Get()
+}
+```
+
+## Database Management with TempolitePool
+
+The TempolitePool helps you manage your workflow database as it grows. Think of it as a smart database manager that:
+- Creates new database files when the current one gets too big
+- Seamlessly transitions workflows to new database files
+- Keeps track of all your workflow history
+- Handles database connections and cleanup
+
+Here's how you might use it:
+
+```go
+pool, err := tempolite.NewTempolitePool[OrderID](
+    context.Background(),
+    registry,
+    tempolite.TempolitePoolOptions{
+        MaxFileSize:  50 * 1024 * 1024,  // Start new DB after 50MB
+        BaseFolder:   "./db",
+        BaseName:     "workflows",
+    },
+)
+
+// Use it just like regular Tempolite
+workflowInfo := pool.Workflow("process-order", ProcessOrderWorkflow, nil, "order-123")
+```
+
+The pool takes care of all the database management details, so you can focus on your business logic. When a database file gets too large, it'll automatically create a new one and move new workflows there, while maintaining access to your historical workflow data.
+
+## Best Practices
+
+1. **Keep Workflows Deterministic**
+   - Move non-deterministic operations to activities or side effects
+   - Avoid time-based decisions in workflows
+   - Use signals for external dependencies
+
+2. **Handle Errors Properly**
+   - Implement retry logic for activities
+   - Use sagas for complex transactions
+   - Plan compensation steps
+   - Monitor workflow states
+
+3. **Version Management**
+   - Use GetVersion for workflow updates
+   - Plan migration strategies
+   - Test version transitions
+   - Document version changes
+
+4. **Database Management**
+   - Configure appropriate rotation policies
+   - Monitor database sizes
+   - Plan cleanup strategies
+   - Backup important workflows
+
+5. **Testing**
+   - Test workflow replay behavior
+   - Verify compensation logic
+   - Test version transitions
+   - Simulate failures
