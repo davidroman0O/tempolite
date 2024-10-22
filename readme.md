@@ -49,9 +49,8 @@ go get github.com/davidroman0O/go-tempolite
 Let's create a simple workflow that processes an order:
 
 ```go
-type OrderID string
 
-func ProcessOrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func ProcessOrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     // Execute an activity to validate the order
     var isValid bool
     if err := ctx.Activity("validate", ValidateOrder, orderID).Get(&isValid); err != nil {
@@ -66,9 +65,9 @@ func ProcessOrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string
 }
 
 func main() {
-    tp, err := tempolite.New[OrderID](
+    tp, err := tempolite.New[string](
         context.Background(),
-        tempolite.NewRegistry[OrderID]().
+        tempolite.NewRegistry[string]().
             Workflow(ProcessOrderWorkflow).
             Activity(ValidateOrder).
             Build(),
@@ -90,7 +89,7 @@ func main() {
 When you trigger any operation in a workflow (activities, side effects, signals, or sagas), Tempolite returns an Info struct with a `Get` method. This consistent pattern helps you handle results and errors:
 
 ```go
-func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     // ActivityInfo
     var total float64
     err := ctx.Activity("calculate", CalculateTotal, orderID).Get(&total)
@@ -125,11 +124,11 @@ Here's a more detailed example:
 
 ```go
 // An activity that returns multiple values
-func ProcessOrder(ctx tempolite.ActivityContext[OrderID], orderID string) (float64, string, error) {
+func ProcessOrder(ctx tempolite.ActivityContext[string], orderID string) (float64, string, error) {
     return 99.99, "processed", nil
 }
 
-func WorkflowWithMultipleReturns(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func WorkflowWithMultipleReturns(ctx tempolite.WorkflowContext[string], orderID string) error {
     var (
         amount  float64
         status  string
@@ -207,13 +206,13 @@ Activities in Tempolite handle all your non-deterministic operations - think API
 The simplest way is to just write a function. This is perfect for straightforward operations:
 
 ```go
-func ProcessPayment(ctx tempolite.ActivityContext[OrderID], amount float64) error {
+func ProcessPayment(ctx tempolite.ActivityContext[string], amount float64) error {
     // Your payment logic here
     return nil
 }
 
 // Register it in your registry
-registry := tempolite.NewRegistry[OrderID]().
+registry := tempolite.NewRegistry[string]().
     Activity(ProcessPayment).
     Build()
 ```
@@ -228,7 +227,7 @@ type PaymentService struct {
     config *Config
 }
 
-func (ps *PaymentService) Run(ctx tempolite.ActivityContext[OrderID], amount float64) error {
+func (ps *PaymentService) Run(ctx tempolite.ActivityContext[string], amount float64) error {
     // Use ps.client and ps.config here
     return ps.client.Charge(amount)
 }
@@ -239,7 +238,7 @@ paymentService := &PaymentService{
     config: loadConfig(),
 }
 
-registry := tempolite.NewRegistry[OrderID]().
+registry := tempolite.NewRegistry[string]().
     Activity(paymentService.Run).  // Register the Run method, not the struct!
     Build()
 ```
@@ -259,18 +258,18 @@ Here's an example showing different activity signatures:
 
 ```go
 // Minimal activity: just context and error
-func SimpleActivity(ctx tempolite.ActivityContext[OrderID]) error {
+func SimpleActivity(ctx tempolite.ActivityContext[string]) error {
     return nil
 }
 
 // Single input, single output + error
-func CalculateTotal(ctx tempolite.ActivityContext[OrderID], orderID string) (float64, error) {
+func CalculateTotal(ctx tempolite.ActivityContext[string], orderID string) (float64, error) {
     return 99.99, nil
 }
 
 // Multiple inputs, multiple outputs + error
 func ProcessOrder(
-    ctx tempolite.ActivityContext[OrderID],
+    ctx tempolite.ActivityContext[string],
     orderID string,
     amount float64,
     options map[string]string,
@@ -284,7 +283,7 @@ When using activities, you must:
 2. Provide pointers for all outputs (except error) when calling Get
 
 ```go
-func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     // Activity with multiple inputs
     activityInfo := ctx.Activity(
         "process",
@@ -313,7 +312,7 @@ The same pattern applies to workflows:
 ```go
 // Workflow can have multiple inputs and outputs
 func ComplexWorkflow(
-    ctx tempolite.WorkflowContext[OrderID],
+    ctx tempolite.WorkflowContext[string],
     orderID string,
     amount float64,
 ) (string, float64, error) {
@@ -347,7 +346,7 @@ If you don't provide enough pointer arguments to `Get()` or provide the wrong ty
 When a workflow fails or is replayed, Tempolite is smart about re-execution. Let's say you have this workflow:
 
 ```go
-func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     // Generate tracking number
     var trackingNum string
     if err := ctx.SideEffect("tracking", GenerateTrackingNumber).Get(&trackingNum); err != nil {
@@ -415,7 +414,7 @@ Use replay when:
 Some workflows run for a long time or loop indefinitely. For these cases, use `ContinueAsNew` to create a fresh workflow instance while maintaining logical continuity:
 
 ```go
-func MonitoringWorkflow(ctx tempolite.WorkflowContext[OrderID], iteration int) error {
+func MonitoringWorkflow(ctx tempolite.WorkflowContext[string], iteration int) error {
     // Do some monitoring work...
     
     if iteration >= 1000 {
@@ -438,7 +437,7 @@ Why use ContinueAsNew?
 Signals let your workflows communicate with the outside world:
 
 ```go
-func ApprovalWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func ApprovalWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     // Wait for manager approval
     var approved bool
     if err := ctx.Signal("approval").Receive(ctx, &approved); err != nil {
@@ -464,17 +463,17 @@ type OrderStep struct {
     OrderID string
 }
 
-func (s OrderStep) Transaction(ctx tempolite.TransactionContext[OrderID]) (interface{}, error) {
+func (s OrderStep) Transaction(ctx tempolite.TransactionContext[string]) (interface{}, error) {
     // Process the order
     return "Order processed", nil
 }
 
-func (s OrderStep) Compensation(ctx tempolite.CompensationContext[OrderID]) (interface{}, error) {
+func (s OrderStep) Compensation(ctx tempolite.CompensationContext[string]) (interface{}, error) {
     // Undo the order processing
     return "Order cancelled", nil
 }
 
-func OrderWorkflow(ctx tempolite.WorkflowContext[OrderID], orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error {
     saga := tempolite.NewSaga[OrderID]().
         AddStep(OrderStep{OrderID: orderID}).
         Build()
@@ -494,7 +493,7 @@ The TempolitePool helps you manage your workflow database as it grows. Think of 
 Here's how you might use it:
 
 ```go
-pool, err := tempolite.NewTempolitePool[OrderID](
+pool, err := tempolite.NewTempolitePool[string](
     context.Background(),
     registry,
     tempolite.TempolitePoolOptions{
