@@ -27,6 +27,17 @@ func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, valu
 		return err
 	}
 
+	executionCurrent, err := w.tp.client.WorkflowExecution.Get(w.tp.ctx, w.executionID)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Error fetching current execution", "error", err)
+		return fmt.Errorf("failed to fetch current execution: %w", err)
+	}
+
+	// If you replay a workflow, we stop right here
+	if executionCurrent.IsReplay {
+		return nil
+	}
+
 	if value, ok := w.tp.workflows.Load(w.handlerIdentity); ok {
 		handler := value.(Workflow)
 		newWorkflowID, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, values...)
