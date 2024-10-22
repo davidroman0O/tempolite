@@ -71,7 +71,7 @@ func main() {
             Workflow(ProcessOrderWorkflow).
             Activity(ValidateOrder).
             Build(),
-        tempolite.WithPath("./workflows.db"),
+        tempolite.WithPath("./workflows.db"), // optional, otherwise memory
     )
     if err != nil {
         log.Fatal(err)
