@@ -108,6 +108,8 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[string], orderID string) error 
     // WorkflowInfo (when starting workflows)
     var result string
     err = ctx.Workflow("sub-process", SubWorkflow, nil, "data").Get(&result)
+
+    return err
 }
 ```
 
