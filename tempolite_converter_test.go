@@ -11,8 +11,9 @@ type CustomId string
 func (s CustomId) String() string {
 	return string(s)
 }
+
 func TestCustomType(t *testing.T) {
-	rawInput := "some_spotify_id"
+	rawInput := "some_id"
 	desiredType := reflect.TypeOf(CustomId(""))
 	desiredKind := desiredType.Kind()
 
