@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
+	"github.com/davidroman0O/tempolite/ent/signal"
+	"github.com/davidroman0O/tempolite/ent/signalexecution"
 )
 
 // SignalCreate is the builder for creating a Signal entity.

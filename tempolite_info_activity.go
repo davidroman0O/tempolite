@@ -7,9 +7,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/activityexecution"
 )
 
 type ActivityInfo[T Identifier] struct {

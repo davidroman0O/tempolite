@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
+	"github.com/davidroman0O/tempolite/ent/featureflagversion"
 )
 
 // FeatureFlagVersionCreate is the builder for creating a FeatureFlagVersion entity.

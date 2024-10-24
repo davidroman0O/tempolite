@@ -4,9 +4,9 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/activityexecution"
 )
 
 type activityTask[T Identifier] struct {

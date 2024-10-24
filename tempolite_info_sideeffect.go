@@ -7,9 +7,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
 type SideEffectInfo[T Identifier] struct {

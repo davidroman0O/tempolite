@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/featureflagversion"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/featureflagversion"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // FeatureFlagVersionDelete is the builder for deleting a FeatureFlagVersion entity.

@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
-	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 )
 
 // SagaExecutionCreate is the builder for creating a SagaExecution entity.

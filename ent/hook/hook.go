@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent"
 )
 
 // The ActivityFunc type is an adapter to allow the use of ordinary

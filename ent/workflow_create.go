@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/davidroman0O/tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
 // WorkflowCreate is the builder for creating a Workflow entity.

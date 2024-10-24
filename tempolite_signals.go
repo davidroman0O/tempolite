@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
-	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/tempolite/ent/signal"
+	"github.com/davidroman0O/tempolite/ent/signalexecution"
 	"github.com/google/uuid"
 )
 

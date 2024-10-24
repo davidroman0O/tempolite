@@ -3,7 +3,7 @@ package tempolite
 import (
 	"fmt"
 
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflow"
 )
 
 type WorkflowContext[T Identifier] struct {

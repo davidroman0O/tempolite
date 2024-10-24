@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
 type WorkflowExecutionInfo[T Identifier] struct {

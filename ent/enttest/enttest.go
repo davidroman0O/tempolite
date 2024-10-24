@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/davidroman0O/go-tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent"
 	// required by schema hooks.
-	_ "github.com/davidroman0O/go-tempolite/ent/runtime"
+	_ "github.com/davidroman0O/tempolite/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/davidroman0O/go-tempolite/ent/migrate"
+	"github.com/davidroman0O/tempolite/ent/migrate"
 )
 
 type (

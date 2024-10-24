@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // ActivityDelete is the builder for deleting a Activity entity.

@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // ExecutionRelationshipQuery is the builder for querying ExecutionRelationship entities.

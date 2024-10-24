@@ -9,9 +9,9 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/run"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/run"
+	"github.com/davidroman0O/tempolite/ent/workflow"
 )
 
 // Run is the model entity for the Run schema.

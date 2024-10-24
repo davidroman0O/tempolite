@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"runtime"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/tempolite/ent/schema"
 	"github.com/google/uuid"
 )
 

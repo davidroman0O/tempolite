@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/schema"
 )
 
 // Saga is the model entity for the Saga schema.

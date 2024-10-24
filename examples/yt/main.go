@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type YtDl struct {

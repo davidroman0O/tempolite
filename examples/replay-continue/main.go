@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync/atomic"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type testIdentifier string

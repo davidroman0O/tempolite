@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/workflow"
 )
 
 // WorkflowDelete is the builder for deleting a Workflow entity.

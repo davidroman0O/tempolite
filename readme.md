@@ -45,7 +45,7 @@ Tempolite is a lightweight, SQLite-based workflow engine for Go that provides de
 ## Getting Started
 
 ```bash
-go get github.com/davidroman0O/go-tempolite
+go get github.com/davidroman0O/tempolite
 ```
 
 Let's create a simple workflow that processes an order:

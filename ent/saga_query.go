@@ -12,9 +12,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
-	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 )
 
 // SagaQuery is the builder for querying Saga entities.

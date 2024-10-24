@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type CustomIdentifier string

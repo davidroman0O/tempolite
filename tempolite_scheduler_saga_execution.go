@@ -4,9 +4,9 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
-	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 	"github.com/google/uuid"
 )
 

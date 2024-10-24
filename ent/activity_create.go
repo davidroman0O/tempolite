@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/activityexecution"
+	"github.com/davidroman0O/tempolite/ent/schema"
 )
 
 // ActivityCreate is the builder for creating a Activity entity.

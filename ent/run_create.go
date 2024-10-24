@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/run"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/run"
+	"github.com/davidroman0O/tempolite/ent/workflow"
 )
 
 // RunCreate is the builder for creating a Run entity.

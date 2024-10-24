@@ -11,9 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/signal"
-	"github.com/davidroman0O/go-tempolite/ent/signalexecution"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/signal"
+	"github.com/davidroman0O/tempolite/ent/signalexecution"
 )
 
 // SignalExecutionQuery is the builder for querying SignalExecution entities.

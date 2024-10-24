@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"runtime"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 	"github.com/google/uuid"
 )
 

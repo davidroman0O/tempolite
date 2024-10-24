@@ -3,10 +3,10 @@ package tempolite
 import (
 	"runtime"
 
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 	"github.com/google/uuid"
 )
 

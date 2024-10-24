@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
 )
 
 // SideEffect is the model entity for the SideEffect schema.

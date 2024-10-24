@@ -2,7 +2,7 @@
 
 package runtime
 
-// The schema-stitching logic is generated in github.com/davidroman0O/go-tempolite/ent/runtime.go
+// The schema-stitching logic is generated in github.com/davidroman0O/tempolite/ent/runtime.go
 
 const (
 	Version = "v0.14.1"                                         // Version of ent codegen.

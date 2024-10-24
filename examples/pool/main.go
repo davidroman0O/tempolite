@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type ExampleID string

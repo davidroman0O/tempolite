@@ -7,7 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.

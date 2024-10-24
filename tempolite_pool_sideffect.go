@@ -4,9 +4,9 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
 type sideEffectTask[T Identifier] struct {

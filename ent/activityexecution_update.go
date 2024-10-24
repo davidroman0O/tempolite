@@ -12,9 +12,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/activity"
-	"github.com/davidroman0O/go-tempolite/ent/activityexecution"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/activity"
+	"github.com/davidroman0O/tempolite/ent/activityexecution"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // ActivityExecutionUpdate is the builder for updating ActivityExecution entities.

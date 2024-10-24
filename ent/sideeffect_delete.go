@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
 )
 
 // SideEffectDelete is the builder for deleting a SideEffect entity.

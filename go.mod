@@ -1,4 +1,4 @@
-module github.com/davidroman0O/go-tempolite
+module github.com/davidroman0O/tempolite
 
 go 1.23.0
 

@@ -11,10 +11,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/saga"
-	"github.com/davidroman0O/go-tempolite/ent/sagaexecution"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/sagaexecution"
+	"github.com/davidroman0O/tempolite/ent/schema"
 )
 
 // SagaUpdate is the builder for updating Saga entities.

@@ -8,7 +8,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/executionrelationship"
+	"github.com/davidroman0O/tempolite/ent/executionrelationship"
 )
 
 // ExecutionRelationship is the model entity for the ExecutionRelationship schema.

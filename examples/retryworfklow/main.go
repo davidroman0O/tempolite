@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type MyIdentifier string

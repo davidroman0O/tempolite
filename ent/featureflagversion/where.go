@@ -4,7 +4,7 @@ package featureflagversion
 
 import (
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.

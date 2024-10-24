@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite"
+	"github.com/davidroman0O/tempolite"
 )
 
 type OrderID string

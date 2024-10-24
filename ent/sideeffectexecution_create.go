@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
 // SideEffectExecutionCreate is the builder for creating a SideEffectExecution entity.

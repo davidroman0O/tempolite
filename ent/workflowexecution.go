@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
+	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
 // WorkflowExecution is the model entity for the WorkflowExecution schema.

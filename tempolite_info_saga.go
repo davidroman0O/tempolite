@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/davidroman0O/go-tempolite/ent/saga"
+	"github.com/davidroman0O/tempolite/ent/saga"
 )
 
 type SagaInfo[T Identifier] struct {

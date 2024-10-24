@@ -4,9 +4,9 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
-	"github.com/davidroman0O/go-tempolite/ent/workflowexecution"
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
 type workflowTask[T Identifier] struct {

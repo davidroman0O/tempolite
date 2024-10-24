@@ -11,10 +11,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/davidroman0O/go-tempolite/ent/predicate"
-	"github.com/davidroman0O/go-tempolite/ent/schema"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffect"
-	"github.com/davidroman0O/go-tempolite/ent/sideeffectexecution"
+	"github.com/davidroman0O/tempolite/ent/predicate"
+	"github.com/davidroman0O/tempolite/ent/schema"
+	"github.com/davidroman0O/tempolite/ent/sideeffect"
+	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
 // SideEffectUpdate is the builder for updating SideEffect entities.

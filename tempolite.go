@@ -15,9 +15,9 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
-	"github.com/davidroman0O/go-tempolite/ent"
-	"github.com/davidroman0O/go-tempolite/ent/workflow"
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/workflow"
 
 	dbSQL "database/sql"
 )

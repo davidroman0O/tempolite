@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/davidroman0O/go-tempolite/ent/signal"
+	"github.com/davidroman0O/tempolite/ent/signal"
 )
 
 // Signal is the model entity for the Signal schema.
