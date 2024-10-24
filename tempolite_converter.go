@@ -24,6 +24,7 @@ func convertIO(rawInput interface{}, desiredType reflect.Type, desiredKind refle
 		return rawInput, nil
 	}
 
+	var convertedValue interface{}
 	// Use desiredKind to guide the conversion
 	switch desiredKind {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -31,46 +32,88 @@ func convertIO(rawInput interface{}, desiredType reflect.Type, desiredKind refle
 		if err != nil {
 			return nil, err
 		}
-		return convertIntToType(intValue, desiredType, desiredKind)
+		convertedValue, err = convertIntToType(intValue, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		uintValue, err := toUint64(rawInput)
 		if err != nil {
 			return nil, err
 		}
-		return convertUintToType(uintValue, desiredType, desiredKind)
+		convertedValue, err = convertUintToType(uintValue, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Float32, reflect.Float64:
 		floatValue, err := toFloat64(rawInput)
 		if err != nil {
 			return nil, err
 		}
-		return convertFloatToType(floatValue, desiredType, desiredKind)
+		convertedValue, err = convertFloatToType(floatValue, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.String:
 		strValue, err := toString(rawInput)
 		if err != nil {
 			return nil, err
 		}
-		return strValue, nil
+		convertedValue = strValue
 	case reflect.Bool:
 		boolValue, err := toBool(rawInput)
 		if err != nil {
 			return nil, err
 		}
-		return boolValue, nil
+		convertedValue = boolValue
 	case reflect.Slice:
-		return convertToSlice(rawInput, desiredType, desiredKind)
+		var err error
+		convertedValue, err = convertToSlice(rawInput, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Array:
-		return convertToArray(rawInput, desiredType, desiredKind)
+		var err error
+		convertedValue, err = convertToArray(rawInput, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Map:
-		return convertToMap(rawInput, desiredType, desiredKind)
+		var err error
+		convertedValue, err = convertToMap(rawInput, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Struct:
-		return convertToStruct(rawInput, desiredType, desiredKind)
+		var err error
+		convertedValue, err = convertToStruct(rawInput, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Ptr:
-		return convertToPointer(rawInput, desiredType, desiredKind)
+		var err error
+		convertedValue, err = convertToPointer(rawInput, desiredType, desiredKind)
+		if err != nil {
+			return nil, err
+		}
 	case reflect.Interface:
-		return rawInput, nil
+		convertedValue = rawInput
 	default:
 		return nil, fmt.Errorf("unsupported desired kind: %v", desiredKind)
 	}
+
+	// Ensure the converted value is of desiredType
+	convertedValueV := reflect.ValueOf(convertedValue)
+	if convertedValueV.Type() != desiredType {
+		if convertedValueV.Type().ConvertibleTo(desiredType) {
+			convertedValueV = convertedValueV.Convert(desiredType)
+			convertedValue = convertedValueV.Interface()
+		} else {
+			return nil, fmt.Errorf("cannot convert %T to %v", convertedValue, desiredType)
+		}
+	}
+
+	return convertedValue, nil
 }
 
 // Helper functions for basic types
@@ -113,32 +156,46 @@ func toInt64(rawInput interface{}) (int64, error) {
 }
 
 func convertIntToType(intValue int64, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
+	var baseValue interface{}
 	switch desiredKind {
 	case reflect.Int:
 		if intValue < math.MinInt || intValue > math.MaxInt {
 			return nil, fmt.Errorf("int64 value %v overflows int", intValue)
 		}
-		return int(intValue), nil
+		baseValue = int(intValue)
 	case reflect.Int8:
 		if intValue < math.MinInt8 || intValue > math.MaxInt8 {
 			return nil, fmt.Errorf("int64 value %v overflows int8", intValue)
 		}
-		return int8(intValue), nil
+		baseValue = int8(intValue)
 	case reflect.Int16:
 		if intValue < math.MinInt16 || intValue > math.MaxInt16 {
 			return nil, fmt.Errorf("int64 value %v overflows int16", intValue)
 		}
-		return int16(intValue), nil
+		baseValue = int16(intValue)
 	case reflect.Int32:
 		if intValue < math.MinInt32 || intValue > math.MaxInt32 {
 			return nil, fmt.Errorf("int64 value %v overflows int32", intValue)
 		}
-		return int32(intValue), nil
+		baseValue = int32(intValue)
 	case reflect.Int64:
-		return intValue, nil
+		baseValue = intValue
 	default:
 		return nil, fmt.Errorf("unsupported desired kind for int: %v", desiredKind)
 	}
+
+	// Convert baseValue to desiredType if necessary
+	baseValueV := reflect.ValueOf(baseValue)
+	if baseValueV.Type() != desiredType {
+		if baseValueV.Type().ConvertibleTo(desiredType) {
+			baseValueV = baseValueV.Convert(desiredType)
+			baseValue = baseValueV.Interface()
+		} else {
+			return nil, fmt.Errorf("cannot convert %T to %v", baseValue, desiredType)
+		}
+	}
+
+	return baseValue, nil
 }
 
 func toUint64(rawInput interface{}) (uint64, error) {
@@ -179,32 +236,46 @@ func toUint64(rawInput interface{}) (uint64, error) {
 }
 
 func convertUintToType(uintValue uint64, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
+	var baseValue interface{}
 	switch desiredKind {
 	case reflect.Uint:
 		if uintValue > math.MaxUint {
 			return nil, fmt.Errorf("uint64 value %v overflows uint", uintValue)
 		}
-		return uint(uintValue), nil
+		baseValue = uint(uintValue)
 	case reflect.Uint8:
 		if uintValue > math.MaxUint8 {
 			return nil, fmt.Errorf("uint64 value %v overflows uint8", uintValue)
 		}
-		return uint8(uintValue), nil
+		baseValue = uint8(uintValue)
 	case reflect.Uint16:
 		if uintValue > math.MaxUint16 {
 			return nil, fmt.Errorf("uint64 value %v overflows uint16", uintValue)
 		}
-		return uint16(uintValue), nil
+		baseValue = uint16(uintValue)
 	case reflect.Uint32:
 		if uintValue > math.MaxUint32 {
 			return nil, fmt.Errorf("uint64 value %v overflows uint32", uintValue)
 		}
-		return uint32(uintValue), nil
+		baseValue = uint32(uintValue)
 	case reflect.Uint64:
-		return uintValue, nil
+		baseValue = uintValue
 	default:
 		return nil, fmt.Errorf("unsupported desired kind for uint: %v", desiredKind)
 	}
+
+	// Convert baseValue to desiredType if necessary
+	baseValueV := reflect.ValueOf(baseValue)
+	if baseValueV.Type() != desiredType {
+		if baseValueV.Type().ConvertibleTo(desiredType) {
+			baseValueV = baseValueV.Convert(desiredType)
+			baseValue = baseValueV.Interface()
+		} else {
+			return nil, fmt.Errorf("cannot convert %T to %v", baseValue, desiredType)
+		}
+	}
+
+	return baseValue, nil
 }
 
 func toFloat64(rawInput interface{}) (float64, error) {
@@ -225,17 +296,31 @@ func toFloat64(rawInput interface{}) (float64, error) {
 }
 
 func convertFloatToType(floatValue float64, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
+	var baseValue interface{}
 	switch desiredKind {
 	case reflect.Float32:
 		if floatValue < -math.MaxFloat32 || floatValue > math.MaxFloat32 {
 			return nil, fmt.Errorf("float64 value %v overflows float32", floatValue)
 		}
-		return float32(floatValue), nil
+		baseValue = float32(floatValue)
 	case reflect.Float64:
-		return floatValue, nil
+		baseValue = floatValue
 	default:
 		return nil, fmt.Errorf("unsupported desired kind for float: %v", desiredKind)
 	}
+
+	// Convert baseValue to desiredType if necessary
+	baseValueV := reflect.ValueOf(baseValue)
+	if baseValueV.Type() != desiredType {
+		if baseValueV.Type().ConvertibleTo(desiredType) {
+			baseValueV = baseValueV.Convert(desiredType)
+			baseValue = baseValueV.Interface()
+		} else {
+			return nil, fmt.Errorf("cannot convert %T to %v", baseValue, desiredType)
+		}
+	}
+
+	return baseValue, nil
 }
 
 func toString(rawInput interface{}) (string, error) {
@@ -259,7 +344,6 @@ func toBool(rawInput interface{}) (bool, error) {
 }
 
 // Helper functions for composite types
-
 func convertToSlice(rawInput interface{}, desiredType reflect.Type, desiredKind reflect.Kind) (interface{}, error) {
 	rawValue := reflect.ValueOf(rawInput)
 	if rawValue.Kind() != reflect.Slice && rawValue.Kind() != reflect.Array {
@@ -277,7 +361,17 @@ func convertToSlice(rawInput interface{}, desiredType reflect.Type, desiredKind 
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert element %d: %v", i, err)
 		}
-		sliceValue.Index(i).Set(reflect.ValueOf(convertedElem))
+
+		sliceElemValue := reflect.ValueOf(convertedElem)
+		if sliceElemValue.Type() != elemType {
+			if sliceElemValue.Type().ConvertibleTo(elemType) {
+				sliceElemValue = sliceElemValue.Convert(elemType)
+			} else {
+				return nil, fmt.Errorf("cannot convert element %d to %v", i, elemType)
+			}
+		}
+
+		sliceValue.Index(i).Set(sliceElemValue)
 	}
 
 	return sliceValue.Interface(), nil
@@ -371,7 +465,16 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type, desiredKind
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert field %s: %v", fieldName, err)
 		}
-		fieldValue.Set(reflect.ValueOf(convertedValue))
+
+		convertedValueV := reflect.ValueOf(convertedValue)
+
+		if convertedValueV.Type().AssignableTo(fieldValue.Type()) {
+			fieldValue.Set(convertedValueV)
+		} else if convertedValueV.Type().ConvertibleTo(fieldValue.Type()) {
+			fieldValue.Set(convertedValueV.Convert(fieldValue.Type()))
+		} else {
+			return nil, fmt.Errorf("cannot set field %s: value of type %v is not assignable to type %v", fieldName, convertedValueV.Type(), fieldValue.Type())
+		}
 	}
 
 	return structValue.Interface(), nil
@@ -385,6 +488,13 @@ func convertToPointer(rawInput interface{}, desiredType reflect.Type, desiredKin
 		return nil, err
 	}
 	ptrValue := reflect.New(elemType)
-	ptrValue.Elem().Set(reflect.ValueOf(convertedValue))
+	convertedValueV := reflect.ValueOf(convertedValue)
+	if convertedValueV.Type().AssignableTo(elemType) {
+		ptrValue.Elem().Set(convertedValueV)
+	} else if convertedValueV.Type().ConvertibleTo(elemType) {
+		ptrValue.Elem().Set(convertedValueV.Convert(elemType))
+	} else {
+		return nil, fmt.Errorf("cannot convert %T to %v", convertedValue, elemType)
+	}
 	return ptrValue.Interface(), nil
 }
