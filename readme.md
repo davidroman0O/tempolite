@@ -564,3 +564,8 @@ ctx.Select(
 - Maybe providing Postges and Mysql support
 - OpenTelemetry Tracing
 - Web UI for diagnostic and administration
+
+# If you like it you also might like
+
+- [`github.com/davidroman0O/comfylite3`](https://github.com/davidroman0O/comfylite3): A `github.com/mattn/go-sqlite3` wrapper that prevent "database is locked" error when using multiple goroutines.
+- [`github.com/davidroman0O/retrypool`](https://github.com/davidroman0O/retrypool): A powerful worker pool library not like you're used to see!
