@@ -556,10 +556,6 @@ ctx.Select(
 )
 ```
 
-- Deciding if generic `Identifier` need to go or not
-
-> I used to have an idea for it but it seems the usage tends to be easier with just strings... It simplifies everything and make it readable. Quite funny it look like an Ansible playbook too.
-
 - Timers
 - Maybe providing Postges and Mysql support
 - OpenTelemetry Tracing
