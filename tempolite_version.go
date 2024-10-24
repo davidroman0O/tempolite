@@ -7,7 +7,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/featureflagversion"
 )
 
-func (tp *Tempolite[T]) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
+func (tp *Tempolite) getOrCreateVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
 	key := fmt.Sprintf("%s-%s", workflowType, changeID)
 
 	tp.logger.Debug(tp.ctx, "Checking cache for version", "key", key)

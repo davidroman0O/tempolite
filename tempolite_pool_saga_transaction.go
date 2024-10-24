@@ -9,8 +9,8 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 )
 
-type transactionTask[T Identifier] struct {
-	ctx         TransactionContext[T]
+type transactionTask struct {
+	ctx         TransactionContext
 	sagaID      string
 	executionID string
 	stepIndex   int
@@ -20,31 +20,31 @@ type transactionTask[T Identifier] struct {
 	compensate  func() error
 }
 
-func (tp *Tempolite[T]) createTransactionPool(countWorkers int) *retrypool.Pool[*transactionTask[T]] {
-	opts := []retrypool.Option[*transactionTask[T]]{
-		retrypool.WithAttempts[*transactionTask[T]](1),
+func (tp *Tempolite) createTransactionPool(countWorkers int) *retrypool.Pool[*transactionTask] {
+	opts := []retrypool.Option[*transactionTask]{
+		retrypool.WithAttempts[*transactionTask](1),
 		retrypool.WithOnTaskSuccess(tp.transactionOnSuccess),
 		retrypool.WithOnTaskFailure(tp.transactionOnFailure),
 		retrypool.WithPanicHandler(tp.transactionOnPanic),
 		retrypool.WithOnRetry(tp.transactionOnRetry),
-		retrypool.WithPanicWorker[*transactionTask[T]](tp.transactionWorkerPanic),
+		retrypool.WithPanicWorker[*transactionTask](tp.transactionWorkerPanic),
 	}
 
-	workers := []retrypool.Worker[*transactionTask[T]]{}
+	workers := []retrypool.Worker[*transactionTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, transactionWorker[T]{id: i, tp: tp})
+		workers = append(workers, transactionWorker{id: i, tp: tp})
 	}
 
 	return retrypool.New(tp.ctx, workers, opts...)
 }
 
-func (tp *Tempolite[T]) transactionWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+func (tp *Tempolite) transactionWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "transaction pool worker panicked", "workerID", workerID, "error", err)
 	tp.logger.Error(tp.ctx, "transaction pool worker panicked", "stackTrace", stackTrace)
 }
 
-func (tp *Tempolite[T]) transactionOnSuccess(controller retrypool.WorkerController[*transactionTask[T]], workerID int, worker retrypool.Worker[*transactionTask[T]], task *retrypool.TaskWrapper[*transactionTask[T]]) {
+func (tp *Tempolite) transactionOnSuccess(controller retrypool.WorkerController[*transactionTask], workerID int, worker retrypool.Worker[*transactionTask], task *retrypool.TaskWrapper[*transactionTask]) {
 
 	tp.logger.Debug(tp.ctx, "transaction task on success", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
@@ -96,7 +96,7 @@ func (tp *Tempolite[T]) transactionOnSuccess(controller retrypool.WorkerControll
 	}
 }
 
-func (tp *Tempolite[T]) transactionOnFailure(controller retrypool.WorkerController[*transactionTask[T]], workerID int, worker retrypool.Worker[*transactionTask[T]], task *retrypool.TaskWrapper[*transactionTask[T]], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) transactionOnFailure(controller retrypool.WorkerController[*transactionTask], workerID int, worker retrypool.Worker[*transactionTask], task *retrypool.TaskWrapper[*transactionTask], err error) retrypool.DeadTaskAction {
 
 	tp.logger.Debug(tp.ctx, "transaction task on failure", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
@@ -132,7 +132,7 @@ func (tp *Tempolite[T]) transactionOnFailure(controller retrypool.WorkerControll
 	return retrypool.DeadTaskActionDoNothing
 }
 
-func (tp *Tempolite[T]) transactionOnPanic(task *transactionTask[T], v interface{}, stackTrace string) {
+func (tp *Tempolite) transactionOnPanic(task *transactionTask, v interface{}, stackTrace string) {
 
 	tp.logger.Debug(tp.ctx, "transaction pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "transaction pool task panicked", "stackTrace", stackTrace)
@@ -170,16 +170,16 @@ func (tp *Tempolite[T]) transactionOnPanic(task *transactionTask[T], v interface
 	}
 }
 
-func (tp *Tempolite[T]) transactionOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*transactionTask[T]]) {
+func (tp *Tempolite) transactionOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*transactionTask]) {
 	tp.logger.Debug(tp.ctx, "transaction task retry", "attempt", attempt, "error", err)
 }
 
-type transactionWorker[T Identifier] struct {
+type transactionWorker struct {
 	id int
-	tp *Tempolite[T]
+	tp *Tempolite
 }
 
-func (w transactionWorker[T]) Run(ctx context.Context, data *transactionTask[T]) error {
+func (w transactionWorker) Run(ctx context.Context, data *transactionTask) error {
 	w.tp.logger.Debug(ctx, "Executing transaction step", "handlerName", data.handlerName)
 
 	sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
@@ -188,7 +188,7 @@ func (w transactionWorker[T]) Run(ctx context.Context, data *transactionTask[T])
 		return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
 	}
 
-	sagaDef := sagaHandlerInfo.(*SagaDefinition[T])
+	sagaDef := sagaHandlerInfo.(*SagaDefinition)
 	step := sagaDef.Steps[data.stepIndex]
 
 	result, err := step.Transaction(data.ctx)

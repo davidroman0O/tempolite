@@ -10,17 +10,15 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type ExampleID string
-
 type StorageActivity struct{}
 
 var storage = StorageActivity{}
 
-func (s StorageActivity) Run(ctx tempolite.ActivityContext[ExampleID], iteration int) (int, error) {
+func (s StorageActivity) Run(ctx tempolite.ActivityContext, iteration int) (int, error) {
 	return iteration * 2, nil
 }
 
-func simpleWorkflow(ctx tempolite.WorkflowContext[ExampleID], iteration int) (int, error) {
+func simpleWorkflow(ctx tempolite.WorkflowContext, iteration int) (int, error) {
 	var result int
 	if err := ctx.Activity("process", storage.Run, iteration).Get(&result); err != nil {
 		return 0, err
@@ -35,7 +33,7 @@ func main() {
 	}
 	log.Printf("Database directory: %s", dir)
 
-	registry := tempolite.NewRegistry[ExampleID]().
+	registry := tempolite.NewRegistry().
 		Workflow(simpleWorkflow).
 		Activity(storage.Run).
 		Build()
@@ -47,7 +45,7 @@ func main() {
 		BaseName:     "demo",
 	}
 
-	pool, err := tempolite.NewTempolitePool[ExampleID](
+	pool, err := tempolite.NewTempolitePool(
 		context.Background(),
 		registry,
 		poolOpts,
@@ -62,7 +60,7 @@ func main() {
 	for i := 1; i <= 1000; i++ {
 		var result int
 		if err := pool.Workflow(
-			ExampleID(fmt.Sprintf("step-%d", i)),
+			fmt.Sprintf("step-%d", i),
 			simpleWorkflow,
 			nil,
 			i,

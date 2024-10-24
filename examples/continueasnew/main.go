@@ -9,9 +9,7 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type CustomIdentifier string
-
-func LongRunningWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], iteration int) (int, error) {
+func LongRunningWorkflow(ctx tempolite.WorkflowContext, iteration int) (int, error) {
 	if iteration >= 3 {
 		return iteration, nil
 	}
@@ -32,12 +30,12 @@ func LongRunningWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], iterat
 }
 
 func main() {
-	tp, err := tempolite.New[CustomIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
-		tempolite.NewRegistry[CustomIdentifier]().
+		tempolite.NewRegistry().
 			Workflow(LongRunningWorkflow).
 			Build(),
-		tempolite.WithPath("./tempolite_long_running.db"),
+		tempolite.WithPath("./db/tempolite-continue-as-new.db"),
 		tempolite.WithDestructive(),
 	)
 	if err != nil {

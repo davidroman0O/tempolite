@@ -9,14 +9,12 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type testIdentifier string
-
 var executionCount atomic.Int32
 
 // Activity
 type CalculateActivity struct{}
 
-func (c CalculateActivity) Run(ctx tempolite.ActivityContext[testIdentifier], x, y int) (int, error) {
+func (c CalculateActivity) Run(ctx tempolite.ActivityContext, x, y int) (int, error) {
 	executionCount.Add(1)
 	return x + y, nil
 }
@@ -24,30 +22,30 @@ func (c CalculateActivity) Run(ctx tempolite.ActivityContext[testIdentifier], x,
 // Saga steps
 type SagaStep1 struct{}
 
-func (s SagaStep1) Transaction(ctx tempolite.TransactionContext[testIdentifier]) (interface{}, error) {
+func (s SagaStep1) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	executionCount.Add(1)
 	return "Step 1 completed", nil
 }
-func (s SagaStep1) Compensation(ctx tempolite.CompensationContext[testIdentifier]) (interface{}, error) {
+func (s SagaStep1) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	return "Step 1 compensated", nil
 }
 
 type SagaStep2 struct{}
 
-func (s SagaStep2) Transaction(ctx tempolite.TransactionContext[testIdentifier]) (interface{}, error) {
+func (s SagaStep2) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	executionCount.Add(1)
 	return "Step 2 completed", nil
 }
-func (s SagaStep2) Compensation(ctx tempolite.CompensationContext[testIdentifier]) (interface{}, error) {
+func (s SagaStep2) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	return "Step 2 compensated", nil
 }
 
 // Main workflow
-func complexWorkflow(ctx tempolite.WorkflowContext[testIdentifier]) (string, error) {
+func complexWorkflow(ctx tempolite.WorkflowContext) (string, error) {
 	var result int
 
 	// Side effect
-	err := ctx.SideEffect("random-number", func(ctx tempolite.SideEffectContext[testIdentifier]) int {
+	err := ctx.SideEffect("random-number", func(ctx tempolite.SideEffectContext) int {
 		executionCount.Add(1)
 		return 42 // In a real scenario, this would be non-deterministic
 	}).Get(&result)
@@ -63,7 +61,7 @@ func complexWorkflow(ctx tempolite.WorkflowContext[testIdentifier]) (string, err
 	}
 
 	// Saga
-	sagaBuilder := tempolite.NewSaga[testIdentifier]()
+	sagaBuilder := tempolite.NewSaga()
 	sagaBuilder.AddStep(SagaStep1{})
 	sagaBuilder.AddStep(SagaStep2{})
 	saga, _ := sagaBuilder.Build()
@@ -80,12 +78,12 @@ var activityStruct CalculateActivity = CalculateActivity{}
 
 func main() {
 
-	registry := tempolite.NewRegistry[testIdentifier]().
+	registry := tempolite.NewRegistry().
 		Workflow(complexWorkflow).
 		Activity(activityStruct.Run).
 		Build()
 
-	tp, err := tempolite.New[testIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
 		registry,
 		tempolite.WithPath("./db/tempolite-advanced-replay.db"),

@@ -10,8 +10,6 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type OrderID string
-
 type Order struct {
 	ID              string
 	UserID          string
@@ -24,7 +22,7 @@ type Order struct {
 // Activity as a struct
 type InventoryChecker struct{}
 
-func (ic InventoryChecker) Run(ctx tempolite.ActivityContext[OrderID], items []string) (bool, error) {
+func (ic InventoryChecker) Run(ctx tempolite.ActivityContext, items []string) (bool, error) {
 	log.Printf("Checking inventory for items: %v", items)
 	// Simulate inventory check
 	time.Sleep(1 * time.Second)
@@ -32,7 +30,7 @@ func (ic InventoryChecker) Run(ctx tempolite.ActivityContext[OrderID], items []s
 }
 
 // Activity as a function
-func ProcessPayment(ctx tempolite.ActivityContext[OrderID], orderID string, amount float64) error {
+func ProcessPayment(ctx tempolite.ActivityContext, orderID string, amount float64) error {
 	log.Printf("Processing payment for order %s: $%.2f", orderID, amount)
 	// Simulate payment processing
 	time.Sleep(2 * time.Second)
@@ -44,12 +42,12 @@ type ReserveInventorySaga struct {
 	Items []string
 }
 
-func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext[OrderID]) (interface{}, error) {
+func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Reserving inventory for items: %v", s.Items)
 	return "Inventory reserved", nil
 }
 
-func (s ReserveInventorySaga) Compensation(ctx tempolite.CompensationContext[OrderID]) (interface{}, error) {
+func (s ReserveInventorySaga) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating: Releasing reserved inventory for items: %v", s.Items)
 	return "Inventory released", nil
 }
@@ -60,18 +58,18 @@ type UpdateOrderStatusSaga struct {
 	Status  string
 }
 
-func (s UpdateOrderStatusSaga) Transaction(ctx tempolite.TransactionContext[OrderID]) (interface{}, error) {
+func (s UpdateOrderStatusSaga) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Updating order status: OrderID=%s, Status=%s", s.OrderID, s.Status)
 	return "Order status updated", nil
 }
 
-func (s UpdateOrderStatusSaga) Compensation(ctx tempolite.CompensationContext[OrderID]) (interface{}, error) {
+func (s UpdateOrderStatusSaga) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating: Reverting order status for OrderID=%s", s.OrderID)
 	return "Order status reverted", nil
 }
 
 // Main workflow
-func OrderProcessingWorkflow(ctx tempolite.WorkflowContext[OrderID], order Order) error {
+func OrderProcessingWorkflow(ctx tempolite.WorkflowContext, order Order) error {
 	log.Printf("Starting order processing for Order ID: %s", order.ID)
 
 	// Version check for new shipping address feature
@@ -102,7 +100,7 @@ func OrderProcessingWorkflow(ctx tempolite.WorkflowContext[OrderID], order Order
 
 	// Use a side effect to generate a unique tracking number
 	var trackingNumber string
-	if err := ctx.SideEffect("generate-tracking", func(ctx tempolite.SideEffectContext[OrderID]) string {
+	if err := ctx.SideEffect("generate-tracking", func(ctx tempolite.SideEffectContext) string {
 		return fmt.Sprintf("TRK-%d", rand.Intn(1000000))
 	}).Get(&trackingNumber); err != nil {
 		return fmt.Errorf("failed to generate tracking number: %w", err)
@@ -111,7 +109,7 @@ func OrderProcessingWorkflow(ctx tempolite.WorkflowContext[OrderID], order Order
 	log.Printf("Generated tracking number: %s", trackingNumber)
 
 	// Use a saga to handle the final steps
-	sagaBuilder := tempolite.NewSaga[OrderID]()
+	sagaBuilder := tempolite.NewSaga()
 	sagaBuilder.AddStep(ReserveInventorySaga{Items: order.Items})
 	sagaBuilder.AddStep(UpdateOrderStatusSaga{OrderID: order.ID, Status: "Processing"})
 	saga, _ := sagaBuilder.Build()
@@ -137,9 +135,9 @@ func OrderProcessingWorkflow(ctx tempolite.WorkflowContext[OrderID], order Order
 }
 
 func main() {
-	tp, err := tempolite.New[OrderID](
+	tp, err := tempolite.New(
 		context.Background(),
-		tempolite.NewRegistry[OrderID]().
+		tempolite.NewRegistry().
 			Workflow(OrderProcessingWorkflow).
 			Activity(InventoryChecker{}.Run).
 			Activity(ProcessPayment).
@@ -172,8 +170,7 @@ func main() {
 		}
 	}()
 
-	var originalResult string
-	if err := workflowInfo.Get(&originalResult); err != nil {
+	if err := workflowInfo.Get(); err != nil {
 		log.Printf("Workflow execution failed: %v", err)
 	} else {
 		log.Println("Workflow completed successfully on first attempt")
@@ -181,13 +178,8 @@ func main() {
 
 	log.Println("Verifying the good behaviour of the workflow...")
 	replayInfo := tp.ReplayWorkflow(workflowInfo.WorkflowID)
-	var replayResult string
-	if err := replayInfo.Get(&replayResult); err != nil {
+	if err := replayInfo.Get(); err != nil {
 		log.Fatalf("Workflow replay failed: %v", err)
-	}
-
-	if originalResult != replayResult {
-		log.Fatalf("Workflow replay result does not match original result: %s != %s", originalResult, replayResult)
 	}
 
 	if err := tp.Wait(); err != nil {

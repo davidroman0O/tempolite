@@ -20,10 +20,10 @@ type Webm2Mp4 struct {
 	OutputFile string
 }
 
-func Workflow(ctx tempolite.WorkflowContext[string], task Webm2Mp4) error {
+func Workflow(ctx tempolite.WorkflowContext, task Webm2Mp4) error {
 
 	var isUrl bool
-	if err := ctx.SideEffect("check url or not", func(ctx tempolite.SideEffectContext[string]) bool {
+	if err := ctx.SideEffect("check url or not", func(ctx tempolite.SideEffectContext) bool {
 		return isURL(task.InputFile)
 	}).Get(&isUrl); err != nil {
 		return err
@@ -52,7 +52,7 @@ func Workflow(ctx tempolite.WorkflowContext[string], task Webm2Mp4) error {
 	return ctx.Activity("transcoding", Transcoding, task).Get()
 }
 
-func DownloadFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) (string, error) {
+func DownloadFile(ctx tempolite.ActivityContext, task Webm2Mp4) (string, error) {
 	url := task.InputFile
 	// Create a temporary file for the download
 	tempFile, err := os.CreateTemp("", "downloaded-*.webm")
@@ -80,7 +80,7 @@ func DownloadFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) (string,
 	return tempFile.Name(), nil
 }
 
-func CheckDiskInputFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) (string, error) {
+func CheckDiskInputFile(ctx tempolite.ActivityContext, task Webm2Mp4) (string, error) {
 	inputFile := task.InputFile
 	// Check if the local file exists
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
@@ -90,7 +90,7 @@ func CheckDiskInputFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) (s
 	return inputFile, nil
 }
 
-func CheckDiskOutputFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) error {
+func CheckDiskOutputFile(ctx tempolite.ActivityContext, task Webm2Mp4) error {
 	outputFile := task.OutputFile
 	// Check if the output file already exists
 	if _, err := os.Stat(outputFile); err == nil {
@@ -105,7 +105,7 @@ func CheckDiskOutputFile(ctx tempolite.ActivityContext[string], task Webm2Mp4) e
 	return nil
 }
 
-func Transcoding(ctx tempolite.ActivityContext[string], task Webm2Mp4) error {
+func Transcoding(ctx tempolite.ActivityContext, task Webm2Mp4) error {
 
 	timeout := time.NewTimer(time.Minute)
 
@@ -146,9 +146,9 @@ func main() {
 	}
 
 	ctx := context.Background()
-	tp, err := tempolite.New[string](
+	tp, err := tempolite.New(
 		ctx,
-		tempolite.NewRegistry[string]().
+		tempolite.NewRegistry().
 			Workflow(Workflow).
 			Activity(Transcoding).
 			Activity(CheckDiskOutputFile).

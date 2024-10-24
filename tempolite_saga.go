@@ -5,18 +5,18 @@ import (
 	"reflect"
 )
 
-type SagaStep[T Identifier] interface {
-	Transaction(ctx TransactionContext[T]) (interface{}, error)
-	Compensation(ctx CompensationContext[T]) (interface{}, error)
+type SagaStep interface {
+	Transaction(ctx TransactionContext) (interface{}, error)
+	Compensation(ctx CompensationContext) (interface{}, error)
 }
 
-type SagaDefinition[T Identifier] struct {
-	Steps       []SagaStep[T]
+type SagaDefinition struct {
+	Steps       []SagaStep
 	HandlerInfo *SagaHandlerInfo
 }
 
-type SagaDefinitionBuilder[T Identifier] struct {
-	steps []SagaStep[T]
+type SagaDefinitionBuilder struct {
+	steps []SagaStep
 }
 
 type SagaHandlerInfo struct {
@@ -25,14 +25,14 @@ type SagaHandlerInfo struct {
 }
 
 // NewSaga creates a new builder instance.
-func NewSaga[T Identifier]() *SagaDefinitionBuilder[T] {
-	return &SagaDefinitionBuilder[T]{
-		steps: make([]SagaStep[T], 0),
+func NewSaga() *SagaDefinitionBuilder {
+	return &SagaDefinitionBuilder{
+		steps: make([]SagaStep, 0),
 	}
 }
 
 // AddStep adds a saga step to the builder.
-func (b *SagaDefinitionBuilder[T]) AddStep(step SagaStep[T]) *SagaDefinitionBuilder[T] {
+func (b *SagaDefinitionBuilder) AddStep(step SagaStep) *SagaDefinitionBuilder {
 	b.steps = append(b.steps, step)
 	return b
 }
@@ -75,7 +75,7 @@ func analyzeMethod(method reflect.Method, name string) (HandlerInfo, error) {
 }
 
 // Build creates a SagaDefinition with the HandlerInfo included.
-func (b *SagaDefinitionBuilder[T]) Build() (*SagaDefinition[T], error) {
+func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 	sagaInfo := &SagaHandlerInfo{
 		TransactionInfo:  make([]HandlerInfo, len(b.steps)),
 		CompensationInfo: make([]HandlerInfo, len(b.steps)),
@@ -110,16 +110,16 @@ func (b *SagaDefinitionBuilder[T]) Build() (*SagaDefinition[T], error) {
 		sagaInfo.CompensationInfo[i] = compensationInfo
 	}
 
-	return &SagaDefinition[T]{
+	return &SagaDefinition{
 		Steps:       b.steps,
 		HandlerInfo: sagaInfo,
 	}, nil
 }
 
-func (w WorkflowContext[T]) Saga(stepID T, saga *SagaDefinition[T]) *SagaInfo[T] {
+func (w WorkflowContext) Saga(stepID string, saga *SagaDefinition) *SagaInfo {
 	if err := w.checkIfPaused(); err != nil {
 		w.tp.logger.Debug(w.tp.ctx, "Workflow is paused, skipping Saga execution", "stepID", stepID, "error", err)
-		return &SagaInfo[T]{err: err}
+		return &SagaInfo{err: err}
 	}
 	// Enqueue the saga for execution
 	return w.tp.saga(w, stepID, saga)

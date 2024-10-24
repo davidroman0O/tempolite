@@ -21,12 +21,12 @@ type YtDl struct {
 	Timeout   string
 }
 
-func Workflow(ctx tempolite.WorkflowContext[string], task YtDl) error {
+func Workflow(ctx tempolite.WorkflowContext, task YtDl) error {
 	defer fmt.Printf("Download completed: %s\n", task.Url)
 	return ctx.Activity("ytdl", Download, task).Get()
 }
 
-func Download(ctx tempolite.ActivityContext[string], task YtDl) error {
+func Download(ctx tempolite.ActivityContext, task YtDl) error {
 	var timeoutChan <-chan time.Time
 
 	// Parse the timeout string if it's not empty
@@ -187,9 +187,9 @@ func main() {
 
 	// Create Tempolite instance
 	ctx := context.Background()
-	tp, err := tempolite.New[string](
+	tp, err := tempolite.New(
 		ctx,
-		tempolite.NewRegistry[string]().
+		tempolite.NewRegistry().
 			Workflow(Workflow).
 			Activity(Download).
 			Build(),

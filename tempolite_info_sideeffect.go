@@ -12,13 +12,13 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
-type SideEffectInfo[T Identifier] struct {
-	tp       *Tempolite[T]
+type SideEffectInfo struct {
+	tp       *Tempolite
 	EntityID SideEffectID
 	err      error
 }
 
-func (i *SideEffectInfo[T]) Get(output ...interface{}) error {
+func (i *SideEffectInfo) Get(output ...interface{}) error {
 	if i.err != nil {
 		i.tp.logger.Error(i.tp.ctx, "SideEffectInfo.Get", "entityID", i.EntityID, "error", i.err)
 		return i.err

@@ -9,15 +9,13 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type CoffeeShopID string
-
 type CustomerOrder struct {
 	OrderID   string
 	DrinkType string
 	Size      string
 }
 
-func CoffeeShopWorkflow(ctx tempolite.WorkflowContext[CoffeeShopID], order CustomerOrder) error {
+func CoffeeShopWorkflow(ctx tempolite.WorkflowContext, order CustomerOrder) error {
 	log.Printf("Received order: %+v", order)
 
 	// Prepare the drink
@@ -50,16 +48,16 @@ func CoffeeShopWorkflow(ctx tempolite.WorkflowContext[CoffeeShopID], order Custo
 	return nil
 }
 
-func PrepareDrink(ctx tempolite.ActivityContext[CoffeeShopID], order CustomerOrder) error {
+func PrepareDrink(ctx tempolite.ActivityContext, order CustomerOrder) error {
 	log.Printf("Preparing %s %s for order %s", order.Size, order.DrinkType, order.OrderID)
 	time.Sleep(3 * time.Second) // Simulating drink preparation time
 	return nil
 }
 
 func main() {
-	tp, err := tempolite.New[CoffeeShopID](
+	tp, err := tempolite.New(
 		context.Background(),
-		tempolite.NewRegistry[CoffeeShopID]().
+		tempolite.NewRegistry().
 			Workflow(CoffeeShopWorkflow).
 			Activity(PrepareDrink).
 			Build(),

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) schedulerExecutionActivity() {
+func (tp *Tempolite) schedulerExecutionActivity() {
 	defer close(tp.schedulerExecutionActivityDone)
 	for {
 		select {
@@ -67,7 +67,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 						inputs = append(inputs, realInput)
 					}
 
-					contextActivity := ActivityContext[T]{
+					contextActivity := ActivityContext{
 						tp:          tp,
 						activityID:  activityEntity.ID,
 						executionID: act.ID,
@@ -75,7 +75,7 @@ func (tp *Tempolite[T]) schedulerExecutionActivity() {
 						stepID:      activityEntity.StepID,
 					}
 
-					task := &activityTask[T]{
+					task := &activityTask{
 						ctx:         contextActivity,
 						handlerName: activityHandlerInfo.HandlerLongName,
 						handler:     activityHandlerInfo.Handler,

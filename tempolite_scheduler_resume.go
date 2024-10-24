@@ -11,7 +11,7 @@ import (
 )
 
 // When workflows were paused, but will be flagged as IsReady
-func (tp *Tempolite[T]) resumeWorkflowsWorker() {
+func (tp *Tempolite) resumeWorkflowsWorker() {
 	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
 	defer close(tp.resumeWorkflowsWorkerDone)
@@ -69,7 +69,7 @@ func (tp *Tempolite[T]) resumeWorkflowsWorker() {
 	}
 }
 
-func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
+func (tp *Tempolite) redispatchWorkflow(id WorkflowID) error {
 	// Start a transaction
 	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
@@ -114,7 +114,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	}
 
 	// Create WorkflowContext
-	ctx := WorkflowContext[T]{
+	ctx := WorkflowContext{
 		tp:           tp,
 		workflowID:   wf.ID,
 		executionID:  wfEx.ID,
@@ -167,7 +167,7 @@ func (tp *Tempolite[T]) redispatchWorkflow(id WorkflowID) error {
 	tp.logger.Debug(tp.ctx, "Creating workflow task", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
 	// Create and dispatch the workflow task
-	task := &workflowTask[T]{
+	task := &workflowTask{
 		ctx:         ctx,
 		handlerName: workflowHandler.HandlerLongName,
 		handler:     workflowHandler.Handler,

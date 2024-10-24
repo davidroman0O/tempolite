@@ -19,7 +19,7 @@ func TestWorkflowSimple(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
 		// fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
@@ -28,11 +28,11 @@ func TestWorkflowSimple(t *testing.T) {
 		return nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-simple.db"),
@@ -65,7 +65,7 @@ type testSimpleActivity struct {
 	SpecialValue string
 }
 
-func (h testSimpleActivity) Run(ctx ActivityContext[testIdentifier], task testMessageActivitySimple) (int, string, error) {
+func (h testSimpleActivity) Run(ctx ActivityContext, task testMessageActivitySimple) (int, string, error) {
 
 	// fmt.Println("testSimpleActivity: ", task.Message)
 
@@ -83,7 +83,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
 		// fmt.Println("localWrkflw: ", input, msg)
 
 		var number int
@@ -103,12 +103,12 @@ func TestWorkflowActivitySimple(t *testing.T) {
 		return nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Activity(workerActivity.Run).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-activity-simple.db"),
@@ -144,7 +144,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 
 	workerActivity := testSimpleActivity{}
 
-	activtfn := func(ctx ActivityContext[testIdentifier], id int) (int, error) {
+	activtfn := func(ctx ActivityContext, id int) (int, error) {
 		// fmt.Println("activtfn: ", id)
 
 		if !failed {
@@ -154,7 +154,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 		return 69, nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) error {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) error {
 		// fmt.Println("localWrkflw: ", input, msg)
 
 		var subnumber int
@@ -176,13 +176,13 @@ func TestWorkflowActivityMore(t *testing.T) {
 		return nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Activity(activtfn).
 		Activity(workerActivity.Run).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-activity-more.db"),
@@ -216,7 +216,7 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", input, msg)
 		if !failed {
 			failed = true
@@ -225,11 +225,11 @@ func TestWorkflowSimpleInfoGet(t *testing.T) {
 		return 420, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-infoget-simple.db"),
@@ -266,7 +266,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 
 	failed := false
 
-	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
+	anotherWrk := func(ctx WorkflowContext) error {
 		// fmt.Println("anotherWrk")
 		// If we fail here, then the the info.Get will fail and the parent workflow, will also fail
 		// but does that mean, we should be retried?
@@ -278,7 +278,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		err := ctx.Workflow("test", anotherWrk).Get()
@@ -290,12 +290,12 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 		return 420, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Workflow(anotherWrk).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-sub-info-child-fail.db"),
@@ -332,12 +332,12 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 
 	failed := false
 
-	anotherWrk := func(ctx WorkflowContext[testIdentifier]) error {
+	anotherWrk := func(ctx WorkflowContext) error {
 		// fmt.Println("anotherWrk")
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		err := ctx.Workflow("test", anotherWrk).Get()
@@ -354,12 +354,12 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 		return 420, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Workflow(anotherWrk).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-sub-info-parent-fail.db"),
@@ -396,11 +396,11 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 
 	failed := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", failed, input, msg)
 
 		var value int
-		if err := ctx.SideEffect("eventual switch", func(ctx SideEffectContext[testIdentifier]) int {
+		if err := ctx.SideEffect("eventual switch", func(ctx SideEffectContext) int {
 			return 69
 		}).Get(&value); err != nil {
 			return -1, err
@@ -415,11 +415,11 @@ func TestWorkflowSimpleSideEffect(t *testing.T) {
 		return 69, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-sideeffect.db"),
@@ -457,12 +457,12 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		Message string
 	}
 
-	activityWork := func(ctx ActivityContext[testIdentifier]) error {
+	activityWork := func(ctx ActivityContext) error {
 		<-time.After(1 * time.Second)
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
 		log.Println("fake work 1")
 		<-time.After(1 * time.Second)
@@ -492,12 +492,12 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 		return 69, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Activity(activityWork).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-yield.db"),
@@ -514,7 +514,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 	})
 
 	var number int
-	var workflowInfo *WorkflowInfo[testIdentifier]
+	var workflowInfo *WorkflowInfo
 	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 	{
 		tp.Close() // close the DB and start again
-		tp, err = New[testIdentifier](
+		tp, err = New(
 			context.Background(),
 			registery,
 			WithPath("./db/tempolite-workflow-yield.db"),
@@ -598,7 +598,7 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 
 	failure := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
 		// fmt.Println("signal..")
 		signal := ctx.Signal("waiting data")
@@ -618,11 +618,11 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 		return 69, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-signal.db"),
@@ -639,7 +639,7 @@ func TestWorkflowSimpleSignal(t *testing.T) {
 	})
 
 	var number int
-	var workflowInfo *WorkflowInfo[testIdentifier]
+	var workflowInfo *WorkflowInfo
 	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
@@ -675,12 +675,12 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 		Message string
 	}
 
-	activtyLocal := func(ctx ActivityContext[testIdentifier]) error {
+	activtyLocal := func(ctx ActivityContext) error {
 		<-time.After(time.Second * 5)
 		return nil
 	}
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
 		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
 			return -1, err
@@ -693,12 +693,12 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 		return 69, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Activity(activtyLocal).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-cancel.db"),
@@ -714,7 +714,7 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 		return true
 	})
 
-	var workflowInfo *WorkflowInfo[testIdentifier]
+	var workflowInfo *WorkflowInfo
 	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}
@@ -741,13 +741,13 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 		Message string
 	}
 
-	activtyLocal := func(ctx ActivityContext[testIdentifier]) error {
+	activtyLocal := func(ctx ActivityContext) error {
 		return nil
 	}
 
 	once := false
 
-	localWrkflw := func(ctx WorkflowContext[testIdentifier], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
 		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
 			return -1, err
@@ -763,12 +763,12 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 		return 69, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(localWrkflw).
 		Activity(activtyLocal).
 		Build()
 
-	tp, err := New[testIdentifier](
+	tp, err := New(
 		context.Background(),
 		registery,
 		WithPath("./db/tempolite-workflow-continueasnew.db"),
@@ -779,7 +779,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 	}
 	defer tp.Close()
 
-	var workflowInfo *WorkflowInfo[testIdentifier]
+	var workflowInfo *WorkflowInfo
 	if workflowInfo = tp.Workflow("test", localWrkflw, nil, 1, workflowData{Message: "hello"}); err != nil {
 		t.Fatalf("EnqueueActivityFunc failed: %v", err)
 	}

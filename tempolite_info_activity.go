@@ -12,13 +12,13 @@ import (
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
 )
 
-type ActivityInfo[T Identifier] struct {
-	tp         *Tempolite[T]
+type ActivityInfo struct {
+	tp         *Tempolite
 	ActivityID ActivityID
 	err        error
 }
 
-func (i *ActivityInfo[T]) Get(output ...interface{}) error {
+func (i *ActivityInfo) Get(output ...interface{}) error {
 	if i.err != nil {
 		i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get", "activityID", i.ActivityID, "error", i.err)
 		return i.err

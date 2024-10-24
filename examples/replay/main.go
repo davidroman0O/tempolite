@@ -9,11 +9,9 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type testIdentifier string
-
 var shouldSucceed atomic.Bool
 
-func undeterministicWorkflow(ctx tempolite.WorkflowContext[testIdentifier]) (string, error) {
+func undeterministicWorkflow(ctx tempolite.WorkflowContext) (string, error) {
 	if shouldSucceed.Load() {
 		return "Success", nil
 	}
@@ -22,11 +20,11 @@ func undeterministicWorkflow(ctx tempolite.WorkflowContext[testIdentifier]) (str
 
 func main() {
 	// Initialize Tempolite
-	registry := tempolite.NewRegistry[testIdentifier]().
+	registry := tempolite.NewRegistry().
 		Workflow(undeterministicWorkflow).
 		Build()
 
-	tp, err := tempolite.New[testIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
 		registry,
 		tempolite.WithPath("./db/tempolite-replay-example.db"),

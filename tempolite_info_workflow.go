@@ -12,14 +12,14 @@ import (
 	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
-type WorkflowInfo[T Identifier] struct {
-	tp         *Tempolite[T]
+type WorkflowInfo struct {
+	tp         *Tempolite
 	WorkflowID WorkflowID
 	err        error
 }
 
 // Try to find the latest workflow execution until it reaches a final state
-func (i *WorkflowInfo[T]) Get(output ...interface{}) error {
+func (i *WorkflowInfo) Get(output ...interface{}) error {
 	defer func() {
 		i.tp.logger.Debug(i.tp.ctx, "WorkflowInfo.Get", "workflowID", i.WorkflowID, "error", i.err)
 	}()

@@ -1,19 +1,19 @@
 package tempolite
 
-type TransactionContext[T Identifier] struct {
+type TransactionContext struct {
 	TempoliteContext
-	tp *Tempolite[T]
+	tp *Tempolite
 }
 
-func (w TransactionContext[T]) EntityType() string {
+func (w TransactionContext) EntityType() string {
 	return "transaction"
 }
 
-type CompensationContext[T Identifier] struct {
+type CompensationContext struct {
 	TempoliteContext
-	tp *Tempolite[T]
+	tp *Tempolite
 }
 
-func (w CompensationContext[T]) EntityType() string {
+func (w CompensationContext) EntityType() string {
 	return "compensation"
 }

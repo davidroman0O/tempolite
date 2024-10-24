@@ -12,18 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) GetActivity(id ActivityID) (*ActivityInfo[T], error) {
+func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
 	tp.logger.Debug(tp.ctx, "GetActivity", "activityID", id)
-	info := ActivityInfo[T]{
+	info := ActivityInfo{
 		tp:         tp,
 		ActivityID: id,
 	}
 	return &info, nil
 }
 
-func (tp *Tempolite[T]) getActivity(ctx TempoliteContext, id ActivityID, err error) *ActivityInfo[T] {
+func (tp *Tempolite) getActivity(ctx TempoliteContext, id ActivityID, err error) *ActivityInfo {
 	tp.logger.Debug(tp.ctx, "getActivity", "activityID", id, "error", err)
-	info := ActivityInfo[T]{
+	info := ActivityInfo{
 		tp:         tp,
 		ActivityID: id,
 		err:        err,
@@ -31,9 +31,9 @@ func (tp *Tempolite[T]) getActivity(ctx TempoliteContext, id ActivityID, err err
 	return &info
 }
 
-func (tp *Tempolite[T]) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo[T] {
+func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo {
 	tp.logger.Debug(tp.ctx, "getActivityExecution", "activityExecutionID", id, "error", err)
-	info := ActivityExecutionInfo[T]{
+	info := ActivityExecutionInfo{
 		tp:          tp,
 		ExecutionID: id,
 		err:         err,
@@ -41,7 +41,7 @@ func (tp *Tempolite[T]) getActivityExecution(ctx TempoliteContext, id ActivityEx
 	return &info
 }
 
-func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
+func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
 
 	tp.logger.Debug(tp.ctx, "EnqueueActivity", "stepID", stepID, "longName", longName)
 	switch ctx.EntityType() {
@@ -60,7 +60,7 @@ func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longNa
 			executionrelationship.And(
 				executionrelationship.RunID(ctx.RunID()),
 				executionrelationship.ParentEntityID(ctx.EntityID()),
-				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ChildStepID(stepID),
 				executionrelationship.ParentStepID(ctx.StepID()),
 			),
 			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeActivity),
@@ -116,7 +116,7 @@ func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longNa
 			Activity.
 			Create().
 			SetID(uuid.NewString()).
-			SetStepID(fmt.Sprint(stepID)).
+			SetStepID(stepID).
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(params).
@@ -161,7 +161,7 @@ func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longNa
 			SetChildID(activityEntity.ID).
 			// steps
 			SetParentStepID(ctx.StepID()).
-			SetChildStepID(fmt.Sprint(stepID)).
+			SetChildStepID(stepID).
 			// types
 			SetParentType(executionrelationship.ParentTypeWorkflow).
 			SetChildType(executionrelationship.ChildTypeActivity).
@@ -189,7 +189,7 @@ func (tp *Tempolite[T]) enqueueActivity(ctx WorkflowContext[T], stepID T, longNa
 	}
 }
 
-func (tp *Tempolite[T]) enqueueActivityFunc(ctx WorkflowContext[T], stepID T, activityFunc interface{}, params ...interface{}) (ActivityID, error) {
+func (tp *Tempolite) enqueueActivityFunc(ctx WorkflowContext, stepID string, activityFunc interface{}, params ...interface{}) (ActivityID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	tp.logger.Debug(tp.ctx, "Enqueue ActivityFunc", "stepID", stepID, "handlerIdentity", handlerIdentity)

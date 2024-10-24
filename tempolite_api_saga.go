@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, saga *SagaDefinition[T]) *SagaInfo[T] {
+func (tp *Tempolite) saga(ctx TempoliteContext, stepID string, saga *SagaDefinition) *SagaInfo {
 	tp.logger.Debug(tp.ctx, "Saga", "stepID", stepID)
 	id, err := tp.enqueueSaga(ctx, stepID, saga)
 	return tp.getSaga(id, err)
@@ -19,7 +19,7 @@ func (tp *Tempolite[T]) saga(ctx TempoliteContext, stepID T, saga *SagaDefinitio
 
 // TempoliteContext contains the information from where it was called, so we know the XXXInfo to which it belongs
 // Saga only accepts one type of input
-func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *SagaDefinition[T]) (SagaID, error) {
+func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, stepID string, sagaDef *SagaDefinition) (SagaID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
 		// Proceed with saga creation
@@ -39,7 +39,7 @@ func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *Sag
 			executionrelationship.And(
 				executionrelationship.RunID(ctx.RunID()),
 				executionrelationship.ParentEntityID(ctx.EntityID()),
-				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ChildStepID(stepID),
 				executionrelationship.ParentStepID(ctx.StepID()),
 			),
 			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSaga),
@@ -83,7 +83,7 @@ func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *Sag
 		Create().
 		SetID(uuid.NewString()).
 		SetRunID(ctx.RunID()).
-		SetStepID(fmt.Sprint(stepID)).
+		SetStepID(stepID).
 		SetStatus(saga.StatusPending).
 		SetSagaDefinition(sagaDefData).
 		Save(tp.ctx)
@@ -123,7 +123,7 @@ func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *Sag
 		SetParentID(ctx.ExecutionID()).
 		SetChildID(sagaExecution.ID).
 		SetParentStepID(ctx.StepID()).
-		SetChildStepID(fmt.Sprint(stepID)).
+		SetChildStepID(stepID).
 		SetParentType(executionrelationship.ParentTypeWorkflow).
 		SetChildType(executionrelationship.ChildTypeSaga).
 		Save(tp.ctx)
@@ -150,9 +150,9 @@ func (tp *Tempolite[T]) enqueueSaga(ctx TempoliteContext, stepID T, sagaDef *Sag
 	return SagaID(sagaEntity.ID), nil
 }
 
-func (tp *Tempolite[T]) getSaga(id SagaID, err error) *SagaInfo[T] {
+func (tp *Tempolite) getSaga(id SagaID, err error) *SagaInfo {
 	tp.logger.Debug(tp.ctx, "getSaga", "sagaID", id, "error", err)
-	return &SagaInfo[T]{
+	return &SagaInfo{
 		tp:     tp,
 		SagaID: id,
 		err:    err,

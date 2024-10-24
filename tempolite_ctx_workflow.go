@@ -6,9 +6,9 @@ import (
 	"github.com/davidroman0O/tempolite/ent/workflow"
 )
 
-type WorkflowContext[T Identifier] struct {
+type WorkflowContext struct {
 	TempoliteContext
-	tp              *Tempolite[T]
+	tp              *Tempolite
 	workflowID      string
 	executionID     string
 	runID           string
@@ -17,7 +17,7 @@ type WorkflowContext[T Identifier] struct {
 	handlerIdentity HandlerIdentity
 }
 
-func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, values ...any) error {
+func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, stepID string, values ...any) error {
 	// Check if the workflow is paused
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
@@ -81,27 +81,27 @@ func (w WorkflowContext[T]) ContinueAsNew(ctx WorkflowContext[T], stepID T, valu
 	return fmt.Errorf("failed to continue as new: workflow not found")
 }
 
-func (w WorkflowContext[T]) RunID() string {
+func (w WorkflowContext) RunID() string {
 	return w.runID
 }
 
-func (w WorkflowContext[T]) EntityID() string {
+func (w WorkflowContext) EntityID() string {
 	return w.workflowID
 }
 
-func (w WorkflowContext[T]) ExecutionID() string {
+func (w WorkflowContext) ExecutionID() string {
 	return w.executionID
 }
 
-func (w WorkflowContext[T]) StepID() string {
+func (w WorkflowContext) StepID() string {
 	return w.stepID
 }
 
-func (w WorkflowContext[T]) EntityType() string {
+func (w WorkflowContext) EntityType() string {
 	return "workflow"
 }
 
-func (w WorkflowContext[T]) checkIfPaused() error {
+func (w WorkflowContext) checkIfPaused() error {
 	workflow, err := w.tp.client.Workflow.Get(w.tp.ctx, w.workflowID)
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Error fetching workflow", "workflowID", w.workflowID, "error", err)
@@ -113,7 +113,7 @@ func (w WorkflowContext[T]) checkIfPaused() error {
 	return nil
 }
 
-func (w WorkflowContext[T]) setExecutionAsPaused() error {
+func (w WorkflowContext) setExecutionAsPaused() error {
 	_, err := w.tp.client.Workflow.UpdateOneID(w.workflowID).SetStatus(workflow.StatusPaused).Save(w.tp.ctx)
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "workflowID", w.workflowID, "error", err)
@@ -121,7 +121,7 @@ func (w WorkflowContext[T]) setExecutionAsPaused() error {
 	return err
 }
 
-func (w WorkflowContext[T]) GetVersion(changeID string, minSupported, maxSupported int) int {
+func (w WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
 	w.tp.logger.Debug(w.tp.ctx, "GetVersion", "workflowType", w.workflowType, "workflowID", w.workflowID, "changeID", changeID, "minSupported", minSupported, "maxSupported", maxSupported)
 	version, err := w.tp.getOrCreateVersion(w.workflowType, w.workflowID, changeID, minSupported, maxSupported)
 	if err != nil {
@@ -132,17 +132,17 @@ func (w WorkflowContext[T]) GetVersion(changeID string, minSupported, maxSupport
 	return version
 }
 
-func (w WorkflowContext[T]) GetWorkflow(id WorkflowExecutionID) *WorkflowExecutionInfo[T] {
+func (w WorkflowContext) GetWorkflow(id WorkflowExecutionID) *WorkflowExecutionInfo {
 	return w.tp.getWorkflowExecution(w, id, nil)
 }
 
-func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}) *SideEffectInfo[T] {
+func (w WorkflowContext) SideEffect(stepID string, handler interface{}) *SideEffectInfo {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &SideEffectInfo[T]{err: uerr}
+			return &SideEffectInfo{err: uerr}
 		}
-		return &SideEffectInfo[T]{err: err}
+		return &SideEffectInfo{err: err}
 	}
 	id, err := w.tp.enqueueSideEffect(w, stepID, handler)
 	if err != nil {
@@ -151,13 +151,13 @@ func (w WorkflowContext[T]) SideEffect(stepID T, handler interface{}) *SideEffec
 	return w.tp.getSideEffect(w, id, err)
 }
 
-func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...any) *WorkflowInfo[T] {
+func (w WorkflowContext) Workflow(stepID string, handler interface{}, inputs ...any) *WorkflowInfo {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &WorkflowInfo[T]{err: uerr}
+			return &WorkflowInfo{err: uerr}
 		}
-		return &WorkflowInfo[T]{err: err}
+		return &WorkflowInfo{err: err}
 	}
 	id, err := w.tp.enqueueWorkflow(w, stepID, handler, inputs...)
 	if err != nil {
@@ -166,13 +166,13 @@ func (w WorkflowContext[T]) Workflow(stepID T, handler interface{}, inputs ...an
 	return w.tp.getWorkflow(w, id, err)
 }
 
-func (w WorkflowContext[T]) Activity(stepID T, handler interface{}, inputs ...any) *ActivityInfo[T] {
+func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...any) *ActivityInfo {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &ActivityInfo[T]{err: uerr}
+			return &ActivityInfo{err: uerr}
 		}
-		return &ActivityInfo[T]{err: err}
+		return &ActivityInfo{err: err}
 	}
 	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, inputs...)
 	if err != nil {
@@ -181,13 +181,13 @@ func (w WorkflowContext[T]) Activity(stepID T, handler interface{}, inputs ...an
 	return w.tp.getActivity(w, id, err)
 }
 
-// func (w WorkflowContext[T]) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo[T] {
+// func (w WorkflowContext) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo {
 // 	if err := w.checkIfPaused(); err != nil {
 // 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 // 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-// 			return &ActivityInfo[T]{err: uerr}
+// 			return &ActivityInfo{err: uerr}
 // 		}
-// 		return &ActivityInfo[T]{err: err}
+// 		return &ActivityInfo{err: err}
 // 	}
 // 	id, err := w.tp.enqueueActivity(w, stepID, name, inputs...)
 // 	if err != nil {

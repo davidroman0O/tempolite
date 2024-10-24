@@ -8,13 +8,13 @@ import (
 	"github.com/davidroman0O/tempolite/ent/saga"
 )
 
-type SagaInfo[T Identifier] struct {
-	tp     *Tempolite[T]
+type SagaInfo struct {
+	tp     *Tempolite
 	SagaID SagaID
 	err    error
 }
 
-func (i *SagaInfo[T]) Get(output ...interface{}) error {
+func (i *SagaInfo) Get(output ...interface{}) error {
 	if i.err != nil {
 		i.tp.logger.Error(i.tp.ctx, "SagaInfo.Get", "sagaID", i.SagaID, "error", i.err)
 		return i.err

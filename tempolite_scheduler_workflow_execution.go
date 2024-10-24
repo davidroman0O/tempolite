@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
+func (tp *Tempolite) schedulerExecutionWorkflow() {
 	defer close(tp.schedulerExecutionWorkflowDone)
 	for {
 		select {
@@ -58,7 +58,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 						continue
 					}
 
-					contextWorkflow := WorkflowContext[T]{
+					contextWorkflow := WorkflowContext{
 						tp:              tp,
 						workflowID:      workflowEntity.ID,
 						executionID:     pendingWorkflowExecution.ID,
@@ -68,7 +68,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 						handlerIdentity: HandlerIdentity(workflowEntity.Identity),
 					}
 
-					task := &workflowTask[T]{
+					task := &workflowTask{
 						ctx:         contextWorkflow,
 						handlerName: workflowHandlerInfo.HandlerLongName,
 						handler:     workflowHandlerInfo.Handler,
@@ -122,7 +122,7 @@ func (tp *Tempolite[T]) schedulerExecutionWorkflow() {
 
 					tp.logger.Debug(tp.ctx, "Scheduler workflow execution: Dispatching", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
-					if err := tp.workflowPool.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask[T]]()); err != nil {
+					if err := tp.workflowPool.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask]()); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
 						tx, txErr := tp.client.Tx(tp.ctx)
 						if txErr != nil {

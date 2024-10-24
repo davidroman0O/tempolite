@@ -14,25 +14,25 @@ import (
 	"github.com/google/uuid"
 )
 
-// func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, opts tempoliteWorkflowConfig, params ...interface{}) *WorkflowInfo[T] {
-func (tp *Tempolite[T]) Workflow(stepID T, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo[T] {
+// func (tp *Tempolite) Workflow(stepID T, workflowFunc interface{}, opts tempoliteWorkflowConfig, params ...interface{}) *WorkflowInfo {
+func (tp *Tempolite) Workflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "Workflow", "stepID", stepID)
 	id, err := tp.executeWorkflow(stepID, workflowFunc, options, params...)
 	return tp.getWorkflowRoot(id, err)
 }
 
-func (tp *Tempolite[T]) GetWorkflow(id WorkflowID) *WorkflowInfo[T] {
+func (tp *Tempolite) GetWorkflow(id WorkflowID) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "GetWorkflow", "workflowID", id)
-	info := WorkflowInfo[T]{
+	info := WorkflowInfo{
 		tp:         tp,
 		WorkflowID: id,
 	}
 	return &info
 }
 
-func (tp *Tempolite[T]) getWorkflowRoot(id WorkflowID, err error) *WorkflowInfo[T] {
+func (tp *Tempolite) getWorkflowRoot(id WorkflowID, err error) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "getWorkflowRoot", "workflowID", id, "error", err)
-	info := WorkflowInfo[T]{
+	info := WorkflowInfo{
 		tp:         tp,
 		WorkflowID: id,
 		err:        err,
@@ -40,9 +40,9 @@ func (tp *Tempolite[T]) getWorkflowRoot(id WorkflowID, err error) *WorkflowInfo[
 	return &info
 }
 
-func (tp *Tempolite[T]) getWorkflow(ctx TempoliteContext, id WorkflowID, err error) *WorkflowInfo[T] {
+func (tp *Tempolite) getWorkflow(ctx TempoliteContext, id WorkflowID, err error) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "getWorkflow", "workflowID", id, "error", err)
-	info := WorkflowInfo[T]{
+	info := WorkflowInfo{
 		tp:         tp,
 		WorkflowID: id,
 		err:        err,
@@ -50,9 +50,9 @@ func (tp *Tempolite[T]) getWorkflow(ctx TempoliteContext, id WorkflowID, err err
 	return &info
 }
 
-func (tp *Tempolite[T]) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID, err error) *WorkflowExecutionInfo[T] {
+func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecutionID, err error) *WorkflowExecutionInfo {
 	tp.logger.Debug(tp.ctx, "getWorkflowExecution", "workflowExecutionID", id, "error", err)
-	info := WorkflowExecutionInfo[T]{
+	info := WorkflowExecutionInfo{
 		tp:          tp,
 		ExecutionID: id,
 		err:         err,
@@ -60,7 +60,7 @@ func (tp *Tempolite[T]) getWorkflowExecution(ctx TempoliteContext, id WorkflowEx
 	return &info
 }
 
-func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
 		// Proceed with sub-workflow creation
@@ -74,7 +74,7 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 			executionrelationship.And(
 				executionrelationship.RunID(ctx.RunID()),
 				executionrelationship.ParentEntityID(ctx.EntityID()),
-				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ChildStepID(stepID),
 				executionrelationship.ParentStepID(ctx.StepID()),
 			),
 			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeWorkflow),
@@ -144,7 +144,7 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 		if workflowEntity, err = tx.Workflow.
 			Create().
 			SetID(uuid.NewString()).
-			SetStepID(fmt.Sprint(stepID)).
+			SetStepID(stepID).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
@@ -192,7 +192,7 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 			SetChildType(executionrelationship.ChildTypeWorkflow).
 			// steps
 			SetParentStepID(ctx.StepID()).
-			SetChildStepID(fmt.Sprint(stepID)).
+			SetChildStepID(stepID).
 			//
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
@@ -218,7 +218,7 @@ func (tp *Tempolite[T]) enqueueWorkflow(ctx TempoliteContext, stepID T, workflow
 	}
 }
 
-func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
@@ -307,7 +307,7 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, opti
 			Create().
 			SetID(runEntity.RunID).
 			SetStatus(workflow.StatusPending).
-			SetStepID(fmt.Sprint(stepID)).
+			SetStepID(stepID).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(params).
@@ -366,14 +366,14 @@ func (tp *Tempolite[T]) executeWorkflow(stepID T, workflowFunc interface{}, opti
 }
 
 // RetryWorkflow initiates the retry process and returns a WorkflowInfo
-func (tp *Tempolite[T]) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+func (tp *Tempolite) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "Retrying workflow", "workflowID", workflowID)
 	id, err := tp.retryWorkflow(workflowID)
 	return tp.getWorkflowRoot(id, err)
 }
 
 // retryWorkflow handles the actual retry logic
-func (tp *Tempolite[T]) retryWorkflow(workflowID WorkflowID) (WorkflowID, error) {
+func (tp *Tempolite) retryWorkflow(workflowID WorkflowID) (WorkflowID, error) {
 	// Find the original workflow
 	originalWf, err := tp.client.Workflow.Get(tp.ctx, workflowID.String())
 	if err != nil {
@@ -434,13 +434,13 @@ func (tp *Tempolite[T]) retryWorkflow(workflowID WorkflowID) (WorkflowID, error)
 	return WorkflowID(newWf.ID), nil
 }
 
-func (tp *Tempolite[T]) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+func (tp *Tempolite) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "Replaying workflow", "workflowID", workflowID)
 	id, err := tp.replayWorkflow(workflowID)
 	return tp.getWorkflowRoot(id, err)
 }
 
-func (tp *Tempolite[T]) replayWorkflow(workflowID WorkflowID) (WorkflowID, error) {
+func (tp *Tempolite) replayWorkflow(workflowID WorkflowID) (WorkflowID, error) {
 	// Find the original workflow
 	originalWf, err := tp.client.Workflow.Get(tp.ctx, workflowID.String())
 	if err != nil {

@@ -19,11 +19,11 @@ type TempolitePoolOptions struct {
 	BaseName     string // base name for database files
 }
 
-type TempolitePool[T Identifier] struct {
+type TempolitePool struct {
 	mu sync.RWMutex
 
 	// Current active instance
-	current     *Tempolite[T]
+	current     *Tempolite
 	currentPath string
 
 	// Configuration
@@ -31,7 +31,7 @@ type TempolitePool[T Identifier] struct {
 	maxPageCount  int64
 	baseFolder    string
 	baseName      string
-	registry      *Registry[T]
+	registry      *Registry
 	tempoliteOpts []tempoliteOption
 
 	// File cache
@@ -47,7 +47,7 @@ type TempolitePool[T Identifier] struct {
 	rotateMu sync.RWMutex
 }
 
-func (p *TempolitePool[T]) findLatestDatabase() (string, error) {
+func (p *TempolitePool) findLatestDatabase() (string, error) {
 	// Check cache first
 	if latest := p.latestDBCache.Load(); latest != nil {
 		// Verify the file still exists
@@ -81,7 +81,7 @@ func (p *TempolitePool[T]) findLatestDatabase() (string, error) {
 	return matches[0], nil
 }
 
-func (p *TempolitePool[T]) createNewDatabase() string {
+func (p *TempolitePool) createNewDatabase() string {
 	timestamp := time.Now().Unix()
 	path := filepath.Join(p.baseFolder, fmt.Sprintf("%s_%d.db", p.baseName, timestamp))
 	p.latestDBCache.Store(&path)
@@ -89,7 +89,7 @@ func (p *TempolitePool[T]) createNewDatabase() string {
 }
 
 // Rest of the implementation remains exactly the same as the original
-func NewTempolitePool[T Identifier](ctx context.Context, registry *Registry[T], poolOpts TempolitePoolOptions, tempoliteOpts ...tempoliteOption) (*TempolitePool[T], error) {
+func NewTempolitePool(ctx context.Context, registry *Registry, poolOpts TempolitePoolOptions, tempoliteOpts ...tempoliteOption) (*TempolitePool, error) {
 	if poolOpts.BaseFolder == "" {
 		return nil, fmt.Errorf("base folder is required")
 	}
@@ -99,7 +99,7 @@ func NewTempolitePool[T Identifier](ctx context.Context, registry *Registry[T], 
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	pool := &TempolitePool[T]{
+	pool := &TempolitePool{
 		maxFileSize:   poolOpts.MaxFileSize,
 		maxPageCount:  poolOpts.MaxPageCount,
 		baseFolder:    poolOpts.BaseFolder,
@@ -127,7 +127,7 @@ func NewTempolitePool[T Identifier](ctx context.Context, registry *Registry[T], 
 	return pool, nil
 }
 
-func (p *TempolitePool[T]) monitorSize() {
+func (p *TempolitePool) monitorSize() {
 	defer close(p.monitorDone)
 	ticker := time.NewTicker(time.Second / 16)
 	defer ticker.Stop()
@@ -147,7 +147,7 @@ func (p *TempolitePool[T]) monitorSize() {
 	}
 }
 
-func (p *TempolitePool[T]) checkLimits() (bool, error) {
+func (p *TempolitePool) checkLimits() (bool, error) {
 	if p.current == nil {
 		return false, nil
 	}
@@ -177,7 +177,7 @@ func (p *TempolitePool[T]) checkLimits() (bool, error) {
 	return false, nil
 }
 
-func (p *TempolitePool[T]) initializeInstance() error {
+func (p *TempolitePool) initializeInstance() error {
 	latestDB, err := p.findLatestDatabase()
 	if err != nil {
 		return err
@@ -191,7 +191,7 @@ func (p *TempolitePool[T]) initializeInstance() error {
 	}
 
 	opts := append(p.tempoliteOpts, WithPath(dbPath))
-	instance, err := New[T](p.ctx, p.registry, opts...)
+	instance, err := New(p.ctx, p.registry, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create Tempolite instance: %w", err)
 	}
@@ -201,7 +201,7 @@ func (p *TempolitePool[T]) initializeInstance() error {
 	return nil
 }
 
-func (p *TempolitePool[T]) rotate() error {
+func (p *TempolitePool) rotate() error {
 	p.rotateMu.Lock() // Acquire write lock to block API functions
 	defer p.rotateMu.Unlock()
 
@@ -225,7 +225,7 @@ func (p *TempolitePool[T]) rotate() error {
 	newPath := p.createNewDatabase()
 	opts := append(p.tempoliteOpts, WithPath(newPath))
 
-	newInstance, err := New[T](p.ctx, p.registry, opts...)
+	newInstance, err := New(p.ctx, p.registry, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create new Tempolite instance: %w", err)
 	}
@@ -236,7 +236,7 @@ func (p *TempolitePool[T]) rotate() error {
 	return nil
 }
 
-func (p *TempolitePool[T]) Close() {
+func (p *TempolitePool) Close() {
 	p.cancel()
 	<-p.monitorDone
 
@@ -248,7 +248,7 @@ func (p *TempolitePool[T]) Close() {
 	}
 }
 
-func (p *TempolitePool[T]) Wait() error {
+func (p *TempolitePool) Wait() error {
 	p.mu.RLock()
 	current := p.current
 	p.mu.RUnlock()
@@ -267,7 +267,7 @@ func (p *TempolitePool[T]) Wait() error {
 
 /// API functions
 
-func (p *TempolitePool[T]) Workflow(stepID T, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo[T] {
+func (p *TempolitePool) Workflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
 	p.rotateMu.RLock() // Acquire read lock
 	defer p.rotateMu.RUnlock()
 
@@ -278,7 +278,7 @@ func (p *TempolitePool[T]) Workflow(stepID T, workflowFunc interface{}, options 
 	return current.Workflow(stepID, workflowFunc, options, params...)
 }
 
-func (p *TempolitePool[T]) GetWorkflow(id WorkflowID) *WorkflowInfo[T] {
+func (p *TempolitePool) GetWorkflow(id WorkflowID) *WorkflowInfo {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -289,7 +289,7 @@ func (p *TempolitePool[T]) GetWorkflow(id WorkflowID) *WorkflowInfo[T] {
 	return current.GetWorkflow(id)
 }
 
-func (p *TempolitePool[T]) GetActivity(id ActivityID) (*ActivityInfo[T], error) {
+func (p *TempolitePool) GetActivity(id ActivityID) (*ActivityInfo, error) {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -300,7 +300,7 @@ func (p *TempolitePool[T]) GetActivity(id ActivityID) (*ActivityInfo[T], error) 
 	return current.GetActivity(id)
 }
 
-func (p *TempolitePool[T]) GetVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
+func (p *TempolitePool) GetVersion(workflowType, workflowID, changeID string, minSupported, maxSupported int) (int, error) {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -311,7 +311,7 @@ func (p *TempolitePool[T]) GetVersion(workflowType, workflowID, changeID string,
 	return current.getOrCreateVersion(workflowType, workflowID, changeID, minSupported, maxSupported)
 }
 
-func (p *TempolitePool[T]) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+func (p *TempolitePool) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -322,7 +322,7 @@ func (p *TempolitePool[T]) RetryWorkflow(workflowID WorkflowID) *WorkflowInfo[T]
 	return current.RetryWorkflow(workflowID)
 }
 
-func (p *TempolitePool[T]) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo[T] {
+func (p *TempolitePool) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -333,7 +333,7 @@ func (p *TempolitePool[T]) ReplayWorkflow(workflowID WorkflowID) *WorkflowInfo[T
 	return current.ReplayWorkflow(workflowID)
 }
 
-func (p *TempolitePool[T]) PauseWorkflow(id WorkflowID) error {
+func (p *TempolitePool) PauseWorkflow(id WorkflowID) error {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -344,7 +344,7 @@ func (p *TempolitePool[T]) PauseWorkflow(id WorkflowID) error {
 	return current.PauseWorkflow(id)
 }
 
-func (p *TempolitePool[T]) ResumeWorkflow(id WorkflowID) error {
+func (p *TempolitePool) ResumeWorkflow(id WorkflowID) error {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -355,7 +355,7 @@ func (p *TempolitePool[T]) ResumeWorkflow(id WorkflowID) error {
 	return current.ResumeWorkflow(id)
 }
 
-func (p *TempolitePool[T]) CancelWorkflow(id WorkflowID) error {
+func (p *TempolitePool) CancelWorkflow(id WorkflowID) error {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -366,7 +366,7 @@ func (p *TempolitePool[T]) CancelWorkflow(id WorkflowID) error {
 	return current.CancelWorkflow(id)
 }
 
-func (p *TempolitePool[T]) ListPausedWorkflows() ([]WorkflowID, error) {
+func (p *TempolitePool) ListPausedWorkflows() ([]WorkflowID, error) {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -377,7 +377,7 @@ func (p *TempolitePool[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 	return current.ListPausedWorkflows()
 }
 
-func (p *TempolitePool[T]) PublishSignal(workflowID WorkflowID, stepID T, value interface{}) error {
+func (p *TempolitePool) PublishSignal(workflowID WorkflowID, stepID string, value interface{}) error {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -388,7 +388,7 @@ func (p *TempolitePool[T]) PublishSignal(workflowID WorkflowID, stepID T, value 
 	return current.PublishSignal(workflowID, stepID, value)
 }
 
-func (p *TempolitePool[T]) GetLatestWorkflowExecution(originalWorkflowID WorkflowID) (WorkflowID, error) {
+func (p *TempolitePool) GetLatestWorkflowExecution(originalWorkflowID WorkflowID) (WorkflowID, error) {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 
@@ -399,7 +399,7 @@ func (p *TempolitePool[T]) GetLatestWorkflowExecution(originalWorkflowID Workflo
 	return current.GetLatestWorkflowExecution(originalWorkflowID)
 }
 
-func (p *TempolitePool[T]) IsActivityRegistered(longName HandlerIdentity) bool {
+func (p *TempolitePool) IsActivityRegistered(longName HandlerIdentity) bool {
 	p.rotateMu.RLock()
 	defer p.rotateMu.RUnlock()
 

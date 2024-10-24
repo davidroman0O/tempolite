@@ -1,30 +1,30 @@
 package tempolite
 
-type SideEffectContext[T Identifier] struct {
+type SideEffectContext struct {
 	TempoliteContext
-	tp           *Tempolite[T]
+	tp           *Tempolite
 	sideEffectID string
 	executionID  string
 	runID        string
 	stepID       string
 }
 
-func (w SideEffectContext[T]) StepID() string {
+func (w SideEffectContext) StepID() string {
 	return w.stepID
 }
 
-func (w SideEffectContext[T]) RunID() string {
+func (w SideEffectContext) RunID() string {
 	return w.runID
 }
 
-func (w SideEffectContext[T]) EntityID() string {
+func (w SideEffectContext) EntityID() string {
 	return w.sideEffectID
 }
 
-func (w SideEffectContext[T]) ExecutionID() string {
+func (w SideEffectContext) ExecutionID() string {
 	return w.executionID
 }
 
-func (w SideEffectContext[T]) EntityType() string {
+func (w SideEffectContext) EntityType() string {
 	return "sideEffect"
 }

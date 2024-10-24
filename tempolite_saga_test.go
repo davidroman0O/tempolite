@@ -11,12 +11,12 @@ type testFailureSaga struct {
 	OrderID string
 }
 
-func (p testFailureSaga) Transaction(ctx TransactionContext[string]) (interface{}, error) {
+func (p testFailureSaga) Transaction(ctx TransactionContext) (interface{}, error) {
 	log.Println("Starting transaction for testFailureSaga")
 	return nil, fmt.Errorf("testFailureSaga failed")
 }
 
-func (p testFailureSaga) Compensation(ctx CompensationContext[string]) (interface{}, error) {
+func (p testFailureSaga) Compensation(ctx CompensationContext) (interface{}, error) {
 	log.Println("Compensating for testFailureSaga")
 	return "FailureSaga", nil
 }
@@ -30,9 +30,9 @@ func TestSagaSimple(t *testing.T) {
 
 	failure := false
 
-	localWrkflw := func(ctx WorkflowContext[string], input int, msg workflowData) (int, error) {
+	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
-		sagaBuilder := NewSaga[string]()
+		sagaBuilder := NewSaga()
 		sagaBuilder.AddStep(testOrderSaga{OrderID: "12345"})
 		sagaBuilder.AddStep(testFailureSaga{OrderID: "12345"})
 		sagaBuilder.AddStep(testPaymentSaga{OrderID: "12345"})
@@ -53,9 +53,9 @@ func TestSagaSimple(t *testing.T) {
 		return 69, nil
 	}
 
-	tp, err := New[string](
+	tp, err := New(
 		context.Background(),
-		NewRegistry[string]().
+		NewRegistry().
 			Workflow(localWrkflw).
 			Build(),
 		WithPath("./db/tempolite-workflow-saga.db"),

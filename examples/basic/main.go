@@ -8,13 +8,11 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type CustomIdentifier string
-
-func SimpleActivity(ctx tempolite.ActivityContext[CustomIdentifier], input string) (string, error) {
+func SimpleActivity(ctx tempolite.ActivityContext, input string) (string, error) {
 	return fmt.Sprintf("Processed: %s", input), nil
 }
 
-func SimpleWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], input string) (string, error) {
+func SimpleWorkflow(ctx tempolite.WorkflowContext, input string) (string, error) {
 	var result string
 	// Inspired by how Ansible can name their steps, you use the stepID to identify the step
 	// It becomes pretty useful when you have tons of activities in your workflow you quickly know what is doing what
@@ -27,12 +25,12 @@ func SimpleWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], input strin
 
 func main() {
 	// Create a new Tempolite instance with custom options
-	tp, err := tempolite.New[CustomIdentifier]( // in a minimalistic workflow engine while needed consistency without big algorithms, you can use a custom identifier, could be just a `string` or `int`
+	tp, err := tempolite.New( // in a minimalistic workflow engine while needed consistency without big algorithms, you can use a custom identifier, could be just a `string` or `int`
 		context.Background(),
-		tempolite.NewRegistry[CustomIdentifier](). // you can create a registry of workflows and activities that you can then re-use on another Tempolite instance
-								Workflow(SimpleWorkflow).
-								Activity(SimpleActivity).
-								Build(),
+		tempolite.NewRegistry(). // you can create a registry of workflows and activities that you can then re-use on another Tempolite instance
+						Workflow(SimpleWorkflow).
+						Activity(SimpleActivity).
+						Build(),
 		tempolite.WithPath("./tempolite.db"),      // once you executed it once, go check the db!
 		tempolite.WithDestructive(),               // means it will attempt to destroy the previous path db at starts
 		tempolite.WithInitialWorkflowsWorkers(10), // completely overkill
