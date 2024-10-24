@@ -2,6 +2,8 @@
 
 Tempolite is a lightweight, SQLite-based workflow engine for Go that provides deterministic execution of workflows with support for activities, side effects, sagas, signals, and versioning. It's designed to be a simpler alternative to complex workflow engines while maintaining essential features for reliable business process automation.
 
+> Not ready for prime time but good enough for playing with it and small applications.
+
 ## Features
 
 ### 🔄 Workflows
@@ -541,3 +543,24 @@ The pool takes care of all the database management details, so you can focus on 
    - Verify compensation logic
    - Test version transitions
    - Simulate failures
+
+# Roadmap
+
+- More utility functions
+- Adding Select
+
+```go
+ctx.Select(
+    ctx.Workflow( /* ... */),
+    ctx.Workflow( /* ... */)
+)
+```
+
+- Deciding if generic `Identifier` need to go or not
+
+> I used to have an idea for it but it seems the usage tends to be easier with just strings... It simplifies everything and make it readable. Quite funny it look like an Ansible playbook too.
+
+- Timers
+- Maybe providing Postges and Mysql support
+- OpenTelemetry Tracing
+- Web UI for diagnostic and administration
