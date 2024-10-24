@@ -15,8 +15,6 @@ const (
 	ChangeIDCalculateTax = "CalculateTotalWithTax"
 )
 
-type identifier string
-
 const (
 	OpComputeTaxes = "ComputeTaxes"
 )
@@ -28,7 +26,7 @@ var panicOnPurpose atomic.Bool
 var panicActivity atomic.Bool
 
 // OrderWorkflow is the main workflow function
-func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) error {
+func OrderWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
 	var err error
 	var total float64
 
@@ -55,7 +53,7 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[identifier], orderID string) er
 	return nil
 }
 
-func ActivityComputeTaxes(ctx tempolite.ActivityContext[identifier], orderID string) (float64, error) {
+func ActivityComputeTaxes(ctx tempolite.ActivityContext, orderID string) (float64, error) {
 	if errOnPurpose.Load() {
 		errOnPurpose.Store(false)
 		return 0, fmt.Errorf("error on purpose ActivityComputeTaxes")
@@ -67,7 +65,7 @@ func ActivityComputeTaxes(ctx tempolite.ActivityContext[identifier], orderID str
 	return getOrderSubtotal(orderID), nil
 }
 
-func ActivityComputeTotalWithTax(ctx tempolite.ActivityContext[identifier], orderID string, subtotal float64) (float64, error) {
+func ActivityComputeTotalWithTax(ctx tempolite.ActivityContext, orderID string, subtotal float64) (float64, error) {
 	if errOnPurpose.Load() {
 		errOnPurpose.Store(false)
 		return 0, fmt.Errorf("error on purpose ActivityComputeTotalWithTax")
@@ -103,9 +101,9 @@ func calculateTax(subtotal float64) float64 {
 func main() {
 	// Create a new Tempolite instance with a destructive option to reset the database
 	ctx := context.Background()
-	tp, err := tempolite.New[identifier](
+	tp, err := tempolite.New(
 		ctx,
-		tempolite.NewRegistry[identifier]().
+		tempolite.NewRegistry().
 			Workflow(OrderWorkflow).
 			Activity(ActivityComputeTaxes).
 			Build(),
@@ -142,9 +140,9 @@ func main() {
 	fmt.Println("\n--- Updating workflow logic to include tax ---\n")
 
 	ctx = context.Background()
-	tp, err = tempolite.New[identifier](
+	tp, err = tempolite.New(
 		ctx,
-		tempolite.NewRegistry[identifier]().
+		tempolite.NewRegistry().
 			Workflow(OrderWorkflow).
 			Activity(ActivityComputeTaxes).
 			Activity(ActivityComputeTotalWithTax).

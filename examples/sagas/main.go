@@ -8,8 +8,6 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type CustomIdentifier string
-
 // OrderData represents the data for an order
 type OrderData struct {
 	OrderID      string
@@ -22,7 +20,7 @@ type ReserveInventorySaga struct {
 	Data OrderData
 }
 
-func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
+func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Reserving inventory for order %s", s.Data.OrderID)
 	if s.Data.FailScenario == "inventory" {
 		return nil, fmt.Errorf("inventory reservation failed: out of stock")
@@ -30,7 +28,7 @@ func (s ReserveInventorySaga) Transaction(ctx tempolite.TransactionContext[Custo
 	return "Inventory reserved", nil
 }
 
-func (s ReserveInventorySaga) Compensation(ctx tempolite.CompensationContext[CustomIdentifier]) (interface{}, error) {
+func (s ReserveInventorySaga) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating: Releasing reserved inventory for order %s", s.Data.OrderID)
 	return "Inventory released", nil
 }
@@ -40,7 +38,7 @@ type ProcessPaymentSaga struct {
 	Data OrderData
 }
 
-func (s ProcessPaymentSaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
+func (s ProcessPaymentSaga) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Processing payment for order %s, amount %.2f", s.Data.OrderID, s.Data.Amount)
 	if s.Data.FailScenario == "payment" {
 		return nil, fmt.Errorf("payment declined: insufficient funds")
@@ -48,7 +46,7 @@ func (s ProcessPaymentSaga) Transaction(ctx tempolite.TransactionContext[CustomI
 	return "Payment processed", nil
 }
 
-func (s ProcessPaymentSaga) Compensation(ctx tempolite.CompensationContext[CustomIdentifier]) (interface{}, error) {
+func (s ProcessPaymentSaga) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating: Refunding payment for order %s", s.Data.OrderID)
 	return "Payment refunded", nil
 }
@@ -58,7 +56,7 @@ type UpdateLedgerSaga struct {
 	Data OrderData
 }
 
-func (s UpdateLedgerSaga) Transaction(ctx tempolite.TransactionContext[CustomIdentifier]) (interface{}, error) {
+func (s UpdateLedgerSaga) Transaction(ctx tempolite.TransactionContext) (interface{}, error) {
 	log.Printf("Updating ledger for order %s", s.Data.OrderID)
 	if s.Data.FailScenario == "ledger" {
 		return nil, fmt.Errorf("ledger update failed: database error")
@@ -66,16 +64,16 @@ func (s UpdateLedgerSaga) Transaction(ctx tempolite.TransactionContext[CustomIde
 	return "Ledger updated", nil
 }
 
-func (s UpdateLedgerSaga) Compensation(ctx tempolite.CompensationContext[CustomIdentifier]) (interface{}, error) {
+func (s UpdateLedgerSaga) Compensation(ctx tempolite.CompensationContext) (interface{}, error) {
 	log.Printf("Compensating: Reverting ledger update for order %s", s.Data.OrderID)
 	return "Ledger update reverted", nil
 }
 
 // OrderWorkflow is the main workflow function
-func OrderWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], orderData OrderData) (string, error) {
+func OrderWorkflow(ctx tempolite.WorkflowContext, orderData OrderData) (string, error) {
 	log.Printf("Starting OrderWorkflow for order %s", orderData.OrderID)
 
-	sagaBuilder := tempolite.NewSaga[CustomIdentifier]()
+	sagaBuilder := tempolite.NewSaga()
 	sagaBuilder.AddStep(ReserveInventorySaga{Data: orderData})
 	sagaBuilder.AddStep(ProcessPaymentSaga{Data: orderData})
 	sagaBuilder.AddStep(UpdateLedgerSaga{Data: orderData})
@@ -94,9 +92,9 @@ func OrderWorkflow(ctx tempolite.WorkflowContext[CustomIdentifier], orderData Or
 }
 
 func main() {
-	tp, err := tempolite.New[CustomIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
-		tempolite.NewRegistry[CustomIdentifier]().
+		tempolite.NewRegistry().
 			Workflow(OrderWorkflow).
 			Build(),
 		tempolite.WithPath("./db/tempolite.db"),
@@ -117,7 +115,7 @@ func main() {
 
 	for _, orderData := range testCases {
 		var result string
-		err = tp.Workflow(CustomIdentifier(fmt.Sprintf("order-workflow-%s", orderData.OrderID)), OrderWorkflow, nil, orderData).Get(&result)
+		err = tp.Workflow(fmt.Sprintf("order-workflow-%s", orderData.OrderID), OrderWorkflow, nil, orderData).Get(&result)
 		if err != nil {
 			log.Printf("Workflow execution failed for order %s: %v", orderData.OrderID, err)
 		} else {

@@ -1,34 +1,34 @@
 package tempolite
 
-type ActivityContext[T Identifier] struct {
+type ActivityContext struct {
 	TempoliteContext
-	tp          *Tempolite[T]
+	tp          *Tempolite
 	activityID  string
 	executionID string
 	runID       string
 	stepID      string
 }
 
-func (w ActivityContext[T]) StepID() string {
+func (w ActivityContext) StepID() string {
 	return w.stepID
 }
 
-func (w ActivityContext[T]) RunID() string {
+func (w ActivityContext) RunID() string {
 	return w.runID
 }
 
-func (w ActivityContext[T]) EntityID() string {
+func (w ActivityContext) EntityID() string {
 	return w.activityID
 }
 
-func (w ActivityContext[T]) ExecutionID() string {
+func (w ActivityContext) ExecutionID() string {
 	return w.executionID
 }
 
-func (w ActivityContext[T]) EntityType() string {
+func (w ActivityContext) EntityType() string {
 	return "activity"
 }
 
-func (w ActivityContext[T]) GetActivity(id ActivityExecutionID) *ActivityExecutionInfo[T] {
+func (w ActivityContext) GetActivity(id ActivityExecutionID) *ActivityExecutionInfo {
 	return w.tp.getActivityExecution(w, id, nil)
 }

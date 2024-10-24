@@ -26,49 +26,42 @@ import (
 /// - register structs with directly a pointer of the struct, we should guarantee will destroy that pointer
 /// - I don't want to see that AsXXX functions anymore
 ///
-/// TODO: change enqueue functions, i don't want to see As[T] functions anymore, you either put the function or an instance of the struct
+/// TODO: change enqueue functions, i don't want to see As functions anymore, you either put the function or an instance of the struct
 ///
 /// In documentation warn that struct activities need a particular care since the developer might introduce even more non-deteministic code, it should be used for struct that hold a client/api but not a value what might change the output given the same inputs since it activities won't be replayed if sucessful.
 ///
 
-// Trade-off of Tempolite vs Temporal
-// Supporting the same similar concepts but now the exact similar features while having less time and resources implies that knowing how Workflows/Activities/Sideffect are behaving in a deterministic and non-deterministic environment, it is crucial
-// to assign some kind of identifying value to each of the calls so the whole system can works with minimum overhead and just be reliable and predictable. For now it should works for sqlite, but one day... i want the same with no db.
-type Identifier interface {
-	~string | ~int
-}
-
 var errWorkflowPaused = errors.New("workflow is paused")
 
 // TODO: to be renamed as tempoliteEngine since it will be used to rotate/roll new databases when its database size is too big
-type Tempolite[T Identifier] struct {
+type Tempolite struct {
 	db     *dbSQL.DB
 	client *ent.Client
 
 	// Workflows are pre-registered
 	// Deterministic function that should be replayed exactly the same way if successful without triggering code since it will have only the results of the previous execution
 	workflows                      sync.Map
-	workflowPool                   *retrypool.Pool[*workflowTask[T]]
+	workflowPool                   *retrypool.Pool[*workflowTask]
 	schedulerExecutionWorkflowDone chan struct{}
 
 	// Activities are pre-registered
 	// Un-deterministic function
 	activities                     sync.Map
-	activityPool                   *retrypool.Pool[*activityTask[T]]
+	activityPool                   *retrypool.Pool[*activityTask]
 	schedulerExecutionActivityDone chan struct{}
 
 	// SideEffects are dynamically cached
 	// You have to use side effects to guide the flow of a workflow
 	// Help to manage un-deterministic code within a workflow
 	sideEffects             sync.Map
-	sideEffectPool          *retrypool.Pool[*sideEffectTask[T]]
+	sideEffectPool          *retrypool.Pool[*sideEffectTask]
 	schedulerSideEffectDone chan struct{}
 
 	// Saga are dynamically cached
 	// Simplify the management of the Sagas, if we were to use Activities we would be subject to trickery to manage the flow
 	sagas             sync.Map
-	transactionPool   *retrypool.Pool[*transactionTask[T]]
-	compensationPool  *retrypool.Pool[*compensationTask[T]]
+	transactionPool   *retrypool.Pool[*transactionTask]
+	compensationPool  *retrypool.Pool[*compensationTask]
 	schedulerSagaDone chan struct{}
 
 	ctx    context.Context
@@ -87,7 +80,7 @@ type Tempolite[T Identifier] struct {
 	logger Logger
 }
 
-func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempoliteOption) (*Tempolite[T], error) {
+func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tempolite, error) {
 	cfg := tempoliteConfig{
 		initialWorkflowsWorkers:    5,
 		initialActivityWorkers:     5,
@@ -169,7 +162,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 		}
 	}
 
-	tp := &Tempolite[T]{
+	tp := &Tempolite{
 		ctx:                            ctx,
 		db:                             db,
 		client:                         client,
@@ -218,7 +211,7 @@ func New[T Identifier](ctx context.Context, registry *Registry[T], opts ...tempo
 	return tp, nil
 }
 
-func (tp *Tempolite[T]) Close() {
+func (tp *Tempolite) Close() {
 	tp.logger.Debug(tp.ctx, "Closing Tempolite")
 	tp.cancel() // it will stops other systems
 	tp.workflowPool.Close()
@@ -228,7 +221,7 @@ func (tp *Tempolite[T]) Close() {
 	tp.compensationPool.Close()
 }
 
-func (tp *Tempolite[T]) Wait() error {
+func (tp *Tempolite) Wait() error {
 	<-time.After(1 * time.Second)
 
 	activityDone := make(chan error)
@@ -250,7 +243,7 @@ func (tp *Tempolite[T]) Wait() error {
 		defer tp.logger.Debug(tp.ctx, "Finished waiting for activities")
 		activityDone <- tp.activityPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			tp.logger.Debug(tp.ctx, "Wait Activity Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.activityPool.RangeTasks(func(data *activityTask[T], workerID int, status retrypool.TaskStatus) bool {
+			tp.activityPool.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
 				tp.logger.Debug(tp.ctx, "Activity Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
@@ -263,7 +256,7 @@ func (tp *Tempolite[T]) Wait() error {
 		defer tp.logger.Debug(tp.ctx, "Finished waiting for workflows")
 		workflowDone <- tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			tp.logger.Debug(tp.ctx, "Wait Workflow Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.workflowPool.RangeTasks(func(data *workflowTask[T], workerID int, status retrypool.TaskStatus) bool {
+			tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
 				tp.logger.Debug(tp.ctx, "Workflow Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
@@ -276,7 +269,7 @@ func (tp *Tempolite[T]) Wait() error {
 		defer tp.logger.Debug(tp.ctx, "Finished waiting for side effects")
 		sideEffectDone <- tp.sideEffectPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			tp.logger.Debug(tp.ctx, "Wait SideEffect Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.sideEffectPool.RangeTasks(func(data *sideEffectTask[T], workerID int, status retrypool.TaskStatus) bool {
+			tp.sideEffectPool.RangeTasks(func(data *sideEffectTask, workerID int, status retrypool.TaskStatus) bool {
 				tp.logger.Debug(tp.ctx, "SideEffect Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
@@ -289,7 +282,7 @@ func (tp *Tempolite[T]) Wait() error {
 		defer tp.logger.Debug(tp.ctx, "Finished waiting for transactions")
 		transactionDone <- tp.transactionPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			tp.logger.Debug(tp.ctx, "Wait Transaction Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.transactionPool.RangeTasks(func(data *transactionTask[T], workerID int, status retrypool.TaskStatus) bool {
+			tp.transactionPool.RangeTasks(func(data *transactionTask, workerID int, status retrypool.TaskStatus) bool {
 				tp.logger.Debug(tp.ctx, "Transaction Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
@@ -302,7 +295,7 @@ func (tp *Tempolite[T]) Wait() error {
 		defer tp.logger.Debug(tp.ctx, "Finished waiting for compensations")
 		compensationDone <- tp.compensationPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
 			tp.logger.Debug(tp.ctx, "Wait Compensation Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.compensationPool.RangeTasks(func(data *compensationTask[T], workerID int, status retrypool.TaskStatus) bool {
+			tp.compensationPool.RangeTasks(func(data *compensationTask, workerID int, status retrypool.TaskStatus) bool {
 				tp.logger.Debug(tp.ctx, "Compensation Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
 				return true
 			})
@@ -323,7 +316,7 @@ func (tp *Tempolite[T]) Wait() error {
 	return nil
 }
 
-func (tp *Tempolite[T]) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
+func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
 	tp.logger.Debug(tp.ctx, "Converting inputs", "handlerInfo", handlerInfo)
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
@@ -341,7 +334,7 @@ func (tp *Tempolite[T]) convertInputs(handlerInfo HandlerInfo, executionInputs [
 	return outputs, nil
 }
 
-func (tp *Tempolite[T]) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
 	tp.logger.Debug(tp.ctx, "Converting outputs", "handlerInfo", handlerInfo)
 	outputs := []interface{}{}
 	// TODO: we can probably parallelize this
@@ -359,7 +352,7 @@ func (tp *Tempolite[T]) convertOuputs(handlerInfo HandlerInfo, executionOutput [
 	return outputs, nil
 }
 
-func (tp *Tempolite[T]) verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
+func (tp *Tempolite) verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
 
 	if len(params) != handlerInfo.NumIn {
 		tp.logger.Error(tp.ctx, "Parameter count mismatch", "expected", handlerInfo.NumIn, "got", len(params))
@@ -376,7 +369,7 @@ func (tp *Tempolite[T]) verifyHandlerAndParams(handlerInfo HandlerInfo, params [
 	return nil
 }
 
-func (tp *Tempolite[T]) GetLatestWorkflowExecution(originalWorkflowID WorkflowID) (WorkflowID, error) {
+func (tp *Tempolite) GetLatestWorkflowExecution(originalWorkflowID WorkflowID) (WorkflowID, error) {
 	tp.logger.Debug(tp.ctx, "Getting latest workflow execution", "originalWorkflowID", originalWorkflowID)
 
 	currentID := originalWorkflowID
@@ -414,7 +407,7 @@ func (tp *Tempolite[T]) GetLatestWorkflowExecution(originalWorkflowID WorkflowID
 	}
 }
 
-func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
+func (tp *Tempolite) ListPausedWorkflows() ([]WorkflowID, error) {
 	pausedWorkflows, err := tp.client.Workflow.Query().
 		Where(workflow.IsPausedEQ(true)).
 		All(tp.ctx)
@@ -431,7 +424,7 @@ func (tp *Tempolite[T]) ListPausedWorkflows() ([]WorkflowID, error) {
 	return ids, nil
 }
 
-func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
+func (tp *Tempolite) PauseWorkflow(id WorkflowID) error {
 	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
 		return err
@@ -454,7 +447,7 @@ func (tp *Tempolite[T]) PauseWorkflow(id WorkflowID) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
+func (tp *Tempolite) ResumeWorkflow(id WorkflowID) error {
 	tx, err := tp.client.Tx(tp.ctx)
 	if err != nil {
 		return err
@@ -477,7 +470,7 @@ func (tp *Tempolite[T]) ResumeWorkflow(id WorkflowID) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) waitWorkflowStatus(ctx context.Context, id WorkflowID, status workflow.Status) error {
+func (tp *Tempolite) waitWorkflowStatus(ctx context.Context, id WorkflowID, status workflow.Status) error {
 	ticker := time.NewTicker(time.Second / 16)
 	for {
 		select {
@@ -494,7 +487,7 @@ func (tp *Tempolite[T]) waitWorkflowStatus(ctx context.Context, id WorkflowID, s
 	}
 }
 
-func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) error {
+func (tp *Tempolite) CancelWorkflow(id WorkflowID) error {
 
 	tp.logger.Debug(tp.ctx, "CancelWorkflow", "workflowID", id)
 
@@ -537,7 +530,7 @@ func (tp *Tempolite[T]) CancelWorkflow(id WorkflowID) error {
 	switch result {
 	case "paused":
 		// fmt.Println("ranging")
-		tp.workflowPool.RangeTasks(func(data *workflowTask[T], workerID int, status retrypool.TaskStatus) bool {
+		tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
 			tp.logger.Debug(tp.ctx, "task still within the workflow", "workflowID", data.ctx.workflowID, "id", id.String())
 			if data.ctx.workflowID == id.String() {
 				tp.workflowPool.InterruptWorker(workerID, retrypool.WithForcePanic(), retrypool.WithRemoveTask())

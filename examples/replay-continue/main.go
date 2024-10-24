@@ -8,11 +8,9 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type testIdentifier string
-
 var shouldSucceed atomic.Bool
 
-func workflowContinueReplay(ctx tempolite.WorkflowContext[testIdentifier]) (string, error) {
+func workflowContinueReplay(ctx tempolite.WorkflowContext) (string, error) {
 	if shouldSucceed.Load() {
 		return "Success", nil
 	}
@@ -22,11 +20,11 @@ func workflowContinueReplay(ctx tempolite.WorkflowContext[testIdentifier]) (stri
 
 func main() {
 	// Initialize Tempolite
-	registry := tempolite.NewRegistry[testIdentifier]().
+	registry := tempolite.NewRegistry().
 		Workflow(workflowContinueReplay).
 		Build()
 
-	tp, err := tempolite.New[testIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
 		registry,
 		tempolite.WithPath("./db/tempolite-replay-example.db"),

@@ -11,7 +11,7 @@ type SideEffect HandlerInfo
 
 type Workflow HandlerInfo
 
-func As[T any, Y Identifier]() HandlerIdentity {
+func As[T any]() HandlerIdentity {
 	dataType := reflect.TypeOf((*T)(nil)).Elem()
 	return HandlerIdentity(fmt.Sprintf("%s/%s", dataType.PkgPath(), dataType.Name()))
 }
@@ -20,7 +20,7 @@ type Activity HandlerInfo
 
 type ActivityRegister func() (*Activity, error)
 
-func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T) ActivityRegister {
+func activityRegisterType[T any](dataType reflect.Type, instance T) ActivityRegister {
 	return func() (*Activity, error) {
 		handlerValue := reflect.ValueOf(instance)
 		runMethod := handlerValue.MethodByName("Run")
@@ -34,7 +34,7 @@ func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T
 			return nil, fmt.Errorf("Run method of %s must have at least one input parameter (ActivityContext)", dataType)
 		}
 
-		if runMethodType.In(0) != reflect.TypeOf(ActivityContext[Y]{}) {
+		if runMethodType.In(0) != reflect.TypeOf(ActivityContext{}) {
 			return nil, fmt.Errorf("first parameter of Run method in %s must be ActivityContext", dataType)
 		}
 
@@ -82,7 +82,7 @@ func activityRegisterType[T any, Y Identifier](dataType reflect.Type, instance T
 	}
 }
 
-func (tp *Tempolite[T]) registerWorkflow(workflowFunc interface{}) error {
+func (tp *Tempolite) registerWorkflow(workflowFunc interface{}) error {
 	handlerType := reflect.TypeOf(workflowFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -93,7 +93,7 @@ func (tp *Tempolite[T]) registerWorkflow(workflowFunc interface{}) error {
 		return fmt.Errorf("workflow function must have at least one input parameter (WorkflowContext)")
 	}
 
-	if handlerType.In(0) != reflect.TypeOf(WorkflowContext[T]{}) {
+	if handlerType.In(0) != reflect.TypeOf(WorkflowContext{}) {
 		return fmt.Errorf("first parameter of workflow function must be WorkflowContext")
 	}
 
@@ -145,7 +145,7 @@ func (tp *Tempolite[T]) registerWorkflow(workflowFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) registerActivity(activityFunc interface{}) error {
+func (tp *Tempolite) registerActivity(activityFunc interface{}) error {
 	handlerType := reflect.TypeOf(activityFunc)
 
 	if handlerType.Kind() != reflect.Func {
@@ -156,7 +156,7 @@ func (tp *Tempolite[T]) registerActivity(activityFunc interface{}) error {
 		return fmt.Errorf("activity function must have at least one input parameter (ActivityContext)")
 	}
 
-	if handlerType.In(0) != reflect.TypeOf(ActivityContext[T]{}) {
+	if handlerType.In(0) != reflect.TypeOf(ActivityContext{}) {
 		return fmt.Errorf("first parameter of activity function must be ActivityContext")
 	}
 
@@ -208,7 +208,7 @@ func (tp *Tempolite[T]) registerActivity(activityFunc interface{}) error {
 	return nil
 }
 
-func (tp *Tempolite[T]) IsActivityRegistered(longName HandlerIdentity) bool {
+func (tp *Tempolite) IsActivityRegistered(longName HandlerIdentity) bool {
 	_, ok := tp.activities.Load(longName)
 	return ok
 }

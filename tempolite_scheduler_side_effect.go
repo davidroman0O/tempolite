@@ -8,7 +8,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
-func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
+func (tp *Tempolite) schedulerExecutionSideEffect() {
 	defer close(tp.schedulerSideEffectDone)
 	for {
 		select {
@@ -40,14 +40,14 @@ func (tp *Tempolite[T]) schedulerExecutionSideEffect() {
 
 				sideEffect := sideEffectInfo.(SideEffect)
 
-				contextSideEffect := SideEffectContext[T]{
+				contextSideEffect := SideEffectContext{
 					tp:           tp,
 					sideEffectID: se.Edges.SideEffect.ID,
 					executionID:  se.ID,
 					stepID:       se.Edges.SideEffect.StepID,
 				}
 
-				task := &sideEffectTask[T]{
+				task := &sideEffectTask{
 					ctx:         contextSideEffect,
 					handlerName: sideEffect.HandlerLongName,
 					handler:     sideEffect.Handler,

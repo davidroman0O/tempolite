@@ -1,40 +1,40 @@
 package tempolite
 
 // RegistryBuilder is used to register workflows, activitiesFunc, and other components
-type RegistryBuilder[T Identifier] struct {
+type RegistryBuilder struct {
 	workflows  []interface{}
 	activities []interface{}
 }
 
 // NewRegistry creates a new RegistryBuilder
-func NewRegistry[T Identifier]() *RegistryBuilder[T] {
-	return &RegistryBuilder[T]{
+func NewRegistry() *RegistryBuilder {
+	return &RegistryBuilder{
 		workflows:  make([]interface{}, 0),
 		activities: make([]interface{}, 0),
 	}
 }
 
 // Workflow adds a workflow to be registered
-func (b *RegistryBuilder[T]) Workflow(workflow interface{}) *RegistryBuilder[T] {
+func (b *RegistryBuilder) Workflow(workflow interface{}) *RegistryBuilder {
 	b.workflows = append(b.workflows, workflow)
 	return b
 }
 
-func (b *RegistryBuilder[T]) Activity(activity interface{}) *RegistryBuilder[T] {
+func (b *RegistryBuilder) Activity(activity interface{}) *RegistryBuilder {
 	b.activities = append(b.activities, activity)
 	return b
 }
 
 // Build finalizes the registry and returns it
-func (b *RegistryBuilder[T]) Build() *Registry[T] {
-	return &Registry[T]{
+func (b *RegistryBuilder) Build() *Registry {
+	return &Registry{
 		workflowsFunc: b.workflows,
 		activities:    b.activities,
 	}
 }
 
 // Registry holds the registered components
-type Registry[T Identifier] struct {
+type Registry struct {
 	workflowsFunc []interface{}
 	activities    []interface{}
 }

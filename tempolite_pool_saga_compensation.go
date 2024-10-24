@@ -9,8 +9,8 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 )
 
-type compensationTask[T Identifier] struct {
-	ctx         CompensationContext[T]
+type compensationTask struct {
+	ctx         CompensationContext
 	sagaID      string
 	executionID string
 	stepIndex   int
@@ -19,31 +19,31 @@ type compensationTask[T Identifier] struct {
 	next        func() error
 }
 
-func (tp *Tempolite[T]) createCompensationPool(countWorkers int) *retrypool.Pool[*compensationTask[T]] {
-	opts := []retrypool.Option[*compensationTask[T]]{
-		retrypool.WithAttempts[*compensationTask[T]](1),
+func (tp *Tempolite) createCompensationPool(countWorkers int) *retrypool.Pool[*compensationTask] {
+	opts := []retrypool.Option[*compensationTask]{
+		retrypool.WithAttempts[*compensationTask](1),
 		retrypool.WithOnTaskSuccess(tp.compensationOnSuccess),
 		retrypool.WithOnTaskFailure(tp.compensationOnFailure),
 		retrypool.WithPanicHandler(tp.compensationOnPanic),
 		retrypool.WithOnRetry(tp.compensationOnRetry),
-		retrypool.WithPanicWorker[*compensationTask[T]](tp.compensationWorkerPanic),
+		retrypool.WithPanicWorker[*compensationTask](tp.compensationWorkerPanic),
 	}
 
-	workers := []retrypool.Worker[*compensationTask[T]]{}
+	workers := []retrypool.Worker[*compensationTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, compensationWorker[T]{id: i, tp: tp})
+		workers = append(workers, compensationWorker{id: i, tp: tp})
 	}
 
 	return retrypool.New(tp.ctx, workers, opts...)
 }
 
-func (tp *Tempolite[T]) compensationWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+func (tp *Tempolite) compensationWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "compensation pool worker panicked", "workerID", workerID, "error", err)
 	tp.logger.Error(tp.ctx, "compensation pool worker panicked", "stackTrace", stackTrace)
 }
 
-func (tp *Tempolite[T]) compensationOnSuccess(controller retrypool.WorkerController[*compensationTask[T]], workerID int, worker retrypool.Worker[*compensationTask[T]], task *retrypool.TaskWrapper[*compensationTask[T]]) {
+func (tp *Tempolite) compensationOnSuccess(controller retrypool.WorkerController[*compensationTask], workerID int, worker retrypool.Worker[*compensationTask], task *retrypool.TaskWrapper[*compensationTask]) {
 
 	tp.logger.Debug(tp.ctx, "compensation task on success", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
@@ -92,7 +92,7 @@ func (tp *Tempolite[T]) compensationOnSuccess(controller retrypool.WorkerControl
 	}
 }
 
-func (tp *Tempolite[T]) compensationOnFailure(controller retrypool.WorkerController[*compensationTask[T]], workerID int, worker retrypool.Worker[*compensationTask[T]], task *retrypool.TaskWrapper[*compensationTask[T]], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) compensationOnFailure(controller retrypool.WorkerController[*compensationTask], workerID int, worker retrypool.Worker[*compensationTask], task *retrypool.TaskWrapper[*compensationTask], err error) retrypool.DeadTaskAction {
 
 	tp.logger.Debug(tp.ctx, "compensation task on failure", "workerID", workerID, "executionID", task.Data().executionID, "handlerName", task.Data().handlerName)
 
@@ -121,7 +121,7 @@ func (tp *Tempolite[T]) compensationOnFailure(controller retrypool.WorkerControl
 	return retrypool.DeadTaskActionAddToDeadTasks
 }
 
-func (tp *Tempolite[T]) compensationOnPanic(task *compensationTask[T], v interface{}, stackTrace string) {
+func (tp *Tempolite) compensationOnPanic(task *compensationTask, v interface{}, stackTrace string) {
 
 	tp.logger.Debug(tp.ctx, "compensation pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "compensation pool task panicked", "stackTrace", stackTrace)
@@ -159,16 +159,16 @@ func (tp *Tempolite[T]) compensationOnPanic(task *compensationTask[T], v interfa
 	}
 }
 
-func (tp *Tempolite[T]) compensationOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*compensationTask[T]]) {
+func (tp *Tempolite) compensationOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*compensationTask]) {
 	tp.logger.Debug(tp.ctx, "compensation task retry", "attempt", attempt, "error", err)
 }
 
-type compensationWorker[T Identifier] struct {
+type compensationWorker struct {
 	id int
-	tp *Tempolite[T]
+	tp *Tempolite
 }
 
-func (w compensationWorker[T]) Run(ctx context.Context, data *compensationTask[T]) error {
+func (w compensationWorker) Run(ctx context.Context, data *compensationTask) error {
 	w.tp.logger.Debug(ctx, "Executing compensation step", "handlerName", data.handlerName)
 
 	sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
@@ -176,7 +176,7 @@ func (w compensationWorker[T]) Run(ctx context.Context, data *compensationTask[T
 		w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
 		return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
 	}
-	sagaDef := sagaHandlerInfo.(*SagaDefinition[T])
+	sagaDef := sagaHandlerInfo.(*SagaDefinition)
 	step := sagaDef.Steps[data.stepIndex]
 
 	result, err := step.Compensation(data.ctx)

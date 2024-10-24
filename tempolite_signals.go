@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value interface{}) error {
+func (tp *Tempolite) PublishSignal(workflowID WorkflowID, stepID string, value interface{}) error {
 	tp.logger.Debug(tp.ctx, "Publishing signal", "workflowID", workflowID, "stepID", stepID)
 
 	latestWorkflowID, err := tp.GetLatestWorkflowExecution(workflowID)
@@ -36,7 +36,7 @@ func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value int
 			relationship, err := tp.client.ExecutionRelationship.Query().
 				Where(
 					executionrelationship.ParentEntityID(latestWorkflowID.String()),
-					executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+					executionrelationship.ChildStepID(stepID),
 					executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSignal),
 				).
 				First(tp.ctx)
@@ -88,7 +88,7 @@ func (tp *Tempolite[T]) PublishSignal(workflowID WorkflowID, stepID T, value int
 	}
 }
 
-func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalID, error) {
+func (tp *Tempolite) enqueueSignal(ctx WorkflowContext, stepID string) (SignalID, error) {
 
 	tp.logger.Debug(tp.ctx, "Enqueueing signal", "workflowID", ctx.EntityID(), "stepID", stepID)
 
@@ -96,7 +96,7 @@ func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalI
 	relationship, err := tp.client.ExecutionRelationship.Query().
 		Where(
 			executionrelationship.ParentEntityID(ctx.EntityID()),
-			executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+			executionrelationship.ChildStepID(stepID),
 			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSignal),
 		).
 		First(tp.ctx)
@@ -131,7 +131,7 @@ func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalI
 	tp.logger.Debug(tp.ctx, "Creating signal entity")
 	signalEntity, err := tx.Signal.Create().
 		SetID(uuid.New().String()).
-		SetStepID(fmt.Sprint(stepID)).
+		SetStepID(stepID).
 		SetStatus(signal.StatusPending).
 		Save(tp.ctx)
 	if err != nil {
@@ -166,7 +166,7 @@ func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalI
 		SetParentID(ctx.ExecutionID()).
 		SetChildID(signalExecution.ID).
 		SetParentStepID(ctx.StepID()).
-		SetChildStepID(fmt.Sprint(stepID)).
+		SetChildStepID(stepID).
 		SetParentType(executionrelationship.ParentTypeWorkflow).
 		SetChildType(executionrelationship.ChildTypeSignal).
 		Save(tp.ctx)
@@ -189,21 +189,21 @@ func (tp *Tempolite[T]) enqueueSignal(ctx WorkflowContext[T], stepID T) (SignalI
 	return SignalID(signalEntity.ID), nil
 }
 
-type SignalInfo[T Identifier] struct {
-	tp       *Tempolite[T]
+type SignalInfo struct {
+	tp       *Tempolite
 	EntityID SignalID
 	err      error
 }
 
-func (tp *Tempolite[T]) getSignalInfo(id SignalID, err error) *SignalInfo[T] {
-	return &SignalInfo[T]{
+func (tp *Tempolite) getSignalInfo(id SignalID, err error) *SignalInfo {
+	return &SignalInfo{
 		tp:       tp,
 		EntityID: id,
 		err:      err,
 	}
 }
 
-func (s *SignalInfo[T]) Receive(ctx WorkflowContext[T], value interface{}) error {
+func (s *SignalInfo) Receive(ctx WorkflowContext, value interface{}) error {
 	if s.err != nil {
 		s.tp.logger.Error(s.tp.ctx, "Error getting signal info", "error", s.err)
 		return s.err
@@ -265,7 +265,7 @@ func (s *SignalInfo[T]) Receive(ctx WorkflowContext[T], value interface{}) error
 	}
 }
 
-func (w *WorkflowContext[T]) Signal(stepID T) *SignalInfo[T] {
+func (w *WorkflowContext) Signal(stepID string) *SignalInfo {
 	w.tp.logger.Debug(w.tp.ctx, "Enqueueing signal", "workflowID", w.EntityID(), "stepID", stepID)
 	id, err := w.tp.enqueueSignal(*w, stepID)
 	return w.tp.getSignalInfo(id, err)

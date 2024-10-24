@@ -15,7 +15,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		ChangeFlag2 bool
 	}
 
-	testWorkflow := func(ctx WorkflowContext[testIdentifier], input testWorkflowInput) (string, error) {
+	testWorkflow := func(ctx WorkflowContext, input testWorkflowInput) (string, error) {
 		var result string
 
 		changeFlag1Value := int(input.ChangeFlag1)
@@ -45,7 +45,7 @@ func TestWorkflowVersioning(t *testing.T) {
 		return result, nil
 	}
 
-	registery := NewRegistry[testIdentifier]().
+	registery := NewRegistry().
 		Workflow(testWorkflow).
 		Build()
 
@@ -53,7 +53,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	var changeFlag2 bool
 
 	// First run with WithDestructive
-	tp, err := New[testIdentifier](context.Background(), registery, WithPath(dbPath), WithDestructive())
+	tp, err := New(context.Background(), registery, WithPath(dbPath), WithDestructive())
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Second run, Change1 to version 1
-	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
+	tp, err = New(context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Third run, Change1 to version 2
-	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
+	tp, err = New(context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestWorkflowVersioning(t *testing.T) {
 	tp.Close()
 
 	// Fourth run, activate Change2
-	tp, err = New[testIdentifier](context.Background(), registery, WithPath(dbPath))
+	tp, err = New(context.Background(), registery, WithPath(dbPath))
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)
 	}

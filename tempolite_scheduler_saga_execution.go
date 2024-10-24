@@ -59,7 +59,7 @@ import (
 //	 |             |             |
 //	 v             v             v
 //	C1 <--next-- C2 <--next-- C3
-func (tp *Tempolite[T]) schedulerExecutionSaga() {
+func (tp *Tempolite) schedulerExecutionSaga() {
 	defer close(tp.schedulerSagaDone)
 	for {
 		select {
@@ -86,9 +86,9 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 					continue
 				}
 
-				sagaDef := sagaHandlerInfo.(*SagaDefinition[T])
-				transactionTasks := make([]*transactionTask[T], len(sagaDef.HandlerInfo.TransactionInfo))
-				compensationTasks := make([]*compensationTask[T], len(sagaDef.HandlerInfo.CompensationInfo))
+				sagaDef := sagaHandlerInfo.(*SagaDefinition)
+				transactionTasks := make([]*transactionTask, len(sagaDef.HandlerInfo.TransactionInfo))
+				compensationTasks := make([]*compensationTask, len(sagaDef.HandlerInfo.CompensationInfo))
 
 				// Prepare and link tasks
 				{
@@ -96,8 +96,8 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 
 					// Prepare and link tasks
 					for i := 0; i < len(sagaDef.Steps); i++ {
-						transactionTasks[i] = &transactionTask[T]{
-							ctx:         TransactionContext[T]{},
+						transactionTasks[i] = &transactionTask{
+							ctx:         TransactionContext{},
 							sagaID:      sagaExecution.Edges.Saga.ID,
 							executionID: sagaExecution.ID,
 							stepIndex:   i,
@@ -106,8 +106,8 @@ func (tp *Tempolite[T]) schedulerExecutionSaga() {
 						}
 
 						// Create compensation tasks for all steps
-						compensationTasks[i] = &compensationTask[T]{
-							ctx:         CompensationContext[T]{},
+						compensationTasks[i] = &compensationTask{
+							ctx:         CompensationContext{},
 							sagaID:      sagaExecution.Edges.Saga.ID,
 							executionID: sagaExecution.ID,
 							stepIndex:   i,

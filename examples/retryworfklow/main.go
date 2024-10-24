@@ -10,11 +10,9 @@ import (
 	"github.com/davidroman0O/tempolite"
 )
 
-type MyIdentifier string
-
 var shouldFail atomic.Bool
 
-func exampleWorkflow(ctx tempolite.WorkflowContext[MyIdentifier], input int) (int, error) {
+func exampleWorkflow(ctx tempolite.WorkflowContext, input int) (int, error) {
 	log.Printf("Starting workflow with input: %d", input)
 
 	// Simulate some work
@@ -30,9 +28,9 @@ func exampleWorkflow(ctx tempolite.WorkflowContext[MyIdentifier], input int) (in
 
 func main() {
 	// Initialize Tempolite
-	tp, err := tempolite.New[MyIdentifier](
+	tp, err := tempolite.New(
 		context.Background(),
-		tempolite.NewRegistry[MyIdentifier]().
+		tempolite.NewRegistry().
 			Workflow(exampleWorkflow).
 			Build(),
 		tempolite.WithPath("./db/tempolite-retryworklow.db"),
@@ -47,7 +45,7 @@ func main() {
 	shouldFail.Store(true)
 
 	// Execute the workflow
-	workflowInfo := tp.Workflow(MyIdentifier("example-step"), exampleWorkflow, nil, 42)
+	workflowInfo := tp.Workflow("example-step", exampleWorkflow, nil, 42)
 	var result int
 	if err := workflowInfo.Get(&result); err != nil {
 		log.Printf("Workflow execution failed as expected: %v", err)

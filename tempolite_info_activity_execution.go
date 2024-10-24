@@ -11,14 +11,14 @@ import (
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
 )
 
-type ActivityExecutionInfo[T Identifier] struct {
-	tp          *Tempolite[T]
+type ActivityExecutionInfo struct {
+	tp          *Tempolite
 	ExecutionID ActivityExecutionID
 	err         error
 }
 
 // Try to find the activity execution until it reaches a final state
-func (i *ActivityExecutionInfo[T]) Get(output ...interface{}) error {
+func (i *ActivityExecutionInfo) Get(output ...interface{}) error {
 	if i.err != nil {
 		i.tp.logger.Error(i.tp.ctx, "ActivityExecutionInfo.Get", "executionID", i.ExecutionID, "error", i.err)
 		return i.err

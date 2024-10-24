@@ -13,17 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite[T]) GetSideEffect(id SideEffectID) *SideEffectInfo[T] {
+func (tp *Tempolite) GetSideEffect(id SideEffectID) *SideEffectInfo {
 	tp.logger.Debug(tp.ctx, "GetSideEffect", "sideEffectID", id)
-	return &SideEffectInfo[T]{
+	return &SideEffectInfo{
 		tp:       tp,
 		EntityID: id,
 	}
 }
 
-func (tp *Tempolite[T]) getSideEffect(ctx TempoliteContext, id SideEffectID, err error) *SideEffectInfo[T] {
+func (tp *Tempolite) getSideEffect(ctx TempoliteContext, id SideEffectID, err error) *SideEffectInfo {
 	tp.logger.Debug(tp.ctx, "getSideEffect", "sideEffectID", id, "error", err)
-	info := SideEffectInfo[T]{
+	info := SideEffectInfo{
 		tp:       tp,
 		EntityID: id,
 		err:      err,
@@ -41,7 +41,7 @@ func (tp *Tempolite[T]) getSideEffect(ctx TempoliteContext, id SideEffectID, err
 //	}).Get(&value)
 //
 // ```
-func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEffectHandler interface{}) (SideEffectID, error) {
+func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, stepID string, sideEffectHandler interface{}) (SideEffectID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
 		// Proceed with side effect creation
@@ -65,7 +65,7 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 			executionrelationship.And(
 				executionrelationship.RunID(ctx.RunID()),
 				executionrelationship.ParentEntityID(ctx.EntityID()),
-				executionrelationship.ChildStepID(fmt.Sprint(stepID)),
+				executionrelationship.ChildStepID(stepID),
 				executionrelationship.ParentStepID(ctx.StepID()),
 			),
 			executionrelationship.ChildTypeEQ(executionrelationship.ChildTypeSideEffect),
@@ -96,7 +96,7 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 	sideEffectEntity, err := tx.SideEffect.
 		Create().
 		SetID(uuid.NewString()).
-		SetStepID(fmt.Sprint(stepID)).
+		SetStepID(stepID).
 		SetIdentity(string(handlerIdentity)).
 		SetHandlerName(funcName).
 		SetStatus(sideeffect.StatusPending).
@@ -134,7 +134,7 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 		SetParentID(ctx.ExecutionID()).
 		SetChildID(sideEffectExecution.ID).
 		SetParentStepID(ctx.StepID()).
-		SetChildStepID(fmt.Sprint(stepID)).
+		SetChildStepID(stepID).
 		SetParentType(executionrelationship.ParentTypeWorkflow).
 		SetChildType(executionrelationship.ChildTypeSideEffect).
 		Save(tp.ctx)
@@ -156,9 +156,9 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 		return "", fmt.Errorf("side effect must be a function")
 	}
 
-	if handlerType.NumIn() != 1 || handlerType.In(0) != reflect.TypeOf(SideEffectContext[T]{}) {
-		tp.logger.Error(tp.ctx, "Side effect function must have exactly one input parameter of type SideEffectContext[T]", "handlerIdentity", handlerIdentity)
-		return "", fmt.Errorf("side effect function must have exactly one input parameter of type SideEffectContext[T]")
+	if handlerType.NumIn() != 1 || handlerType.In(0) != reflect.TypeOf(SideEffectContext{}) {
+		tp.logger.Error(tp.ctx, "Side effect function must have exactly one input parameter of type SideEffectContext", "handlerIdentity", handlerIdentity)
+		return "", fmt.Errorf("side effect function must have exactly one input parameter of type SideEffectContext")
 	}
 
 	// Collect all return types
@@ -198,7 +198,7 @@ func (tp *Tempolite[T]) enqueueSideEffect(ctx TempoliteContext, stepID T, sideEf
 	return SideEffectID(sideEffectEntity.ID), nil
 }
 
-func (tp *Tempolite[T]) enqueueSideEffectFunc(ctx TempoliteContext, stepID T, sideEffect interface{}) (SideEffectID, error) {
+func (tp *Tempolite) enqueueSideEffectFunc(ctx TempoliteContext, stepID string, sideEffect interface{}) (SideEffectID, error) {
 	tp.logger.Debug(tp.ctx, "EnqueueSideEffectFunc", "stepID", stepID)
 	funcName := runtime.FuncForPC(reflect.ValueOf(sideEffect).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)

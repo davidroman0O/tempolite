@@ -9,8 +9,8 @@ import (
 	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
-type workflowTask[T Identifier] struct {
-	ctx         WorkflowContext[T]
+type workflowTask struct {
+	ctx         WorkflowContext
 	handler     interface{}
 	handlerName HandlerIdentity
 	params      []interface{}
@@ -20,21 +20,21 @@ type workflowTask[T Identifier] struct {
 	isPaused    bool
 }
 
-func (tp *Tempolite[T]) createWorkflowPool(countWorkers int) *retrypool.Pool[*workflowTask[T]] {
+func (tp *Tempolite) createWorkflowPool(countWorkers int) *retrypool.Pool[*workflowTask] {
 
-	opts := []retrypool.Option[*workflowTask[T]]{
-		retrypool.WithAttempts[*workflowTask[T]](1),
+	opts := []retrypool.Option[*workflowTask]{
+		retrypool.WithAttempts[*workflowTask](1),
 		retrypool.WithOnTaskSuccess(tp.workflowOnSuccess),
 		retrypool.WithOnTaskFailure(tp.workflowOnFailure),
 		retrypool.WithPanicHandler(tp.workflowOnPanic),
 		retrypool.WithOnRetry(tp.workflowOnRetry),
-		retrypool.WithPanicWorker[*workflowTask[T]](tp.workflowWorkerPanic),
+		retrypool.WithPanicWorker[*workflowTask](tp.workflowWorkerPanic),
 	}
 
-	workers := []retrypool.Worker[*workflowTask[T]]{}
+	workers := []retrypool.Worker[*workflowTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, workflowWorker[T]{id: i, tp: tp})
+		workers = append(workers, workflowWorker{id: i, tp: tp})
 	}
 
 	return retrypool.New(
@@ -43,21 +43,21 @@ func (tp *Tempolite[T]) createWorkflowPool(countWorkers int) *retrypool.Pool[*wo
 		opts...)
 }
 
-func (tp *Tempolite[T]) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "workflow pool worker panicked", "workerID", workerID, "error", err)
 	tp.logger.Error(tp.ctx, "workflow pool worker panicked", "stackTrace", stackTrace)
 }
 
-func (tp *Tempolite[T]) workflowOnPanic(task *workflowTask[T], v interface{}, stackTrace string) {
+func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "workflow pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "workflow pool task panicked", "stackTrace", stackTrace)
 }
 
-func (tp *Tempolite[T]) workflowOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask[T]]) {
+func (tp *Tempolite) workflowOnRetry(attempt int, err error, task *retrypool.TaskWrapper[*workflowTask]) {
 	tp.logger.Debug(tp.ctx, "workflow pool task retry", "attempt", attempt, "error", err)
 }
 
-func (tp *Tempolite[T]) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask[T]], workerID int, worker retrypool.Worker[*workflowTask[T]], task *retrypool.TaskWrapper[*workflowTask[T]]) {
+func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask]) {
 
 	if task.Data().isPaused {
 		tp.logger.Debug(tp.ctx, "workflow pool task paused", "workflowID", task.Data().ctx.workflowID)
@@ -113,7 +113,7 @@ func (tp *Tempolite[T]) workflowOnSuccess(controller retrypool.WorkerController[
 	}
 }
 
-func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[*workflowTask[T]], workerID int, worker retrypool.Worker[*workflowTask[T]], task *retrypool.TaskWrapper[*workflowTask[T]], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
 
 	tp.logger.Debug(tp.ctx, "workflow pool task failed", "workflowID", task.Data().ctx.workflowID, "executionID", task.Data().ctx.executionID, "retryCount", task.Data().retryCount, "maxRetry", task.Data().maxRetry)
 
@@ -207,12 +207,12 @@ func (tp *Tempolite[T]) workflowOnFailure(controller retrypool.WorkerController[
 	return retrypool.DeadTaskActionDoNothing
 }
 
-type workflowWorker[T Identifier] struct {
+type workflowWorker struct {
 	id int
-	tp *Tempolite[T]
+	tp *Tempolite
 }
 
-func (w workflowWorker[T]) Run(ctx context.Context, data *workflowTask[T]) error {
+func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 
 	w.tp.logger.Debug(data.ctx, "workflow pool worker run", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 
