@@ -1,10 +1,130 @@
 package tempolite
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 )
+
+type BookHexID string
+
+func (b BookHexID) String() string {
+	return string(b)
+}
+
+type BookID string
+
+func (b BookID) String() string {
+	return string(b)
+}
+
+func GIDToBase64(gid []byte) string {
+	return base64.StdEncoding.EncodeToString(gid)
+}
+
+type BookGID []byte
+
+func (b BookGID) Bytes() []byte {
+	return []byte(b)
+}
+
+func (b BookGID) String() string {
+	return GIDToBase64(b)
+}
+
+type BookUri string
+
+func (b BookUri) String() string {
+	return string(b)
+}
+
+type BookIdentifier struct {
+	HexID BookHexID // Example: "59WN2psjkt1tyaxjspN8fp"
+	ID    BookID    // Example: "1QEEqeFIZktqIpPI4jSVSF"
+	GID   BookGID   // Example: []byte(PML+YsMKTA+vU7gOqihgoQ==)
+	URI   BookUri   // Example: "book:1QEEqeFIZktqIpPI4jSVSF"
+}
+
+func (b BookIdentifier) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		HexID string `json:"hexid"`
+		ID    string `json:"id"`
+		GID   string `json:"gid"`
+		URI   string `json:"uri"`
+	}{
+		HexID: b.HexID.String(),
+		ID:    b.ID.String(),
+		GID:   base64.StdEncoding.EncodeToString(b.GID),
+		URI:   b.URI.String(),
+	})
+}
+
+func (b *BookIdentifier) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		HexID string `json:"hexid"`
+		ID    string `json:"id"`
+		GID   string `json:"gid"`
+		URI   string `json:"uri"`
+	}{}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	b.HexID = BookHexID(aux.HexID)
+	b.ID = BookID(aux.ID)
+	b.URI = BookUri(aux.URI)
+
+	gid, err := base64.StdEncoding.DecodeString(aux.GID)
+	if err != nil {
+		return fmt.Errorf("failed to decode GID: %v", err)
+	}
+	b.GID = BookGID(gid)
+
+	return nil
+}
+
+// go test -timeout 30s -v -run ^TestConverterBookIdentifier$  .
+func TestConverterBookIdentifier(t *testing.T) {
+	rawInput := BookIdentifier{
+		HexID: BookHexID("59WN2psjkt1tyaxjspN8fp"),
+		ID:    BookID("1QEEqeFIZktqIpPI4jSVSF"),
+		GID:   BookGID([]byte("PML+YsMKTA+vU7gOqihgoQ==")),
+	}
+	desiredType := reflect.TypeOf(rawInput)
+	desiredKind := desiredType.Kind()
+
+	convertedValue, err := convertIO(rawInput, desiredType, desiredKind)
+	if err != nil {
+		fmt.Println("Error:", err)
+		t.Fail()
+	} else {
+		scustomID := convertedValue.(BookIdentifier)
+		fmt.Println("Converted book:", scustomID)
+	}
+}
+
+// go test -timeout 30s -v -run ^TestConverterBookIdentifierPointer$  .
+func TestConverterBookIdentifierPointer(t *testing.T) {
+	rawInput := &BookIdentifier{
+		HexID: BookHexID("59WN2psjkt1tyaxjspN8fp"),
+		ID:    BookID("1QEEqeFIZktqIpPI4jSVSF"),
+		GID:   BookGID([]byte("PML+YsMKTA+vU7gOqihgoQ==")),
+	}
+	desiredType := reflect.TypeOf(rawInput)
+	desiredKind := desiredType.Kind()
+
+	convertedValue, err := convertIO(rawInput, desiredType, desiredKind)
+	if err != nil {
+		fmt.Println("Error:", err)
+		t.Fail()
+	} else {
+		scustomID := convertedValue.(*BookIdentifier)
+		fmt.Println("Converted book:", scustomID)
+	}
+}
 
 // go test -timeout 30s -v -run ^TestConverterCustomType$  .
 func TestConverterCustomType(t *testing.T) {
