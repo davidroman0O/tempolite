@@ -535,6 +535,7 @@ func convertToMap(rawInput interface{}, desiredType reflect.Type) (interface{}, 
 }
 
 func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{}, error) {
+	// Handle pointer input
 	inputVal := reflect.ValueOf(rawInput)
 	if inputVal.Kind() == reflect.Ptr {
 		if inputVal.IsNil() {
@@ -543,41 +544,83 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{
 		inputVal = inputVal.Elem()
 	}
 
-	if inputVal.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("cannot convert %T to struct", rawInput)
-	}
-
+	// Create the new struct
 	newStruct := reflect.New(desiredType).Elem()
 
-	for i := 0; i < desiredType.NumField(); i++ {
-		field := desiredType.Field(i)
-		if !field.IsExported() {
-			continue
+	// Handle map to struct conversion
+	if inputVal.Kind() == reflect.Map {
+		if inputVal.Type().Key().Kind() != reflect.String {
+			return nil, fmt.Errorf("cannot convert map with non-string keys to struct")
 		}
 
-		// Try to find corresponding field by name
-		inputField := inputVal.FieldByName(field.Name)
-		if !inputField.IsValid() {
-			// Try JSON tag if direct name match fails
+		for i := 0; i < desiredType.NumField(); i++ {
+			field := desiredType.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+
+			// Try field name first
+			mapKey := field.Name
+
+			// Check JSON tag
 			if jsonTag := field.Tag.Get("json"); jsonTag != "" {
 				parts := strings.Split(jsonTag, ",")
 				if parts[0] != "-" {
-					inputField = inputVal.FieldByName(parts[0])
+					mapKey = parts[0]
 				}
 			}
-			if !inputField.IsValid() {
-				continue
+
+			mapValue := inputVal.MapIndex(reflect.ValueOf(mapKey))
+			if !mapValue.IsValid() {
+				continue // Skip if field not found in map
 			}
+
+			// Convert the value
+			converted, err := convertIO(mapValue.Interface(), field.Type, field.Type.Kind())
+			if err != nil {
+				return nil, fmt.Errorf("error converting field %s: %w", field.Name, err)
+			}
+
+			newStruct.Field(i).Set(reflect.ValueOf(converted))
 		}
 
-		// Convert the field value
-		converted, err := convertIO(inputField.Interface(), field.Type, field.Type.Kind())
-		if err != nil {
-			return nil, fmt.Errorf("error converting field %s: %w", field.Name, err)
-		}
-
-		newStruct.Field(i).Set(reflect.ValueOf(converted))
+		return newStruct.Interface(), nil
 	}
 
-	return newStruct.Interface(), nil
+	// Handle struct to struct conversion
+	if inputVal.Kind() == reflect.Struct {
+		for i := 0; i < desiredType.NumField(); i++ {
+			field := desiredType.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+
+			// Try to find corresponding field by name
+			inputField := inputVal.FieldByName(field.Name)
+			if !inputField.IsValid() {
+				// Try JSON tag if direct name match fails
+				if jsonTag := field.Tag.Get("json"); jsonTag != "" {
+					parts := strings.Split(jsonTag, ",")
+					if parts[0] != "-" {
+						inputField = inputVal.FieldByName(parts[0])
+					}
+				}
+				if !inputField.IsValid() {
+					continue
+				}
+			}
+
+			// Convert the field value
+			converted, err := convertIO(inputField.Interface(), field.Type, field.Type.Kind())
+			if err != nil {
+				return nil, fmt.Errorf("error converting field %s: %w", field.Name, err)
+			}
+
+			newStruct.Field(i).Set(reflect.ValueOf(converted))
+		}
+
+		return newStruct.Interface(), nil
+	}
+
+	return nil, fmt.Errorf("cannot convert %T to struct", rawInput)
 }

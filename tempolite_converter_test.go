@@ -402,3 +402,89 @@ func TestErrorCases(t *testing.T) {
 		})
 	}
 }
+
+func TestMapToStructConversion(t *testing.T) {
+	type TestStruct struct {
+		Name    string  `json:"name"`
+		Age     int     `json:"age"`
+		Balance float64 `json:"balance"`
+		Active  bool    `json:"active"`
+	}
+
+	tests := []struct {
+		name        string
+		input       map[string]interface{}
+		want        TestStruct
+		expectError bool
+	}{
+		{
+			name: "basic conversion",
+			input: map[string]interface{}{
+				"name":    "John Doe",
+				"age":     30,
+				"balance": 100.50,
+				"active":  true,
+			},
+			want: TestStruct{
+				Name:    "John Doe",
+				Age:     30,
+				Balance: 100.50,
+				Active:  true,
+			},
+			expectError: false,
+		},
+		{
+			name: "partial fields",
+			input: map[string]interface{}{
+				"name": "Jane Doe",
+				"age":  25,
+			},
+			want: TestStruct{
+				Name: "Jane Doe",
+				Age:  25,
+			},
+			expectError: false,
+		},
+		{
+			name: "with type conversion",
+			input: map[string]interface{}{
+				"name":    "Bob",
+				"age":     "40", // string that needs to be converted to int
+				"balance": 200,  // int that needs to be converted to float64
+				"active":  1,    // int that needs to be converted to bool
+			},
+			want: TestStruct{
+				Name:    "Bob",
+				Age:     40,
+				Balance: 200.0,
+				Active:  true,
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result TestStruct
+			desiredType := reflect.TypeOf(result)
+			converted, err := convertIO(tt.input, desiredType, desiredType.Kind())
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			result = converted.(TestStruct)
+			if !reflect.DeepEqual(result, tt.want) {
+				t.Errorf("Got %+v, want %+v", result, tt.want)
+			}
+		})
+	}
+}
