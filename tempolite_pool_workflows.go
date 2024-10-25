@@ -113,7 +113,7 @@ func (tp *Tempolite) workflowOnSuccess(controller retrypool.WorkerController[*wo
 	}
 }
 
-func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*workflowTask], workerID int, worker retrypool.Worker[*workflowTask], task *retrypool.TaskWrapper[*workflowTask], taskErr error) retrypool.DeadTaskAction {
 
 	tp.logger.Debug(tp.ctx, "workflow pool task failed", "workflowID", task.Data().ctx.workflowID, "executionID", task.Data().ctx.executionID, "retryCount", task.Data().retryCount, "maxRetry", task.Data().maxRetry)
 
@@ -172,9 +172,9 @@ func (tp *Tempolite) workflowOnFailure(controller retrypool.WorkerController[*wo
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	if err != nil {
-		if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", err)
+	if taskErr != nil {
+		if _, err := tx.WorkflowExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(workflowexecution.StatusFailed).SetError(taskErr.Error()).Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "workflow pool task: WorkflowExecution.Update failed", "error", taskErr)
 			if rerr := tx.Rollback(); rerr != nil {
 				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
 			}
