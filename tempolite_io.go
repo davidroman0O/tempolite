@@ -58,13 +58,13 @@ func (tp *Tempolite) convertInputsFromSerialization(handlerInfo HandlerInfo, exe
 		decodedObj := reflect.New(inputType).Elem().Addr().Interface()
 
 		// fmt.Println("convertInputsFromSerialization decodedObj before", decodedObj)
-		fmt.Println("convertInputsFromSerialization serialized input", executionInputs[idx])
+		// fmt.Println("convertInputsFromSerialization serialized input", executionInputs[idx])
 
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
 		}
 
-		fmt.Println("convertInputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
+		// fmt.Println("convertInputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
 
 		inputs = append(inputs, reflect.ValueOf(decodedObj).Elem().Interface())
 	}
@@ -82,12 +82,12 @@ func (tp *Tempolite) convertOutputsFromSerialization(handlerInfo HandlerInfo, ex
 		decodedObj := reflect.New(outputType).Elem().Addr().Interface()
 
 		// fmt.Println("convertOutputsFromSerialization decodedObj before", decodedObj)
-		fmt.Println("convertOutputsFromSerialization serialized output", executionOutputs[idx])
+		// fmt.Println("convertOutputsFromSerialization serialized output", executionOutputs[idx])
 
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
 		}
-		fmt.Println("convertOutputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
+		// fmt.Println("convertOutputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
 
 		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
 	}
@@ -101,7 +101,7 @@ func (tp *Tempolite) convertInputsForSerializationFromValues(regularValues []int
 	for _, inputPointer := range regularValues {
 		buf := new(bytes.Buffer)
 
-		fmt.Printf("convertInputsForSerializationFromValues inputPointer: %v\n", inputPointer)
+		// fmt.Printf("convertInputsForSerializationFromValues inputPointer: %v\n", inputPointer)
 
 		decodedObj := reflect.ValueOf(inputPointer).Interface()
 

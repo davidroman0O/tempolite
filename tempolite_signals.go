@@ -277,13 +277,12 @@ func (s *SignalInfo) Receive(ctx WorkflowContext, value interface{}) error {
 			// 	return fmt.Errorf("error decoding signal value: %w", err)
 			// }
 
-			realValues, err := s.tp.convertOutputsFromSerializationToPointer([]interface{}{value}, signalExecution.Output)
-			if err != nil {
+			if _, err = s.tp.convertOutputsFromSerializationToPointer([]interface{}{value}, signalExecution.Output); err != nil {
 				s.tp.logger.Error(ctx.tp.ctx, "Signal info error decoding signal value", "error", err)
 				return fmt.Errorf("error decoding signal value: %w", err)
 			}
 
-			fmt.Println("realValues", realValues)
+			// fmt.Println("realValues", realValues)
 
 			// s.tp.convertOutputsFromSerialization(value, output)
 

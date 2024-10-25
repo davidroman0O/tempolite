@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/davidroman0O/retrypool"
@@ -65,7 +64,7 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 					// 	continue
 					// }
 
-					fmt.Println("creating workflow task with input", inputs)
+					// fmt.Println("creating workflow task with input", inputs)
 
 					contextWorkflow := WorkflowContext{
 						tp:              tp,

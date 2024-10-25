@@ -755,11 +755,11 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 
 		if !once {
 			once = true
-			fmt.Println("continue as new")
+			// fmt.Println("continue as new")
 			return 69, ctx.ContinueAsNew(ctx, "continue-me", input, msg)
 		}
 
-		fmt.Println("done")
+		// fmt.Println("done")
 		return 69, nil
 	}
 
