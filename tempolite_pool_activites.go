@@ -87,7 +87,7 @@ func (tp *Tempolite) activityOnSuccess(controller retrypool.WorkerController[*ac
 	}
 }
 
-func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask], err error) retrypool.DeadTaskAction {
+func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*activityTask], workerID int, worker retrypool.Worker[*activityTask], task *retrypool.TaskWrapper[*activityTask], taskErr error) retrypool.DeadTaskAction {
 	// printf with err + retryCount + maxRetry
 	tp.logger.Error(tp.ctx, "activity task on failure", "workerID", workerID, "executionID", task.Data().ctx.executionID, "handlerName", task.Data().handlerName)
 
@@ -139,7 +139,7 @@ func (tp *Tempolite) activityOnFailure(controller retrypool.WorkerController[*ac
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
-	if _, err := tx.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(err.Error()).Save(tp.ctx); err != nil {
+	if _, err := tx.ActivityExecution.UpdateOneID(task.Data().ctx.executionID).SetStatus(activityexecution.StatusFailed).SetError(taskErr.Error()).Save(tp.ctx); err != nil {
 		tp.logger.Error(tp.ctx, "activity task on failure: ActivityExecution.Update failed", "error", err)
 		if rerr := tx.Rollback(); rerr != nil {
 			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
