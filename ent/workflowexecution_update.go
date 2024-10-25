@@ -59,14 +59,14 @@ func (weu *WorkflowExecutionUpdate) SetNillableStatus(w *workflowexecution.Statu
 }
 
 // SetOutput sets the "output" field.
-func (weu *WorkflowExecutionUpdate) SetOutput(i []interface{}) *WorkflowExecutionUpdate {
-	weu.mutation.SetOutput(i)
+func (weu *WorkflowExecutionUpdate) SetOutput(u [][]uint8) *WorkflowExecutionUpdate {
+	weu.mutation.SetOutput(u)
 	return weu
 }
 
-// AppendOutput appends i to the "output" field.
-func (weu *WorkflowExecutionUpdate) AppendOutput(i []interface{}) *WorkflowExecutionUpdate {
-	weu.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (weu *WorkflowExecutionUpdate) AppendOutput(u [][]uint8) *WorkflowExecutionUpdate {
+	weu.mutation.AppendOutput(u)
 	return weu
 }
 
@@ -323,14 +323,14 @@ func (weuo *WorkflowExecutionUpdateOne) SetNillableStatus(w *workflowexecution.S
 }
 
 // SetOutput sets the "output" field.
-func (weuo *WorkflowExecutionUpdateOne) SetOutput(i []interface{}) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetOutput(i)
+func (weuo *WorkflowExecutionUpdateOne) SetOutput(u [][]uint8) *WorkflowExecutionUpdateOne {
+	weuo.mutation.SetOutput(u)
 	return weuo
 }
 
-// AppendOutput appends i to the "output" field.
-func (weuo *WorkflowExecutionUpdateOne) AppendOutput(i []interface{}) *WorkflowExecutionUpdateOne {
-	weuo.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (weuo *WorkflowExecutionUpdateOne) AppendOutput(u [][]uint8) *WorkflowExecutionUpdateOne {
+	weuo.mutation.AppendOutput(u)
 	return weuo
 }
 

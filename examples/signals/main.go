@@ -61,8 +61,8 @@ func main() {
 			Workflow(CoffeeShopWorkflow).
 			Activity(PrepareDrink).
 			Build(),
-		tempolite.WithPath("./db/tempolite-signals.db"),
-		tempolite.WithDestructive(),
+		// tempolite.WithPath("./db/tempolite-signals.db"),
+		// tempolite.WithDestructive(),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)

@@ -59,14 +59,14 @@ func (seu *SignalExecutionUpdate) SetNillableStatus(s *signalexecution.Status) *
 }
 
 // SetOutput sets the "output" field.
-func (seu *SignalExecutionUpdate) SetOutput(i []interface{}) *SignalExecutionUpdate {
-	seu.mutation.SetOutput(i)
+func (seu *SignalExecutionUpdate) SetOutput(u [][]uint8) *SignalExecutionUpdate {
+	seu.mutation.SetOutput(u)
 	return seu
 }
 
-// AppendOutput appends i to the "output" field.
-func (seu *SignalExecutionUpdate) AppendOutput(i []interface{}) *SignalExecutionUpdate {
-	seu.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (seu *SignalExecutionUpdate) AppendOutput(u [][]uint8) *SignalExecutionUpdate {
+	seu.mutation.AppendOutput(u)
 	return seu
 }
 
@@ -306,14 +306,14 @@ func (seuo *SignalExecutionUpdateOne) SetNillableStatus(s *signalexecution.Statu
 }
 
 // SetOutput sets the "output" field.
-func (seuo *SignalExecutionUpdateOne) SetOutput(i []interface{}) *SignalExecutionUpdateOne {
-	seuo.mutation.SetOutput(i)
+func (seuo *SignalExecutionUpdateOne) SetOutput(u [][]uint8) *SignalExecutionUpdateOne {
+	seuo.mutation.SetOutput(u)
 	return seuo
 }
 
-// AppendOutput appends i to the "output" field.
-func (seuo *SignalExecutionUpdateOne) AppendOutput(i []interface{}) *SignalExecutionUpdateOne {
-	seuo.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (seuo *SignalExecutionUpdateOne) AppendOutput(u [][]uint8) *SignalExecutionUpdateOne {
+	seuo.mutation.AppendOutput(u)
 	return seuo
 }
 

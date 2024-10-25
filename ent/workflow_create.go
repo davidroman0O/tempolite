@@ -55,8 +55,8 @@ func (wc *WorkflowCreate) SetHandlerName(s string) *WorkflowCreate {
 }
 
 // SetInput sets the "input" field.
-func (wc *WorkflowCreate) SetInput(i []interface{}) *WorkflowCreate {
-	wc.mutation.SetInput(i)
+func (wc *WorkflowCreate) SetInput(u [][]uint8) *WorkflowCreate {
+	wc.mutation.SetInput(u)
 	return wc
 }
 

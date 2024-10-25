@@ -62,8 +62,8 @@ type ActivityMutation struct {
 	step_id           *string
 	status            *activity.Status
 	handler_name      *string
-	input             *[]interface{}
-	appendinput       []interface{}
+	input             *[][]uint8
+	appendinput       [][]uint8
 	retry_policy      *schema.RetryPolicy
 	timeout           *time.Time
 	created_at        *time.Time
@@ -325,13 +325,13 @@ func (m *ActivityMutation) ResetHandlerName() {
 }
 
 // SetInput sets the "input" field.
-func (m *ActivityMutation) SetInput(i []interface{}) {
-	m.input = &i
+func (m *ActivityMutation) SetInput(u [][]uint8) {
+	m.input = &u
 	m.appendinput = nil
 }
 
 // Input returns the value of the "input" field in the mutation.
-func (m *ActivityMutation) Input() (r []interface{}, exists bool) {
+func (m *ActivityMutation) Input() (r [][]uint8, exists bool) {
 	v := m.input
 	if v == nil {
 		return
@@ -342,7 +342,7 @@ func (m *ActivityMutation) Input() (r []interface{}, exists bool) {
 // OldInput returns the old "input" field's value of the Activity entity.
 // If the Activity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityMutation) OldInput(ctx context.Context) (v []interface{}, err error) {
+func (m *ActivityMutation) OldInput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInput is only allowed on UpdateOne operations")
 	}
@@ -356,13 +356,13 @@ func (m *ActivityMutation) OldInput(ctx context.Context) (v []interface{}, err e
 	return oldValue.Input, nil
 }
 
-// AppendInput adds i to the "input" field.
-func (m *ActivityMutation) AppendInput(i []interface{}) {
-	m.appendinput = append(m.appendinput, i...)
+// AppendInput adds u to the "input" field.
+func (m *ActivityMutation) AppendInput(u [][]uint8) {
+	m.appendinput = append(m.appendinput, u...)
 }
 
 // AppendedInput returns the list of values that were appended to the "input" field in this mutation.
-func (m *ActivityMutation) AppendedInput() ([]interface{}, bool) {
+func (m *ActivityMutation) AppendedInput() ([][]uint8, bool) {
 	if len(m.appendinput) == 0 {
 		return nil, false
 	}
@@ -709,7 +709,7 @@ func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 		m.SetHandlerName(v)
 		return nil
 	case activity.FieldInput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -922,8 +922,8 @@ type ActivityExecutionMutation struct {
 	status          *activityexecution.Status
 	attempt         *int
 	addattempt      *int
-	output          *[]interface{}
-	appendoutput    []interface{}
+	output          *[][]uint8
+	appendoutput    [][]uint8
 	error           *string
 	started_at      *time.Time
 	updated_at      *time.Time
@@ -1168,13 +1168,13 @@ func (m *ActivityExecutionMutation) ResetAttempt() {
 }
 
 // SetOutput sets the "output" field.
-func (m *ActivityExecutionMutation) SetOutput(i []interface{}) {
-	m.output = &i
+func (m *ActivityExecutionMutation) SetOutput(u [][]uint8) {
+	m.output = &u
 	m.appendoutput = nil
 }
 
 // Output returns the value of the "output" field in the mutation.
-func (m *ActivityExecutionMutation) Output() (r []interface{}, exists bool) {
+func (m *ActivityExecutionMutation) Output() (r [][]uint8, exists bool) {
 	v := m.output
 	if v == nil {
 		return
@@ -1185,7 +1185,7 @@ func (m *ActivityExecutionMutation) Output() (r []interface{}, exists bool) {
 // OldOutput returns the old "output" field's value of the ActivityExecution entity.
 // If the ActivityExecution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionMutation) OldOutput(ctx context.Context) (v []interface{}, err error) {
+func (m *ActivityExecutionMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
 	}
@@ -1199,13 +1199,13 @@ func (m *ActivityExecutionMutation) OldOutput(ctx context.Context) (v []interfac
 	return oldValue.Output, nil
 }
 
-// AppendOutput adds i to the "output" field.
-func (m *ActivityExecutionMutation) AppendOutput(i []interface{}) {
-	m.appendoutput = append(m.appendoutput, i...)
+// AppendOutput adds u to the "output" field.
+func (m *ActivityExecutionMutation) AppendOutput(u [][]uint8) {
+	m.appendoutput = append(m.appendoutput, u...)
 }
 
 // AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *ActivityExecutionMutation) AppendedOutput() ([]interface{}, bool) {
+func (m *ActivityExecutionMutation) AppendedOutput() ([][]uint8, bool) {
 	if len(m.appendoutput) == 0 {
 		return nil, false
 	}
@@ -1524,7 +1524,7 @@ func (m *ActivityExecutionMutation) SetField(name string, value ent.Value) error
 		m.SetAttempt(v)
 		return nil
 	case activityexecution.FieldOutput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -5947,8 +5947,8 @@ type SideEffectExecutionMutation struct {
 	status             *sideeffectexecution.Status
 	attempt            *int
 	addattempt         *int
-	output             *[]interface{}
-	appendoutput       []interface{}
+	output             *[][]uint8
+	appendoutput       [][]uint8
 	error              *string
 	started_at         *time.Time
 	updated_at         *time.Time
@@ -6157,13 +6157,13 @@ func (m *SideEffectExecutionMutation) ResetAttempt() {
 }
 
 // SetOutput sets the "output" field.
-func (m *SideEffectExecutionMutation) SetOutput(i []interface{}) {
-	m.output = &i
+func (m *SideEffectExecutionMutation) SetOutput(u [][]uint8) {
+	m.output = &u
 	m.appendoutput = nil
 }
 
 // Output returns the value of the "output" field in the mutation.
-func (m *SideEffectExecutionMutation) Output() (r []interface{}, exists bool) {
+func (m *SideEffectExecutionMutation) Output() (r [][]uint8, exists bool) {
 	v := m.output
 	if v == nil {
 		return
@@ -6174,7 +6174,7 @@ func (m *SideEffectExecutionMutation) Output() (r []interface{}, exists bool) {
 // OldOutput returns the old "output" field's value of the SideEffectExecution entity.
 // If the SideEffectExecution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionMutation) OldOutput(ctx context.Context) (v []interface{}, err error) {
+func (m *SideEffectExecutionMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
 	}
@@ -6188,13 +6188,13 @@ func (m *SideEffectExecutionMutation) OldOutput(ctx context.Context) (v []interf
 	return oldValue.Output, nil
 }
 
-// AppendOutput adds i to the "output" field.
-func (m *SideEffectExecutionMutation) AppendOutput(i []interface{}) {
-	m.appendoutput = append(m.appendoutput, i...)
+// AppendOutput adds u to the "output" field.
+func (m *SideEffectExecutionMutation) AppendOutput(u [][]uint8) {
+	m.appendoutput = append(m.appendoutput, u...)
 }
 
 // AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *SideEffectExecutionMutation) AppendedOutput() ([]interface{}, bool) {
+func (m *SideEffectExecutionMutation) AppendedOutput() ([][]uint8, bool) {
 	if len(m.appendoutput) == 0 {
 		return nil, false
 	}
@@ -6499,7 +6499,7 @@ func (m *SideEffectExecutionMutation) SetField(name string, value ent.Value) err
 		m.SetAttempt(v)
 		return nil
 	case sideeffectexecution.FieldOutput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -7296,8 +7296,8 @@ type SignalExecutionMutation struct {
 	id            *string
 	run_id        *string
 	status        *signalexecution.Status
-	output        *[]interface{}
-	appendoutput  []interface{}
+	output        *[][]uint8
+	appendoutput  [][]uint8
 	error         *string
 	started_at    *time.Time
 	updated_at    *time.Time
@@ -7486,13 +7486,13 @@ func (m *SignalExecutionMutation) ResetStatus() {
 }
 
 // SetOutput sets the "output" field.
-func (m *SignalExecutionMutation) SetOutput(i []interface{}) {
-	m.output = &i
+func (m *SignalExecutionMutation) SetOutput(u [][]uint8) {
+	m.output = &u
 	m.appendoutput = nil
 }
 
 // Output returns the value of the "output" field in the mutation.
-func (m *SignalExecutionMutation) Output() (r []interface{}, exists bool) {
+func (m *SignalExecutionMutation) Output() (r [][]uint8, exists bool) {
 	v := m.output
 	if v == nil {
 		return
@@ -7503,7 +7503,7 @@ func (m *SignalExecutionMutation) Output() (r []interface{}, exists bool) {
 // OldOutput returns the old "output" field's value of the SignalExecution entity.
 // If the SignalExecution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SignalExecutionMutation) OldOutput(ctx context.Context) (v []interface{}, err error) {
+func (m *SignalExecutionMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
 	}
@@ -7517,13 +7517,13 @@ func (m *SignalExecutionMutation) OldOutput(ctx context.Context) (v []interface{
 	return oldValue.Output, nil
 }
 
-// AppendOutput adds i to the "output" field.
-func (m *SignalExecutionMutation) AppendOutput(i []interface{}) {
-	m.appendoutput = append(m.appendoutput, i...)
+// AppendOutput adds u to the "output" field.
+func (m *SignalExecutionMutation) AppendOutput(u [][]uint8) {
+	m.appendoutput = append(m.appendoutput, u...)
 }
 
 // AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *SignalExecutionMutation) AppendedOutput() ([]interface{}, bool) {
+func (m *SignalExecutionMutation) AppendedOutput() ([][]uint8, bool) {
 	if len(m.appendoutput) == 0 {
 		return nil, false
 	}
@@ -7828,7 +7828,7 @@ func (m *SignalExecutionMutation) SetField(name string, value ent.Value) error {
 		m.SetStatus(v)
 		return nil
 	case signalexecution.FieldOutput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -8025,8 +8025,8 @@ type WorkflowMutation struct {
 	status                *workflow.Status
 	identity              *string
 	handler_name          *string
-	input                 *[]interface{}
-	appendinput           []interface{}
+	input                 *[][]uint8
+	appendinput           [][]uint8
 	retry_policy          *schema.RetryPolicy
 	is_paused             *bool
 	is_ready              *bool
@@ -8299,13 +8299,13 @@ func (m *WorkflowMutation) ResetHandlerName() {
 }
 
 // SetInput sets the "input" field.
-func (m *WorkflowMutation) SetInput(i []interface{}) {
-	m.input = &i
+func (m *WorkflowMutation) SetInput(u [][]uint8) {
+	m.input = &u
 	m.appendinput = nil
 }
 
 // Input returns the value of the "input" field in the mutation.
-func (m *WorkflowMutation) Input() (r []interface{}, exists bool) {
+func (m *WorkflowMutation) Input() (r [][]uint8, exists bool) {
 	v := m.input
 	if v == nil {
 		return
@@ -8316,7 +8316,7 @@ func (m *WorkflowMutation) Input() (r []interface{}, exists bool) {
 // OldInput returns the old "input" field's value of the Workflow entity.
 // If the Workflow object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowMutation) OldInput(ctx context.Context) (v []interface{}, err error) {
+func (m *WorkflowMutation) OldInput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInput is only allowed on UpdateOne operations")
 	}
@@ -8330,13 +8330,13 @@ func (m *WorkflowMutation) OldInput(ctx context.Context) (v []interface{}, err e
 	return oldValue.Input, nil
 }
 
-// AppendInput adds i to the "input" field.
-func (m *WorkflowMutation) AppendInput(i []interface{}) {
-	m.appendinput = append(m.appendinput, i...)
+// AppendInput adds u to the "input" field.
+func (m *WorkflowMutation) AppendInput(u [][]uint8) {
+	m.appendinput = append(m.appendinput, u...)
 }
 
 // AppendedInput returns the list of values that were appended to the "input" field in this mutation.
-func (m *WorkflowMutation) AppendedInput() ([]interface{}, bool) {
+func (m *WorkflowMutation) AppendedInput() ([][]uint8, bool) {
 	if len(m.appendinput) == 0 {
 		return nil, false
 	}
@@ -9028,7 +9028,7 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		m.SetHandlerName(v)
 		return nil
 	case workflow.FieldInput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -9371,8 +9371,8 @@ type WorkflowExecutionMutation struct {
 	id              *string
 	run_id          *string
 	status          *workflowexecution.Status
-	output          *[]interface{}
-	appendoutput    []interface{}
+	output          *[][]uint8
+	appendoutput    [][]uint8
 	error           *string
 	is_replay       *bool
 	started_at      *time.Time
@@ -9562,13 +9562,13 @@ func (m *WorkflowExecutionMutation) ResetStatus() {
 }
 
 // SetOutput sets the "output" field.
-func (m *WorkflowExecutionMutation) SetOutput(i []interface{}) {
-	m.output = &i
+func (m *WorkflowExecutionMutation) SetOutput(u [][]uint8) {
+	m.output = &u
 	m.appendoutput = nil
 }
 
 // Output returns the value of the "output" field in the mutation.
-func (m *WorkflowExecutionMutation) Output() (r []interface{}, exists bool) {
+func (m *WorkflowExecutionMutation) Output() (r [][]uint8, exists bool) {
 	v := m.output
 	if v == nil {
 		return
@@ -9579,7 +9579,7 @@ func (m *WorkflowExecutionMutation) Output() (r []interface{}, exists bool) {
 // OldOutput returns the old "output" field's value of the WorkflowExecution entity.
 // If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionMutation) OldOutput(ctx context.Context) (v []interface{}, err error) {
+func (m *WorkflowExecutionMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
 	}
@@ -9593,13 +9593,13 @@ func (m *WorkflowExecutionMutation) OldOutput(ctx context.Context) (v []interfac
 	return oldValue.Output, nil
 }
 
-// AppendOutput adds i to the "output" field.
-func (m *WorkflowExecutionMutation) AppendOutput(i []interface{}) {
-	m.appendoutput = append(m.appendoutput, i...)
+// AppendOutput adds u to the "output" field.
+func (m *WorkflowExecutionMutation) AppendOutput(u [][]uint8) {
+	m.appendoutput = append(m.appendoutput, u...)
 }
 
 // AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *WorkflowExecutionMutation) AppendedOutput() ([]interface{}, bool) {
+func (m *WorkflowExecutionMutation) AppendedOutput() ([][]uint8, bool) {
 	if len(m.appendoutput) == 0 {
 		return nil, false
 	}
@@ -9947,7 +9947,7 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 		m.SetStatus(v)
 		return nil
 	case workflowexecution.FieldOutput:
-		v, ok := value.([]interface{})
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

@@ -42,8 +42,8 @@ func (wec *WorkflowExecutionCreate) SetNillableStatus(w *workflowexecution.Statu
 }
 
 // SetOutput sets the "output" field.
-func (wec *WorkflowExecutionCreate) SetOutput(i []interface{}) *WorkflowExecutionCreate {
-	wec.mutation.SetOutput(i)
+func (wec *WorkflowExecutionCreate) SetOutput(u [][]uint8) *WorkflowExecutionCreate {
+	wec.mutation.SetOutput(u)
 	return wec
 }
 

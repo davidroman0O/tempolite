@@ -76,19 +76,21 @@ func (i *ActivityInfo) Get(output ...interface{}) error {
 
 					switch latestExec.Status {
 					case activityexecution.StatusCompleted:
-						outputs, err := i.tp.convertOuputs(HandlerInfo(activityHandlerInfo), latestExec.Output)
+						// outputs, err := i.tp.convertOutputs(HandlerInfo(activityHandlerInfo), latestExec.Output)
+						deserializedOutput, err := i.tp.convertOutputsFromSerialization(HandlerInfo(activityHandlerInfo), latestExec.Output)
+
 						if err != nil {
 							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: failed to convert outputs", "error", err)
 							return err
 						}
-						if len(output) != len(outputs) {
-							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output length mismatch", "expected", len(outputs), "got", len(output))
-							return fmt.Errorf("output length mismatch: expected %d, got %d", len(outputs), len(output))
+						if len(output) != len(deserializedOutput) {
+							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output length mismatch", "expected", len(deserializedOutput), "got", len(output))
+							return fmt.Errorf("output length mismatch: expected %d, got %d", len(deserializedOutput), len(output))
 						}
 
 						for idx, outPtr := range output {
 							outVal := reflect.ValueOf(outPtr).Elem()
-							outputVal := reflect.ValueOf(outputs[idx])
+							outputVal := reflect.ValueOf(deserializedOutput[idx])
 
 							if outVal.Type() != outputVal.Type() {
 								i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: type mismatch", "index", idx, "expected", outVal.Type(), "got", outputVal.Type())

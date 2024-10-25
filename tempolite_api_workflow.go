@@ -132,6 +132,12 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 			}
 		}
 
+		serializableParams, err := tp.convertInputsForSerialization(HandlerInfo(workflowHandlerInfo), params)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Error converting inputs for serialization", "error", err)
+			return "", err
+		}
+
 		tp.logger.Debug(tp.ctx, "Creating transaction to create workflow", "handlerIdentity", handlerIdentity)
 		if tx, err = tp.client.Tx(tp.ctx); err != nil {
 			tp.logger.Error(tp.ctx, "Error creating transaction to create workflow", "error", err)
@@ -147,7 +153,7 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 			SetStepID(stepID).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
-			SetInput(params).
+			SetInput(serializableParams).
 			SetRetryPolicy(schema.RetryPolicy{
 				MaximumAttempts: 1,
 			}).
@@ -300,6 +306,12 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			}
 		}
 
+		serializableParams, err := tp.convertInputsForSerialization(HandlerInfo(workflowHandlerInfo), params)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Error converting inputs for serialization", "error", err)
+			return "", err
+		}
+
 		tp.logger.Debug(tp.ctx, "Creating workflow entity")
 		//	definition of a workflow, it exists but it is nothing without an execution that will be created as long as it retries
 		var workflowEntity *ent.Workflow
@@ -310,7 +322,7 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			SetStepID(stepID).
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
-			SetInput(params).
+			SetInput(serializableParams).
 			SetRetryPolicy(retryPolicyConfig).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {

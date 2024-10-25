@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/davidroman0O/retrypool"
@@ -191,13 +192,33 @@ func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
 		}
 	}
 
+	var value any
+	var ok bool
+	var activityInfo Activity
+
+	if value, ok = w.tp.activities.Load(data.handlerName); ok {
+		if activityInfo, ok = value.(Activity); !ok {
+			w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+			return fmt.Errorf("activity %s not found", data.handlerName)
+		}
+	} else {
+		w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+		return fmt.Errorf("activity %s not found", data.handlerName)
+	}
+
+	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(activityInfo), res)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "activity pool worker: convertOutputsForSerialization failed", "error", err)
+		return err
+	}
+
 	tx, err := w.tp.client.Tx(w.tp.ctx)
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
 		return err
 	}
 
-	if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
+	if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
 		w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
 		if rerr := tx.Rollback(); rerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)

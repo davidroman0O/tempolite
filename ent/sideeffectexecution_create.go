@@ -50,8 +50,8 @@ func (seec *SideEffectExecutionCreate) SetNillableAttempt(i *int) *SideEffectExe
 }
 
 // SetOutput sets the "output" field.
-func (seec *SideEffectExecutionCreate) SetOutput(i []interface{}) *SideEffectExecutionCreate {
-	seec.mutation.SetOutput(i)
+func (seec *SideEffectExecutionCreate) SetOutput(u [][]uint8) *SideEffectExecutionCreate {
+	seec.mutation.SetOutput(u)
 	return seec
 }
 

@@ -110,6 +110,12 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			return "", err
 		}
 
+		serializableParams, err := tp.convertInputsForSerialization(HandlerInfo(activityHandlerInfo), params)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Error converting inputs for serialization", "error", err)
+			return "", err
+		}
+
 		tp.logger.Debug(tp.ctx, "Creating activity entity", "longName", longName, "stepID", stepID)
 		var activityEntity *ent.Activity
 		if activityEntity, err = tx.
@@ -119,7 +125,7 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			SetStepID(stepID).
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
-			SetInput(params).
+			SetInput(serializableParams).
 			SetRetryPolicy(schema.RetryPolicy{
 				MaximumAttempts: 1,
 			}).

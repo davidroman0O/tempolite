@@ -28,7 +28,7 @@ type Activity struct {
 	// HandlerName holds the value of the "handler_name" field.
 	HandlerName string `json:"handler_name,omitempty"`
 	// Input holds the value of the "input" field.
-	Input []interface{} `json:"input,omitempty"`
+	Input [][]uint8 `json:"input,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Timeout holds the value of the "timeout" field.

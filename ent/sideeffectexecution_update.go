@@ -66,14 +66,14 @@ func (seeu *SideEffectExecutionUpdate) AddAttempt(i int) *SideEffectExecutionUpd
 }
 
 // SetOutput sets the "output" field.
-func (seeu *SideEffectExecutionUpdate) SetOutput(i []interface{}) *SideEffectExecutionUpdate {
-	seeu.mutation.SetOutput(i)
+func (seeu *SideEffectExecutionUpdate) SetOutput(u [][]uint8) *SideEffectExecutionUpdate {
+	seeu.mutation.SetOutput(u)
 	return seeu
 }
 
-// AppendOutput appends i to the "output" field.
-func (seeu *SideEffectExecutionUpdate) AppendOutput(i []interface{}) *SideEffectExecutionUpdate {
-	seeu.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (seeu *SideEffectExecutionUpdate) AppendOutput(u [][]uint8) *SideEffectExecutionUpdate {
+	seeu.mutation.AppendOutput(u)
 	return seeu
 }
 
@@ -323,14 +323,14 @@ func (seeuo *SideEffectExecutionUpdateOne) AddAttempt(i int) *SideEffectExecutio
 }
 
 // SetOutput sets the "output" field.
-func (seeuo *SideEffectExecutionUpdateOne) SetOutput(i []interface{}) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.SetOutput(i)
+func (seeuo *SideEffectExecutionUpdateOne) SetOutput(u [][]uint8) *SideEffectExecutionUpdateOne {
+	seeuo.mutation.SetOutput(u)
 	return seeuo
 }
 
-// AppendOutput appends i to the "output" field.
-func (seeuo *SideEffectExecutionUpdateOne) AppendOutput(i []interface{}) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (seeuo *SideEffectExecutionUpdateOne) AppendOutput(u [][]uint8) *SideEffectExecutionUpdateOne {
+	seeuo.mutation.AppendOutput(u)
 	return seeuo
 }
 

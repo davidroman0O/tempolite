@@ -67,7 +67,16 @@ func handleNamedType(input interface{}, desiredType reflect.Type) (interface{}, 
 		case reflect.Slice:
 			if inputValue.Type().Elem().Kind() == reflect.Uint8 {
 				input = inputValue.Bytes()
+			} else {
+				// Keep the original slice for non-byte slices
+				input = inputValue.Interface()
 			}
+		case reflect.Map:
+			// Keep the original map value
+			input = inputValue.Interface()
+		case reflect.Struct:
+			// Keep the original struct value
+			input = inputValue.Interface()
 		}
 	}
 
@@ -128,7 +137,45 @@ func handleNamedType(input interface{}, desiredType reflect.Type) (interface{}, 
 			if err != nil {
 				return nil, err
 			}
-			newValue.Set(reflect.ValueOf(convertedSlice))
+			if reflect.TypeOf(convertedSlice).AssignableTo(desiredType) {
+				newValue.Set(reflect.ValueOf(convertedSlice))
+			} else {
+				// Handle custom slice types
+				sliceVal := reflect.ValueOf(convertedSlice)
+				customSlice := reflect.MakeSlice(desiredType, sliceVal.Len(), sliceVal.Cap())
+				for i := 0; i < sliceVal.Len(); i++ {
+					elem := sliceVal.Index(i).Interface()
+					converted, err := convertIO(elem, desiredType.Elem(), desiredType.Elem().Kind())
+					if err != nil {
+						return nil, fmt.Errorf("error converting slice element %d: %w", i, err)
+					}
+					customSlice.Index(i).Set(reflect.ValueOf(converted))
+				}
+				newValue.Set(customSlice)
+			}
+		}
+
+	case reflect.Map:
+		converted, err := convertToMap(input, desiredType)
+		if err != nil {
+			return nil, err
+		}
+		if reflect.TypeOf(converted).AssignableTo(desiredType) {
+			newValue.Set(reflect.ValueOf(converted))
+		} else {
+			return nil, fmt.Errorf("cannot assign converted map to type %v", desiredType)
+		}
+
+	case reflect.Struct:
+		// Handle struct type conversion
+		converted, err := convertToStruct(input, desiredType)
+		if err != nil {
+			return nil, err
+		}
+		if reflect.TypeOf(converted).AssignableTo(desiredType) {
+			newValue.Set(reflect.ValueOf(converted))
+		} else {
+			return nil, fmt.Errorf("cannot assign converted struct to type %v", desiredType)
 		}
 
 	default:
@@ -136,7 +183,11 @@ func handleNamedType(input interface{}, desiredType reflect.Type) (interface{}, 
 		if err != nil {
 			return nil, err
 		}
-		newValue.Set(reflect.ValueOf(converted))
+		if reflect.TypeOf(converted).AssignableTo(desiredType) {
+			newValue.Set(reflect.ValueOf(converted))
+		} else {
+			return nil, fmt.Errorf("cannot assign converted value to type %v", desiredType)
+		}
 	}
 
 	return newValue.Interface(), nil
@@ -535,7 +586,6 @@ func convertToMap(rawInput interface{}, desiredType reflect.Type) (interface{}, 
 }
 
 func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{}, error) {
-	// Handle pointer input
 	inputVal := reflect.ValueOf(rawInput)
 	if inputVal.Kind() == reflect.Ptr {
 		if inputVal.IsNil() {
@@ -544,7 +594,6 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{
 		inputVal = inputVal.Elem()
 	}
 
-	// Create the new struct
 	newStruct := reflect.New(desiredType).Elem()
 
 	// Handle map to struct conversion
@@ -560,27 +609,56 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{
 			}
 
 			// Try field name first
-			mapKey := field.Name
+			fieldNames := []string{field.Name}
 
-			// Check JSON tag
+			// Add JSON tag name
 			if jsonTag := field.Tag.Get("json"); jsonTag != "" {
 				parts := strings.Split(jsonTag, ",")
 				if parts[0] != "-" {
-					mapKey = parts[0]
+					fieldNames = append(fieldNames, parts[0])
 				}
 			}
 
-			mapValue := inputVal.MapIndex(reflect.ValueOf(mapKey))
-			if !mapValue.IsValid() {
-				continue // Skip if field not found in map
+			// Try each possible field name
+			var mapValue reflect.Value
+			for _, name := range fieldNames {
+				mapValue = inputVal.MapIndex(reflect.ValueOf(name))
+				if mapValue.IsValid() {
+					break
+				}
 			}
 
-			// Convert the value
-			converted, err := convertIO(mapValue.Interface(), field.Type, field.Type.Kind())
+			if !mapValue.IsValid() {
+				continue
+			}
+
+			fieldValue := mapValue.Interface()
+
+			// Special handling for nested maps that should become structs
+			if mapValue.Kind() == reflect.Map && field.Type.Kind() == reflect.Struct {
+				converted, err := convertToStruct(fieldValue, field.Type)
+				if err != nil {
+					return nil, fmt.Errorf("error converting nested struct field %s: %w", field.Name, err)
+				}
+				newStruct.Field(i).Set(reflect.ValueOf(converted))
+				continue
+			}
+
+			// Handle slices specially
+			if field.Type.Kind() == reflect.Slice {
+				converted, err := convertToSlice(fieldValue, field.Type)
+				if err != nil {
+					return nil, fmt.Errorf("error converting slice field %s: %w", field.Name, err)
+				}
+				newStruct.Field(i).Set(reflect.ValueOf(converted))
+				continue
+			}
+
+			// Regular field conversion
+			converted, err := convertIO(fieldValue, field.Type, field.Type.Kind())
 			if err != nil {
 				return nil, fmt.Errorf("error converting field %s: %w", field.Name, err)
 			}
-
 			newStruct.Field(i).Set(reflect.ValueOf(converted))
 		}
 
@@ -610,7 +688,27 @@ func convertToStruct(rawInput interface{}, desiredType reflect.Type) (interface{
 				}
 			}
 
-			// Convert the field value
+			// Handle nested structs
+			if field.Type.Kind() == reflect.Struct && inputField.Kind() == reflect.Struct {
+				converted, err := convertToStruct(inputField.Interface(), field.Type)
+				if err != nil {
+					return nil, fmt.Errorf("error converting nested struct field %s: %w", field.Name, err)
+				}
+				newStruct.Field(i).Set(reflect.ValueOf(converted))
+				continue
+			}
+
+			// Handle slices
+			if field.Type.Kind() == reflect.Slice {
+				converted, err := convertToSlice(inputField.Interface(), field.Type)
+				if err != nil {
+					return nil, fmt.Errorf("error converting slice field %s: %w", field.Name, err)
+				}
+				newStruct.Field(i).Set(reflect.ValueOf(converted))
+				continue
+			}
+
+			// Convert regular fields
 			converted, err := convertIO(inputField.Interface(), field.Type, field.Type.Kind())
 			if err != nil {
 				return nil, fmt.Errorf("error converting field %s: %w", field.Name, err)

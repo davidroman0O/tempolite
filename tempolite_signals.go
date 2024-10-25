@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -64,8 +63,18 @@ func (tp *Tempolite) PublishSignal(workflowID WorkflowID, stepID string, value i
 				return fmt.Errorf("error querying signal execution: %w", err)
 			}
 
-			// Encode the value to JSON
-			jsonValue, err := json.Marshal(value)
+			// // Encode the value to JSON
+			// jsonValue, err := json.Marshal(value)
+			// if err != nil {
+			// 	tp.logger.Error(tp.ctx, "Publish to signal error encoding signal value", "error", err)
+			// 	return fmt.Errorf("error encoding signal value: %w", err)
+			// }
+
+			if reflect.ValueOf(value).Type().Kind() == reflect.Ptr {
+				value = reflect.ValueOf(value).Elem().Interface()
+			}
+
+			serializableOutput, err := tp.convertInputsForSerializationFromValues([]interface{}{value})
 			if err != nil {
 				tp.logger.Error(tp.ctx, "Publish to signal error encoding signal value", "error", err)
 				return fmt.Errorf("error encoding signal value: %w", err)
@@ -73,7 +82,7 @@ func (tp *Tempolite) PublishSignal(workflowID WorkflowID, stepID string, value i
 
 			// Update the signal execution with the JSON-encoded value
 			_, err = tp.client.SignalExecution.UpdateOne(latestExecution).
-				SetOutput([]interface{}{string(jsonValue)}).
+				SetOutput(serializableOutput).
 				SetStatus(signalexecution.StatusCompleted).
 				Save(tp.ctx)
 			if err != nil {
@@ -240,25 +249,43 @@ func (s *SignalInfo) Receive(ctx WorkflowContext, value interface{}) error {
 				return fmt.Errorf("value must be a pointer")
 			}
 
+			// var output [][]byte
+			// var ok bool
+
+			// if output, ok = signalExecution.Output.([][]byte); !ok {
+			// 	s.tp.logger.Error(ctx.tp.ctx, "Signal info unexpected output type", "type", reflect.TypeOf(signalExecution.Output))
+			// 	return fmt.Errorf("unexpected output type: expected [][]byte, got %T", signalExecution.Output)
+			// }
+
 			// Check if the output slice is empty
 			if len(signalExecution.Output) == 0 {
 				s.tp.logger.Error(ctx.tp.ctx, "Signal execution output is empty")
 				return fmt.Errorf("signal execution output is empty")
 			}
 
-			// Get the JSON-encoded output value
-			jsonValue, ok := signalExecution.Output[0].(string)
-			if !ok {
-				s.tp.logger.Error(ctx.tp.ctx, "Signal info unexpected output type", "type", reflect.TypeOf(signalExecution.Output[0]))
-				return fmt.Errorf("unexpected output type: expected string, got %T", signalExecution.Output[0])
-			}
+			// // Get the JSON-encoded output value
+			// jsonValue, ok := signalExecution.Output[0].(string)
+			// if !ok {
+			// 	s.tp.logger.Error(ctx.tp.ctx, "Signal info unexpected output type", "type", reflect.TypeOf(signalExecution.Output[0]))
+			// 	return fmt.Errorf("unexpected output type: expected string, got %T", signalExecution.Output[0])
+			// }
 
-			// Decode the JSON value into the provided pointer
-			if err := json.Unmarshal([]byte(jsonValue), value); err != nil {
+			// // Decode the JSON value into the provided pointer
+			// if err := json.Unmarshal([]byte(jsonValue), value); err != nil {
+			// 	s.tp.logger.Error(ctx.tp.ctx, "Signal info error decoding signal value", "error", err)
+			// 	// TODO: might be a case for failure
+			// 	return fmt.Errorf("error decoding signal value: %w", err)
+			// }
+
+			realValues, err := s.tp.convertOutputsFromSerializationToPointer([]interface{}{value}, signalExecution.Output)
+			if err != nil {
 				s.tp.logger.Error(ctx.tp.ctx, "Signal info error decoding signal value", "error", err)
-				// TODO: might be a case for failure
 				return fmt.Errorf("error decoding signal value: %w", err)
 			}
+
+			fmt.Println("realValues", realValues)
+
+			// s.tp.convertOutputsFromSerialization(value, output)
 
 			return nil
 		}

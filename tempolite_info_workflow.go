@@ -71,19 +71,22 @@ func (i *WorkflowInfo) Get(output ...interface{}) error {
 						if len(output) == 0 {
 							return nil
 						}
-						outputs, err := i.tp.convertOuputs(HandlerInfo(workflowHandlerInfo), latestExec.Output)
+
+						deserializedOutput, err := i.tp.convertOutputsFromSerialization(HandlerInfo(workflowHandlerInfo), latestExec.Output)
+						// outputs, err := i.tp.convertOutputs(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 						if err != nil {
 							i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: failed to convert outputs", "error", err)
 							return err
 						}
-						if len(output) != len(outputs) {
-							i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: output length mismatch", "expected", len(outputs), "got", len(output))
-							return fmt.Errorf("output length mismatch: expected %d, got %d", len(outputs), len(output))
+
+						if len(output) != len(deserializedOutput) {
+							i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: output length mismatch", "expected", len(deserializedOutput), "got", len(output))
+							return fmt.Errorf("output length mismatch: expected %d, got %d", len(deserializedOutput), len(output))
 						}
 
 						for idx, outPtr := range output {
 							outVal := reflect.ValueOf(outPtr).Elem()
-							outputVal := reflect.ValueOf(outputs[idx])
+							outputVal := reflect.ValueOf(deserializedOutput[idx])
 
 							if outVal.Type() != outputVal.Type() {
 								i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: type mismatch", "index", idx, "expected", outVal.Type(), "got", outputVal.Type())

@@ -26,7 +26,10 @@ func (Activity) Fields() []ent.Field {
 			Default("Pending"),
 		field.String("handler_name").
 			NotEmpty(),
-		field.JSON("input", []interface{}{}),
+		// field.JSON("input", []interface{}{}),
+		// field.Any("input"), // technically a [][]byte
+		field.JSON("input", [][]byte{}),
+
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
 		field.Time("timeout").

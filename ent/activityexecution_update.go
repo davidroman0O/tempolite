@@ -80,14 +80,14 @@ func (aeu *ActivityExecutionUpdate) AddAttempt(i int) *ActivityExecutionUpdate {
 }
 
 // SetOutput sets the "output" field.
-func (aeu *ActivityExecutionUpdate) SetOutput(i []interface{}) *ActivityExecutionUpdate {
-	aeu.mutation.SetOutput(i)
+func (aeu *ActivityExecutionUpdate) SetOutput(u [][]uint8) *ActivityExecutionUpdate {
+	aeu.mutation.SetOutput(u)
 	return aeu
 }
 
-// AppendOutput appends i to the "output" field.
-func (aeu *ActivityExecutionUpdate) AppendOutput(i []interface{}) *ActivityExecutionUpdate {
-	aeu.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (aeu *ActivityExecutionUpdate) AppendOutput(u [][]uint8) *ActivityExecutionUpdate {
+	aeu.mutation.AppendOutput(u)
 	return aeu
 }
 
@@ -354,14 +354,14 @@ func (aeuo *ActivityExecutionUpdateOne) AddAttempt(i int) *ActivityExecutionUpda
 }
 
 // SetOutput sets the "output" field.
-func (aeuo *ActivityExecutionUpdateOne) SetOutput(i []interface{}) *ActivityExecutionUpdateOne {
-	aeuo.mutation.SetOutput(i)
+func (aeuo *ActivityExecutionUpdateOne) SetOutput(u [][]uint8) *ActivityExecutionUpdateOne {
+	aeuo.mutation.SetOutput(u)
 	return aeuo
 }
 
-// AppendOutput appends i to the "output" field.
-func (aeuo *ActivityExecutionUpdateOne) AppendOutput(i []interface{}) *ActivityExecutionUpdateOne {
-	aeuo.mutation.AppendOutput(i)
+// AppendOutput appends u to the "output" field.
+func (aeuo *ActivityExecutionUpdateOne) AppendOutput(u [][]uint8) *ActivityExecutionUpdateOne {
+	aeuo.mutation.AppendOutput(u)
 	return aeuo
 }
 

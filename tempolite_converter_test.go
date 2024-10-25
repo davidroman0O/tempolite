@@ -1,10 +1,13 @@
 package tempolite
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -216,7 +219,7 @@ type WithinStruct struct {
 	CustomB CustomBID
 }
 
-type NestedStruct struct {
+type NestedStructPtr struct {
 	Basic WithinStruct
 	Ptr   *WithinStruct
 }
@@ -453,7 +456,7 @@ func TestStructConversions(t *testing.T) {
 		CustomB: CustomBID{1, 2, 3},
 	}
 
-	nested := NestedStruct{
+	nested := NestedStructPtr{
 		Basic: basic,
 		Ptr:   &basic,
 	}
@@ -604,6 +607,326 @@ func TestMapToStructConversion(t *testing.T) {
 			result = converted.(TestStruct)
 			if !reflect.DeepEqual(result, tt.want) {
 				t.Errorf("Got %+v, want %+v", result, tt.want)
+			}
+		})
+	}
+}
+
+type CustomStruct struct {
+	Title   string  `json:"title"`
+	Score   float64 `json:"score"`
+	Tags    []string
+	Details map[string]interface{}
+}
+
+type CustomString string
+type CustomSlice []string
+type CustomMap map[string]int
+
+// Interface implementation test
+type Stringer interface {
+	String() string
+}
+
+func (c CustomString) String() string {
+	return string(c)
+}
+
+// Struct definitions
+type TestStruct struct {
+	Name    string  `json:"name"`
+	Age     int     `json:"age"`
+	IsAdmin bool    `json:"is_admin"`
+	Score   float64 `json:"score"`
+}
+
+type InnerStruct struct {
+	Value    *int     `json:"value"`
+	Optional string   `json:"optional"`
+	Tags     []string `json:"tags"`
+}
+
+type NestedStruct struct {
+	Data *InnerStruct   `json:"data"`
+	List []CustomString `json:"list"`
+	Map  map[string]int `json:"map"`
+}
+
+type ComplexSlice []struct {
+	ID    CustomInt   `json:"id"`
+	Items []*string   `json:"items"`
+	Info  InnerStruct `json:"info"`
+}
+
+func TestConvertInputs(t *testing.T) {
+
+	// Test activity function definitions
+	primitiveActivity := func(ctx ActivityContext,
+		str string,
+		num int,
+		flag bool,
+		f float64) error {
+		return nil
+	}
+
+	pointerActivity := func(ctx ActivityContext,
+		strPtr *string,
+		numPtr *int,
+		flagPtr *bool) error {
+		return nil
+	}
+
+	customTypesActivity := func(ctx ActivityContext,
+		cs CustomString,
+		ci *CustomInt,
+		cf CustomFloat,
+		cm CustomMap) error {
+		return nil
+	}
+
+	sliceActivity := func(ctx ActivityContext,
+		basicSlice []int,
+		pointerSlice []*string,
+		customSlice CustomSlice,
+		complexSlice ComplexSlice) error {
+		return nil
+	}
+
+	mapActivity := func(ctx ActivityContext,
+		basicMap map[string]int,
+		pointerMap map[string]*float64,
+		customKeyMap map[CustomString]int,
+		nestedMap map[string]map[string][]CustomInt) error {
+		return nil
+	}
+
+	structActivity := func(ctx ActivityContext,
+		basic TestStruct,
+		nested *NestedStruct,
+		withSlices struct {
+			Items     []CustomInt
+			MoreItems []*CustomString
+		}) error {
+		return nil
+	}
+
+	interfaceActivity := func(ctx ActivityContext,
+		stringer CustomString, // implements Stringer
+		anySlice []interface{},
+		anyMap map[string]interface{}) error {
+		return nil
+	}
+
+	// Test data setup
+	str := "test"
+	num := 42
+	flag := true
+	float := 3.14
+	customInt := CustomInt(123)
+
+	// Prepare nested test data
+	innerStruct := &InnerStruct{
+		Value:    &num,
+		Optional: "optional",
+		Tags:     []string{"tag1", "tag2"},
+	}
+
+	nestedStruct := &NestedStruct{
+		Data: innerStruct,
+		List: []CustomString{"one", "two"},
+		Map:  map[string]int{"key": 1},
+	}
+
+	tests := []struct {
+		name     string
+		activity interface{}
+		inputs   []interface{}
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "Basic primitives",
+			activity: primitiveActivity,
+			inputs:   []interface{}{"test", 42, true, 3.14},
+		},
+		{
+			name:     "Primitive pointers",
+			activity: pointerActivity,
+			inputs:   []interface{}{&str, &num, &flag},
+		},
+		{
+			name:     "Custom types",
+			activity: customTypesActivity,
+			inputs: []interface{}{
+				"test",                    // -> CustomString
+				42,                        // -> *CustomInt
+				float64(3.14),             // -> CustomFloat
+				map[string]int{"test": 1}, // -> CustomMap
+			},
+		},
+		{
+			name:     "Slices basic",
+			activity: sliceActivity,
+			inputs: []interface{}{
+				[]int{1, 2, 3},
+				[]*string{&str},
+				[]string{"a", "b", "c"},
+				ComplexSlice{
+					{
+						ID:    customInt,
+						Items: []*string{&str},
+						Info:  *innerStruct,
+					},
+				},
+			},
+		},
+		{
+			name:     "Maps",
+			activity: mapActivity,
+			inputs: []interface{}{
+				map[string]int{"a": 1, "b": 2},
+				map[string]*float64{"a": &float},
+				map[string]int{"test": 1}, // -> map[CustomString]int
+				map[string]map[string][]CustomInt{
+					"outer": {
+						"inner": []CustomInt{1, 2, 3},
+					},
+				},
+			},
+		},
+		{
+			name:     "Structs",
+			activity: structActivity,
+			inputs: []interface{}{
+				TestStruct{
+					Name:    "test",
+					Age:     42,
+					IsAdmin: true,
+					Score:   3.14,
+				},
+				nestedStruct,
+				struct {
+					Items     []CustomInt
+					MoreItems []*CustomString
+				}{
+					Items:     []CustomInt{1, 2, 3},
+					MoreItems: []*CustomString{},
+				},
+			},
+		},
+		{
+			name:     "Interface implementations",
+			activity: interfaceActivity,
+			inputs: []interface{}{
+				CustomString("test"),
+				[]interface{}{1, "test", true},
+				map[string]interface{}{
+					"key":  "value",
+					"num":  42,
+					"bool": true,
+				},
+			},
+		},
+		{
+			name:     "Type conversion errors",
+			activity: primitiveActivity,
+			inputs:   []interface{}{"test", map[string]int{}, true, 3.14},
+			wantErr:  true,
+			errMsg:   "cannot convert map to int",
+		},
+		{
+			name:     "Slice conversion errors",
+			activity: sliceActivity,
+			inputs: []interface{}{
+				map[string]string{},
+				[]*string{&str},
+				[]string{"a", "b"},
+				[]interface{}{map[string]interface{}{}},
+			},
+			wantErr: true,
+			errMsg:  "cannot convert map to slice",
+		},
+		{
+			name:     "Map conversion errors",
+			activity: mapActivity,
+			inputs: []interface{}{
+				[]string{"not", "a", "map"},
+				map[string]*float64{},
+				map[string]int{},
+				map[string]interface{}{},
+			},
+			wantErr: true,
+			errMsg:  "cannot convert slice to map",
+		},
+		{
+			name:     "Struct conversion errors",
+			activity: structActivity,
+			inputs: []interface{}{
+				[]string{"not", "a", "struct"},
+				&NestedStruct{},
+				struct {
+					Items     []CustomInt
+					MoreItems []*CustomString
+				}{},
+			},
+			wantErr: true,
+			errMsg:  "cannot convert slice to struct",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fresh Tempolite instance
+			tp, err := New(
+				context.Background(),
+				NewRegistry().
+					Activity(tt.activity).
+					Build(),
+				WithPath(":memory:"),
+			)
+			if err != nil {
+				t.Fatalf("Failed to create Tempolite instance: %v", err)
+			}
+			defer tp.Close()
+
+			// Get handler info
+			activityValue, ok := tp.activities.Load(HandlerIdentity(runtime.FuncForPC(reflect.ValueOf(tt.activity).Pointer()).Name()))
+			if !ok {
+				t.Fatal("Activity not found in registry")
+			}
+			handlerInfo := HandlerInfo(activityValue.(Activity))
+
+			// Try conversion
+			outputs, err := tp.convertInputs(handlerInfo, tt.inputs)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error, got nil")
+				} else if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("Expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("convertInputs() error = %v", err)
+				return
+			}
+
+			// Verify outputs
+			if len(outputs) != len(handlerInfo.ParamTypes) {
+				t.Errorf("Got %d outputs, want %d", len(outputs), len(handlerInfo.ParamTypes))
+				return
+			}
+
+			for i, out := range outputs {
+				expectedType := handlerInfo.ParamTypes[i]
+				actualType := reflect.TypeOf(out)
+				if actualType == nil {
+					t.Errorf("output[%d] is nil", i)
+					continue
+				}
+				if !actualType.AssignableTo(expectedType) {
+					t.Errorf("output[%d] type = %v, want %v", i, actualType, expectedType)
+				}
 			}
 		})
 	}

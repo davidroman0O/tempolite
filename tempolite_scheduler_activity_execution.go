@@ -51,20 +51,26 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 						continue
 					}
 
-					inputs := []interface{}{}
+					// inputs := []interface{}{}
 
-					for idx, rawInput := range activityEntity.Input {
-						inputType := activityHandlerInfo.ParamTypes[idx]
+					// for idx, rawInput := range activityEntity.Input {
+					// 	inputType := activityHandlerInfo.ParamTypes[idx]
 
-						inputKind := activityHandlerInfo.ParamsKinds[idx]
+					// 	inputKind := activityHandlerInfo.ParamsKinds[idx]
 
-						realInput, err := convertIO(rawInput, inputType, inputKind)
-						if err != nil {
-							tp.logger.Error(tp.ctx, "scheduler activity execution: convertInput failed", "error", err)
-							continue
-						}
+					// 	realInput, err := convertIO(rawInput, inputType, inputKind)
+					// 	if err != nil {
+					// 		tp.logger.Error(tp.ctx, "scheduler activity execution: convertInput failed", "error", err)
+					// 		continue
+					// 	}
 
-						inputs = append(inputs, realInput)
+					// 	inputs = append(inputs, realInput)
+					// }
+
+					inputs, err := tp.convertInputsFromSerialization(HandlerInfo(activityHandlerInfo), activityEntity.Input)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInputsFromSerialization failed", "error", err)
+						continue
 					}
 
 					contextActivity := ActivityContext{

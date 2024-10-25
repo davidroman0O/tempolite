@@ -144,25 +144,34 @@ func (tp *Tempolite) redispatchWorkflow(id WorkflowID) error {
 		return fmt.Errorf("invalid workflow handler for %s", wf.Identity)
 	}
 
-	inputs := []interface{}{}
-
-	tp.logger.Debug(tp.ctx, "Converting inputs", "workflowID", id, "inputs", len(wf.Input))
-	// TODO: we can probably parallelize this
-	for idx, rawInput := range wf.Input {
-		inputType := workflowHandler.ParamTypes[idx]
-		inputKind := workflowHandler.ParamsKinds[idx]
-
-		realInput, err := convertIO(rawInput, inputType, inputKind)
-		if err != nil {
-			if rerr := tx.Rollback(); rerr != nil {
-				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
-			}
-			tp.logger.Error(tp.ctx, "Error converting input", "workflowID", id, "error", err)
-			return err
+	inputs, err := tp.convertInputsFromSerialization(HandlerInfo(workflowHandler), wf.Input)
+	if err != nil {
+		if rerr := tx.Rollback(); rerr != nil {
+			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
 		}
-
-		inputs = append(inputs, realInput)
+		tp.logger.Error(tp.ctx, "Error converting inputs from serialization", "workflowID", id, "error", err)
+		return fmt.Errorf("error converting inputs from serialization: %w", err)
 	}
+
+	// inputs := []interface{}{}
+
+	// tp.logger.Debug(tp.ctx, "Converting inputs", "workflowID", id, "inputs", len(wf.Input))
+	// // TODO: we can probably parallelize this
+	// for idx, rawInput := range wf.Input {
+	// 	inputType := workflowHandler.ParamTypes[idx]
+	// 	inputKind := workflowHandler.ParamsKinds[idx]
+
+	// 	realInput, err := convertIO(rawInput, inputType, inputKind)
+	// 	if err != nil {
+	// 		if rerr := tx.Rollback(); rerr != nil {
+	// 			tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+	// 		}
+	// 		tp.logger.Error(tp.ctx, "Error converting input", "workflowID", id, "error", err)
+	// 		return err
+	// 	}
+
+	// 	inputs = append(inputs, realInput)
+	// }
 
 	tp.logger.Debug(tp.ctx, "Creating workflow task", "workflowID", id, "handlerName", workflowHandler.HandlerLongName)
 
