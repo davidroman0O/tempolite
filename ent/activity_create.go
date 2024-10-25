@@ -55,8 +55,8 @@ func (ac *ActivityCreate) SetHandlerName(s string) *ActivityCreate {
 }
 
 // SetInput sets the "input" field.
-func (ac *ActivityCreate) SetInput(i []interface{}) *ActivityCreate {
-	ac.mutation.SetInput(i)
+func (ac *ActivityCreate) SetInput(u [][]uint8) *ActivityCreate {
+	ac.mutation.SetInput(u)
 	return ac
 }
 

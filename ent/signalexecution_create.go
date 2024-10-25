@@ -42,8 +42,8 @@ func (sec *SignalExecutionCreate) SetNillableStatus(s *signalexecution.Status) *
 }
 
 // SetOutput sets the "output" field.
-func (sec *SignalExecutionCreate) SetOutput(i []interface{}) *SignalExecutionCreate {
-	sec.mutation.SetOutput(i)
+func (sec *SignalExecutionCreate) SetOutput(u [][]uint8) *SignalExecutionCreate {
+	sec.mutation.SetOutput(u)
 	return sec
 }
 

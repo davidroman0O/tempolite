@@ -316,41 +316,41 @@ func (tp *Tempolite) Wait() error {
 	return nil
 }
 
-func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
-	tp.logger.Debug(tp.ctx, "Converting inputs", "handlerInfo", handlerInfo)
-	outputs := []interface{}{}
-	// TODO: we can probably parallelize this
-	for idx, rawInputs := range executionInputs {
-		inputType := handlerInfo.ParamTypes[idx]
-		inputKind := handlerInfo.ParamsKinds[idx]
-		tp.logger.Debug(tp.ctx, "Converting input", "inputType", inputType, "inputKind", inputKind, "rawInputs", rawInputs)
-		realInput, err := convertIO(rawInputs, inputType, inputKind)
-		if err != nil {
-			tp.logger.Error(tp.ctx, "Error converting input", "error", err)
-			return nil, err
-		}
-		outputs = append(outputs, realInput)
-	}
-	return outputs, nil
-}
+// func (tp *Tempolite) convertInputs(handlerInfo HandlerInfo, executionInputs []interface{}) ([]interface{}, error) {
+// 	tp.logger.Debug(tp.ctx, "Converting inputs", "handlerInfo", handlerInfo)
+// 	outputs := []interface{}{}
+// 	// TODO: we can probably parallelize this
+// 	for idx, rawInputs := range executionInputs {
+// 		inputType := handlerInfo.ParamTypes[idx]
+// 		inputKind := handlerInfo.ParamsKinds[idx]
+// 		tp.logger.Debug(tp.ctx, "Converting input", "inputType", inputType, "inputKind", inputKind, "rawInputs", rawInputs)
+// 		realInput, err := convertIO(rawInputs, inputType, inputKind)
+// 		if err != nil {
+// 			tp.logger.Error(tp.ctx, "Error converting input", "error", err)
+// 			return nil, err
+// 		}
+// 		outputs = append(outputs, realInput)
+// 	}
+// 	return outputs, nil
+// }
 
-func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
-	tp.logger.Debug(tp.ctx, "Converting outputs", "handlerInfo", handlerInfo)
-	outputs := []interface{}{}
-	// TODO: we can probably parallelize this
-	for idx, rawOutput := range executionOutput {
-		ouputType := handlerInfo.ReturnTypes[idx]
-		outputKind := handlerInfo.ReturnKinds[idx]
-		tp.logger.Debug(tp.ctx, "Converting output", "ouputType", ouputType, "outputKind", outputKind, "rawOutput", rawOutput)
-		realOutput, err := convertIO(rawOutput, ouputType, outputKind)
-		if err != nil {
-			tp.logger.Error(tp.ctx, "Error converting output", "error", err)
-			return nil, err
-		}
-		outputs = append(outputs, realOutput)
-	}
-	return outputs, nil
-}
+// func (tp *Tempolite) convertOuputs(handlerInfo HandlerInfo, executionOutput []interface{}) ([]interface{}, error) {
+// 	tp.logger.Debug(tp.ctx, "Converting outputs", "handlerInfo", handlerInfo)
+// 	outputs := []interface{}{}
+// 	// TODO: we can probably parallelize this
+// 	for idx, rawOutput := range executionOutput {
+// 		ouputType := handlerInfo.ReturnTypes[idx]
+// 		outputKind := handlerInfo.ReturnKinds[idx]
+// 		tp.logger.Debug(tp.ctx, "Converting output", "ouputType", ouputType, "outputKind", outputKind, "rawOutput", rawOutput)
+// 		realOutput, err := convertIO(rawOutput, ouputType, outputKind)
+// 		if err != nil {
+// 			tp.logger.Error(tp.ctx, "Error converting output", "error", err)
+// 			return nil, err
+// 		}
+// 		outputs = append(outputs, realOutput)
+// 	}
+// 	return outputs, nil
+// }
 
 func (tp *Tempolite) verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
 

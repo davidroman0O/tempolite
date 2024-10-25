@@ -88,14 +88,14 @@ func (wu *WorkflowUpdate) SetNillableHandlerName(s *string) *WorkflowUpdate {
 }
 
 // SetInput sets the "input" field.
-func (wu *WorkflowUpdate) SetInput(i []interface{}) *WorkflowUpdate {
-	wu.mutation.SetInput(i)
+func (wu *WorkflowUpdate) SetInput(u [][]uint8) *WorkflowUpdate {
+	wu.mutation.SetInput(u)
 	return wu
 }
 
-// AppendInput appends i to the "input" field.
-func (wu *WorkflowUpdate) AppendInput(i []interface{}) *WorkflowUpdate {
-	wu.mutation.AppendInput(i)
+// AppendInput appends u to the "input" field.
+func (wu *WorkflowUpdate) AppendInput(u [][]uint8) *WorkflowUpdate {
+	wu.mutation.AppendInput(u)
 	return wu
 }
 
@@ -704,14 +704,14 @@ func (wuo *WorkflowUpdateOne) SetNillableHandlerName(s *string) *WorkflowUpdateO
 }
 
 // SetInput sets the "input" field.
-func (wuo *WorkflowUpdateOne) SetInput(i []interface{}) *WorkflowUpdateOne {
-	wuo.mutation.SetInput(i)
+func (wuo *WorkflowUpdateOne) SetInput(u [][]uint8) *WorkflowUpdateOne {
+	wuo.mutation.SetInput(u)
 	return wuo
 }
 
-// AppendInput appends i to the "input" field.
-func (wuo *WorkflowUpdateOne) AppendInput(i []interface{}) *WorkflowUpdateOne {
-	wuo.mutation.AppendInput(i)
+// AppendInput appends u to the "input" field.
+func (wuo *WorkflowUpdateOne) AppendInput(u [][]uint8) *WorkflowUpdateOne {
+	wuo.mutation.AppendInput(u)
 	return wuo
 }
 

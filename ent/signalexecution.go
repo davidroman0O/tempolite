@@ -24,7 +24,7 @@ type SignalExecution struct {
 	// Status holds the value of the "status" field.
 	Status signalexecution.Status `json:"status,omitempty"`
 	// Output holds the value of the "output" field.
-	Output []interface{} `json:"output,omitempty"`
+	Output [][]uint8 `json:"output,omitempty"`
 	// Error holds the value of the "error" field.
 	Error string `json:"error,omitempty"`
 	// StartedAt holds the value of the "started_at" field.

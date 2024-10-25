@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"fmt"
 	"runtime"
 
 	"github.com/davidroman0O/retrypool"
@@ -52,11 +53,19 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 						continue
 					}
 
-					inputs, err := tp.convertInputs(HandlerInfo(workflowHandlerInfo), workflowEntity.Input)
+					inputs, err := tp.convertInputsFromSerialization(HandlerInfo(workflowHandlerInfo), workflowEntity.Input)
 					if err != nil {
-						tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInputs failed", "error", err)
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInputsFromSerialization failed", "error", err)
 						continue
 					}
+
+					// inputs, err := tp.convertInputs(HandlerInfo(workflowHandlerInfo), workflowEntity.Input)
+					// if err != nil {
+					// 	tp.logger.Error(tp.ctx, "Scheduler workflow execution: convertInputs failed", "error", err)
+					// 	continue
+					// }
+
+					fmt.Println("creating workflow task with input", inputs)
 
 					contextWorkflow := WorkflowContext{
 						tp:              tp,

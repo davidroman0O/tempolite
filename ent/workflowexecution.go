@@ -24,7 +24,7 @@ type WorkflowExecution struct {
 	// Status holds the value of the "status" field.
 	Status workflowexecution.Status `json:"status,omitempty"`
 	// Output holds the value of the "output" field.
-	Output []interface{} `json:"output,omitempty"`
+	Output [][]uint8 `json:"output,omitempty"`
 	// Error holds the value of the "error" field.
 	Error string `json:"error,omitempty"`
 	// IsReplay holds the value of the "is_replay" field.

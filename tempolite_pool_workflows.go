@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/davidroman0O/retrypool"
@@ -242,6 +243,26 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		return nil
 	}
 
+	var value any
+	var ok bool
+	var workflowInfo Workflow
+
+	if value, ok = w.tp.workflows.Load(data.handlerName); ok {
+		if workflowInfo, ok = value.(Workflow); !ok {
+			w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+			return fmt.Errorf("workflow %s not found", data.handlerName)
+		}
+	} else {
+		w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+		return fmt.Errorf("workflow %s not found", data.handlerName)
+	}
+
+	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(workflowInfo), res)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "workflow pool worker: convertOutputsForSerialization failed", "error", err)
+		return err
+	}
+
 	// fmt.Println("output to save", res, errRes)
 	tx, err := w.tp.client.Tx(w.tp.ctx)
 	if err != nil {
@@ -249,7 +270,7 @@ func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
 		return err
 	}
 
-	if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(res).Save(w.tp.ctx); err != nil {
+	if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
 		w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
 		if rerr := tx.Rollback(); rerr != nil {
 			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)

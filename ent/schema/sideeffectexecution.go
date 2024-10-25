@@ -23,8 +23,11 @@ func (SideEffectExecution) Fields() []ent.Field {
 			Default("Pending"),
 		field.Int("attempt").
 			Default(1),
-		field.JSON("output", []interface{}{}).
-			Optional(),
+		// field.JSON("output", []interface{}{}).
+		// 	Optional(),
+		// field.Any("output").Optional(), // technically a [][]byte
+		field.JSON("output", [][]byte{}).Optional(),
+
 		field.String("error").
 			Optional(),
 		field.Time("started_at").

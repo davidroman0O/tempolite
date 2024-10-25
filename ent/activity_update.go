@@ -88,14 +88,14 @@ func (au *ActivityUpdate) SetNillableHandlerName(s *string) *ActivityUpdate {
 }
 
 // SetInput sets the "input" field.
-func (au *ActivityUpdate) SetInput(i []interface{}) *ActivityUpdate {
-	au.mutation.SetInput(i)
+func (au *ActivityUpdate) SetInput(u [][]uint8) *ActivityUpdate {
+	au.mutation.SetInput(u)
 	return au
 }
 
-// AppendInput appends i to the "input" field.
-func (au *ActivityUpdate) AppendInput(i []interface{}) *ActivityUpdate {
-	au.mutation.AppendInput(i)
+// AppendInput appends u to the "input" field.
+func (au *ActivityUpdate) AppendInput(u [][]uint8) *ActivityUpdate {
+	au.mutation.AppendInput(u)
 	return au
 }
 
@@ -415,14 +415,14 @@ func (auo *ActivityUpdateOne) SetNillableHandlerName(s *string) *ActivityUpdateO
 }
 
 // SetInput sets the "input" field.
-func (auo *ActivityUpdateOne) SetInput(i []interface{}) *ActivityUpdateOne {
-	auo.mutation.SetInput(i)
+func (auo *ActivityUpdateOne) SetInput(u [][]uint8) *ActivityUpdateOne {
+	auo.mutation.SetInput(u)
 	return auo
 }
 
-// AppendInput appends i to the "input" field.
-func (auo *ActivityUpdateOne) AppendInput(i []interface{}) *ActivityUpdateOne {
-	auo.mutation.AppendInput(i)
+// AppendInput appends u to the "input" field.
+func (auo *ActivityUpdateOne) AppendInput(u [][]uint8) *ActivityUpdateOne {
+	auo.mutation.AppendInput(u)
 	return auo
 }
 

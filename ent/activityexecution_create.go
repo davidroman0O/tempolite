@@ -56,8 +56,8 @@ func (aec *ActivityExecutionCreate) SetNillableAttempt(i *int) *ActivityExecutio
 }
 
 // SetOutput sets the "output" field.
-func (aec *ActivityExecutionCreate) SetOutput(i []interface{}) *ActivityExecutionCreate {
-	aec.mutation.SetOutput(i)
+func (aec *ActivityExecutionCreate) SetOutput(u [][]uint8) *ActivityExecutionCreate {
+	aec.mutation.SetOutput(u)
 	return aec
 }
 
