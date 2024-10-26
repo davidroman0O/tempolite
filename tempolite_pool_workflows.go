@@ -35,7 +35,7 @@ func (tp *Tempolite) createWorkflowPool(countWorkers int) *retrypool.Pool[*workf
 	workers := []retrypool.Worker[*workflowTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, workflowWorker{id: i, tp: tp})
+		workers = append(workers, workflowWorker{id: tp.getWorkerWorkflowID(), tp: tp})
 	}
 
 	return retrypool.New(

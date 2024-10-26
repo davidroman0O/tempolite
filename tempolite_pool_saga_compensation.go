@@ -32,7 +32,7 @@ func (tp *Tempolite) createCompensationPool(countWorkers int) *retrypool.Pool[*c
 	workers := []retrypool.Worker[*compensationTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, compensationWorker{id: i, tp: tp})
+		workers = append(workers, compensationWorker{id: tp.getWorkerCompensationID(), tp: tp})
 	}
 
 	return retrypool.New(tp.ctx, workers, opts...)

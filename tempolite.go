@@ -77,6 +77,12 @@ type Tempolite struct {
 
 	resumeWorkflowsWorkerDone chan struct{}
 
+	poolCounterWorkflow     int
+	poolCounterActivity     int
+	poolCounterSideEffect   int
+	poolCounterTransaction  int
+	poolCounterCompensation int
+
 	logger Logger
 }
 
@@ -219,6 +225,91 @@ func (tp *Tempolite) Close() {
 	tp.sideEffectPool.Close()
 	tp.transactionPool.Close()
 	tp.compensationPool.Close()
+}
+
+func (tp *Tempolite) getWorkerWorkflowID() int {
+	tp.poolCounterWorkflow++
+	return tp.poolCounterWorkflow
+}
+
+func (tp *Tempolite) getWorkerActivityID() int {
+	tp.poolCounterActivity++
+	return tp.poolCounterActivity
+}
+
+func (tp *Tempolite) getWorkerSideEffectID() int {
+	tp.poolCounterSideEffect++
+	return tp.poolCounterSideEffect
+}
+
+func (tp *Tempolite) getWorkerTransactionID() int {
+	tp.poolCounterTransaction++
+	return tp.poolCounterTransaction
+}
+
+func (tp *Tempolite) getWorkerCompensationID() int {
+	tp.poolCounterCompensation++
+	return tp.poolCounterCompensation
+}
+
+func (tp *Tempolite) AddWorkerWorkflow() {
+	tp.workflowPool.AddWorker(workflowWorker{id: tp.getWorkerWorkflowID(), tp: tp})
+}
+
+func (tp *Tempolite) AddWorkerActivity() {
+	tp.activityPool.AddWorker(activityWorker{id: tp.getWorkerActivityID(), tp: tp})
+}
+
+func (tp *Tempolite) AddWorkerSideEffect() {
+	tp.sideEffectPool.AddWorker(sideEffectWorker{id: tp.getWorkerSideEffectID(), tp: tp})
+}
+
+func (tp *Tempolite) AddWorkerTransaction() {
+	tp.transactionPool.AddWorker(transactionWorker{id: tp.getWorkerTransactionID(), tp: tp})
+}
+
+func (tp *Tempolite) AddWorkerCompensation() {
+	tp.compensationPool.AddWorker(compensationWorker{id: tp.getWorkerCompensationID(), tp: tp})
+}
+
+func (tp *Tempolite) RemoveWorkerWorkflow(id int) error {
+	return tp.workflowPool.RemoveWorker(id)
+}
+
+func (tp *Tempolite) RemoveWorkerActivity(id int) error {
+	return tp.activityPool.RemoveWorker(id)
+}
+
+func (tp *Tempolite) RemoveWorkerSideEffect(id int) error {
+	return tp.sideEffectPool.RemoveWorker(id)
+}
+
+func (tp *Tempolite) RemoveWorkerTransaction(id int) error {
+	return tp.transactionPool.RemoveWorker(id)
+}
+
+func (tp *Tempolite) RemoveWorkerCompensation(id int) error {
+	return tp.compensationPool.RemoveWorker(id)
+}
+
+func (tp *Tempolite) ListWorkersWorkflow() []int {
+	return tp.workflowPool.GetWorkerIDs()
+}
+
+func (tp *Tempolite) ListWorkersActivity() []int {
+	return tp.activityPool.GetWorkerIDs()
+}
+
+func (tp *Tempolite) ListWorkersSideEffect() []int {
+	return tp.sideEffectPool.GetWorkerIDs()
+}
+
+func (tp *Tempolite) ListWorkersTransaction() []int {
+	return tp.transactionPool.GetWorkerIDs()
+}
+
+func (tp *Tempolite) ListWorkersCompensation() []int {
+	return tp.compensationPool.GetWorkerIDs()
 }
 
 func (tp *Tempolite) Wait() error {

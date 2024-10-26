@@ -33,7 +33,7 @@ func (tp *Tempolite) createActivityPool(countWorkers int) *retrypool.Pool[*activ
 	workers := []retrypool.Worker[*activityTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, activityWorker{id: i, tp: tp})
+		workers = append(workers, activityWorker{id: tp.getWorkerActivityID(), tp: tp})
 	}
 
 	return retrypool.New(

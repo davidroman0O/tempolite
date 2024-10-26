@@ -17,6 +17,13 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 		case <-tp.ctx.Done():
 			return
 		default:
+
+			// we cannot have more workflows running than the number of workers
+			if tp.workflowPool.GetWorkerCount() >= tp.workflowPool.ProcessingCount() {
+				runtime.Gosched()
+				continue
+			}
+
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
 				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
 				Order(ent.Asc(workflowexecution.FieldStartedAt)).

@@ -33,7 +33,7 @@ func (tp *Tempolite) createTransactionPool(countWorkers int) *retrypool.Pool[*tr
 	workers := []retrypool.Worker[*transactionTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, transactionWorker{id: i, tp: tp})
+		workers = append(workers, transactionWorker{id: tp.getWorkerTransactionID(), tp: tp})
 	}
 
 	return retrypool.New(tp.ctx, workers, opts...)

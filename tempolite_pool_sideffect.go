@@ -29,7 +29,7 @@ func (tp *Tempolite) createSideEffectPool(countWorkers int) *retrypool.Pool[*sid
 	workers := []retrypool.Worker[*sideEffectTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, sideEffectWorker{id: i, tp: tp})
+		workers = append(workers, sideEffectWorker{id: tp.getWorkerSideEffectID(), tp: tp})
 	}
 
 	return retrypool.New(
