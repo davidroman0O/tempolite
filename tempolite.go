@@ -227,6 +227,58 @@ func (tp *Tempolite) Close() {
 	tp.compensationPool.Close()
 }
 
+type WorkerPoolInfo struct {
+	Workers    []int
+	DeadTasks  int
+	QueueSize  int
+	Processing int
+}
+
+func (tp *Tempolite) GetWorkflowsInfo() WorkerPoolInfo {
+	return WorkerPoolInfo{
+		Workers:    tp.ListWorkersWorkflow(),
+		DeadTasks:  tp.workflowPool.DeadTaskCount(),
+		QueueSize:  tp.workflowPool.QueueSize(),
+		Processing: tp.workflowPool.ProcessingCount(),
+	}
+}
+
+func (tp *Tempolite) GetActivitiesInfo() WorkerPoolInfo {
+	return WorkerPoolInfo{
+		Workers:    tp.ListWorkersActivity(),
+		DeadTasks:  tp.activityPool.DeadTaskCount(),
+		QueueSize:  tp.activityPool.QueueSize(),
+		Processing: tp.activityPool.ProcessingCount(),
+	}
+}
+
+func (tp *Tempolite) GetSideEffectsInfo() WorkerPoolInfo {
+	return WorkerPoolInfo{
+		Workers:    tp.ListWorkersSideEffect(),
+		DeadTasks:  tp.sideEffectPool.DeadTaskCount(),
+		QueueSize:  tp.sideEffectPool.QueueSize(),
+		Processing: tp.sideEffectPool.ProcessingCount(),
+	}
+}
+
+func (tp *Tempolite) GetTransactionsInfo() WorkerPoolInfo {
+	return WorkerPoolInfo{
+		Workers:    tp.ListWorkersTransaction(),
+		DeadTasks:  tp.transactionPool.DeadTaskCount(),
+		QueueSize:  tp.transactionPool.QueueSize(),
+		Processing: tp.transactionPool.ProcessingCount(),
+	}
+}
+
+func (tp *Tempolite) GetCompensationsInfo() WorkerPoolInfo {
+	return WorkerPoolInfo{
+		Workers:    tp.ListWorkersCompensation(),
+		DeadTasks:  tp.compensationPool.DeadTaskCount(),
+		QueueSize:  tp.compensationPool.QueueSize(),
+		Processing: tp.compensationPool.ProcessingCount(),
+	}
+}
+
 func (tp *Tempolite) getWorkerWorkflowID() int {
 	tp.poolCounterWorkflow++
 	return tp.poolCounterWorkflow
