@@ -2,7 +2,7 @@
 
 Tempolite is a lightweight, SQLite-based workflow engine for Go that provides deterministic execution of workflows with support for activities, side effects, sagas, signals, and versioning. It's designed to be a simpler alternative to complex workflow engines while maintaining essential features for reliable business process automation.
 
-> Not ready for prime time but good enough for playing with it and small applications.
+> Work In Progress: Not ready for prime time but good enough for playing with it and small applications.
 
 ## Features
 
