@@ -18,11 +18,17 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 			return
 		default:
 
+			availableSlots := len(tp.ListWorkersWorkflow()) - tp.workflowPool.ProcessingCount()
+			if availableSlots <= 0 {
+				runtime.Gosched()
+				continue
+			}
+
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
 				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
 				Order(ent.Asc(workflowexecution.FieldStartedAt)).
 				WithWorkflow().
-				Limit(1).
+				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
 				continue

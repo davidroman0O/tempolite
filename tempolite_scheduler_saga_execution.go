@@ -66,11 +66,18 @@ func (tp *Tempolite) schedulerExecutionSaga() {
 		case <-tp.ctx.Done():
 			return
 		default:
+
+			availableSlots := len(tp.ListWorkersTransaction()) - tp.transactionPool.ProcessingCount()
+			if availableSlots <= 0 {
+				runtime.Gosched()
+				continue
+			}
+
 			pendingSagas, err := tp.client.SagaExecution.Query().
 				Where(sagaexecution.StatusEQ(sagaexecution.StatusPending)).
 				Order(ent.Asc(sagaexecution.FieldStartedAt)).
 				WithSaga().
-				Limit(1).
+				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
 				tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaExecution.Query failed", "error", err)

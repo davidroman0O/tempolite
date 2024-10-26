@@ -15,11 +15,19 @@ func (tp *Tempolite) schedulerExecutionSideEffect() {
 		case <-tp.ctx.Done():
 			return
 		default:
+
+			availableSlots := len(tp.ListWorkersSideEffect()) - tp.sideEffectPool.ProcessingCount()
+			if availableSlots <= 0 {
+				runtime.Gosched()
+				continue
+			}
+
 			pendingSideEffects, err := tp.client.SideEffectExecution.Query().
 				Where(sideeffectexecution.StatusEQ(sideeffectexecution.StatusPending)).
 				Order(ent.Asc(sideeffectexecution.FieldStartedAt)).WithSideEffect().
 				WithSideEffect().
-				Limit(1).All(tp.ctx)
+				Limit(availableSlots).
+				All(tp.ctx)
 			if err != nil {
 				tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.Query failed", "error", err)
 				continue

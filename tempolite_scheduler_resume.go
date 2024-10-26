@@ -24,12 +24,19 @@ func (tp *Tempolite) resumeWorkflowsWorker() {
 			tp.logger.Debug(tp.ctx, "Resume workflows worker done")
 			return
 		case <-ticker.C:
+			availableSlots := len(tp.ListWorkersWorkflow()) - tp.workflowPool.ProcessingCount()
+			if availableSlots <= 0 {
+				continue
+			}
+
 			workflows, err := tp.client.Workflow.Query().
 				Where(
 					workflow.StatusEQ(workflow.StatusRunning),
 					workflow.IsPausedEQ(false),
 					workflow.IsReadyEQ(true),
-				).All(tp.ctx)
+				).
+				Limit(availableSlots).
+				All(tp.ctx)
 			if err != nil {
 				tp.logger.Error(tp.ctx, "Error querying workflows to resume", "error", err)
 				continue

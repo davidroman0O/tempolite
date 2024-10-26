@@ -17,10 +17,19 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 			return
 		default:
 
+			// Get number of available worker slots
+			availableSlots := len(tp.ListWorkersActivity()) - tp.activityPool.ProcessingCount()
+			if availableSlots <= 0 {
+				// All workers are busy, wait and continue
+				runtime.Gosched()
+				continue
+			}
+
 			pendingActivities, err := tp.client.ActivityExecution.Query().
 				Where(activityexecution.StatusEQ(activityexecution.StatusPending)).
 				Order(ent.Asc(activityexecution.FieldStartedAt)).WithActivity().
-				Limit(1).All(tp.ctx)
+				Limit(availableSlots).
+				All(tp.ctx)
 			if err != nil {
 				tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Query failed", "error", err)
 				continue
