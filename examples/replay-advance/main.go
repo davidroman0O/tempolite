@@ -97,7 +97,7 @@ func main() {
 	// First run
 	executionCount.Store(0)
 	log.Println("Running workflow for the first time")
-	workflowInfo := tp.Workflow("test", complexWorkflow, nil)
+	workflowInfo := tp.Workflow(complexWorkflow, nil)
 
 	var result string
 	err = workflowInfo.Get(&result)

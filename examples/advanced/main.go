@@ -159,7 +159,7 @@ func main() {
 		ShippingAddress: "123 Main St, Anytown, USA",
 	}
 
-	workflowInfo := tp.Workflow("process-order", OrderProcessingWorkflow, nil, order)
+	workflowInfo := tp.Workflow(OrderProcessingWorkflow, nil, order)
 
 	// Simulate shipment confirmation signal
 	go func() {

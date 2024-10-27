@@ -110,7 +110,7 @@ func main() {
 
 	// Start the main workflow on the default queue
 	log.Println("Starting main workflow on default queue")
-	if err := tp.Workflow("main", MainWorkflow, nil, 5).Get(); err != nil {
+	if err := tp.Workflow(MainWorkflow, nil, 5).Get(); err != nil {
 		log.Fatalf("Main workflow failed: %v", err)
 	}
 

@@ -43,7 +43,7 @@ func main() {
 
 	// Execute the workflow with retry options
 	var output string
-	err = tp.Workflow("simple-workflow", SimpleWorkflow, tempolite.WorkflowConfig(
+	err = tp.Workflow(SimpleWorkflow, tempolite.WorkflowConfig(
 		tempolite.WithRetryMaximumAttempts(3),
 	), "Hello, Tempolite!").Get(&output)
 	if err != nil {

@@ -15,9 +15,9 @@ import (
 )
 
 // func (tp *Tempolite) Workflow(stepID T, workflowFunc interface{}, opts tempoliteWorkflowConfig, params ...interface{}) *WorkflowInfo {
-func (tp *Tempolite) Workflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
-	tp.logger.Debug(tp.ctx, "Workflow", "stepID", stepID)
-	id, err := tp.executeWorkflow(stepID, workflowFunc, options, params...)
+func (tp *Tempolite) Workflow(workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
+	tp.logger.Debug(tp.ctx, "Workflow")
+	id, err := tp.executeWorkflow(workflowFunc, options, params...)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error executing workflow", "error", err)
 	}
@@ -256,7 +256,7 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 	}
 }
 
-func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	var value any
@@ -355,7 +355,7 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			Create().
 			SetID(runEntity.RunID).
 			SetStatus(workflow.StatusPending).
-			SetStepID(stepID).
+			SetStepID("root").
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(serializableParams).

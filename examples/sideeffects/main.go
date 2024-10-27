@@ -65,7 +65,7 @@ func main() {
 	defer tp.Close()
 
 	var result string
-	err = tp.Workflow("complex-workflow", ComplexWorkflow, nil, 100).Get(&result)
+	err = tp.Workflow(ComplexWorkflow, nil, 100).Get(&result)
 	if err != nil {
 		log.Fatalf("Workflow execution failed: %v", err)
 	}

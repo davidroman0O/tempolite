@@ -267,7 +267,7 @@ func (p *TempolitePool) Wait() error {
 
 /// API functions
 
-func (p *TempolitePool) Workflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
+func (p *TempolitePool) Workflow(workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
 	p.rotateMu.RLock() // Acquire read lock
 	defer p.rotateMu.RUnlock()
 
@@ -275,7 +275,7 @@ func (p *TempolitePool) Workflow(stepID string, workflowFunc interface{}, option
 	current := p.current
 	p.mu.RUnlock()
 
-	return current.Workflow(stepID, workflowFunc, options, params...)
+	return current.Workflow(workflowFunc, options, params...)
 }
 
 func (p *TempolitePool) GetWorkflow(id WorkflowID) *WorkflowInfo {

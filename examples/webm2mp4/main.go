@@ -162,7 +162,7 @@ func main() {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)
 	}
 
-	if err := tp.Workflow("webm2mp4", Workflow, nil, Webm2Mp4{
+	if err := tp.Workflow(Workflow, nil, Webm2Mp4{
 		InputFile:  *input,
 		OutputFile: *output,
 	}).Get(); err != nil {

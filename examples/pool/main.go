@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -60,7 +59,6 @@ func main() {
 	for i := 1; i <= 1000; i++ {
 		var result int
 		if err := pool.Workflow(
-			fmt.Sprintf("step-%d", i),
 			simpleWorkflow,
 			nil,
 			i,

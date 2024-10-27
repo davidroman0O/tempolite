@@ -202,7 +202,7 @@ func main() {
 	defer tp.Close()
 
 	// Start workflow
-	if err := tp.Workflow("ytdl", Workflow, nil, YtDl{
+	if err := tp.Workflow(Workflow, nil, YtDl{
 		Url:       *youtubeURL,
 		OutputDir: cleanOutputDir,
 		Timeout:   *timeout,

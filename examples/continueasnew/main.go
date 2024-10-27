@@ -43,7 +43,7 @@ func main() {
 	}
 	defer tp.Close()
 
-	workflowInfo := tp.Workflow("long-running", LongRunningWorkflow, nil, 0)
+	workflowInfo := tp.Workflow(LongRunningWorkflow, nil, 0)
 
 	// Simulate sending signals to the workflow
 	go func() {

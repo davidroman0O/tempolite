@@ -38,7 +38,7 @@ func main() {
 	// First run - this should fail
 	shouldSucceed.Store(false)
 	log.Println("Running workflow for the first time (should fail)")
-	workflowInfo := tp.Workflow("test", undeterministicWorkflow, nil)
+	workflowInfo := tp.Workflow(undeterministicWorkflow, nil)
 
 	var result string
 	err = workflowInfo.Get(&result)

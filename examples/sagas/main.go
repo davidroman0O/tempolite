@@ -115,7 +115,7 @@ func main() {
 
 	for _, orderData := range testCases {
 		var result string
-		err = tp.Workflow(fmt.Sprintf("order-workflow-%s", orderData.OrderID), OrderWorkflow, nil, orderData).Get(&result)
+		err = tp.Workflow(OrderWorkflow, nil, orderData).Get(&result)
 		if err != nil {
 			log.Printf("Workflow execution failed for order %s: %v", orderData.OrderID, err)
 		} else {

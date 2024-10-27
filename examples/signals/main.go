@@ -75,7 +75,7 @@ func main() {
 		Size:      "Grande",
 	}
 
-	workflowInfo := tp.Workflow("coffee-order", CoffeeShopWorkflow, nil, order)
+	workflowInfo := tp.Workflow(CoffeeShopWorkflow, nil, order)
 
 	// Simulate barista signaling that the drink is ready
 	go func() {

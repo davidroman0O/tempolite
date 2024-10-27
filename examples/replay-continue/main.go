@@ -37,7 +37,7 @@ func main() {
 
 	shouldSucceed.Store(true)
 	log.Println("Running workflow for the first time (should succeed)")
-	workflowInfo := tp.Workflow("test", workflowContinueReplay, nil)
+	workflowInfo := tp.Workflow(workflowContinueReplay, nil)
 
 	var result string
 	err = workflowInfo.Get(&result)

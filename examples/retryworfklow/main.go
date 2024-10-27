@@ -45,7 +45,7 @@ func main() {
 	shouldFail.Store(true)
 
 	// Execute the workflow
-	workflowInfo := tp.Workflow("example-step", exampleWorkflow, nil, 42)
+	workflowInfo := tp.Workflow(exampleWorkflow, nil, 42)
 	var result int
 	if err := workflowInfo.Get(&result); err != nil {
 		log.Printf("Workflow execution failed as expected: %v", err)
