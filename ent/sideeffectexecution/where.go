@@ -65,6 +65,11 @@ func IDContainsFold(id string) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldContainsFold(FieldID, id))
 }
 
+// QueueName applies equality check predicate on the "queue_name" field. It's identical to QueueNameEQ.
+func QueueName(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEQ(FieldQueueName, v))
+}
+
 // Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
 func Attempt(v int) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldEQ(FieldAttempt, v))
@@ -103,6 +108,71 @@ func StatusIn(vs ...Status) predicate.SideEffectExecution {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// QueueNameEQ applies the EQ predicate on the "queue_name" field.
+func QueueNameEQ(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEQ(FieldQueueName, v))
+}
+
+// QueueNameNEQ applies the NEQ predicate on the "queue_name" field.
+func QueueNameNEQ(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldNEQ(FieldQueueName, v))
+}
+
+// QueueNameIn applies the In predicate on the "queue_name" field.
+func QueueNameIn(vs ...string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldIn(FieldQueueName, vs...))
+}
+
+// QueueNameNotIn applies the NotIn predicate on the "queue_name" field.
+func QueueNameNotIn(vs ...string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldNotIn(FieldQueueName, vs...))
+}
+
+// QueueNameGT applies the GT predicate on the "queue_name" field.
+func QueueNameGT(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldGT(FieldQueueName, v))
+}
+
+// QueueNameGTE applies the GTE predicate on the "queue_name" field.
+func QueueNameGTE(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldGTE(FieldQueueName, v))
+}
+
+// QueueNameLT applies the LT predicate on the "queue_name" field.
+func QueueNameLT(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldLT(FieldQueueName, v))
+}
+
+// QueueNameLTE applies the LTE predicate on the "queue_name" field.
+func QueueNameLTE(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldLTE(FieldQueueName, v))
+}
+
+// QueueNameContains applies the Contains predicate on the "queue_name" field.
+func QueueNameContains(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldContains(FieldQueueName, v))
+}
+
+// QueueNameHasPrefix applies the HasPrefix predicate on the "queue_name" field.
+func QueueNameHasPrefix(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldHasPrefix(FieldQueueName, v))
+}
+
+// QueueNameHasSuffix applies the HasSuffix predicate on the "queue_name" field.
+func QueueNameHasSuffix(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldHasSuffix(FieldQueueName, v))
+}
+
+// QueueNameEqualFold applies the EqualFold predicate on the "queue_name" field.
+func QueueNameEqualFold(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldEqualFold(FieldQueueName, v))
+}
+
+// QueueNameContainsFold applies the ContainsFold predicate on the "queue_name" field.
+func QueueNameContainsFold(v string) predicate.SideEffectExecution {
+	return predicate.SideEffectExecution(sql.FieldContainsFold(FieldQueueName, v))
 }
 
 // AttemptEQ applies the EQ predicate on the "attempt" field.

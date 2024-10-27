@@ -14,6 +14,7 @@ var (
 		{Name: "identity", Type: field.TypeString},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
@@ -31,6 +32,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "run_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
@@ -46,7 +48,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_executions_activities_executions",
-				Columns:    []*schema.Column{ActivityExecutionsColumns[8]},
+				Columns:    []*schema.Column{ActivityExecutionsColumns[9]},
 				RefColumns: []*schema.Column{ActivitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -134,6 +136,7 @@ var (
 		{Name: "run_id", Type: field.TypeString},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Compensating", "Compensated"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "saga_definition", Type: field.TypeJSON},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
@@ -151,6 +154,7 @@ var (
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "step_type", Type: field.TypeEnum, Enums: []string{"Transaction", "Compensation"}},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "sequence", Type: field.TypeInt},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
@@ -165,7 +169,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "saga_executions_sagas_steps",
-				Columns:    []*schema.Column{SagaExecutionsColumns[8]},
+				Columns:    []*schema.Column{SagaExecutionsColumns[9]},
 				RefColumns: []*schema.Column{SagasColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -178,6 +182,7 @@ var (
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "timeout", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
@@ -192,6 +197,7 @@ var (
 	SideEffectExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
@@ -207,7 +213,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_executions_side_effects_executions",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[7]},
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[8]},
 				RefColumns: []*schema.Column{SideEffectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -218,6 +224,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "consumed", Type: field.TypeBool, Default: false},
 	}
@@ -232,6 +239,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "run_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
@@ -246,7 +254,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "signal_executions_signals_executions",
-				Columns:    []*schema.Column{SignalExecutionsColumns[7]},
+				Columns:    []*schema.Column{SignalExecutionsColumns[8]},
 				RefColumns: []*schema.Column{SignalsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -260,6 +268,7 @@ var (
 		{Name: "identity", Type: field.TypeString},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "input", Type: field.TypeJSON},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "retry_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "is_paused", Type: field.TypeBool, Default: false},
 		{Name: "is_ready", Type: field.TypeBool, Default: false},
@@ -276,13 +285,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflows_workflows_continued_to",
-				Columns:    []*schema.Column{WorkflowsColumns[11]},
+				Columns:    []*schema.Column{WorkflowsColumns[12]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "workflows_workflows_retried_to",
-				Columns:    []*schema.Column{WorkflowsColumns[12]},
+				Columns:    []*schema.Column{WorkflowsColumns[13]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -293,6 +302,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "run_id", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled"}, Default: "Pending"},
+		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "is_replay", Type: field.TypeBool, Default: false},
@@ -308,7 +318,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_executions_workflows_executions",
-				Columns:    []*schema.Column{WorkflowExecutionsColumns[8]},
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[9]},
 				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

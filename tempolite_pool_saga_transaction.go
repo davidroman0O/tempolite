@@ -20,7 +20,7 @@ type transactionTask struct {
 	compensate  func() error
 }
 
-func (tp *Tempolite) createTransactionPool(countWorkers int) *retrypool.Pool[*transactionTask] {
+func (tp *Tempolite) createTransactionPool(queue string, countWorkers int) (*retrypool.Pool[*transactionTask], error) {
 	opts := []retrypool.Option[*transactionTask]{
 		retrypool.WithAttempts[*transactionTask](1),
 		retrypool.WithOnTaskSuccess(tp.transactionOnSuccess),
@@ -32,11 +32,17 @@ func (tp *Tempolite) createTransactionPool(countWorkers int) *retrypool.Pool[*tr
 
 	workers := []retrypool.Worker[*transactionTask]{}
 
+	tp.logger.Debug(tp.ctx, "createTransactionPool", "queue", queue, "countWorkers", countWorkers)
+
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, transactionWorker{id: tp.getWorkerTransactionID(), tp: tp})
+		id, err := tp.getWorkerTransactionID(queue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate transaction worker ID: %w", err)
+		}
+		workers = append(workers, transactionWorker{id: id, tp: tp})
 	}
 
-	return retrypool.New(tp.ctx, workers, opts...)
+	return retrypool.New(tp.ctx, workers, opts...), nil
 }
 
 func (tp *Tempolite) transactionWorkerPanic(workerID int, recovery any, err error, stackTrace string) {

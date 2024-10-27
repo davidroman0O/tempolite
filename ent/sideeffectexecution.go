@@ -21,6 +21,8 @@ type SideEffectExecution struct {
 	ID string `json:"id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sideeffectexecution.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Attempt holds the value of the "attempt" field.
 	Attempt int `json:"attempt,omitempty"`
 	// Output holds the value of the "output" field.
@@ -67,7 +69,7 @@ func (*SideEffectExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case sideeffectexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case sideeffectexecution.FieldID, sideeffectexecution.FieldStatus, sideeffectexecution.FieldError:
+		case sideeffectexecution.FieldID, sideeffectexecution.FieldStatus, sideeffectexecution.FieldQueueName, sideeffectexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case sideeffectexecution.FieldStartedAt, sideeffectexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -99,6 +101,12 @@ func (see *SideEffectExecution) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				see.Status = sideeffectexecution.Status(value.String)
+			}
+		case sideeffectexecution.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				see.QueueName = value.String
 			}
 		case sideeffectexecution.FieldAttempt:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -182,6 +190,9 @@ func (see *SideEffectExecution) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", see.ID))
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", see.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(see.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("attempt=")
 	builder.WriteString(fmt.Sprintf("%v", see.Attempt))

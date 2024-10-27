@@ -29,6 +29,8 @@ type Workflow struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Input holds the value of the "input" field.
 	Input [][]uint8 `json:"input,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// IsPaused holds the value of the "is_paused" field.
@@ -126,7 +128,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflow.FieldIsPaused, workflow.FieldIsReady:
 			values[i] = new(sql.NullBool)
-		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldContinuedFromID, workflow.FieldRetriedFromID:
+		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldQueueName, workflow.FieldContinuedFromID, workflow.FieldRetriedFromID:
 			values[i] = new(sql.NullString)
 		case workflow.FieldTimeout, workflow.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -182,6 +184,12 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &w.Input); err != nil {
 					return fmt.Errorf("unmarshal field input: %w", err)
 				}
+			}
+		case workflow.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				w.QueueName = value.String
 			}
 		case workflow.FieldRetryPolicy:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -303,6 +311,9 @@ func (w *Workflow) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", w.Input))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(w.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("retry_policy=")
 	builder.WriteString(fmt.Sprintf("%v", w.RetryPolicy))

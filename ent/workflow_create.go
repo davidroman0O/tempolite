@@ -60,6 +60,20 @@ func (wc *WorkflowCreate) SetInput(u [][]uint8) *WorkflowCreate {
 	return wc
 }
 
+// SetQueueName sets the "queue_name" field.
+func (wc *WorkflowCreate) SetQueueName(s string) *WorkflowCreate {
+	wc.mutation.SetQueueName(s)
+	return wc
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableQueueName(s *string) *WorkflowCreate {
+	if s != nil {
+		wc.SetQueueName(*s)
+	}
+	return wc
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (wc *WorkflowCreate) SetRetryPolicy(sp schema.RetryPolicy) *WorkflowCreate {
 	wc.mutation.SetRetryPolicy(sp)
@@ -262,6 +276,10 @@ func (wc *WorkflowCreate) defaults() {
 		v := workflow.DefaultStatus
 		wc.mutation.SetStatus(v)
 	}
+	if _, ok := wc.mutation.QueueName(); !ok {
+		v := workflow.DefaultQueueName
+		wc.mutation.SetQueueName(v)
+	}
 	if _, ok := wc.mutation.IsPaused(); !ok {
 		v := workflow.DefaultIsPaused
 		wc.mutation.SetIsPaused(v)
@@ -312,6 +330,14 @@ func (wc *WorkflowCreate) check() error {
 	}
 	if _, ok := wc.mutation.Input(); !ok {
 		return &ValidationError{Name: "input", err: errors.New(`ent: missing required field "Workflow.input"`)}
+	}
+	if _, ok := wc.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "Workflow.queue_name"`)}
+	}
+	if v, ok := wc.mutation.QueueName(); ok {
+		if err := workflow.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Workflow.queue_name": %w`, err)}
+		}
 	}
 	if _, ok := wc.mutation.IsPaused(); !ok {
 		return &ValidationError{Name: "is_paused", err: errors.New(`ent: missing required field "Workflow.is_paused"`)}
@@ -376,6 +402,10 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.Input(); ok {
 		_spec.SetField(workflow.FieldInput, field.TypeJSON, value)
 		_node.Input = value
+	}
+	if value, ok := wc.mutation.QueueName(); ok {
+		_spec.SetField(workflow.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := wc.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflow.FieldRetryPolicy, field.TypeJSON, value)

@@ -47,6 +47,20 @@ func (sec *SagaExecutionCreate) SetNillableStatus(s *sagaexecution.Status) *Saga
 	return sec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (sec *SagaExecutionCreate) SetQueueName(s string) *SagaExecutionCreate {
+	sec.mutation.SetQueueName(s)
+	return sec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (sec *SagaExecutionCreate) SetNillableQueueName(s *string) *SagaExecutionCreate {
+	if s != nil {
+		sec.SetQueueName(*s)
+	}
+	return sec
+}
+
 // SetSequence sets the "sequence" field.
 func (sec *SagaExecutionCreate) SetSequence(i int) *SagaExecutionCreate {
 	sec.mutation.SetSequence(i)
@@ -151,6 +165,10 @@ func (sec *SagaExecutionCreate) defaults() {
 		v := sagaexecution.DefaultStatus
 		sec.mutation.SetStatus(v)
 	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		v := sagaexecution.DefaultQueueName
+		sec.mutation.SetQueueName(v)
+	}
 	if _, ok := sec.mutation.StartedAt(); !ok {
 		v := sagaexecution.DefaultStartedAt()
 		sec.mutation.SetStartedAt(v)
@@ -181,6 +199,14 @@ func (sec *SagaExecutionCreate) check() error {
 	if v, ok := sec.mutation.Status(); ok {
 		if err := sagaexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
+		}
+	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "SagaExecution.queue_name"`)}
+	}
+	if v, ok := sec.mutation.QueueName(); ok {
+		if err := sagaexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := sec.mutation.Sequence(); !ok {
@@ -243,6 +269,10 @@ func (sec *SagaExecutionCreate) createSpec() (*SagaExecution, *sqlgraph.CreateSp
 	if value, ok := sec.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := sec.mutation.QueueName(); ok {
+		_spec.SetField(sagaexecution.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := sec.mutation.Sequence(); ok {
 		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)

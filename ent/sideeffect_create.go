@@ -54,6 +54,20 @@ func (sec *SideEffectCreate) SetNillableStatus(s *sideeffect.Status) *SideEffect
 	return sec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (sec *SideEffectCreate) SetQueueName(s string) *SideEffectCreate {
+	sec.mutation.SetQueueName(s)
+	return sec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (sec *SideEffectCreate) SetNillableQueueName(s *string) *SideEffectCreate {
+	if s != nil {
+		sec.SetQueueName(*s)
+	}
+	return sec
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (sec *SideEffectCreate) SetRetryPolicy(sp schema.RetryPolicy) *SideEffectCreate {
 	sec.mutation.SetRetryPolicy(sp)
@@ -156,6 +170,10 @@ func (sec *SideEffectCreate) defaults() {
 		v := sideeffect.DefaultStatus
 		sec.mutation.SetStatus(v)
 	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		v := sideeffect.DefaultQueueName
+		sec.mutation.SetQueueName(v)
+	}
 	if _, ok := sec.mutation.CreatedAt(); !ok {
 		v := sideeffect.DefaultCreatedAt()
 		sec.mutation.SetCreatedAt(v)
@@ -194,6 +212,14 @@ func (sec *SideEffectCreate) check() error {
 	if v, ok := sec.mutation.Status(); ok {
 		if err := sideeffect.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
+		}
+	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "SideEffect.queue_name"`)}
+	}
+	if v, ok := sec.mutation.QueueName(); ok {
+		if err := sideeffect.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := sec.mutation.CreatedAt(); !ok {
@@ -249,6 +275,10 @@ func (sec *SideEffectCreate) createSpec() (*SideEffect, *sqlgraph.CreateSpec) {
 	if value, ok := sec.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := sec.mutation.QueueName(); ok {
+		_spec.SetField(sideeffect.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := sec.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)

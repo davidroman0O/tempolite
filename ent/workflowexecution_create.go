@@ -41,6 +41,20 @@ func (wec *WorkflowExecutionCreate) SetNillableStatus(w *workflowexecution.Statu
 	return wec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (wec *WorkflowExecutionCreate) SetQueueName(s string) *WorkflowExecutionCreate {
+	wec.mutation.SetQueueName(s)
+	return wec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableQueueName(s *string) *WorkflowExecutionCreate {
+	if s != nil {
+		wec.SetQueueName(*s)
+	}
+	return wec
+}
+
 // SetOutput sets the "output" field.
 func (wec *WorkflowExecutionCreate) SetOutput(u [][]uint8) *WorkflowExecutionCreate {
 	wec.mutation.SetOutput(u)
@@ -159,6 +173,10 @@ func (wec *WorkflowExecutionCreate) defaults() {
 		v := workflowexecution.DefaultStatus
 		wec.mutation.SetStatus(v)
 	}
+	if _, ok := wec.mutation.QueueName(); !ok {
+		v := workflowexecution.DefaultQueueName
+		wec.mutation.SetQueueName(v)
+	}
 	if _, ok := wec.mutation.IsReplay(); !ok {
 		v := workflowexecution.DefaultIsReplay
 		wec.mutation.SetIsReplay(v)
@@ -184,6 +202,14 @@ func (wec *WorkflowExecutionCreate) check() error {
 	if v, ok := wec.mutation.Status(); ok {
 		if err := workflowexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.status": %w`, err)}
+		}
+	}
+	if _, ok := wec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "WorkflowExecution.queue_name"`)}
+	}
+	if v, ok := wec.mutation.QueueName(); ok {
+		if err := workflowexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := wec.mutation.IsReplay(); !ok {
@@ -240,6 +266,10 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 	if value, ok := wec.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := wec.mutation.QueueName(); ok {
+		_spec.SetField(workflowexecution.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := wec.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)

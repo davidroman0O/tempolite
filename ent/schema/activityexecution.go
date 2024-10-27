@@ -22,13 +22,12 @@ func (ActivityExecution) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Retried").
 			Default("Pending"),
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.Int("attempt").
 			Default(1),
-		// field.JSON("output", []interface{}{}).
-		// 	Optional(),
-		// field.Any("output").Optional(), // technically a [][]byte
 		field.JSON("output", [][]byte{}).Optional(),
-
 		field.String("error").
 			Optional(),
 		field.Time("started_at").

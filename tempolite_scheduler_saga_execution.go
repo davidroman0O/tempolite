@@ -59,32 +59,61 @@ import (
 //	 |             |             |
 //	 v             v             v
 //	C1 <--next-- C2 <--next-- C3
-func (tp *Tempolite) schedulerExecutionSaga() {
-	defer close(tp.schedulerSagaDone)
+func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan struct{}) {
+
+	queueTransaction, err := tp.getTransactionPoolQueue(queueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Scheduler transaction execution: getTransactionPoolQueue failed", "error", err)
+		return
+	}
+
+	queueCompensation, err := tp.getCompensationPoolQueue(queueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Scheduler compensation execution: getCompensationPoolQueue failed", "error", err)
+		return
+	}
+
 	for {
 		select {
 		case <-tp.ctx.Done():
 			return
 		default:
 
-			availableSlots := len(tp.ListWorkersTransaction()) - tp.transactionPool.ProcessingCount()
-			if availableSlots <= 0 {
+			queueWorkersRaw, ok := tp.queues.Load(queueName)
+			if !ok {
+				continue
+			}
+			queueWorkers := queueWorkersRaw.(*QueueWorkers)
+
+			// For transactions
+			txWorkerIDs := queueWorkers.Transactions.GetWorkerIDs()
+			txAvailableSlots := len(txWorkerIDs) - queueWorkers.Transactions.ProcessingCount()
+			if txAvailableSlots <= 0 {
+				runtime.Gosched()
+				continue
+			}
+
+			// For compensations
+			compWorkerIDs := queueWorkers.Compensations.GetWorkerIDs()
+			compAvailableSlots := len(compWorkerIDs) - queueWorkers.Compensations.ProcessingCount()
+			if compAvailableSlots <= 0 {
 				runtime.Gosched()
 				continue
 			}
 
 			pendingSagas, err := tp.client.SagaExecution.Query().
-				Where(sagaexecution.StatusEQ(sagaexecution.StatusPending)).
+				Where(
+					sagaexecution.StatusEQ(sagaexecution.StatusPending),
+					sagaexecution.HasSagaWith(saga.QueueNameEQ(queueName)),
+				).
 				Order(ent.Asc(sagaexecution.FieldStartedAt)).
 				WithSaga().
-				Limit(availableSlots).
+				Limit(min(txAvailableSlots, compAvailableSlots)).
 				All(tp.ctx)
 			if err != nil {
 				tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaExecution.Query failed", "error", err)
 				continue
 			}
-
-			tp.schedulerSagaStarted.Store(true)
 
 			for _, sagaExecution := range pendingSagas {
 				sagaHandlerInfo, ok := tp.sagas.Load(sagaExecution.Edges.Saga.ID)
@@ -160,7 +189,7 @@ func (tp *Tempolite) schedulerExecutionSaga() {
 
 								// Before moving to the next transaction, update the last successful index
 								lastSuccessfulIndex = i
-								return tp.transactionPool.Dispatch(transactionTasks[nextIndex])
+								return queueTransaction.Dispatch(transactionTasks[nextIndex])
 							}
 						} else {
 							// For the last transaction
@@ -210,7 +239,7 @@ func (tp *Tempolite) schedulerExecutionSaga() {
 								compensationTasks[lastSuccessfulIndex].executionID = compensationExecution.ID
 
 								// Start compensation from the last successful transaction
-								return tp.compensationPool.Dispatch(compensationTasks[lastSuccessfulIndex])
+								return queueCompensation.Dispatch(compensationTasks[lastSuccessfulIndex])
 							}
 
 							tx, err := tp.client.Tx(tp.ctx)
@@ -276,7 +305,7 @@ func (tp *Tempolite) schedulerExecutionSaga() {
 
 								compensationTasks[prevIndex].executionID = compensationExecution.ID
 
-								return tp.compensationPool.Dispatch(compensationTasks[prevIndex])
+								return queueCompensation.Dispatch(compensationTasks[prevIndex])
 							}
 						} else {
 							// Optionally, for the first compensation task, you might decide to loop back or end the chain
@@ -287,7 +316,7 @@ func (tp *Tempolite) schedulerExecutionSaga() {
 				}
 
 				// Dispatch the first transaction task
-				if err := tp.transactionPool.Dispatch(transactionTasks[0]); err != nil {
+				if err := queueTransaction.Dispatch(transactionTasks[0]); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to dispatch first transaction task", "error", err)
 					tx, err := tp.client.Tx(tp.ctx)
 					if err != nil {

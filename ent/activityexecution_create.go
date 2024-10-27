@@ -41,6 +41,20 @@ func (aec *ActivityExecutionCreate) SetNillableStatus(a *activityexecution.Statu
 	return aec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (aec *ActivityExecutionCreate) SetQueueName(s string) *ActivityExecutionCreate {
+	aec.mutation.SetQueueName(s)
+	return aec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (aec *ActivityExecutionCreate) SetNillableQueueName(s *string) *ActivityExecutionCreate {
+	if s != nil {
+		aec.SetQueueName(*s)
+	}
+	return aec
+}
+
 // SetAttempt sets the "attempt" field.
 func (aec *ActivityExecutionCreate) SetAttempt(i int) *ActivityExecutionCreate {
 	aec.mutation.SetAttempt(i)
@@ -159,6 +173,10 @@ func (aec *ActivityExecutionCreate) defaults() {
 		v := activityexecution.DefaultStatus
 		aec.mutation.SetStatus(v)
 	}
+	if _, ok := aec.mutation.QueueName(); !ok {
+		v := activityexecution.DefaultQueueName
+		aec.mutation.SetQueueName(v)
+	}
 	if _, ok := aec.mutation.Attempt(); !ok {
 		v := activityexecution.DefaultAttempt
 		aec.mutation.SetAttempt(v)
@@ -184,6 +202,14 @@ func (aec *ActivityExecutionCreate) check() error {
 	if v, ok := aec.mutation.Status(); ok {
 		if err := activityexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.status": %w`, err)}
+		}
+	}
+	if _, ok := aec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "ActivityExecution.queue_name"`)}
+	}
+	if v, ok := aec.mutation.QueueName(); ok {
+		if err := activityexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := aec.mutation.Attempt(); !ok {
@@ -240,6 +266,10 @@ func (aec *ActivityExecutionCreate) createSpec() (*ActivityExecution, *sqlgraph.
 	if value, ok := aec.mutation.Status(); ok {
 		_spec.SetField(activityexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := aec.mutation.QueueName(); ok {
+		_spec.SetField(activityexecution.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := aec.mutation.Attempt(); ok {
 		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)

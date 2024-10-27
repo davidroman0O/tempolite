@@ -58,6 +58,20 @@ func (aeu *ActivityExecutionUpdate) SetNillableStatus(a *activityexecution.Statu
 	return aeu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (aeu *ActivityExecutionUpdate) SetQueueName(s string) *ActivityExecutionUpdate {
+	aeu.mutation.SetQueueName(s)
+	return aeu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (aeu *ActivityExecutionUpdate) SetNillableQueueName(s *string) *ActivityExecutionUpdate {
+	if s != nil {
+		aeu.SetQueueName(*s)
+	}
+	return aeu
+}
+
 // SetAttempt sets the "attempt" field.
 func (aeu *ActivityExecutionUpdate) SetAttempt(i int) *ActivityExecutionUpdate {
 	aeu.mutation.ResetAttempt()
@@ -202,6 +216,11 @@ func (aeu *ActivityExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := aeu.mutation.QueueName(); ok {
+		if err := activityexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.queue_name": %w`, err)}
+		}
+	}
 	if aeu.mutation.ActivityCleared() && len(aeu.mutation.ActivityIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ActivityExecution.activity"`)
 	}
@@ -225,6 +244,9 @@ func (aeu *ActivityExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if value, ok := aeu.mutation.Status(); ok {
 		_spec.SetField(activityexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := aeu.mutation.QueueName(); ok {
+		_spec.SetField(activityexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := aeu.mutation.Attempt(); ok {
 		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)
@@ -328,6 +350,20 @@ func (aeuo *ActivityExecutionUpdateOne) SetStatus(a activityexecution.Status) *A
 func (aeuo *ActivityExecutionUpdateOne) SetNillableStatus(a *activityexecution.Status) *ActivityExecutionUpdateOne {
 	if a != nil {
 		aeuo.SetStatus(*a)
+	}
+	return aeuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (aeuo *ActivityExecutionUpdateOne) SetQueueName(s string) *ActivityExecutionUpdateOne {
+	aeuo.mutation.SetQueueName(s)
+	return aeuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (aeuo *ActivityExecutionUpdateOne) SetNillableQueueName(s *string) *ActivityExecutionUpdateOne {
+	if s != nil {
+		aeuo.SetQueueName(*s)
 	}
 	return aeuo
 }
@@ -489,6 +525,11 @@ func (aeuo *ActivityExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := aeuo.mutation.QueueName(); ok {
+		if err := activityexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "ActivityExecution.queue_name": %w`, err)}
+		}
+	}
 	if aeuo.mutation.ActivityCleared() && len(aeuo.mutation.ActivityIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ActivityExecution.activity"`)
 	}
@@ -529,6 +570,9 @@ func (aeuo *ActivityExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Act
 	}
 	if value, ok := aeuo.mutation.Status(); ok {
 		_spec.SetField(activityexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := aeuo.mutation.QueueName(); ok {
+		_spec.SetField(activityexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := aeuo.mutation.Attempt(); ok {
 		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)

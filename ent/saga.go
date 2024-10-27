@@ -25,6 +25,8 @@ type Saga struct {
 	StepID string `json:"step_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status saga.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Stores the full saga definition including transactions and compensations
 	SagaDefinition schema.SagaDefinitionData `json:"saga_definition,omitempty"`
 	// Error holds the value of the "error" field.
@@ -64,7 +66,7 @@ func (*Saga) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case saga.FieldSagaDefinition:
 			values[i] = new([]byte)
-		case saga.FieldID, saga.FieldRunID, saga.FieldStepID, saga.FieldStatus, saga.FieldError:
+		case saga.FieldID, saga.FieldRunID, saga.FieldStepID, saga.FieldStatus, saga.FieldQueueName, saga.FieldError:
 			values[i] = new(sql.NullString)
 		case saga.FieldCreatedAt, saga.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -106,6 +108,12 @@ func (s *Saga) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				s.Status = saga.Status(value.String)
+			}
+		case saga.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				s.QueueName = value.String
 			}
 		case saga.FieldSagaDefinition:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -182,6 +190,9 @@ func (s *Saga) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", s.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(s.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("saga_definition=")
 	builder.WriteString(fmt.Sprintf("%v", s.SagaDefinition))

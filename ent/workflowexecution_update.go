@@ -58,6 +58,20 @@ func (weu *WorkflowExecutionUpdate) SetNillableStatus(w *workflowexecution.Statu
 	return weu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (weu *WorkflowExecutionUpdate) SetQueueName(s string) *WorkflowExecutionUpdate {
+	weu.mutation.SetQueueName(s)
+	return weu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (weu *WorkflowExecutionUpdate) SetNillableQueueName(s *string) *WorkflowExecutionUpdate {
+	if s != nil {
+		weu.SetQueueName(*s)
+	}
+	return weu
+}
+
 // SetOutput sets the "output" field.
 func (weu *WorkflowExecutionUpdate) SetOutput(u [][]uint8) *WorkflowExecutionUpdate {
 	weu.mutation.SetOutput(u)
@@ -195,6 +209,11 @@ func (weu *WorkflowExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := weu.mutation.QueueName(); ok {
+		if err := workflowexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.queue_name": %w`, err)}
+		}
+	}
 	if weu.mutation.WorkflowCleared() && len(weu.mutation.WorkflowIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "WorkflowExecution.workflow"`)
 	}
@@ -218,6 +237,9 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if value, ok := weu.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := weu.mutation.QueueName(); ok {
+		_spec.SetField(workflowexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := weu.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)
@@ -318,6 +340,20 @@ func (weuo *WorkflowExecutionUpdateOne) SetStatus(w workflowexecution.Status) *W
 func (weuo *WorkflowExecutionUpdateOne) SetNillableStatus(w *workflowexecution.Status) *WorkflowExecutionUpdateOne {
 	if w != nil {
 		weuo.SetStatus(*w)
+	}
+	return weuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (weuo *WorkflowExecutionUpdateOne) SetQueueName(s string) *WorkflowExecutionUpdateOne {
+	weuo.mutation.SetQueueName(s)
+	return weuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (weuo *WorkflowExecutionUpdateOne) SetNillableQueueName(s *string) *WorkflowExecutionUpdateOne {
+	if s != nil {
+		weuo.SetQueueName(*s)
 	}
 	return weuo
 }
@@ -472,6 +508,11 @@ func (weuo *WorkflowExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := weuo.mutation.QueueName(); ok {
+		if err := workflowexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.queue_name": %w`, err)}
+		}
+	}
 	if weuo.mutation.WorkflowCleared() && len(weuo.mutation.WorkflowIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "WorkflowExecution.workflow"`)
 	}
@@ -512,6 +553,9 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 	}
 	if value, ok := weuo.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := weuo.mutation.QueueName(); ok {
+		_spec.SetField(workflowexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := weuo.mutation.Output(); ok {
 		_spec.SetField(workflowexecution.FieldOutput, field.TypeJSON, value)

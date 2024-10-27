@@ -17,6 +17,8 @@ const (
 	FieldID = "id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldQueueName holds the string denoting the queue_name field in the database.
+	FieldQueueName = "queue_name"
 	// FieldAttempt holds the string denoting the attempt field in the database.
 	FieldAttempt = "attempt"
 	// FieldOutput holds the string denoting the output field in the database.
@@ -44,6 +46,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldStatus,
+	FieldQueueName,
 	FieldAttempt,
 	FieldOutput,
 	FieldError,
@@ -73,6 +76,10 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultQueueName holds the default value on creation for the "queue_name" field.
+	DefaultQueueName string
+	// QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	QueueNameValidator func(string) error
 	// DefaultAttempt holds the default value on creation for the "attempt" field.
 	DefaultAttempt int
 	// DefaultStartedAt holds the default value on creation for the "started_at" field.
@@ -122,6 +129,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByQueueName orders the results by the queue_name field.
+func ByQueueName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueueName, opts...).ToFunc()
 }
 
 // ByAttempt orders the results by the attempt field.

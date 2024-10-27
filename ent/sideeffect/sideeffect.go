@@ -23,6 +23,8 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldQueueName holds the string denoting the queue_name field in the database.
+	FieldQueueName = "queue_name"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
 	FieldRetryPolicy = "retry_policy"
 	// FieldTimeout holds the string denoting the timeout field in the database.
@@ -49,6 +51,7 @@ var Columns = []string{
 	FieldStepID,
 	FieldHandlerName,
 	FieldStatus,
+	FieldQueueName,
 	FieldRetryPolicy,
 	FieldTimeout,
 	FieldCreatedAt,
@@ -71,6 +74,10 @@ var (
 	StepIDValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
+	// DefaultQueueName holds the default value on creation for the "queue_name" field.
+	DefaultQueueName string
+	// QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	QueueNameValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -129,6 +136,11 @@ func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByQueueName orders the results by the queue_name field.
+func ByQueueName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueueName, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

@@ -35,6 +35,20 @@ func (seec *SideEffectExecutionCreate) SetNillableStatus(s *sideeffectexecution.
 	return seec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (seec *SideEffectExecutionCreate) SetQueueName(s string) *SideEffectExecutionCreate {
+	seec.mutation.SetQueueName(s)
+	return seec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seec *SideEffectExecutionCreate) SetNillableQueueName(s *string) *SideEffectExecutionCreate {
+	if s != nil {
+		seec.SetQueueName(*s)
+	}
+	return seec
+}
+
 // SetAttempt sets the "attempt" field.
 func (seec *SideEffectExecutionCreate) SetAttempt(i int) *SideEffectExecutionCreate {
 	seec.mutation.SetAttempt(i)
@@ -153,6 +167,10 @@ func (seec *SideEffectExecutionCreate) defaults() {
 		v := sideeffectexecution.DefaultStatus
 		seec.mutation.SetStatus(v)
 	}
+	if _, ok := seec.mutation.QueueName(); !ok {
+		v := sideeffectexecution.DefaultQueueName
+		seec.mutation.SetQueueName(v)
+	}
 	if _, ok := seec.mutation.Attempt(); !ok {
 		v := sideeffectexecution.DefaultAttempt
 		seec.mutation.SetAttempt(v)
@@ -175,6 +193,14 @@ func (seec *SideEffectExecutionCreate) check() error {
 	if v, ok := seec.mutation.Status(); ok {
 		if err := sideeffectexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.status": %w`, err)}
+		}
+	}
+	if _, ok := seec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "SideEffectExecution.queue_name"`)}
+	}
+	if v, ok := seec.mutation.QueueName(); ok {
+		if err := sideeffectexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := seec.mutation.Attempt(); !ok {
@@ -227,6 +253,10 @@ func (seec *SideEffectExecutionCreate) createSpec() (*SideEffectExecution, *sqlg
 	if value, ok := seec.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := seec.mutation.QueueName(); ok {
+		_spec.SetField(sideeffectexecution.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := seec.mutation.Attempt(); ok {
 		_spec.SetField(sideeffectexecution.FieldAttempt, field.TypeInt, value)

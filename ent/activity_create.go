@@ -48,6 +48,20 @@ func (ac *ActivityCreate) SetNillableStatus(a *activity.Status) *ActivityCreate 
 	return ac
 }
 
+// SetQueueName sets the "queue_name" field.
+func (ac *ActivityCreate) SetQueueName(s string) *ActivityCreate {
+	ac.mutation.SetQueueName(s)
+	return ac
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (ac *ActivityCreate) SetNillableQueueName(s *string) *ActivityCreate {
+	if s != nil {
+		ac.SetQueueName(*s)
+	}
+	return ac
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (ac *ActivityCreate) SetHandlerName(s string) *ActivityCreate {
 	ac.mutation.SetHandlerName(s)
@@ -162,6 +176,10 @@ func (ac *ActivityCreate) defaults() {
 		v := activity.DefaultStatus
 		ac.mutation.SetStatus(v)
 	}
+	if _, ok := ac.mutation.QueueName(); !ok {
+		v := activity.DefaultQueueName
+		ac.mutation.SetQueueName(v)
+	}
 	if _, ok := ac.mutation.CreatedAt(); !ok {
 		v := activity.DefaultCreatedAt()
 		ac.mutation.SetCreatedAt(v)
@@ -192,6 +210,14 @@ func (ac *ActivityCreate) check() error {
 	if v, ok := ac.mutation.Status(); ok {
 		if err := activity.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
+		}
+	}
+	if _, ok := ac.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "Activity.queue_name"`)}
+	}
+	if v, ok := ac.mutation.QueueName(); ok {
+		if err := activity.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Activity.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := ac.mutation.HandlerName(); !ok {
@@ -254,6 +280,10 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 	if value, ok := ac.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := ac.mutation.QueueName(); ok {
+		_spec.SetField(activity.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := ac.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)

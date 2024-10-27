@@ -23,6 +23,8 @@ type SignalExecution struct {
 	RunID string `json:"run_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status signalexecution.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Output holds the value of the "output" field.
 	Output [][]uint8 `json:"output,omitempty"`
 	// Error holds the value of the "error" field.
@@ -65,7 +67,7 @@ func (*SignalExecution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case signalexecution.FieldOutput:
 			values[i] = new([]byte)
-		case signalexecution.FieldID, signalexecution.FieldRunID, signalexecution.FieldStatus, signalexecution.FieldError:
+		case signalexecution.FieldID, signalexecution.FieldRunID, signalexecution.FieldStatus, signalexecution.FieldQueueName, signalexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case signalexecution.FieldStartedAt, signalexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -103,6 +105,12 @@ func (se *SignalExecution) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				se.Status = signalexecution.Status(value.String)
+			}
+		case signalexecution.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				se.QueueName = value.String
 			}
 		case signalexecution.FieldOutput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -183,6 +191,9 @@ func (se *SignalExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", se.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(se.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", se.Output))

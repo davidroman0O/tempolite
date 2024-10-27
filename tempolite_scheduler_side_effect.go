@@ -8,23 +8,39 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sideeffectexecution"
 )
 
-func (tp *Tempolite) schedulerExecutionSideEffect() {
-	defer close(tp.schedulerSideEffectDone)
+func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done chan struct{}) {
+
+	queue, err := tp.getSideEffectPoolQueue(queueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Scheduler side effect execution: getSideEffectPoolQueue failed", "error", err)
+		return
+	}
+
 	for {
 		select {
 		case <-tp.ctx.Done():
 			return
 		default:
 
-			availableSlots := len(tp.ListWorkersSideEffect()) - tp.sideEffectPool.ProcessingCount()
+			queueWorkersRaw, ok := tp.queues.Load(queueName)
+			if !ok {
+				continue
+			}
+			queueWorkers := queueWorkersRaw.(*QueueWorkers)
+
+			workerIDs := queueWorkers.SideEffects.GetWorkerIDs()
+			availableSlots := len(workerIDs) - queueWorkers.SideEffects.ProcessingCount()
 			if availableSlots <= 0 {
 				runtime.Gosched()
 				continue
 			}
 
 			pendingSideEffects, err := tp.client.SideEffectExecution.Query().
-				Where(sideeffectexecution.StatusEQ(sideeffectexecution.StatusPending)).
-				Order(ent.Asc(sideeffectexecution.FieldStartedAt)).WithSideEffect().
+				Where(
+					sideeffectexecution.StatusEQ(sideeffectexecution.StatusPending),
+					sideeffectexecution.HasSideEffectWith(sideeffect.QueueNameEQ(queueName)),
+				).
+				Order(ent.Asc(sideeffectexecution.FieldStartedAt)).
 				WithSideEffect().
 				Limit(availableSlots).
 				All(tp.ctx)
@@ -32,8 +48,6 @@ func (tp *Tempolite) schedulerExecutionSideEffect() {
 				tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.Query failed", "error", err)
 				continue
 			}
-
-			tp.schedulerSideEffectStarted.Store(true)
 
 			if len(pendingSideEffects) == 0 {
 				continue
@@ -63,7 +77,7 @@ func (tp *Tempolite) schedulerExecutionSideEffect() {
 
 				tp.logger.Debug(tp.ctx, "Scheduler sideeffect execution: Dispatching side effect", "sideEffectHandler", se.Edges.SideEffect.HandlerName)
 
-				if err := tp.sideEffectPool.Dispatch(task); err != nil {
+				if err := queue.Dispatch(task); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: Dispatch failed", "error", err)
 
 					tx, err := tp.client.Tx(tp.ctx)

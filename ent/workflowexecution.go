@@ -23,6 +23,8 @@ type WorkflowExecution struct {
 	RunID string `json:"run_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status workflowexecution.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Output holds the value of the "output" field.
 	Output [][]uint8 `json:"output,omitempty"`
 	// Error holds the value of the "error" field.
@@ -69,7 +71,7 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflowexecution.FieldIsReplay:
 			values[i] = new(sql.NullBool)
-		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus, workflowexecution.FieldError:
+		case workflowexecution.FieldID, workflowexecution.FieldRunID, workflowexecution.FieldStatus, workflowexecution.FieldQueueName, workflowexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case workflowexecution.FieldStartedAt, workflowexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -107,6 +109,12 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				we.Status = workflowexecution.Status(value.String)
+			}
+		case workflowexecution.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				we.QueueName = value.String
 			}
 		case workflowexecution.FieldOutput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -193,6 +201,9 @@ func (we *WorkflowExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", we.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(we.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", we.Output))

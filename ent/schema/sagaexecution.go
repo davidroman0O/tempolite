@@ -25,6 +25,9 @@ func (SagaExecution) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed").
 			Default("Pending"),
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.Int("sequence").
 			NonNegative(),
 		field.String("error").

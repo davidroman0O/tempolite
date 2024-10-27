@@ -24,6 +24,8 @@ type SagaExecution struct {
 	StepType sagaexecution.StepType `json:"step_type,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sagaexecution.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Sequence holds the value of the "sequence" field.
 	Sequence int `json:"sequence,omitempty"`
 	// Error holds the value of the "error" field.
@@ -66,7 +68,7 @@ func (*SagaExecution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sagaexecution.FieldSequence:
 			values[i] = new(sql.NullInt64)
-		case sagaexecution.FieldID, sagaexecution.FieldHandlerName, sagaexecution.FieldStepType, sagaexecution.FieldStatus, sagaexecution.FieldError:
+		case sagaexecution.FieldID, sagaexecution.FieldHandlerName, sagaexecution.FieldStepType, sagaexecution.FieldStatus, sagaexecution.FieldQueueName, sagaexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case sagaexecution.FieldStartedAt, sagaexecution.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -110,6 +112,12 @@ func (se *SagaExecution) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				se.Status = sagaexecution.Status(value.String)
+			}
+		case sagaexecution.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				se.QueueName = value.String
 			}
 		case sagaexecution.FieldSequence:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -191,6 +199,9 @@ func (se *SagaExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", se.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(se.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("sequence=")
 	builder.WriteString(fmt.Sprintf("%v", se.Sequence))

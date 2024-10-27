@@ -126,6 +126,7 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(serializableParams).
+			SetQueueName(ctx.QueueName()).
 			SetRetryPolicy(schema.RetryPolicy{
 				MaximumAttempts: 1,
 			}).
@@ -146,6 +147,7 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			SetID(activityEntity.ID). // Use the deterministic activity ID
 			SetRunID(ctx.RunID()).
 			SetActivity(activityEntity).
+			SetQueueName(ctx.QueueName()).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating activity execution", "error", err)

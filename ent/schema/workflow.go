@@ -26,11 +26,10 @@ func (Workflow) Fields() []ent.Field {
 			NotEmpty(),
 		field.String("handler_name").
 			NotEmpty(),
-		// field.JSON("input", []interface{}{}),
-		// field.Bytes("input"), // technically a [][]byte
-		// field.Any("input"), // technically a [][]byte
 		field.JSON("input", [][]byte{}),
-
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
 		field.Bool("is_paused").Default(false),

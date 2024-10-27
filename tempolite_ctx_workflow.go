@@ -15,9 +15,17 @@ type WorkflowContext struct {
 	workflowType    string
 	stepID          string
 	handlerIdentity HandlerIdentity
+	queueName       string
 }
 
-func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, stepID string, values ...any) error {
+func (w WorkflowContext) QueueName() string {
+	if w.queueName == "" {
+		return "default"
+	}
+	return w.queueName
+}
+
+func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, stepID string, options tempoliteWorkflowOptions, values ...any) error {
 	// Check if the workflow is paused
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
@@ -40,7 +48,7 @@ func (w WorkflowContext) ContinueAsNew(ctx WorkflowContext, stepID string, value
 
 	if value, ok := w.tp.workflows.Load(w.handlerIdentity); ok {
 		handler := value.(Workflow)
-		newWorkflowID, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, values...)
+		newWorkflowID, err := w.tp.enqueueWorkflow(w, stepID, handler.Handler, options, values...)
 		if err != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
 			return fmt.Errorf("failed to enqueue new workflow: %w", err)
@@ -151,21 +159,7 @@ func (w WorkflowContext) SideEffect(stepID string, handler interface{}) *SideEff
 	return w.tp.getSideEffect(w, id, err)
 }
 
-func (w WorkflowContext) Workflow(stepID string, handler interface{}, inputs ...any) *WorkflowInfo {
-	if err := w.checkIfPaused(); err != nil {
-		if uerr := w.setExecutionAsPaused(); uerr != nil {
-			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &WorkflowInfo{err: uerr}
-		}
-		return &WorkflowInfo{err: err}
-	}
-	id, err := w.tp.enqueueWorkflow(w, stepID, handler, inputs...)
-	if err != nil {
-		w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
-	}
-	return w.tp.getWorkflow(w, id, err)
-}
-
+// Original Activity with queue inheritance
 func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...any) *ActivityInfo {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
@@ -174,6 +168,7 @@ func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...
 		}
 		return &ActivityInfo{err: err}
 	}
+	// Use parent workflow's queue
 	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, inputs...)
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Error enqueuing activity function", "error", err)
@@ -181,17 +176,38 @@ func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...
 	return w.tp.getActivity(w, id, err)
 }
 
-// func (w WorkflowContext) ExecuteActivity(stepID T, name HandlerIdentity, inputs ...any) *ActivityInfo {
+// Original Workflow with queue inheritance
+func (w WorkflowContext) Workflow(stepID string, handler interface{}, options tempoliteWorkflowOptions, inputs ...any) *WorkflowInfo {
+	if err := w.checkIfPaused(); err != nil {
+		if uerr := w.setExecutionAsPaused(); uerr != nil {
+			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
+			return &WorkflowInfo{err: uerr}
+		}
+		return &WorkflowInfo{err: err}
+	}
+	// Use parent workflow's queue by default
+	id, err := w.tp.enqueueWorkflow(w, stepID, handler, options, inputs...)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
+	}
+	return w.tp.getWorkflow(w, id, err)
+}
+
+// // Optional queue override for workflows
+// func (w WorkflowContext) WorkflowInQueue(stepID string, handler interface{}, inputs ...any) *WorkflowInfo {
 // 	if err := w.checkIfPaused(); err != nil {
 // 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 // 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-// 			return &ActivityInfo{err: uerr}
+// 			return &WorkflowInfo{err: uerr}
 // 		}
-// 		return &ActivityInfo{err: err}
+// 		return &WorkflowInfo{err: err}
 // 	}
-// 	id, err := w.tp.enqueueActivity(w, stepID, name, inputs...)
+// 	// Create new context with specified queue
+// 	queueCtx := w
+// 	queueCtx.queueName = queueName
+// 	id, err := w.tp.enqueueWorkflow(queueCtx, stepID, handler, inputs...)
 // 	if err != nil {
-// 		w.tp.logger.Error(w.tp.ctx, "Error enqueuing activity", "error", err)
+// 		w.tp.logger.Error(w.tp.ctx, "Error enqueuing workflow", "error", err)
 // 	}
-// 	return w.tp.getActivity(w, id, err)
+// 	return w.tp.getWorkflow(w, id, err)
 // }

@@ -99,6 +99,20 @@ func (wu *WorkflowUpdate) AppendInput(u [][]uint8) *WorkflowUpdate {
 	return wu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (wu *WorkflowUpdate) SetQueueName(s string) *WorkflowUpdate {
+	wu.mutation.SetQueueName(s)
+	return wu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableQueueName(s *string) *WorkflowUpdate {
+	if s != nil {
+		wu.SetQueueName(*s)
+	}
+	return wu
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (wu *WorkflowUpdate) SetRetryPolicy(sp schema.RetryPolicy) *WorkflowUpdate {
 	wu.mutation.SetRetryPolicy(sp)
@@ -394,6 +408,11 @@ func (wu *WorkflowUpdate) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Workflow.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := wu.mutation.QueueName(); ok {
+		if err := workflow.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Workflow.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -428,6 +447,9 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, workflow.FieldInput, value)
 		})
+	}
+	if value, ok := wu.mutation.QueueName(); ok {
+		_spec.SetField(workflow.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := wu.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflow.FieldRetryPolicy, field.TypeJSON, value)
@@ -712,6 +734,20 @@ func (wuo *WorkflowUpdateOne) SetInput(u [][]uint8) *WorkflowUpdateOne {
 // AppendInput appends u to the "input" field.
 func (wuo *WorkflowUpdateOne) AppendInput(u [][]uint8) *WorkflowUpdateOne {
 	wuo.mutation.AppendInput(u)
+	return wuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (wuo *WorkflowUpdateOne) SetQueueName(s string) *WorkflowUpdateOne {
+	wuo.mutation.SetQueueName(s)
+	return wuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableQueueName(s *string) *WorkflowUpdateOne {
+	if s != nil {
+		wuo.SetQueueName(*s)
+	}
 	return wuo
 }
 
@@ -1023,6 +1059,11 @@ func (wuo *WorkflowUpdateOne) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Workflow.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := wuo.mutation.QueueName(); ok {
+		if err := workflow.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Workflow.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1074,6 +1115,9 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, workflow.FieldInput, value)
 		})
+	}
+	if value, ok := wuo.mutation.QueueName(); ok {
+		_spec.SetField(workflow.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := wuo.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflow.FieldRetryPolicy, field.TypeJSON, value)

@@ -21,6 +21,8 @@ type Signal struct {
 	StepID string `json:"step_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status signal.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Consumed holds the value of the "consumed" field.
@@ -56,7 +58,7 @@ func (*Signal) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case signal.FieldConsumed:
 			values[i] = new(sql.NullBool)
-		case signal.FieldID, signal.FieldStepID, signal.FieldStatus:
+		case signal.FieldID, signal.FieldStepID, signal.FieldStatus, signal.FieldQueueName:
 			values[i] = new(sql.NullString)
 		case signal.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -92,6 +94,12 @@ func (s *Signal) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				s.Status = signal.Status(value.String)
+			}
+		case signal.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				s.QueueName = value.String
 			}
 		case signal.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -151,6 +159,9 @@ func (s *Signal) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", s.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(s.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(s.CreatedAt.Format(time.ANSIC))

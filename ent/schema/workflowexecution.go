@@ -22,11 +22,10 @@ func (WorkflowExecution) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),
-		// field.JSON("output", []interface{}{}).
-		// 	Optional(),
-		// field.Any("output").Optional(), // technically a [][]byte
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.JSON("output", [][]byte{}).Optional(),
-
 		field.String("error").
 			Optional(),
 		field.Bool("is_replay").

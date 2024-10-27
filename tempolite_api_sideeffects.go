@@ -100,6 +100,7 @@ func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, stepID string, side
 		SetIdentity(string(handlerIdentity)).
 		SetHandlerName(funcName).
 		SetStatus(sideeffect.StatusPending).
+		SetQueueName(ctx.QueueName()).
 		Save(tp.ctx)
 	if err != nil {
 		if err := tx.Rollback(); err != nil {
@@ -117,6 +118,7 @@ func (tp *Tempolite) enqueueSideEffect(ctx TempoliteContext, stepID string, side
 		// SetRunID(ctx.RunID()).
 		SetSideEffect(sideEffectEntity).
 		SetStatus(sideeffectexecution.StatusPending).
+		SetQueueName(ctx.QueueName()).
 		Save(tp.ctx)
 	if err != nil {
 		if err := tx.Rollback(); err != nil {

@@ -15,7 +15,7 @@ func workflowContinueReplay(ctx tempolite.WorkflowContext) (string, error) {
 		return "Success", nil
 	}
 	// When you replay a workflow, it should not continue as new
-	return "Continue", ctx.ContinueAsNew(ctx, "should-stop")
+	return "Continue", ctx.ContinueAsNew(ctx, "should-stop", nil)
 }
 
 func main() {

@@ -16,7 +16,7 @@ type sideEffectTask struct {
 	handlerName HandlerIdentity
 }
 
-func (tp *Tempolite) createSideEffectPool(countWorkers int) *retrypool.Pool[*sideEffectTask] {
+func (tp *Tempolite) createSideEffectPool(queue string, countWorkers int) (*retrypool.Pool[*sideEffectTask], error) {
 	opts := []retrypool.Option[*sideEffectTask]{
 		retrypool.WithAttempts[*sideEffectTask](1),
 		retrypool.WithOnTaskSuccess(tp.sideEffectOnSuccess),
@@ -28,14 +28,20 @@ func (tp *Tempolite) createSideEffectPool(countWorkers int) *retrypool.Pool[*sid
 
 	workers := []retrypool.Worker[*sideEffectTask]{}
 
+	tp.logger.Debug(tp.ctx, "createSideEffectPool", "queue", queue, "countWorkers", countWorkers)
+
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, sideEffectWorker{id: tp.getWorkerSideEffectID(), tp: tp})
+		id, err := tp.getWorkerSideEffectID(queue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate side effect worker ID: %w", err)
+		}
+		workers = append(workers, sideEffectWorker{id: id, tp: tp})
 	}
 
 	return retrypool.New(
 		tp.ctx,
 		workers,
-		opts...)
+		opts...), nil
 }
 
 func (tp *Tempolite) sideEffectWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
