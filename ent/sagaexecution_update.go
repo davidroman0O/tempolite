@@ -71,6 +71,20 @@ func (seu *SagaExecutionUpdate) SetNillableStatus(s *sagaexecution.Status) *Saga
 	return seu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (seu *SagaExecutionUpdate) SetQueueName(s string) *SagaExecutionUpdate {
+	seu.mutation.SetQueueName(s)
+	return seu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seu *SagaExecutionUpdate) SetNillableQueueName(s *string) *SagaExecutionUpdate {
+	if s != nil {
+		seu.SetQueueName(*s)
+	}
+	return seu
+}
+
 // SetSequence sets the "sequence" field.
 func (seu *SagaExecutionUpdate) SetSequence(i int) *SagaExecutionUpdate {
 	seu.mutation.ResetSequence()
@@ -212,6 +226,11 @@ func (seu *SagaExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seu.mutation.QueueName(); ok {
+		if err := sagaexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.queue_name": %w`, err)}
+		}
+	}
 	if v, ok := seu.mutation.Sequence(); ok {
 		if err := sagaexecution.SequenceValidator(v); err != nil {
 			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.sequence": %w`, err)}
@@ -243,6 +262,9 @@ func (seu *SagaExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) 
 	}
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seu.mutation.QueueName(); ok {
+		_spec.SetField(sagaexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seu.mutation.Sequence(); ok {
 		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)
@@ -352,6 +374,20 @@ func (seuo *SagaExecutionUpdateOne) SetStatus(s sagaexecution.Status) *SagaExecu
 func (seuo *SagaExecutionUpdateOne) SetNillableStatus(s *sagaexecution.Status) *SagaExecutionUpdateOne {
 	if s != nil {
 		seuo.SetStatus(*s)
+	}
+	return seuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (seuo *SagaExecutionUpdateOne) SetQueueName(s string) *SagaExecutionUpdateOne {
+	seuo.mutation.SetQueueName(s)
+	return seuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seuo *SagaExecutionUpdateOne) SetNillableQueueName(s *string) *SagaExecutionUpdateOne {
+	if s != nil {
+		seuo.SetQueueName(*s)
 	}
 	return seuo
 }
@@ -510,6 +546,11 @@ func (seuo *SagaExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seuo.mutation.QueueName(); ok {
+		if err := sagaexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.queue_name": %w`, err)}
+		}
+	}
 	if v, ok := seuo.mutation.Sequence(); ok {
 		if err := sagaexecution.SequenceValidator(v); err != nil {
 			return &ValidationError{Name: "sequence", err: fmt.Errorf(`ent: validator failed for field "SagaExecution.sequence": %w`, err)}
@@ -558,6 +599,9 @@ func (seuo *SagaExecutionUpdateOne) sqlSave(ctx context.Context) (_node *SagaExe
 	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(sagaexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seuo.mutation.QueueName(); ok {
+		_spec.SetField(sagaexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seuo.mutation.Sequence(); ok {
 		_spec.SetField(sagaexecution.FieldSequence, field.TypeInt, value)

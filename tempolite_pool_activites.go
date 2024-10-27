@@ -18,9 +18,10 @@ type activityTask struct {
 	retryCount  int
 	maxRetry    int
 	retry       func() error
+	queueName   string
 }
 
-func (tp *Tempolite) createActivityPool(countWorkers int) *retrypool.Pool[*activityTask] {
+func (tp *Tempolite) createActivityPool(queue string, countWorkers int) (*retrypool.Pool[*activityTask], error) {
 	opts := []retrypool.Option[*activityTask]{
 		retrypool.WithAttempts[*activityTask](1),
 		retrypool.WithOnTaskSuccess(tp.activityOnSuccess),
@@ -32,14 +33,20 @@ func (tp *Tempolite) createActivityPool(countWorkers int) *retrypool.Pool[*activ
 
 	workers := []retrypool.Worker[*activityTask]{}
 
+	tp.logger.Debug(tp.ctx, "createActivityPool", "queue", queue, "countWorkers", countWorkers)
+
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, activityWorker{id: tp.getWorkerActivityID(), tp: tp})
+		id, err := tp.getWorkerActivityID(queue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate activity worker ID: %w", err)
+		}
+		workers = append(workers, activityWorker{id: id, tp: tp})
 	}
 
 	return retrypool.New(
 		tp.ctx,
 		workers,
-		opts...)
+		opts...), nil
 
 }
 

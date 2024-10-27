@@ -80,6 +80,11 @@ func HandlerName(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldHandlerName, v))
 }
 
+// QueueName applies equality check predicate on the "queue_name" field. It's identical to QueueNameEQ.
+func QueueName(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldQueueName, v))
+}
+
 // IsPaused applies equality check predicate on the "is_paused" field. It's identical to IsPausedEQ.
 func IsPaused(v bool) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldIsPaused, v))
@@ -323,6 +328,71 @@ func HandlerNameEqualFold(v string) predicate.Workflow {
 // HandlerNameContainsFold applies the ContainsFold predicate on the "handler_name" field.
 func HandlerNameContainsFold(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldHandlerName, v))
+}
+
+// QueueNameEQ applies the EQ predicate on the "queue_name" field.
+func QueueNameEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldQueueName, v))
+}
+
+// QueueNameNEQ applies the NEQ predicate on the "queue_name" field.
+func QueueNameNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldQueueName, v))
+}
+
+// QueueNameIn applies the In predicate on the "queue_name" field.
+func QueueNameIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldQueueName, vs...))
+}
+
+// QueueNameNotIn applies the NotIn predicate on the "queue_name" field.
+func QueueNameNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldQueueName, vs...))
+}
+
+// QueueNameGT applies the GT predicate on the "queue_name" field.
+func QueueNameGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldQueueName, v))
+}
+
+// QueueNameGTE applies the GTE predicate on the "queue_name" field.
+func QueueNameGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldQueueName, v))
+}
+
+// QueueNameLT applies the LT predicate on the "queue_name" field.
+func QueueNameLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldQueueName, v))
+}
+
+// QueueNameLTE applies the LTE predicate on the "queue_name" field.
+func QueueNameLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldQueueName, v))
+}
+
+// QueueNameContains applies the Contains predicate on the "queue_name" field.
+func QueueNameContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldQueueName, v))
+}
+
+// QueueNameHasPrefix applies the HasPrefix predicate on the "queue_name" field.
+func QueueNameHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldQueueName, v))
+}
+
+// QueueNameHasSuffix applies the HasSuffix predicate on the "queue_name" field.
+func QueueNameHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldQueueName, v))
+}
+
+// QueueNameEqualFold applies the EqualFold predicate on the "queue_name" field.
+func QueueNameEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldQueueName, v))
+}
+
+// QueueNameContainsFold applies the ContainsFold predicate on the "queue_name" field.
+func QueueNameContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldQueueName, v))
 }
 
 // RetryPolicyIsNil applies the IsNil predicate on the "retry_policy" field.

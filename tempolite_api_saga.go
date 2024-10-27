@@ -86,6 +86,7 @@ func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, stepID string, sagaDef *S
 		SetStepID(stepID).
 		SetStatus(saga.StatusPending).
 		SetSagaDefinition(sagaDefData).
+		SetQueueName(ctx.QueueName()).
 		Save(tp.ctx)
 	if err != nil {
 		if err := tx.Rollback(); err != nil {
@@ -106,6 +107,7 @@ func (tp *Tempolite) enqueueSaga(ctx TempoliteContext, stepID string, sagaDef *S
 		SetHandlerName(firstStep.TransactionHandlerName).
 		SetSequence(0).
 		SetSaga(sagaEntity).
+		SetQueueName(ctx.QueueName()).
 		Save(tp.ctx)
 	if err != nil {
 		if err := tx.Rollback(); err != nil {

@@ -18,6 +18,9 @@ import (
 func (tp *Tempolite) Workflow(stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) *WorkflowInfo {
 	tp.logger.Debug(tp.ctx, "Workflow", "stepID", stepID)
 	id, err := tp.executeWorkflow(stepID, workflowFunc, options, params...)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error executing workflow", "error", err)
+	}
 	return tp.getWorkflowRoot(id, err)
 }
 
@@ -60,7 +63,7 @@ func (tp *Tempolite) getWorkflowExecution(ctx TempoliteContext, id WorkflowExecu
 	return &info
 }
 
-func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workflowFunc interface{}, params ...interface{}) (WorkflowID, error) {
+func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workflowFunc interface{}, options tempoliteWorkflowOptions, params ...interface{}) (WorkflowID, error) {
 	switch ctx.EntityType() {
 	case "workflow":
 		// Proceed with sub-workflow creation
@@ -101,6 +104,35 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 
 	funcName := runtime.FuncForPC(reflect.ValueOf(workflowFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
+
+	retryPolicyConfig := schema.RetryPolicy{
+		MaximumAttempts: 1,
+	}
+
+	queueName := "default"
+
+	if options != nil {
+		config := tempoliteWorkflowConfig{}
+		for _, opt := range options {
+			opt(&config)
+		}
+		if config.queueName != "" {
+			queueName = config.queueName
+		}
+		if config.retryMaximumAttempts > 0 {
+			retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
+		}
+		if config.retryInitialInterval > 0 {
+			retryPolicyConfig.InitialInterval = config.retryInitialInterval
+		}
+		if config.retryBackoffCoefficient > 0 {
+			retryPolicyConfig.BackoffCoefficient = config.retryBackoffCoefficient
+		}
+		if config.maximumInterval > 0 {
+			retryPolicyConfig.MaximumInterval = config.maximumInterval
+		}
+	}
+
 	var value any
 	var ok bool
 	var tx *ent.Tx
@@ -154,9 +186,8 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(serializableParams).
-			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 1,
-			}).
+			SetRetryPolicy(retryPolicyConfig).
+			SetQueueName(queueName).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow entity", "error", err)
@@ -174,6 +205,7 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 			SetID(uuid.NewString()).
 			SetRunID(ctx.RunID()).
 			SetWorkflow(workflowEntity).
+			SetQueueName(queueName).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow execution", "error", err)
@@ -286,12 +318,16 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			MaximumAttempts: 1,
 		}
 
+		queueName := "default"
+
 		if options != nil {
 			config := tempoliteWorkflowConfig{}
 			for _, opt := range options {
 				opt(&config)
 			}
-
+			if config.queueName != "" {
+				queueName = config.queueName
+			}
 			if config.retryMaximumAttempts > 0 {
 				retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
 			}
@@ -324,6 +360,7 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(serializableParams).
 			SetRetryPolicy(retryPolicyConfig).
+			SetQueueName(queueName).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow entity", "error", err)
@@ -341,6 +378,7 @@ func (tp *Tempolite) executeWorkflow(stepID string, workflowFunc interface{}, op
 			SetID(uuid.NewString()).
 			SetRunID(runEntity.ID).
 			SetWorkflow(workflowEntity).
+			SetQueueName(queueName).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow execution", "error", err)

@@ -44,6 +44,20 @@ func (seeu *SideEffectExecutionUpdate) SetNillableStatus(s *sideeffectexecution.
 	return seeu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (seeu *SideEffectExecutionUpdate) SetQueueName(s string) *SideEffectExecutionUpdate {
+	seeu.mutation.SetQueueName(s)
+	return seeu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seeu *SideEffectExecutionUpdate) SetNillableQueueName(s *string) *SideEffectExecutionUpdate {
+	if s != nil {
+		seeu.SetQueueName(*s)
+	}
+	return seeu
+}
+
 // SetAttempt sets the "attempt" field.
 func (seeu *SideEffectExecutionUpdate) SetAttempt(i int) *SideEffectExecutionUpdate {
 	seeu.mutation.ResetAttempt()
@@ -188,6 +202,11 @@ func (seeu *SideEffectExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seeu.mutation.QueueName(); ok {
+		if err := sideeffectexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.queue_name": %w`, err)}
+		}
+	}
 	if seeu.mutation.SideEffectCleared() && len(seeu.mutation.SideEffectIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SideEffectExecution.side_effect"`)
 	}
@@ -208,6 +227,9 @@ func (seeu *SideEffectExecutionUpdate) sqlSave(ctx context.Context) (n int, err 
 	}
 	if value, ok := seeu.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seeu.mutation.QueueName(); ok {
+		_spec.SetField(sideeffectexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seeu.mutation.Attempt(); ok {
 		_spec.SetField(sideeffectexecution.FieldAttempt, field.TypeInt, value)
@@ -297,6 +319,20 @@ func (seeuo *SideEffectExecutionUpdateOne) SetStatus(s sideeffectexecution.Statu
 func (seeuo *SideEffectExecutionUpdateOne) SetNillableStatus(s *sideeffectexecution.Status) *SideEffectExecutionUpdateOne {
 	if s != nil {
 		seeuo.SetStatus(*s)
+	}
+	return seeuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (seeuo *SideEffectExecutionUpdateOne) SetQueueName(s string) *SideEffectExecutionUpdateOne {
+	seeuo.mutation.SetQueueName(s)
+	return seeuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seeuo *SideEffectExecutionUpdateOne) SetNillableQueueName(s *string) *SideEffectExecutionUpdateOne {
+	if s != nil {
+		seeuo.SetQueueName(*s)
 	}
 	return seeuo
 }
@@ -458,6 +494,11 @@ func (seeuo *SideEffectExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seeuo.mutation.QueueName(); ok {
+		if err := sideeffectexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffectExecution.queue_name": %w`, err)}
+		}
+	}
 	if seeuo.mutation.SideEffectCleared() && len(seeuo.mutation.SideEffectIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SideEffectExecution.side_effect"`)
 	}
@@ -495,6 +536,9 @@ func (seeuo *SideEffectExecutionUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if value, ok := seeuo.mutation.Status(); ok {
 		_spec.SetField(sideeffectexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seeuo.mutation.QueueName(); ok {
+		_spec.SetField(sideeffectexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seeuo.mutation.Attempt(); ok {
 		_spec.SetField(sideeffectexecution.FieldAttempt, field.TypeInt, value)

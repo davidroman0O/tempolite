@@ -24,12 +24,12 @@ func (Activity) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.String("handler_name").
 			NotEmpty(),
-		// field.JSON("input", []interface{}{}),
-		// field.Any("input"), // technically a [][]byte
 		field.JSON("input", [][]byte{}),
-
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
 		field.Time("timeout").

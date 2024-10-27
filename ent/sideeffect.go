@@ -27,6 +27,8 @@ type SideEffect struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Status holds the value of the "status" field.
 	Status sideeffect.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Timeout holds the value of the "timeout" field.
@@ -64,7 +66,7 @@ func (*SideEffect) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sideeffect.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case sideeffect.FieldID, sideeffect.FieldIdentity, sideeffect.FieldStepID, sideeffect.FieldHandlerName, sideeffect.FieldStatus:
+		case sideeffect.FieldID, sideeffect.FieldIdentity, sideeffect.FieldStepID, sideeffect.FieldHandlerName, sideeffect.FieldStatus, sideeffect.FieldQueueName:
 			values[i] = new(sql.NullString)
 		case sideeffect.FieldTimeout, sideeffect.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -112,6 +114,12 @@ func (se *SideEffect) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				se.Status = sideeffect.Status(value.String)
+			}
+		case sideeffect.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				se.QueueName = value.String
 			}
 		case sideeffect.FieldRetryPolicy:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -185,6 +193,9 @@ func (se *SideEffect) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", se.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(se.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("retry_policy=")
 	builder.WriteString(fmt.Sprintf("%v", se.RetryPolicy))

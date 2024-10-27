@@ -41,6 +41,20 @@ func (sc *SignalCreate) SetNillableStatus(s *signal.Status) *SignalCreate {
 	return sc
 }
 
+// SetQueueName sets the "queue_name" field.
+func (sc *SignalCreate) SetQueueName(s string) *SignalCreate {
+	sc.mutation.SetQueueName(s)
+	return sc
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (sc *SignalCreate) SetNillableQueueName(s *string) *SignalCreate {
+	if s != nil {
+		sc.SetQueueName(*s)
+	}
+	return sc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (sc *SignalCreate) SetCreatedAt(t time.Time) *SignalCreate {
 	sc.mutation.SetCreatedAt(t)
@@ -129,6 +143,10 @@ func (sc *SignalCreate) defaults() {
 		v := signal.DefaultStatus
 		sc.mutation.SetStatus(v)
 	}
+	if _, ok := sc.mutation.QueueName(); !ok {
+		v := signal.DefaultQueueName
+		sc.mutation.SetQueueName(v)
+	}
 	if _, ok := sc.mutation.CreatedAt(); !ok {
 		v := signal.DefaultCreatedAt()
 		sc.mutation.SetCreatedAt(v)
@@ -155,6 +173,14 @@ func (sc *SignalCreate) check() error {
 	if v, ok := sc.mutation.Status(); ok {
 		if err := signal.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Signal.status": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "Signal.queue_name"`)}
+	}
+	if v, ok := sc.mutation.QueueName(); ok {
+		if err := signal.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Signal.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := sc.mutation.CreatedAt(); !ok {
@@ -205,6 +231,10 @@ func (sc *SignalCreate) createSpec() (*Signal, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := sc.mutation.QueueName(); ok {
+		_spec.SetField(signal.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := sc.mutation.CreatedAt(); ok {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)

@@ -9,25 +9,42 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite) schedulerExecutionActivity() {
-	defer close(tp.schedulerExecutionActivityDone)
+func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done chan struct{}) {
+
+	queue, err := tp.getActivityPoolQueue(queueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Scheduler activity execution: getActivityPoolQueue failed", "error", err)
+		return
+	}
+
 	for {
 		select {
 		case <-tp.ctx.Done():
 			return
 		default:
+			var ok bool
 
-			// Get number of available worker slots
-			availableSlots := len(tp.ListWorkersActivity()) - tp.activityPool.ProcessingCount()
+			queueWorkersRaw, ok := tp.queues.Load(queueName)
+			if !ok {
+				continue
+			}
+			queueWorkers := queueWorkersRaw.(*QueueWorkers)
+
+			// Check available slots in this queue's activity pool
+			workerIDs := queueWorkers.Activities.GetWorkerIDs()
+			availableSlots := len(workerIDs) - queueWorkers.Activities.ProcessingCount()
 			if availableSlots <= 0 {
-				// All workers are busy, wait and continue
 				runtime.Gosched()
 				continue
 			}
 
 			pendingActivities, err := tp.client.ActivityExecution.Query().
-				Where(activityexecution.StatusEQ(activityexecution.StatusPending)).
-				Order(ent.Asc(activityexecution.FieldStartedAt)).WithActivity().
+				Where(
+					activityexecution.StatusEQ(activityexecution.StatusPending),
+					activityexecution.HasActivityWith(activity.QueueNameEQ(queueName)),
+				).
+				Order(ent.Asc(activityexecution.FieldStartedAt)).
+				WithActivity().
 				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
@@ -35,14 +52,11 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 				continue
 			}
 
-			tp.schedulerActivityStarted.Store(true)
-
 			if len(pendingActivities) == 0 {
 				continue
 			}
 
 			var value any
-			var ok bool
 
 			for _, act := range pendingActivities {
 
@@ -138,7 +152,7 @@ func (tp *Tempolite) schedulerExecutionActivity() {
 
 					tp.logger.Debug(tp.ctx, "scheduler: Dispatching activity", "activity", activityEntity.HandlerName, "params", activityEntity.Input)
 
-					if err := tp.activityPool.Dispatch(task); err != nil {
+					if err := queue.Dispatch(task); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
 
 						// Start transaction for status updates

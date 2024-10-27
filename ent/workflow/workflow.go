@@ -25,6 +25,8 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
+	// FieldQueueName holds the string denoting the queue_name field in the database.
+	FieldQueueName = "queue_name"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
 	FieldRetryPolicy = "retry_policy"
 	// FieldIsPaused holds the string denoting the is_paused field in the database.
@@ -84,6 +86,7 @@ var Columns = []string{
 	FieldIdentity,
 	FieldHandlerName,
 	FieldInput,
+	FieldQueueName,
 	FieldRetryPolicy,
 	FieldIsPaused,
 	FieldIsReady,
@@ -110,6 +113,10 @@ var (
 	IdentityValidator func(string) error
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
+	// DefaultQueueName holds the default value on creation for the "queue_name" field.
+	DefaultQueueName string
+	// QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	QueueNameValidator func(string) error
 	// DefaultIsPaused holds the default value on creation for the "is_paused" field.
 	DefaultIsPaused bool
 	// DefaultIsReady holds the default value on creation for the "is_ready" field.
@@ -175,6 +182,11 @@ func ByIdentity(opts ...sql.OrderTermOption) OrderOption {
 // ByHandlerName orders the results by the handler_name field.
 func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
+}
+
+// ByQueueName orders the results by the queue_name field.
+func ByQueueName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueueName, opts...).ToFunc()
 }
 
 // ByIsPaused orders the results by the is_paused field.

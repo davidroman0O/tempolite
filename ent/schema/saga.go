@@ -23,6 +23,9 @@ func (Saga) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Compensating", "Compensated").
 			Default("Pending"),
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.JSON("saga_definition", SagaDefinitionData{}).
 			Comment("Stores the full saga definition including transactions and compensations"),
 		field.String("error").

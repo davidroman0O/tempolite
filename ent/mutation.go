@@ -61,6 +61,7 @@ type ActivityMutation struct {
 	identity          *string
 	step_id           *string
 	status            *activity.Status
+	queue_name        *string
 	handler_name      *string
 	input             *[][]uint8
 	appendinput       [][]uint8
@@ -286,6 +287,42 @@ func (m *ActivityMutation) OldStatus(ctx context.Context) (v activity.Status, er
 // ResetStatus resets all changes to the "status" field.
 func (m *ActivityMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *ActivityMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *ActivityMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *ActivityMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetHandlerName sets the "handler_name" field.
@@ -597,7 +634,7 @@ func (m *ActivityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.identity != nil {
 		fields = append(fields, activity.FieldIdentity)
 	}
@@ -606,6 +643,9 @@ func (m *ActivityMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, activity.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, activity.FieldQueueName)
 	}
 	if m.handler_name != nil {
 		fields = append(fields, activity.FieldHandlerName)
@@ -636,6 +676,8 @@ func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 		return m.StepID()
 	case activity.FieldStatus:
 		return m.Status()
+	case activity.FieldQueueName:
+		return m.QueueName()
 	case activity.FieldHandlerName:
 		return m.HandlerName()
 	case activity.FieldInput:
@@ -661,6 +703,8 @@ func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldStepID(ctx)
 	case activity.FieldStatus:
 		return m.OldStatus(ctx)
+	case activity.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case activity.FieldHandlerName:
 		return m.OldHandlerName(ctx)
 	case activity.FieldInput:
@@ -700,6 +744,13 @@ func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case activity.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case activity.FieldHandlerName:
 		v, ok := value.(string)
@@ -808,6 +859,9 @@ func (m *ActivityMutation) ResetField(name string) error {
 		return nil
 	case activity.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case activity.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case activity.FieldHandlerName:
 		m.ResetHandlerName()
@@ -920,6 +974,7 @@ type ActivityExecutionMutation struct {
 	id              *string
 	run_id          *string
 	status          *activityexecution.Status
+	queue_name      *string
 	attempt         *int
 	addattempt      *int
 	output          *[][]uint8
@@ -1109,6 +1164,42 @@ func (m *ActivityExecutionMutation) OldStatus(ctx context.Context) (v activityex
 // ResetStatus resets all changes to the "status" field.
 func (m *ActivityExecutionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *ActivityExecutionMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *ActivityExecutionMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the ActivityExecution entity.
+// If the ActivityExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityExecutionMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *ActivityExecutionMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetAttempt sets the "attempt" field.
@@ -1426,12 +1517,15 @@ func (m *ActivityExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.run_id != nil {
 		fields = append(fields, activityexecution.FieldRunID)
 	}
 	if m.status != nil {
 		fields = append(fields, activityexecution.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, activityexecution.FieldQueueName)
 	}
 	if m.attempt != nil {
 		fields = append(fields, activityexecution.FieldAttempt)
@@ -1460,6 +1554,8 @@ func (m *ActivityExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.RunID()
 	case activityexecution.FieldStatus:
 		return m.Status()
+	case activityexecution.FieldQueueName:
+		return m.QueueName()
 	case activityexecution.FieldAttempt:
 		return m.Attempt()
 	case activityexecution.FieldOutput:
@@ -1483,6 +1579,8 @@ func (m *ActivityExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldRunID(ctx)
 	case activityexecution.FieldStatus:
 		return m.OldStatus(ctx)
+	case activityexecution.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case activityexecution.FieldAttempt:
 		return m.OldAttempt(ctx)
 	case activityexecution.FieldOutput:
@@ -1515,6 +1613,13 @@ func (m *ActivityExecutionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case activityexecution.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case activityexecution.FieldAttempt:
 		v, ok := value.(int)
@@ -1635,6 +1740,9 @@ func (m *ActivityExecutionMutation) ResetField(name string) error {
 		return nil
 	case activityexecution.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case activityexecution.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case activityexecution.FieldAttempt:
 		m.ResetAttempt()
@@ -3586,6 +3694,7 @@ type SagaMutation struct {
 	run_id          *string
 	step_id         *string
 	status          *saga.Status
+	queue_name      *string
 	saga_definition *schema.SagaDefinitionData
 	error           *string
 	created_at      *time.Time
@@ -3809,6 +3918,42 @@ func (m *SagaMutation) OldStatus(ctx context.Context) (v saga.Status, err error)
 // ResetStatus resets all changes to the "status" field.
 func (m *SagaMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *SagaMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SagaMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the Saga entity.
+// If the Saga object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SagaMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SagaMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetSagaDefinition sets the "saga_definition" field.
@@ -4056,7 +4201,7 @@ func (m *SagaMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SagaMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.run_id != nil {
 		fields = append(fields, saga.FieldRunID)
 	}
@@ -4065,6 +4210,9 @@ func (m *SagaMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, saga.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, saga.FieldQueueName)
 	}
 	if m.saga_definition != nil {
 		fields = append(fields, saga.FieldSagaDefinition)
@@ -4092,6 +4240,8 @@ func (m *SagaMutation) Field(name string) (ent.Value, bool) {
 		return m.StepID()
 	case saga.FieldStatus:
 		return m.Status()
+	case saga.FieldQueueName:
+		return m.QueueName()
 	case saga.FieldSagaDefinition:
 		return m.SagaDefinition()
 	case saga.FieldError:
@@ -4115,6 +4265,8 @@ func (m *SagaMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldStepID(ctx)
 	case saga.FieldStatus:
 		return m.OldStatus(ctx)
+	case saga.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case saga.FieldSagaDefinition:
 		return m.OldSagaDefinition(ctx)
 	case saga.FieldError:
@@ -4152,6 +4304,13 @@ func (m *SagaMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case saga.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case saga.FieldSagaDefinition:
 		v, ok := value.(schema.SagaDefinitionData)
@@ -4247,6 +4406,9 @@ func (m *SagaMutation) ResetField(name string) error {
 		return nil
 	case saga.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case saga.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case saga.FieldSagaDefinition:
 		m.ResetSagaDefinition()
@@ -4357,6 +4519,7 @@ type SagaExecutionMutation struct {
 	handler_name  *string
 	step_type     *sagaexecution.StepType
 	status        *sagaexecution.Status
+	queue_name    *string
 	sequence      *int
 	addsequence   *int
 	error         *string
@@ -4580,6 +4743,42 @@ func (m *SagaExecutionMutation) OldStatus(ctx context.Context) (v sagaexecution.
 // ResetStatus resets all changes to the "status" field.
 func (m *SagaExecutionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *SagaExecutionMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SagaExecutionMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the SagaExecution entity.
+// If the SagaExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SagaExecutionMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SagaExecutionMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetSequence sets the "sequence" field.
@@ -4845,7 +5044,7 @@ func (m *SagaExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SagaExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.handler_name != nil {
 		fields = append(fields, sagaexecution.FieldHandlerName)
 	}
@@ -4854,6 +5053,9 @@ func (m *SagaExecutionMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, sagaexecution.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, sagaexecution.FieldQueueName)
 	}
 	if m.sequence != nil {
 		fields = append(fields, sagaexecution.FieldSequence)
@@ -4881,6 +5083,8 @@ func (m *SagaExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.StepType()
 	case sagaexecution.FieldStatus:
 		return m.Status()
+	case sagaexecution.FieldQueueName:
+		return m.QueueName()
 	case sagaexecution.FieldSequence:
 		return m.Sequence()
 	case sagaexecution.FieldError:
@@ -4904,6 +5108,8 @@ func (m *SagaExecutionMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldStepType(ctx)
 	case sagaexecution.FieldStatus:
 		return m.OldStatus(ctx)
+	case sagaexecution.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case sagaexecution.FieldSequence:
 		return m.OldSequence(ctx)
 	case sagaexecution.FieldError:
@@ -4941,6 +5147,13 @@ func (m *SagaExecutionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case sagaexecution.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case sagaexecution.FieldSequence:
 		v, ok := value.(int)
@@ -5058,6 +5271,9 @@ func (m *SagaExecutionMutation) ResetField(name string) error {
 	case sagaexecution.FieldStatus:
 		m.ResetStatus()
 		return nil
+	case sagaexecution.FieldQueueName:
+		m.ResetQueueName()
+		return nil
 	case sagaexecution.FieldSequence:
 		m.ResetSequence()
 		return nil
@@ -5158,6 +5374,7 @@ type SideEffectMutation struct {
 	step_id           *string
 	handler_name      *string
 	status            *sideeffect.Status
+	queue_name        *string
 	retry_policy      *schema.RetryPolicy
 	timeout           *time.Time
 	created_at        *time.Time
@@ -5418,6 +5635,42 @@ func (m *SideEffectMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetQueueName sets the "queue_name" field.
+func (m *SideEffectMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SideEffectMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the SideEffect entity.
+// If the SideEffect object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SideEffectMutation) ResetQueueName() {
+	m.queue_name = nil
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (m *SideEffectMutation) SetRetryPolicy(sp schema.RetryPolicy) {
 	m.retry_policy = &sp
@@ -5640,7 +5893,7 @@ func (m *SideEffectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.identity != nil {
 		fields = append(fields, sideeffect.FieldIdentity)
 	}
@@ -5652,6 +5905,9 @@ func (m *SideEffectMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, sideeffect.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, sideeffect.FieldQueueName)
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, sideeffect.FieldRetryPolicy)
@@ -5678,6 +5934,8 @@ func (m *SideEffectMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case sideeffect.FieldStatus:
 		return m.Status()
+	case sideeffect.FieldQueueName:
+		return m.QueueName()
 	case sideeffect.FieldRetryPolicy:
 		return m.RetryPolicy()
 	case sideeffect.FieldTimeout:
@@ -5701,6 +5959,8 @@ func (m *SideEffectMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldHandlerName(ctx)
 	case sideeffect.FieldStatus:
 		return m.OldStatus(ctx)
+	case sideeffect.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case sideeffect.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
 	case sideeffect.FieldTimeout:
@@ -5743,6 +6003,13 @@ func (m *SideEffectMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case sideeffect.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case sideeffect.FieldRetryPolicy:
 		v, ok := value.(schema.RetryPolicy)
@@ -5840,6 +6107,9 @@ func (m *SideEffectMutation) ResetField(name string) error {
 		return nil
 	case sideeffect.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case sideeffect.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case sideeffect.FieldRetryPolicy:
 		m.ResetRetryPolicy()
@@ -5945,6 +6215,7 @@ type SideEffectExecutionMutation struct {
 	typ                string
 	id                 *string
 	status             *sideeffectexecution.Status
+	queue_name         *string
 	attempt            *int
 	addattempt         *int
 	output             *[][]uint8
@@ -6098,6 +6369,42 @@ func (m *SideEffectExecutionMutation) OldStatus(ctx context.Context) (v sideeffe
 // ResetStatus resets all changes to the "status" field.
 func (m *SideEffectExecutionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *SideEffectExecutionMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SideEffectExecutionMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the SideEffectExecution entity.
+// If the SideEffectExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SideEffectExecutionMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SideEffectExecutionMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetAttempt sets the "attempt" field.
@@ -6415,9 +6722,12 @@ func (m *SideEffectExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.status != nil {
 		fields = append(fields, sideeffectexecution.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, sideeffectexecution.FieldQueueName)
 	}
 	if m.attempt != nil {
 		fields = append(fields, sideeffectexecution.FieldAttempt)
@@ -6444,6 +6754,8 @@ func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case sideeffectexecution.FieldStatus:
 		return m.Status()
+	case sideeffectexecution.FieldQueueName:
+		return m.QueueName()
 	case sideeffectexecution.FieldAttempt:
 		return m.Attempt()
 	case sideeffectexecution.FieldOutput:
@@ -6465,6 +6777,8 @@ func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string)
 	switch name {
 	case sideeffectexecution.FieldStatus:
 		return m.OldStatus(ctx)
+	case sideeffectexecution.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case sideeffectexecution.FieldAttempt:
 		return m.OldAttempt(ctx)
 	case sideeffectexecution.FieldOutput:
@@ -6490,6 +6804,13 @@ func (m *SideEffectExecutionMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case sideeffectexecution.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case sideeffectexecution.FieldAttempt:
 		v, ok := value.(int)
@@ -6608,6 +6929,9 @@ func (m *SideEffectExecutionMutation) ResetField(name string) error {
 	case sideeffectexecution.FieldStatus:
 		m.ResetStatus()
 		return nil
+	case sideeffectexecution.FieldQueueName:
+		m.ResetQueueName()
+		return nil
 	case sideeffectexecution.FieldAttempt:
 		m.ResetAttempt()
 		return nil
@@ -6709,6 +7033,7 @@ type SignalMutation struct {
 	id                *string
 	step_id           *string
 	status            *signal.Status
+	queue_name        *string
 	created_at        *time.Time
 	consumed          *bool
 	clearedFields     map[string]struct{}
@@ -6896,6 +7221,42 @@ func (m *SignalMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetQueueName sets the "queue_name" field.
+func (m *SignalMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SignalMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the Signal entity.
+// If the Signal object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SignalMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SignalMutation) ResetQueueName() {
+	m.queue_name = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *SignalMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -7056,12 +7417,15 @@ func (m *SignalMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SignalMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.step_id != nil {
 		fields = append(fields, signal.FieldStepID)
 	}
 	if m.status != nil {
 		fields = append(fields, signal.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, signal.FieldQueueName)
 	}
 	if m.created_at != nil {
 		fields = append(fields, signal.FieldCreatedAt)
@@ -7081,6 +7445,8 @@ func (m *SignalMutation) Field(name string) (ent.Value, bool) {
 		return m.StepID()
 	case signal.FieldStatus:
 		return m.Status()
+	case signal.FieldQueueName:
+		return m.QueueName()
 	case signal.FieldCreatedAt:
 		return m.CreatedAt()
 	case signal.FieldConsumed:
@@ -7098,6 +7464,8 @@ func (m *SignalMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldStepID(ctx)
 	case signal.FieldStatus:
 		return m.OldStatus(ctx)
+	case signal.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case signal.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case signal.FieldConsumed:
@@ -7124,6 +7492,13 @@ func (m *SignalMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case signal.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case signal.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -7193,6 +7568,9 @@ func (m *SignalMutation) ResetField(name string) error {
 		return nil
 	case signal.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case signal.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case signal.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -7296,6 +7674,7 @@ type SignalExecutionMutation struct {
 	id            *string
 	run_id        *string
 	status        *signalexecution.Status
+	queue_name    *string
 	output        *[][]uint8
 	appendoutput  [][]uint8
 	error         *string
@@ -7483,6 +7862,42 @@ func (m *SignalExecutionMutation) OldStatus(ctx context.Context) (v signalexecut
 // ResetStatus resets all changes to the "status" field.
 func (m *SignalExecutionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *SignalExecutionMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *SignalExecutionMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the SignalExecution entity.
+// If the SignalExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SignalExecutionMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *SignalExecutionMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetOutput sets the "output" field.
@@ -7744,12 +8159,15 @@ func (m *SignalExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SignalExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.run_id != nil {
 		fields = append(fields, signalexecution.FieldRunID)
 	}
 	if m.status != nil {
 		fields = append(fields, signalexecution.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, signalexecution.FieldQueueName)
 	}
 	if m.output != nil {
 		fields = append(fields, signalexecution.FieldOutput)
@@ -7775,6 +8193,8 @@ func (m *SignalExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.RunID()
 	case signalexecution.FieldStatus:
 		return m.Status()
+	case signalexecution.FieldQueueName:
+		return m.QueueName()
 	case signalexecution.FieldOutput:
 		return m.Output()
 	case signalexecution.FieldError:
@@ -7796,6 +8216,8 @@ func (m *SignalExecutionMutation) OldField(ctx context.Context, name string) (en
 		return m.OldRunID(ctx)
 	case signalexecution.FieldStatus:
 		return m.OldStatus(ctx)
+	case signalexecution.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case signalexecution.FieldOutput:
 		return m.OldOutput(ctx)
 	case signalexecution.FieldError:
@@ -7826,6 +8248,13 @@ func (m *SignalExecutionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case signalexecution.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case signalexecution.FieldOutput:
 		v, ok := value.([][]uint8)
@@ -7924,6 +8353,9 @@ func (m *SignalExecutionMutation) ResetField(name string) error {
 		return nil
 	case signalexecution.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case signalexecution.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case signalexecution.FieldOutput:
 		m.ResetOutput()
@@ -8027,6 +8459,7 @@ type WorkflowMutation struct {
 	handler_name          *string
 	input                 *[][]uint8
 	appendinput           [][]uint8
+	queue_name            *string
 	retry_policy          *schema.RetryPolicy
 	is_paused             *bool
 	is_ready              *bool
@@ -8347,6 +8780,42 @@ func (m *WorkflowMutation) AppendedInput() ([][]uint8, bool) {
 func (m *WorkflowMutation) ResetInput() {
 	m.input = nil
 	m.appendinput = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *WorkflowMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *WorkflowMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *WorkflowMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetRetryPolicy sets the "retry_policy" field.
@@ -8888,7 +9357,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.step_id != nil {
 		fields = append(fields, workflow.FieldStepID)
 	}
@@ -8903,6 +9372,9 @@ func (m *WorkflowMutation) Fields() []string {
 	}
 	if m.input != nil {
 		fields = append(fields, workflow.FieldInput)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, workflow.FieldQueueName)
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, workflow.FieldRetryPolicy)
@@ -8943,6 +9415,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case workflow.FieldInput:
 		return m.Input()
+	case workflow.FieldQueueName:
+		return m.QueueName()
 	case workflow.FieldRetryPolicy:
 		return m.RetryPolicy()
 	case workflow.FieldIsPaused:
@@ -8976,6 +9450,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldHandlerName(ctx)
 	case workflow.FieldInput:
 		return m.OldInput(ctx)
+	case workflow.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case workflow.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
 	case workflow.FieldIsPaused:
@@ -9033,6 +9509,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInput(v)
+		return nil
+	case workflow.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case workflow.FieldRetryPolicy:
 		v, ok := value.(schema.RetryPolicy)
@@ -9173,6 +9656,9 @@ func (m *WorkflowMutation) ResetField(name string) error {
 		return nil
 	case workflow.FieldInput:
 		m.ResetInput()
+		return nil
+	case workflow.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case workflow.FieldRetryPolicy:
 		m.ResetRetryPolicy()
@@ -9371,6 +9857,7 @@ type WorkflowExecutionMutation struct {
 	id              *string
 	run_id          *string
 	status          *workflowexecution.Status
+	queue_name      *string
 	output          *[][]uint8
 	appendoutput    [][]uint8
 	error           *string
@@ -9559,6 +10046,42 @@ func (m *WorkflowExecutionMutation) OldStatus(ctx context.Context) (v workflowex
 // ResetStatus resets all changes to the "status" field.
 func (m *WorkflowExecutionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetQueueName sets the "queue_name" field.
+func (m *WorkflowExecutionMutation) SetQueueName(s string) {
+	m.queue_name = &s
+}
+
+// QueueName returns the value of the "queue_name" field in the mutation.
+func (m *WorkflowExecutionMutation) QueueName() (r string, exists bool) {
+	v := m.queue_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueueName returns the old "queue_name" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldQueueName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueueName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueueName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueueName: %w", err)
+	}
+	return oldValue.QueueName, nil
+}
+
+// ResetQueueName resets all changes to the "queue_name" field.
+func (m *WorkflowExecutionMutation) ResetQueueName() {
+	m.queue_name = nil
 }
 
 // SetOutput sets the "output" field.
@@ -9856,12 +10379,15 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.run_id != nil {
 		fields = append(fields, workflowexecution.FieldRunID)
 	}
 	if m.status != nil {
 		fields = append(fields, workflowexecution.FieldStatus)
+	}
+	if m.queue_name != nil {
+		fields = append(fields, workflowexecution.FieldQueueName)
 	}
 	if m.output != nil {
 		fields = append(fields, workflowexecution.FieldOutput)
@@ -9890,6 +10416,8 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.RunID()
 	case workflowexecution.FieldStatus:
 		return m.Status()
+	case workflowexecution.FieldQueueName:
+		return m.QueueName()
 	case workflowexecution.FieldOutput:
 		return m.Output()
 	case workflowexecution.FieldError:
@@ -9913,6 +10441,8 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldRunID(ctx)
 	case workflowexecution.FieldStatus:
 		return m.OldStatus(ctx)
+	case workflowexecution.FieldQueueName:
+		return m.OldQueueName(ctx)
 	case workflowexecution.FieldOutput:
 		return m.OldOutput(ctx)
 	case workflowexecution.FieldError:
@@ -9945,6 +10475,13 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case workflowexecution.FieldQueueName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueueName(v)
 		return nil
 	case workflowexecution.FieldOutput:
 		v, ok := value.([][]uint8)
@@ -10050,6 +10587,9 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 		return nil
 	case workflowexecution.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case workflowexecution.FieldQueueName:
+		m.ResetQueueName()
 		return nil
 	case workflowexecution.FieldOutput:
 		m.ResetOutput()

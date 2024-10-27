@@ -26,7 +26,7 @@ func LongRunningWorkflow(ctx tempolite.WorkflowContext, iteration int) (int, err
 	}
 
 	// Continue as new
-	return 0, ctx.ContinueAsNew(ctx, "continue-workflow", iteration+1)
+	return 0, ctx.ContinueAsNew(ctx, "continue-workflow", nil, iteration+1)
 }
 
 func main() {

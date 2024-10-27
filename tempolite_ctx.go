@@ -9,4 +9,5 @@ type TempoliteContext interface {
 	ExecutionID() string
 	EntityType() string
 	StepID() string
+	QueueName() string
 }

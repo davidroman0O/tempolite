@@ -72,6 +72,20 @@ func (su *SagaUpdate) SetNillableStatus(s *saga.Status) *SagaUpdate {
 	return su
 }
 
+// SetQueueName sets the "queue_name" field.
+func (su *SagaUpdate) SetQueueName(s string) *SagaUpdate {
+	su.mutation.SetQueueName(s)
+	return su
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (su *SagaUpdate) SetNillableQueueName(s *string) *SagaUpdate {
+	if s != nil {
+		su.SetQueueName(*s)
+	}
+	return su
+}
+
 // SetSagaDefinition sets the "saga_definition" field.
 func (su *SagaUpdate) SetSagaDefinition(sdd schema.SagaDefinitionData) *SagaUpdate {
 	su.mutation.SetSagaDefinition(sdd)
@@ -215,6 +229,11 @@ func (su *SagaUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Saga.status": %w`, err)}
 		}
 	}
+	if v, ok := su.mutation.QueueName(); ok {
+		if err := saga.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Saga.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -238,6 +257,9 @@ func (su *SagaUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.Status(); ok {
 		_spec.SetField(saga.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.QueueName(); ok {
+		_spec.SetField(saga.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := su.mutation.SagaDefinition(); ok {
 		_spec.SetField(saga.FieldSagaDefinition, field.TypeJSON, value)
@@ -357,6 +379,20 @@ func (suo *SagaUpdateOne) SetStatus(s saga.Status) *SagaUpdateOne {
 func (suo *SagaUpdateOne) SetNillableStatus(s *saga.Status) *SagaUpdateOne {
 	if s != nil {
 		suo.SetStatus(*s)
+	}
+	return suo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (suo *SagaUpdateOne) SetQueueName(s string) *SagaUpdateOne {
+	suo.mutation.SetQueueName(s)
+	return suo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (suo *SagaUpdateOne) SetNillableQueueName(s *string) *SagaUpdateOne {
+	if s != nil {
+		suo.SetQueueName(*s)
 	}
 	return suo
 }
@@ -517,6 +553,11 @@ func (suo *SagaUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Saga.status": %w`, err)}
 		}
 	}
+	if v, ok := suo.mutation.QueueName(); ok {
+		if err := saga.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Saga.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -557,6 +598,9 @@ func (suo *SagaUpdateOne) sqlSave(ctx context.Context) (_node *Saga, err error) 
 	}
 	if value, ok := suo.mutation.Status(); ok {
 		_spec.SetField(saga.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.QueueName(); ok {
+		_spec.SetField(saga.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.SagaDefinition(); ok {
 		_spec.SetField(saga.FieldSagaDefinition, field.TypeJSON, value)

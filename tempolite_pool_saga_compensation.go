@@ -19,7 +19,7 @@ type compensationTask struct {
 	next        func() error
 }
 
-func (tp *Tempolite) createCompensationPool(countWorkers int) *retrypool.Pool[*compensationTask] {
+func (tp *Tempolite) createCompensationPool(queue string, countWorkers int) (*retrypool.Pool[*compensationTask], error) {
 	opts := []retrypool.Option[*compensationTask]{
 		retrypool.WithAttempts[*compensationTask](1),
 		retrypool.WithOnTaskSuccess(tp.compensationOnSuccess),
@@ -31,11 +31,17 @@ func (tp *Tempolite) createCompensationPool(countWorkers int) *retrypool.Pool[*c
 
 	workers := []retrypool.Worker[*compensationTask]{}
 
+	tp.logger.Debug(tp.ctx, "createCompensationPool", "queue", queue, "countWorkers", countWorkers)
+
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, compensationWorker{id: tp.getWorkerCompensationID(), tp: tp})
+		id, err := tp.getWorkerCompensationID(queue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate compensation worker ID: %w", err)
+		}
+		workers = append(workers, compensationWorker{id: id, tp: tp})
 	}
 
-	return retrypool.New(tp.ctx, workers, opts...)
+	return retrypool.New(tp.ctx, workers, opts...), nil
 }
 
 func (tp *Tempolite) compensationWorkerPanic(workerID int, recovery any, err error, stackTrace string) {

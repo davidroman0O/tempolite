@@ -2,6 +2,63 @@ package tempolite
 
 import "time"
 
+// Queue configuration at startup
+type queueConfig struct {
+	Name                string
+	WorkflowWorkers     int
+	ActivityWorkers     int
+	SideEffectWorkers   int
+	TransactionWorkers  int
+	CompensationWorkers int
+}
+
+type queueOption func(*queueConfig)
+
+func WithWorkflowWorkers(n int) queueOption {
+	return func(c *queueConfig) {
+		c.WorkflowWorkers = n
+	}
+}
+
+func WithActivityWorkers(n int) queueOption {
+	return func(c *queueConfig) {
+		c.ActivityWorkers = n
+	}
+}
+
+func WithSideEffectWorkers(n int) queueOption {
+	return func(c *queueConfig) {
+		c.SideEffectWorkers = n
+	}
+}
+
+func WithTransactionWorkers(n int) queueOption {
+	return func(c *queueConfig) {
+		c.TransactionWorkers = n
+	}
+}
+
+func WithCompensationWorkers(n int) queueOption {
+	return func(c *queueConfig) {
+		c.CompensationWorkers = n
+	}
+}
+
+func NewQueue(name string, opts ...queueOption) queueConfig {
+	c := queueConfig{
+		Name:                name,
+		WorkflowWorkers:     1,
+		ActivityWorkers:     1,
+		SideEffectWorkers:   1,
+		TransactionWorkers:  1,
+		CompensationWorkers: 1,
+	}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	return c
+}
+
 type tempoliteConfig struct {
 	path        *string
 	destructive bool
@@ -12,9 +69,18 @@ type tempoliteConfig struct {
 	initialSideEffectWorkers   int
 	initialTransctionWorkers   int
 	initialCompensationWorkers int
+
+	// Additional queues
+	queues []queueConfig
 }
 
 type tempoliteOption func(*tempoliteConfig)
+
+func WithQueueConfig(queue queueConfig) tempoliteOption {
+	return func(c *tempoliteConfig) {
+		c.queues = append(c.queues, queue)
+	}
+}
 
 func WithLogger(logger Logger) tempoliteOption {
 	return func(c *tempoliteConfig) {
@@ -70,6 +136,7 @@ type tempoliteWorkflowConfig struct {
 	retryInitialInterval    time.Duration
 	retryBackoffCoefficient float64
 	maximumInterval         time.Duration
+	queueName               string
 }
 
 type tempoliteWorkflowOptions []tempoliteWorkflowOption
@@ -79,6 +146,12 @@ func WorkflowConfig(opts ...tempoliteWorkflowOption) tempoliteWorkflowOptions {
 }
 
 type tempoliteWorkflowOption func(*tempoliteWorkflowConfig)
+
+func WithQueue(queueName string) tempoliteWorkflowOption {
+	return func(c *tempoliteWorkflowConfig) {
+		c.queueName = queueName
+	}
+}
 
 func WithRetryMaximumAttempts(max int) tempoliteWorkflowOption {
 	return func(c *tempoliteWorkflowConfig) {

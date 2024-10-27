@@ -34,26 +34,38 @@ func init() {
 	activityDescStepID := activityFields[2].Descriptor()
 	// activity.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
 	activity.StepIDValidator = activityDescStepID.Validators[0].(func(string) error)
+	// activityDescQueueName is the schema descriptor for queue_name field.
+	activityDescQueueName := activityFields[4].Descriptor()
+	// activity.DefaultQueueName holds the default value on creation for the queue_name field.
+	activity.DefaultQueueName = activityDescQueueName.Default.(string)
+	// activity.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	activity.QueueNameValidator = activityDescQueueName.Validators[0].(func(string) error)
 	// activityDescHandlerName is the schema descriptor for handler_name field.
-	activityDescHandlerName := activityFields[4].Descriptor()
+	activityDescHandlerName := activityFields[5].Descriptor()
 	// activity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	activity.HandlerNameValidator = activityDescHandlerName.Validators[0].(func(string) error)
 	// activityDescCreatedAt is the schema descriptor for created_at field.
-	activityDescCreatedAt := activityFields[8].Descriptor()
+	activityDescCreatedAt := activityFields[9].Descriptor()
 	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
 	activityexecutionFields := schema.ActivityExecution{}.Fields()
 	_ = activityexecutionFields
+	// activityexecutionDescQueueName is the schema descriptor for queue_name field.
+	activityexecutionDescQueueName := activityexecutionFields[3].Descriptor()
+	// activityexecution.DefaultQueueName holds the default value on creation for the queue_name field.
+	activityexecution.DefaultQueueName = activityexecutionDescQueueName.Default.(string)
+	// activityexecution.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	activityexecution.QueueNameValidator = activityexecutionDescQueueName.Validators[0].(func(string) error)
 	// activityexecutionDescAttempt is the schema descriptor for attempt field.
-	activityexecutionDescAttempt := activityexecutionFields[3].Descriptor()
+	activityexecutionDescAttempt := activityexecutionFields[4].Descriptor()
 	// activityexecution.DefaultAttempt holds the default value on creation for the attempt field.
 	activityexecution.DefaultAttempt = activityexecutionDescAttempt.Default.(int)
 	// activityexecutionDescStartedAt is the schema descriptor for started_at field.
-	activityexecutionDescStartedAt := activityexecutionFields[6].Descriptor()
+	activityexecutionDescStartedAt := activityexecutionFields[7].Descriptor()
 	// activityexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	activityexecution.DefaultStartedAt = activityexecutionDescStartedAt.Default.(func() time.Time)
 	// activityexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	activityexecutionDescUpdatedAt := activityexecutionFields[7].Descriptor()
+	activityexecutionDescUpdatedAt := activityexecutionFields[8].Descriptor()
 	// activityexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	activityexecution.DefaultUpdatedAt = activityexecutionDescUpdatedAt.Default.(func() time.Time)
 	// activityexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -92,12 +104,18 @@ func init() {
 	sagaDescStepID := sagaFields[2].Descriptor()
 	// saga.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
 	saga.StepIDValidator = sagaDescStepID.Validators[0].(func(string) error)
+	// sagaDescQueueName is the schema descriptor for queue_name field.
+	sagaDescQueueName := sagaFields[4].Descriptor()
+	// saga.DefaultQueueName holds the default value on creation for the queue_name field.
+	saga.DefaultQueueName = sagaDescQueueName.Default.(string)
+	// saga.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	saga.QueueNameValidator = sagaDescQueueName.Validators[0].(func(string) error)
 	// sagaDescCreatedAt is the schema descriptor for created_at field.
-	sagaDescCreatedAt := sagaFields[6].Descriptor()
+	sagaDescCreatedAt := sagaFields[7].Descriptor()
 	// saga.DefaultCreatedAt holds the default value on creation for the created_at field.
 	saga.DefaultCreatedAt = sagaDescCreatedAt.Default.(func() time.Time)
 	// sagaDescUpdatedAt is the schema descriptor for updated_at field.
-	sagaDescUpdatedAt := sagaFields[7].Descriptor()
+	sagaDescUpdatedAt := sagaFields[8].Descriptor()
 	// saga.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	saga.DefaultUpdatedAt = sagaDescUpdatedAt.Default.(func() time.Time)
 	// saga.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -108,12 +126,18 @@ func init() {
 	sagaexecutionDescHandlerName := sagaexecutionFields[1].Descriptor()
 	// sagaexecution.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sagaexecution.HandlerNameValidator = sagaexecutionDescHandlerName.Validators[0].(func(string) error)
+	// sagaexecutionDescQueueName is the schema descriptor for queue_name field.
+	sagaexecutionDescQueueName := sagaexecutionFields[4].Descriptor()
+	// sagaexecution.DefaultQueueName holds the default value on creation for the queue_name field.
+	sagaexecution.DefaultQueueName = sagaexecutionDescQueueName.Default.(string)
+	// sagaexecution.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	sagaexecution.QueueNameValidator = sagaexecutionDescQueueName.Validators[0].(func(string) error)
 	// sagaexecutionDescSequence is the schema descriptor for sequence field.
-	sagaexecutionDescSequence := sagaexecutionFields[4].Descriptor()
+	sagaexecutionDescSequence := sagaexecutionFields[5].Descriptor()
 	// sagaexecution.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
 	sagaexecution.SequenceValidator = sagaexecutionDescSequence.Validators[0].(func(int) error)
 	// sagaexecutionDescStartedAt is the schema descriptor for started_at field.
-	sagaexecutionDescStartedAt := sagaexecutionFields[6].Descriptor()
+	sagaexecutionDescStartedAt := sagaexecutionFields[7].Descriptor()
 	// sagaexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	sagaexecution.DefaultStartedAt = sagaexecutionDescStartedAt.Default.(func() time.Time)
 	sideeffectFields := schema.SideEffect{}.Fields()
@@ -130,22 +154,34 @@ func init() {
 	sideeffectDescHandlerName := sideeffectFields[3].Descriptor()
 	// sideeffect.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	sideeffect.HandlerNameValidator = sideeffectDescHandlerName.Validators[0].(func(string) error)
+	// sideeffectDescQueueName is the schema descriptor for queue_name field.
+	sideeffectDescQueueName := sideeffectFields[5].Descriptor()
+	// sideeffect.DefaultQueueName holds the default value on creation for the queue_name field.
+	sideeffect.DefaultQueueName = sideeffectDescQueueName.Default.(string)
+	// sideeffect.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	sideeffect.QueueNameValidator = sideeffectDescQueueName.Validators[0].(func(string) error)
 	// sideeffectDescCreatedAt is the schema descriptor for created_at field.
-	sideeffectDescCreatedAt := sideeffectFields[7].Descriptor()
+	sideeffectDescCreatedAt := sideeffectFields[8].Descriptor()
 	// sideeffect.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sideeffect.DefaultCreatedAt = sideeffectDescCreatedAt.Default.(func() time.Time)
 	sideeffectexecutionFields := schema.SideEffectExecution{}.Fields()
 	_ = sideeffectexecutionFields
+	// sideeffectexecutionDescQueueName is the schema descriptor for queue_name field.
+	sideeffectexecutionDescQueueName := sideeffectexecutionFields[2].Descriptor()
+	// sideeffectexecution.DefaultQueueName holds the default value on creation for the queue_name field.
+	sideeffectexecution.DefaultQueueName = sideeffectexecutionDescQueueName.Default.(string)
+	// sideeffectexecution.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	sideeffectexecution.QueueNameValidator = sideeffectexecutionDescQueueName.Validators[0].(func(string) error)
 	// sideeffectexecutionDescAttempt is the schema descriptor for attempt field.
-	sideeffectexecutionDescAttempt := sideeffectexecutionFields[2].Descriptor()
+	sideeffectexecutionDescAttempt := sideeffectexecutionFields[3].Descriptor()
 	// sideeffectexecution.DefaultAttempt holds the default value on creation for the attempt field.
 	sideeffectexecution.DefaultAttempt = sideeffectexecutionDescAttempt.Default.(int)
 	// sideeffectexecutionDescStartedAt is the schema descriptor for started_at field.
-	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[5].Descriptor()
+	sideeffectexecutionDescStartedAt := sideeffectexecutionFields[6].Descriptor()
 	// sideeffectexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	sideeffectexecution.DefaultStartedAt = sideeffectexecutionDescStartedAt.Default.(func() time.Time)
 	// sideeffectexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[6].Descriptor()
+	sideeffectexecutionDescUpdatedAt := sideeffectexecutionFields[7].Descriptor()
 	// sideeffectexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	sideeffectexecution.DefaultUpdatedAt = sideeffectexecutionDescUpdatedAt.Default.(func() time.Time)
 	// sideeffectexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -156,22 +192,34 @@ func init() {
 	signalDescStepID := signalFields[1].Descriptor()
 	// signal.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
 	signal.StepIDValidator = signalDescStepID.Validators[0].(func(string) error)
+	// signalDescQueueName is the schema descriptor for queue_name field.
+	signalDescQueueName := signalFields[3].Descriptor()
+	// signal.DefaultQueueName holds the default value on creation for the queue_name field.
+	signal.DefaultQueueName = signalDescQueueName.Default.(string)
+	// signal.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	signal.QueueNameValidator = signalDescQueueName.Validators[0].(func(string) error)
 	// signalDescCreatedAt is the schema descriptor for created_at field.
-	signalDescCreatedAt := signalFields[3].Descriptor()
+	signalDescCreatedAt := signalFields[4].Descriptor()
 	// signal.DefaultCreatedAt holds the default value on creation for the created_at field.
 	signal.DefaultCreatedAt = signalDescCreatedAt.Default.(func() time.Time)
 	// signalDescConsumed is the schema descriptor for consumed field.
-	signalDescConsumed := signalFields[4].Descriptor()
+	signalDescConsumed := signalFields[5].Descriptor()
 	// signal.DefaultConsumed holds the default value on creation for the consumed field.
 	signal.DefaultConsumed = signalDescConsumed.Default.(bool)
 	signalexecutionFields := schema.SignalExecution{}.Fields()
 	_ = signalexecutionFields
+	// signalexecutionDescQueueName is the schema descriptor for queue_name field.
+	signalexecutionDescQueueName := signalexecutionFields[3].Descriptor()
+	// signalexecution.DefaultQueueName holds the default value on creation for the queue_name field.
+	signalexecution.DefaultQueueName = signalexecutionDescQueueName.Default.(string)
+	// signalexecution.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	signalexecution.QueueNameValidator = signalexecutionDescQueueName.Validators[0].(func(string) error)
 	// signalexecutionDescStartedAt is the schema descriptor for started_at field.
-	signalexecutionDescStartedAt := signalexecutionFields[5].Descriptor()
+	signalexecutionDescStartedAt := signalexecutionFields[6].Descriptor()
 	// signalexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	signalexecution.DefaultStartedAt = signalexecutionDescStartedAt.Default.(func() time.Time)
 	// signalexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	signalexecutionDescUpdatedAt := signalexecutionFields[6].Descriptor()
+	signalexecutionDescUpdatedAt := signalexecutionFields[7].Descriptor()
 	// signalexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	signalexecution.DefaultUpdatedAt = signalexecutionDescUpdatedAt.Default.(func() time.Time)
 	// signalexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -190,30 +238,42 @@ func init() {
 	workflowDescHandlerName := workflowFields[4].Descriptor()
 	// workflow.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	workflow.HandlerNameValidator = workflowDescHandlerName.Validators[0].(func(string) error)
+	// workflowDescQueueName is the schema descriptor for queue_name field.
+	workflowDescQueueName := workflowFields[6].Descriptor()
+	// workflow.DefaultQueueName holds the default value on creation for the queue_name field.
+	workflow.DefaultQueueName = workflowDescQueueName.Default.(string)
+	// workflow.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	workflow.QueueNameValidator = workflowDescQueueName.Validators[0].(func(string) error)
 	// workflowDescIsPaused is the schema descriptor for is_paused field.
-	workflowDescIsPaused := workflowFields[7].Descriptor()
+	workflowDescIsPaused := workflowFields[8].Descriptor()
 	// workflow.DefaultIsPaused holds the default value on creation for the is_paused field.
 	workflow.DefaultIsPaused = workflowDescIsPaused.Default.(bool)
 	// workflowDescIsReady is the schema descriptor for is_ready field.
-	workflowDescIsReady := workflowFields[8].Descriptor()
+	workflowDescIsReady := workflowFields[9].Descriptor()
 	// workflow.DefaultIsReady holds the default value on creation for the is_ready field.
 	workflow.DefaultIsReady = workflowDescIsReady.Default.(bool)
 	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[10].Descriptor()
+	workflowDescCreatedAt := workflowFields[11].Descriptor()
 	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionFields := schema.WorkflowExecution{}.Fields()
 	_ = workflowexecutionFields
+	// workflowexecutionDescQueueName is the schema descriptor for queue_name field.
+	workflowexecutionDescQueueName := workflowexecutionFields[3].Descriptor()
+	// workflowexecution.DefaultQueueName holds the default value on creation for the queue_name field.
+	workflowexecution.DefaultQueueName = workflowexecutionDescQueueName.Default.(string)
+	// workflowexecution.QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	workflowexecution.QueueNameValidator = workflowexecutionDescQueueName.Validators[0].(func(string) error)
 	// workflowexecutionDescIsReplay is the schema descriptor for is_replay field.
-	workflowexecutionDescIsReplay := workflowexecutionFields[5].Descriptor()
+	workflowexecutionDescIsReplay := workflowexecutionFields[6].Descriptor()
 	// workflowexecution.DefaultIsReplay holds the default value on creation for the is_replay field.
 	workflowexecution.DefaultIsReplay = workflowexecutionDescIsReplay.Default.(bool)
 	// workflowexecutionDescStartedAt is the schema descriptor for started_at field.
-	workflowexecutionDescStartedAt := workflowexecutionFields[6].Descriptor()
+	workflowexecutionDescStartedAt := workflowexecutionFields[7].Descriptor()
 	// workflowexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	workflowexecution.DefaultStartedAt = workflowexecutionDescStartedAt.Default.(func() time.Time)
 	// workflowexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowexecutionDescUpdatedAt := workflowexecutionFields[7].Descriptor()
+	workflowexecutionDescUpdatedAt := workflowexecutionFields[8].Descriptor()
 	// workflowexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	workflowexecution.DefaultUpdatedAt = workflowexecutionDescUpdatedAt.Default.(func() time.Time)
 	// workflowexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

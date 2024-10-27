@@ -41,6 +41,20 @@ func (sec *SignalExecutionCreate) SetNillableStatus(s *signalexecution.Status) *
 	return sec
 }
 
+// SetQueueName sets the "queue_name" field.
+func (sec *SignalExecutionCreate) SetQueueName(s string) *SignalExecutionCreate {
+	sec.mutation.SetQueueName(s)
+	return sec
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (sec *SignalExecutionCreate) SetNillableQueueName(s *string) *SignalExecutionCreate {
+	if s != nil {
+		sec.SetQueueName(*s)
+	}
+	return sec
+}
+
 // SetOutput sets the "output" field.
 func (sec *SignalExecutionCreate) SetOutput(u [][]uint8) *SignalExecutionCreate {
 	sec.mutation.SetOutput(u)
@@ -145,6 +159,10 @@ func (sec *SignalExecutionCreate) defaults() {
 		v := signalexecution.DefaultStatus
 		sec.mutation.SetStatus(v)
 	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		v := signalexecution.DefaultQueueName
+		sec.mutation.SetQueueName(v)
+	}
 	if _, ok := sec.mutation.StartedAt(); !ok {
 		v := signalexecution.DefaultStartedAt()
 		sec.mutation.SetStartedAt(v)
@@ -166,6 +184,14 @@ func (sec *SignalExecutionCreate) check() error {
 	if v, ok := sec.mutation.Status(); ok {
 		if err := signalexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.status": %w`, err)}
+		}
+	}
+	if _, ok := sec.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "SignalExecution.queue_name"`)}
+	}
+	if v, ok := sec.mutation.QueueName(); ok {
+		if err := signalexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := sec.mutation.StartedAt(); !ok {
@@ -219,6 +245,10 @@ func (sec *SignalExecutionCreate) createSpec() (*SignalExecution, *sqlgraph.Crea
 	if value, ok := sec.mutation.Status(); ok {
 		_spec.SetField(signalexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := sec.mutation.QueueName(); ok {
+		_spec.SetField(signalexecution.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := sec.mutation.Output(); ok {
 		_spec.SetField(signalexecution.FieldOutput, field.TypeJSON, value)

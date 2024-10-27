@@ -19,9 +19,10 @@ type workflowTask struct {
 	maxRetry    int
 	retry       func() error
 	isPaused    bool
+	queueName   string
 }
 
-func (tp *Tempolite) createWorkflowPool(countWorkers int) *retrypool.Pool[*workflowTask] {
+func (tp *Tempolite) createWorkflowPool(queue string, countWorkers int) (*retrypool.Pool[*workflowTask], error) {
 
 	opts := []retrypool.Option[*workflowTask]{
 		retrypool.WithAttempts[*workflowTask](1),
@@ -32,16 +33,22 @@ func (tp *Tempolite) createWorkflowPool(countWorkers int) *retrypool.Pool[*workf
 		retrypool.WithPanicWorker[*workflowTask](tp.workflowWorkerPanic),
 	}
 
+	tp.logger.Debug(tp.ctx, "creating workflow pool", "queue", queue, "workers", countWorkers)
+
 	workers := []retrypool.Worker[*workflowTask]{}
 
 	for i := 0; i < countWorkers; i++ {
-		workers = append(workers, workflowWorker{id: tp.getWorkerWorkflowID(), tp: tp})
+		id, err := tp.getWorkerWorkflowID(queue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate workflow worker ID: %w", err)
+		}
+		workers = append(workers, workflowWorker{id: id, tp: tp})
 	}
 
 	return retrypool.New(
 		tp.ctx,
 		workers,
-		opts...)
+		opts...), nil
 }
 
 func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {

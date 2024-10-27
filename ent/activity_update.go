@@ -73,6 +73,20 @@ func (au *ActivityUpdate) SetNillableStatus(a *activity.Status) *ActivityUpdate 
 	return au
 }
 
+// SetQueueName sets the "queue_name" field.
+func (au *ActivityUpdate) SetQueueName(s string) *ActivityUpdate {
+	au.mutation.SetQueueName(s)
+	return au
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (au *ActivityUpdate) SetNillableQueueName(s *string) *ActivityUpdate {
+	if s != nil {
+		au.SetQueueName(*s)
+	}
+	return au
+}
+
 // SetHandlerName sets the "handler_name" field.
 func (au *ActivityUpdate) SetHandlerName(s string) *ActivityUpdate {
 	au.mutation.SetHandlerName(s)
@@ -238,6 +252,11 @@ func (au *ActivityUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
 		}
 	}
+	if v, ok := au.mutation.QueueName(); ok {
+		if err := activity.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Activity.queue_name": %w`, err)}
+		}
+	}
 	if v, ok := au.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -266,6 +285,9 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := au.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := au.mutation.QueueName(); ok {
+		_spec.SetField(activity.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := au.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)
@@ -396,6 +418,20 @@ func (auo *ActivityUpdateOne) SetStatus(a activity.Status) *ActivityUpdateOne {
 func (auo *ActivityUpdateOne) SetNillableStatus(a *activity.Status) *ActivityUpdateOne {
 	if a != nil {
 		auo.SetStatus(*a)
+	}
+	return auo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (auo *ActivityUpdateOne) SetQueueName(s string) *ActivityUpdateOne {
+	auo.mutation.SetQueueName(s)
+	return auo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (auo *ActivityUpdateOne) SetNillableQueueName(s *string) *ActivityUpdateOne {
+	if s != nil {
+		auo.SetQueueName(*s)
 	}
 	return auo
 }
@@ -578,6 +614,11 @@ func (auo *ActivityUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Activity.status": %w`, err)}
 		}
 	}
+	if v, ok := auo.mutation.QueueName(); ok {
+		if err := activity.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Activity.queue_name": %w`, err)}
+		}
+	}
 	if v, ok := auo.mutation.HandlerName(); ok {
 		if err := activity.HandlerNameValidator(v); err != nil {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Activity.handler_name": %w`, err)}
@@ -623,6 +664,9 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 	}
 	if value, ok := auo.mutation.Status(); ok {
 		_spec.SetField(activity.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := auo.mutation.QueueName(); ok {
+		_spec.SetField(activity.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := auo.mutation.HandlerName(); ok {
 		_spec.SetField(activity.FieldHandlerName, field.TypeString, value)

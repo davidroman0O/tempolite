@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,50 +37,38 @@ type Tempolite struct {
 	db     *dbSQL.DB
 	client *ent.Client
 
-	// Workflows are pre-registered
-	// Deterministic function that should be replayed exactly the same way if successful without triggering code since it will have only the results of the previous execution
-	workflows                      sync.Map
-	workflowPool                   *retrypool.Pool[*workflowTask]
-	schedulerExecutionWorkflowDone chan struct{}
+	// Registry management
+	workflows   sync.Map // map[HandlerIdentity]Workflow
+	activities  sync.Map // map[HandlerIdentity]Activity
+	sideEffects sync.Map // map[string]SideEffect
+	sagas       sync.Map // map[string]*SagaDefinition
 
-	// Activities are pre-registered
-	// Un-deterministic function
-	activities                     sync.Map
-	activityPool                   *retrypool.Pool[*activityTask]
-	schedulerExecutionActivityDone chan struct{}
+	queuePoolWorkflowCounter     sync.Map // map[string]*atomic.Int64
+	queuePoolActivityCounter     sync.Map
+	queuePoolSideEffectCounter   sync.Map
+	queuePoolTransactionCounter  sync.Map
+	queuePoolCompensationCounter sync.Map
 
-	// SideEffects are dynamically cached
-	// You have to use side effects to guide the flow of a workflow
-	// Help to manage un-deterministic code within a workflow
-	sideEffects             sync.Map
-	sideEffectPool          *retrypool.Pool[*sideEffectTask]
-	schedulerSideEffectDone chan struct{}
-
-	// Saga are dynamically cached
-	// Simplify the management of the Sagas, if we were to use Activities we would be subject to trickery to manage the flow
-	sagas             sync.Map
-	transactionPool   *retrypool.Pool[*transactionTask]
-	compensationPool  *retrypool.Pool[*compensationTask]
-	schedulerSagaDone chan struct{}
+	// Additional queues
+	queues sync.Map // map[string]*QueuePools
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// Versioning system cache
-	versionCache sync.Map
+	// Per-queue scheduler status
+	queueSchedulerStatus sync.Map // map[string]*schedulerStatus
 
-	schedulerWorkflowStarted   atomic.Bool
-	schedulerActivityStarted   atomic.Bool
-	schedulerSideEffectStarted atomic.Bool
-	schedulerSagaStarted       atomic.Bool
-
+	// Scheduler done channels for default queue
 	resumeWorkflowsWorkerDone chan struct{}
 
-	poolCounterWorkflow     int
-	poolCounterActivity     int
-	poolCounterSideEffect   int
-	poolCounterTransaction  int
-	poolCounterCompensation int
+	// Per-queue done channels
+	schedulerDone sync.Map // map[string]map[string]chan struct{} // queueName -> schedulerType -> done
+
+	// Per-queue worker ID counters
+	workerCounters sync.Map // map[string]map[string]*atomic.Int32 // queueName -> poolType -> counter
+
+	// Versioning
+	versionCache sync.Map
 
 	logger Logger
 }
@@ -169,16 +156,12 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 	}
 
 	tp := &Tempolite{
-		ctx:                            ctx,
-		db:                             db,
-		client:                         client,
-		cancel:                         cancel,
-		schedulerExecutionWorkflowDone: make(chan struct{}),
-		schedulerExecutionActivityDone: make(chan struct{}),
-		schedulerSideEffectDone:        make(chan struct{}),
-		schedulerSagaDone:              make(chan struct{}),
-		resumeWorkflowsWorkerDone:      make(chan struct{}),
-		logger:                         cfg.logger,
+		ctx:                       ctx,
+		db:                        db,
+		client:                    client,
+		cancel:                    cancel,
+		resumeWorkflowsWorkerDone: make(chan struct{}),
+		logger:                    cfg.logger,
 	}
 
 	tp.logger.Debug(ctx, "Registering workflows functions", "total", len(registry.workflowsFunc))
@@ -192,39 +175,279 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 	tp.logger.Debug(ctx, "Registering activities", "total", len(registry.activities))
 	for _, activity := range registry.activities {
 		if err := tp.registerActivity(activity); err != nil {
+			tp.logger.Error(ctx, "Error registering activity", "error", err)
 			return nil, err
 		}
 	}
 
-	tp.logger.Debug(ctx, "Creating pools")
-	tp.workflowPool = tp.createWorkflowPool(cfg.initialWorkflowsWorkers)
-	tp.activityPool = tp.createActivityPool(cfg.initialActivityWorkers)
-	tp.sideEffectPool = tp.createSideEffectPool(cfg.initialSideEffectWorkers)
-	tp.transactionPool = tp.createTransactionPool(cfg.initialTransctionWorkers)
-	tp.compensationPool = tp.createCompensationPool(cfg.initialCompensationWorkers)
+	tp.logger.Debug(ctx, "Registering default queue")
+	// priority
+	if err := tp.createQueue("default", cfg.initialWorkflowsWorkers, cfg.initialActivityWorkers, cfg.initialSideEffectWorkers, cfg.initialTransctionWorkers, cfg.initialCompensationWorkers); err != nil {
+		tp.logger.Error(ctx, "Error creating default queue", "error", err)
+		return nil, err
+	}
 
-	tp.logger.Debug(ctx, "Starting scheduler side effect")
-	go tp.schedulerExecutionSideEffect()
-	tp.logger.Debug(ctx, "Starting scheduler workflow executions")
-	go tp.schedulerExecutionWorkflow()
-	tp.logger.Debug(ctx, "Starting scheduler activity executions")
-	go tp.schedulerExecutionActivity()
-	tp.logger.Debug(ctx, "Starting scheduler saga executions")
-	go tp.schedulerExecutionSaga()
+	for _, queue := range cfg.queues {
+		tp.logger.Debug(ctx, "Registering additional queue", "name", queue.Name)
+		if err := tp.createQueue(queue.Name, queue.WorkflowWorkers, queue.ActivityWorkers, queue.SideEffectWorkers, queue.TransactionWorkers, queue.CompensationWorkers); err != nil {
+			tp.logger.Error(ctx, "Error creating additional queue", "error", err)
+			return nil, err
+		}
+	}
+
 	tp.logger.Debug(ctx, "Starting resume workflows worker")
 	go tp.resumeWorkflowsWorker()
 
 	return tp, nil
 }
 
+type QueueWorkers struct {
+	Workflows     *retrypool.Pool[*workflowTask]
+	Activities    *retrypool.Pool[*activityTask]
+	SideEffects   *retrypool.Pool[*sideEffectTask]
+	Transactions  *retrypool.Pool[*transactionTask]
+	Compensations *retrypool.Pool[*compensationTask]
+	Done          chan struct{}
+}
+
+func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
+	sideEffectWorkers, transactionWorkers, compensationWorkers int) error {
+
+	// Validate queue name
+	if name == "" {
+		tp.logger.Error(tp.ctx, "Queue name cannot be empty")
+		return fmt.Errorf("queue name cannot be empty")
+	}
+
+	tp.logger.Debug(tp.ctx, "Creating queue", "name", name)
+
+	tp.logger.Debug(tp.ctx, "Creating workflow pool", "name", name, "workers", workflowWorkers)
+	// Initialize pools
+	workflowPool, err := tp.createWorkflowPool(name, workflowWorkers)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating workflow pool", "error", err)
+		return fmt.Errorf("failed to create workflow pool: %w", err)
+	}
+
+	tp.logger.Debug(tp.ctx, "Creating activity pool", "name", name, "workers", activityWorkers)
+	activityPool, err := tp.createActivityPool(name, activityWorkers)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating activity pool", "error", err)
+		// Clean up the workflow pool before returning
+		workflowPool.Close()
+		return fmt.Errorf("failed to create activity pool: %w", err)
+	}
+
+	tp.logger.Debug(tp.ctx, "Creating side effect pool", "name", name, "workers", sideEffectWorkers)
+	sideEffectPool, err := tp.createSideEffectPool(name, sideEffectWorkers)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating side effect pool", "error", err)
+		// Clean up previous pools
+		workflowPool.Close()
+		activityPool.Close()
+		return fmt.Errorf("failed to create side effect pool: %w", err)
+	}
+
+	tp.logger.Debug(tp.ctx, "Creating transaction pool", "name", name, "workers", transactionWorkers)
+	transactionPool, err := tp.createTransactionPool(name, transactionWorkers)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating transaction pool", "error", err)
+		// Clean up previous pools
+		workflowPool.Close()
+		activityPool.Close()
+		sideEffectPool.Close()
+		return fmt.Errorf("failed to create transaction pool: %w", err)
+	}
+
+	tp.logger.Debug(tp.ctx, "Creating compensation pool", "name", name, "workers", compensationWorkers)
+	compensationPool, err := tp.createCompensationPool(name, compensationWorkers)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error creating compensation pool", "error", err)
+		// Clean up previous pools
+		workflowPool.Close()
+		activityPool.Close()
+		sideEffectPool.Close()
+		transactionPool.Close()
+		return fmt.Errorf("failed to create compensation pool: %w", err)
+	}
+
+	done := make(chan struct{})
+
+	workers := &QueueWorkers{
+		Workflows:     workflowPool,
+		Activities:    activityPool,
+		SideEffects:   sideEffectPool,
+		Transactions:  transactionPool,
+		Compensations: compensationPool,
+		Done:          done,
+	}
+
+	tp.logger.Debug(tp.ctx, "Storing queue workers", "name", name)
+	// Store the queue workers
+	if _, loaded := tp.queues.LoadOrStore(name, workers); loaded {
+		tp.logger.Error(tp.ctx, "Queue already exists", "name", name)
+		// Clean up all pools if queue already exists
+		workflowPool.Close()
+		activityPool.Close()
+		sideEffectPool.Close()
+		transactionPool.Close()
+		compensationPool.Close()
+		return fmt.Errorf("queue %s already exists", name)
+	}
+
+	tp.logger.Debug(tp.ctx, "Storing queue counters", "name", name)
+	// Initialize queue counters
+	tp.initQueueCounters(name)
+
+	tp.logger.Debug(tp.ctx, "Starting queue-specific schedulers")
+	// Start queue-specific schedulers
+	go tp.schedulerExecutionWorkflowForQueue(name, done)
+	go tp.schedulerExecutionActivityForQueue(name, done)
+	go tp.schedulerExecutionSideEffectForQueue(name, done)
+	go tp.schedulerExecutionSagaForQueue(name, done)
+
+	tp.logger.Debug(tp.ctx, "Created queue", "name", name,
+		"workflowWorkers", workflowWorkers,
+		"activityWorkers", activityWorkers,
+		"sideEffectWorkers", sideEffectWorkers,
+		"transactionWorkers", transactionWorkers,
+		"compensationWorkers", compensationWorkers)
+
+	fmt.Println("queue created")
+
+	return nil
+}
+
+func (tp *Tempolite) removeQueue(name string) error {
+	value, ok := tp.queues.LoadAndDelete(name)
+	if !ok {
+		return fmt.Errorf("queue %s not found", name)
+	}
+
+	workers := value.(*QueueWorkers)
+	close(workers.Done) // Signal schedulers to stop
+
+	// Close all pools
+	workers.Workflows.Close()
+	workers.Activities.Close()
+	workers.SideEffects.Close()
+	workers.Transactions.Close()
+	workers.Compensations.Close()
+
+	// Clean up queue counters
+	tp.queuePoolWorkflowCounter.Delete(name)
+	tp.queuePoolActivityCounter.Delete(name)
+	tp.queuePoolSideEffectCounter.Delete(name)
+	tp.queuePoolTransactionCounter.Delete(name)
+	tp.queuePoolCompensationCounter.Delete(name)
+
+	tp.logger.Debug(tp.ctx, "Removed queue", "name", name)
+	return nil
+}
+
+func (tp *Tempolite) getWorkflowPoolQueue(queueName string) (*retrypool.Pool[*workflowTask], error) {
+	if queueName == "" {
+		queueName = "default"
+	}
+	if value, ok := tp.queues.Load(queueName); ok {
+		queue := value.(*QueueWorkers)
+		return queue.Workflows, nil
+	}
+	return nil, fmt.Errorf("workflow queue %s not found", queueName)
+}
+
+func (tp *Tempolite) getActivityPoolQueue(queueName string) (*retrypool.Pool[*activityTask], error) {
+	if queueName == "" {
+		queueName = "default"
+	}
+	if value, ok := tp.queues.Load(queueName); ok {
+		queue := value.(*QueueWorkers)
+		return queue.Activities, nil
+	}
+	return nil, fmt.Errorf("activity queue %s not found", queueName)
+}
+
+func (tp *Tempolite) getSideEffectPoolQueue(queueName string) (*retrypool.Pool[*sideEffectTask], error) {
+	if queueName == "" {
+		queueName = "default"
+	}
+	if value, ok := tp.queues.Load(queueName); ok {
+		queue := value.(*QueueWorkers)
+		return queue.SideEffects, nil
+	}
+	return nil, fmt.Errorf("side effect queue %s not found", queueName)
+}
+
+func (tp *Tempolite) getTransactionPoolQueue(queueName string) (*retrypool.Pool[*transactionTask], error) {
+	if queueName == "" {
+		queueName = "default"
+	}
+	if value, ok := tp.queues.Load(queueName); ok {
+		queue := value.(*QueueWorkers)
+		return queue.Transactions, nil
+	}
+	return nil, fmt.Errorf("transaction queue %s not found", queueName)
+}
+
+func (tp *Tempolite) getCompensationPoolQueue(queueName string) (*retrypool.Pool[*compensationTask], error) {
+	if queueName == "" {
+		queueName = "default"
+	}
+	if value, ok := tp.queues.Load(queueName); ok {
+		queue := value.(*QueueWorkers)
+		return queue.Compensations, nil
+	}
+	return nil, fmt.Errorf("compensation queue %s not found", queueName)
+}
+
 func (tp *Tempolite) Close() {
 	tp.logger.Debug(tp.ctx, "Closing Tempolite")
 	tp.cancel() // it will stops other systems
-	tp.workflowPool.Close()
-	tp.activityPool.Close()
-	tp.sideEffectPool.Close()
-	tp.transactionPool.Close()
-	tp.compensationPool.Close()
+
+	tp.queues.Range(func(key, value interface{}) bool {
+		queueName := key.(string)
+		queue := value.(*QueueWorkers)
+		tp.logger.Debug(tp.ctx, "Closing queue", "queueName", queueName)
+		queue.Workflows.Close()
+		queue.Activities.Close()
+		queue.SideEffects.Close()
+		queue.Transactions.Close()
+		queue.Compensations.Close()
+		return true
+	})
+}
+
+func (tp *Tempolite) getWorkerWorkflowID(queue string) (int, error) {
+	counter, _ := tp.queuePoolWorkflowCounter.LoadOrStore(queue, &atomic.Int64{})
+	return int(counter.(*atomic.Int64).Add(1)), nil
+}
+
+func (tp *Tempolite) getWorkerActivityID(queue string) (int, error) {
+	counter, _ := tp.queuePoolActivityCounter.LoadOrStore(queue, &atomic.Int64{})
+	return int(counter.(*atomic.Int64).Add(1)), nil
+}
+
+func (tp *Tempolite) getWorkerSideEffectID(queue string) (int, error) {
+	counter, _ := tp.queuePoolSideEffectCounter.LoadOrStore(queue, &atomic.Int64{})
+	return int(counter.(*atomic.Int64).Add(1)), nil
+}
+
+func (tp *Tempolite) getWorkerTransactionID(queue string) (int, error) {
+	counter, _ := tp.queuePoolTransactionCounter.LoadOrStore(queue, &atomic.Int64{})
+	return int(counter.(*atomic.Int64).Add(1)), nil
+}
+
+func (tp *Tempolite) getWorkerCompensationID(queue string) (int, error) {
+	counter, _ := tp.queuePoolCompensationCounter.LoadOrStore(queue, &atomic.Int64{})
+	return int(counter.(*atomic.Int64).Add(1)), nil
+}
+
+func (tp *Tempolite) initQueueCounters(queue string) {
+	tp.queuePoolWorkflowCounter.Store(queue, &atomic.Int64{})
+	tp.queuePoolActivityCounter.Store(queue, &atomic.Int64{})
+	tp.queuePoolSideEffectCounter.Store(queue, &atomic.Int64{})
+	tp.queuePoolTransactionCounter.Store(queue, &atomic.Int64{})
+	tp.queuePoolCompensationCounter.Store(queue, &atomic.Int64{})
 }
 
 type WorkerPoolInfo struct {
@@ -234,227 +457,320 @@ type WorkerPoolInfo struct {
 	Processing int
 }
 
-func (tp *Tempolite) GetWorkflowsInfo() WorkerPoolInfo {
-	return WorkerPoolInfo{
-		Workers:    tp.ListWorkersWorkflow(),
-		DeadTasks:  tp.workflowPool.DeadTaskCount(),
-		QueueSize:  tp.workflowPool.QueueSize(),
-		Processing: tp.workflowPool.ProcessingCount(),
+func (tp *Tempolite) AddWorkerWorkflow(queue string) error {
+	pool, err := tp.getWorkflowPoolQueue(queue)
+	if err != nil {
+		return err
 	}
-}
-
-func (tp *Tempolite) GetActivitiesInfo() WorkerPoolInfo {
-	return WorkerPoolInfo{
-		Workers:    tp.ListWorkersActivity(),
-		DeadTasks:  tp.activityPool.DeadTaskCount(),
-		QueueSize:  tp.activityPool.QueueSize(),
-		Processing: tp.activityPool.ProcessingCount(),
+	id, err := tp.getWorkerWorkflowID(queue)
+	if err != nil {
+		return err
 	}
+	pool.AddWorker(workflowWorker{id: id, tp: tp})
+	return nil
 }
 
-func (tp *Tempolite) GetSideEffectsInfo() WorkerPoolInfo {
-	return WorkerPoolInfo{
-		Workers:    tp.ListWorkersSideEffect(),
-		DeadTasks:  tp.sideEffectPool.DeadTaskCount(),
-		QueueSize:  tp.sideEffectPool.QueueSize(),
-		Processing: tp.sideEffectPool.ProcessingCount(),
+func (tp *Tempolite) AddWorkerActivity(queue string) error {
+	pool, err := tp.getActivityPoolQueue(queue)
+	if err != nil {
+		return err
 	}
-}
 
-func (tp *Tempolite) GetTransactionsInfo() WorkerPoolInfo {
-	return WorkerPoolInfo{
-		Workers:    tp.ListWorkersTransaction(),
-		DeadTasks:  tp.transactionPool.DeadTaskCount(),
-		QueueSize:  tp.transactionPool.QueueSize(),
-		Processing: tp.transactionPool.ProcessingCount(),
+	id, err := tp.getWorkerActivityID(queue)
+	if err != nil {
+		return err
 	}
+	pool.AddWorker(activityWorker{id: id, tp: tp})
+	return nil
 }
 
-func (tp *Tempolite) GetCompensationsInfo() WorkerPoolInfo {
-	return WorkerPoolInfo{
-		Workers:    tp.ListWorkersCompensation(),
-		DeadTasks:  tp.compensationPool.DeadTaskCount(),
-		QueueSize:  tp.compensationPool.QueueSize(),
-		Processing: tp.compensationPool.ProcessingCount(),
+func (tp *Tempolite) AddWorkerSideEffect(queue string) error {
+	pool, err := tp.getSideEffectPoolQueue(queue)
+	if err != nil {
+		return err
 	}
+	id, err := tp.getWorkerSideEffectID(queue)
+	if err != nil {
+		return err
+	}
+	pool.AddWorker(sideEffectWorker{id: id, tp: tp})
+	return nil
 }
 
-func (tp *Tempolite) getWorkerWorkflowID() int {
-	tp.poolCounterWorkflow++
-	return tp.poolCounterWorkflow
+func (tp *Tempolite) AddWorkerTransaction(queue string) error {
+	pool, err := tp.getTransactionPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	id, err := tp.getWorkerTransactionID(queue)
+	if err != nil {
+		return err
+	}
+	pool.AddWorker(transactionWorker{id: id, tp: tp})
+	return nil
 }
 
-func (tp *Tempolite) getWorkerActivityID() int {
-	tp.poolCounterActivity++
-	return tp.poolCounterActivity
+func (tp *Tempolite) AddWorkerCompensation(queue string) error {
+	pool, err := tp.getCompensationPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	id, err := tp.getWorkerCompensationID(queue)
+	if err != nil {
+		return err
+	}
+	pool.AddWorker(compensationWorker{id: id, tp: tp})
+	return nil
 }
 
-func (tp *Tempolite) getWorkerSideEffectID() int {
-	tp.poolCounterSideEffect++
-	return tp.poolCounterSideEffect
+// Worker pool info functions
+func (tp *Tempolite) GetWorkflowsInfo(queue string) (*WorkerPoolInfo, error) {
+	pool, err := tp.getWorkflowPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := tp.ListWorkersWorkflow(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerPoolInfo{
+		Workers:    workers,
+		DeadTasks:  pool.DeadTaskCount(),
+		QueueSize:  pool.QueueSize(),
+		Processing: pool.ProcessingCount(),
+	}, nil
 }
 
-func (tp *Tempolite) getWorkerTransactionID() int {
-	tp.poolCounterTransaction++
-	return tp.poolCounterTransaction
+func (tp *Tempolite) GetActivitiesInfo(queue string) (*WorkerPoolInfo, error) {
+	pool, err := tp.getActivityPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := tp.ListWorkersActivity(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerPoolInfo{
+		Workers:    workers,
+		DeadTasks:  pool.DeadTaskCount(),
+		QueueSize:  pool.QueueSize(),
+		Processing: pool.ProcessingCount(),
+	}, nil
 }
 
-func (tp *Tempolite) getWorkerCompensationID() int {
-	tp.poolCounterCompensation++
-	return tp.poolCounterCompensation
+func (tp *Tempolite) GetSideEffectsInfo(queue string) (*WorkerPoolInfo, error) {
+	pool, err := tp.getSideEffectPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := tp.ListWorkersSideEffect(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerPoolInfo{
+		Workers:    workers,
+		DeadTasks:  pool.DeadTaskCount(),
+		QueueSize:  pool.QueueSize(),
+		Processing: pool.ProcessingCount(),
+	}, nil
 }
 
-func (tp *Tempolite) AddWorkerWorkflow() {
-	tp.workflowPool.AddWorker(workflowWorker{id: tp.getWorkerWorkflowID(), tp: tp})
+func (tp *Tempolite) GetTransactionsInfo(queue string) (*WorkerPoolInfo, error) {
+	pool, err := tp.getTransactionPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := tp.ListWorkersTransaction(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerPoolInfo{
+		Workers:    workers,
+		DeadTasks:  pool.DeadTaskCount(),
+		QueueSize:  pool.QueueSize(),
+		Processing: pool.ProcessingCount(),
+	}, nil
 }
 
-func (tp *Tempolite) AddWorkerActivity() {
-	tp.activityPool.AddWorker(activityWorker{id: tp.getWorkerActivityID(), tp: tp})
+func (tp *Tempolite) GetCompensationsInfo(queue string) (*WorkerPoolInfo, error) {
+	pool, err := tp.getCompensationPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := tp.ListWorkersCompensation(queue)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WorkerPoolInfo{
+		Workers:    workers,
+		DeadTasks:  pool.DeadTaskCount(),
+		QueueSize:  pool.QueueSize(),
+		Processing: pool.ProcessingCount(),
+	}, nil
 }
 
-func (tp *Tempolite) AddWorkerSideEffect() {
-	tp.sideEffectPool.AddWorker(sideEffectWorker{id: tp.getWorkerSideEffectID(), tp: tp})
+func (tp *Tempolite) RemoveWorkerWorkflow(queue string, id int) error {
+	pool, err := tp.getWorkflowPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) AddWorkerTransaction() {
-	tp.transactionPool.AddWorker(transactionWorker{id: tp.getWorkerTransactionID(), tp: tp})
+func (tp *Tempolite) RemoveWorkerActivity(queue string, id int) error {
+	pool, err := tp.getActivityPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) AddWorkerCompensation() {
-	tp.compensationPool.AddWorker(compensationWorker{id: tp.getWorkerCompensationID(), tp: tp})
+func (tp *Tempolite) RemoveWorkerSideEffect(queue string, id int) error {
+	pool, err := tp.getSideEffectPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerWorkflow(id int) error {
-	return tp.workflowPool.RemoveWorker(id)
+func (tp *Tempolite) RemoveWorkerTransaction(queue string, id int) error {
+	pool, err := tp.getTransactionPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerActivity(id int) error {
-	return tp.activityPool.RemoveWorker(id)
+func (tp *Tempolite) RemoveWorkerCompensation(queue string, id int) error {
+	pool, err := tp.getCompensationPoolQueue(queue)
+	if err != nil {
+		return err
+	}
+	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerSideEffect(id int) error {
-	return tp.sideEffectPool.RemoveWorker(id)
+func (tp *Tempolite) ListWorkersWorkflow(queue string) ([]int, error) {
+	pool, err := tp.getWorkflowPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+	return pool.GetWorkerIDs(), nil
 }
 
-func (tp *Tempolite) RemoveWorkerTransaction(id int) error {
-	return tp.transactionPool.RemoveWorker(id)
+func (tp *Tempolite) ListWorkersActivity(queue string) ([]int, error) {
+	pool, err := tp.getActivityPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+	return pool.GetWorkerIDs(), nil
 }
 
-func (tp *Tempolite) RemoveWorkerCompensation(id int) error {
-	return tp.compensationPool.RemoveWorker(id)
+func (tp *Tempolite) ListWorkersSideEffect(queue string) ([]int, error) {
+	pool, err := tp.getSideEffectPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+	return pool.GetWorkerIDs(), nil
 }
 
-func (tp *Tempolite) ListWorkersWorkflow() []int {
-	return tp.workflowPool.GetWorkerIDs()
+func (tp *Tempolite) ListWorkersTransaction(queue string) ([]int, error) {
+	pool, err := tp.getTransactionPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+	return pool.GetWorkerIDs(), nil
 }
 
-func (tp *Tempolite) ListWorkersActivity() []int {
-	return tp.activityPool.GetWorkerIDs()
+func (tp *Tempolite) ListWorkersCompensation(queue string) ([]int, error) {
+	pool, err := tp.getCompensationPoolQueue(queue)
+	if err != nil {
+		return nil, err
+	}
+	return pool.GetWorkerIDs(), nil
 }
 
-func (tp *Tempolite) ListWorkersSideEffect() []int {
-	return tp.sideEffectPool.GetWorkerIDs()
-}
-
-func (tp *Tempolite) ListWorkersTransaction() []int {
-	return tp.transactionPool.GetWorkerIDs()
-}
-
-func (tp *Tempolite) ListWorkersCompensation() []int {
-	return tp.compensationPool.GetWorkerIDs()
+type waitItem struct {
+	QueueName string
+	Workers   *QueueWorkers
 }
 
 func (tp *Tempolite) Wait() error {
 	<-time.After(1 * time.Second)
 
-	activityDone := make(chan error)
-	workflowDone := make(chan error)
-	sideEffectDone := make(chan error)
-	transactionDone := make(chan error)
-	compensationDone := make(chan error)
-
-	doneSignals := []chan error{activityDone, workflowDone, sideEffectDone, transactionDone, compensationDone}
-
-	tp.logger.Debug(tp.ctx, "Waiting for scheduler to start")
-	for !tp.schedulerWorkflowStarted.Load() || !tp.schedulerActivityStarted.Load() || !tp.schedulerSideEffectStarted.Load() || !tp.schedulerSagaStarted.Load() {
-		runtime.Gosched()
-	}
-	tp.logger.Debug(tp.ctx, "Waiting for scheduler to start done")
+	// make channe of array of waitItem
+	newWaiters := make(chan []waitItem)
 
 	go func() {
-		defer close(activityDone)
-		defer tp.logger.Debug(tp.ctx, "Finished waiting for activities")
-		activityDone <- tp.activityPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			tp.logger.Debug(tp.ctx, "Wait Activity Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.activityPool.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
-				tp.logger.Debug(tp.ctx, "Activity Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
-				return true
-			})
-			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-		}, time.Second)
-	}()
-
-	go func() {
-		defer close(workflowDone)
-		defer tp.logger.Debug(tp.ctx, "Finished waiting for workflows")
-		workflowDone <- tp.workflowPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			tp.logger.Debug(tp.ctx, "Wait Workflow Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
-				tp.logger.Debug(tp.ctx, "Workflow Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
-				return true
-			})
-			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-		}, time.Second)
-	}()
-
-	go func() {
-		defer close(sideEffectDone)
-		defer tp.logger.Debug(tp.ctx, "Finished waiting for side effects")
-		sideEffectDone <- tp.sideEffectPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			tp.logger.Debug(tp.ctx, "Wait SideEffect Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.sideEffectPool.RangeTasks(func(data *sideEffectTask, workerID int, status retrypool.TaskStatus) bool {
-				tp.logger.Debug(tp.ctx, "SideEffect Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
-				return true
-			})
-			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-		}, time.Second)
-	}()
-
-	go func() {
-		defer close(transactionDone)
-		defer tp.logger.Debug(tp.ctx, "Finished waiting for transactions")
-		transactionDone <- tp.transactionPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			tp.logger.Debug(tp.ctx, "Wait Transaction Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.transactionPool.RangeTasks(func(data *transactionTask, workerID int, status retrypool.TaskStatus) bool {
-				tp.logger.Debug(tp.ctx, "Transaction Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
-				return true
-			})
-			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-		}, time.Second)
-	}()
-
-	go func() {
-		defer close(compensationDone)
-		defer tp.logger.Debug(tp.ctx, "Finished waiting for compensations")
-		compensationDone <- tp.compensationPool.WaitWithCallback(tp.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-			tp.logger.Debug(tp.ctx, "Wait Compensation Pool", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-			tp.compensationPool.RangeTasks(func(data *compensationTask, workerID int, status retrypool.TaskStatus) bool {
-				tp.logger.Debug(tp.ctx, "Compensation Pool RangeTask", "workerID", workerID, "status", status, "task", data.handlerName)
-				return true
-			})
-			return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-		}, time.Second)
-	}()
-
-	tp.logger.Debug(tp.ctx, "Waiting for done signals")
-	for _, doneSignal := range doneSignals {
-		if err := <-doneSignal; err != nil {
-			tp.logger.Error(tp.ctx, "Error waiting for done signal", "error", err)
-			return err
+		waiters := []waitItem{}
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				tp.queues.Range(func(key, value interface{}) bool {
+					queueName := key.(string)
+					queue := value.(*QueueWorkers)
+					waiters = append(waiters, waitItem{QueueName: queueName, Workers: queue})
+					return true
+				})
+				newWaiters <- waiters
+			}
 		}
-	}
+	}()
 
-	tp.logger.Debug(tp.ctx, "Done waiting for signals")
+	go func() {
+		finished := false
+		for !finished {
+			<-time.After(1 * time.Second)
+			select {
+			case waiters := <-newWaiters:
+				allZero := true
+				states := make([]bool, len(waiters))
+				for i, waiter := range waiters {
+					queueName := waiter.QueueName
+					queue := waiter.Workers
+					tp.logger.Debug(tp.ctx, "Waiting queue", "queueName", queueName)
+
+					checkPool := func(q string) func(queueSize, processingCount, deadTaskCount int) bool {
+						return func(queueSize, processingCount, deadTaskCount int) bool {
+							tp.logger.Debug(tp.ctx, fmt.Sprintf("Checking %s pool on queue %s", q, queueName), "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+							if queueSize > 0 || processingCount > 0 || deadTaskCount > 0 {
+								states[i] = false
+							} else {
+								states[i] = true
+							}
+							return false // no wait, we just consult
+						}
+					}
+
+					queue.Workflows.WaitWithCallback(tp.ctx, checkPool("workfow"), 1)
+					queue.Activities.WaitWithCallback(tp.ctx, checkPool("activities"), 1)
+					queue.SideEffects.WaitWithCallback(tp.ctx, checkPool("side effects"), 1)
+					queue.Transactions.WaitWithCallback(tp.ctx, checkPool("transactions"), 1)
+					queue.Compensations.WaitWithCallback(tp.ctx, checkPool("compensations"), 1)
+				}
+				for _, state := range states {
+					if !state {
+						allZero = false
+						break
+					}
+				}
+				if allZero {
+					finished = true
+				}
+			}
+		}
+		close(newWaiters) // we are done
+	}()
 
 	return nil
 }
@@ -670,13 +986,25 @@ func (tp *Tempolite) CancelWorkflow(id WorkflowID) error {
 
 	close(waiting)
 
+	wf, err := tp.client.Workflow.Get(tp.ctx, id.String())
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error getting workflow", "workflowID", id, "error", err)
+		return err
+	}
+
+	queueWorkflow, err := tp.getWorkflowPoolQueue(wf.QueueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Error getting workflow queue", "workflowID", id, "error", err)
+		return err
+	}
+
 	switch result {
 	case "paused":
 		// fmt.Println("ranging")
-		tp.workflowPool.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+		queueWorkflow.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
 			tp.logger.Debug(tp.ctx, "task still within the workflow", "workflowID", data.ctx.workflowID, "id", id.String())
 			if data.ctx.workflowID == id.String() {
-				tp.workflowPool.InterruptWorker(workerID, retrypool.WithForcePanic(), retrypool.WithRemoveTask())
+				queueWorkflow.InterruptWorker(workerID, retrypool.WithForcePanic(), retrypool.WithRemoveTask())
 			}
 			return true
 		})

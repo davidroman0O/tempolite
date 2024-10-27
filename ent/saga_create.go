@@ -48,6 +48,20 @@ func (sc *SagaCreate) SetNillableStatus(s *saga.Status) *SagaCreate {
 	return sc
 }
 
+// SetQueueName sets the "queue_name" field.
+func (sc *SagaCreate) SetQueueName(s string) *SagaCreate {
+	sc.mutation.SetQueueName(s)
+	return sc
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (sc *SagaCreate) SetNillableQueueName(s *string) *SagaCreate {
+	if s != nil {
+		sc.SetQueueName(*s)
+	}
+	return sc
+}
+
 // SetSagaDefinition sets the "saga_definition" field.
 func (sc *SagaCreate) SetSagaDefinition(sdd schema.SagaDefinitionData) *SagaCreate {
 	sc.mutation.SetSagaDefinition(sdd)
@@ -156,6 +170,10 @@ func (sc *SagaCreate) defaults() {
 		v := saga.DefaultStatus
 		sc.mutation.SetStatus(v)
 	}
+	if _, ok := sc.mutation.QueueName(); !ok {
+		v := saga.DefaultQueueName
+		sc.mutation.SetQueueName(v)
+	}
 	if _, ok := sc.mutation.CreatedAt(); !ok {
 		v := saga.DefaultCreatedAt()
 		sc.mutation.SetCreatedAt(v)
@@ -185,6 +203,14 @@ func (sc *SagaCreate) check() error {
 	if v, ok := sc.mutation.Status(); ok {
 		if err := saga.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Saga.status": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.QueueName(); !ok {
+		return &ValidationError{Name: "queue_name", err: errors.New(`ent: missing required field "Saga.queue_name"`)}
+	}
+	if v, ok := sc.mutation.QueueName(); ok {
+		if err := saga.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Saga.queue_name": %w`, err)}
 		}
 	}
 	if _, ok := sc.mutation.SagaDefinition(); !ok {
@@ -242,6 +268,10 @@ func (sc *SagaCreate) createSpec() (*Saga, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.Status(); ok {
 		_spec.SetField(saga.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := sc.mutation.QueueName(); ok {
+		_spec.SetField(saga.FieldQueueName, field.TypeString, value)
+		_node.QueueName = value
 	}
 	if value, ok := sc.mutation.SagaDefinition(); ok {
 		_spec.SetField(saga.FieldSagaDefinition, field.TypeJSON, value)

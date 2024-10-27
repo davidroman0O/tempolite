@@ -30,8 +30,12 @@ type defaultLogger struct {
 }
 
 func NewDefaultLogger() Logger {
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		// Level: slog.LevelDebug,
+	})
+	l := slog.New(handler)
 	return &defaultLogger{
-		logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		logger: l,
 	}
 }
 

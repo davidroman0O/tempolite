@@ -23,6 +23,8 @@ type ActivityExecution struct {
 	RunID string `json:"run_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status activityexecution.Status `json:"status,omitempty"`
+	// QueueName holds the value of the "queue_name" field.
+	QueueName string `json:"queue_name,omitempty"`
 	// Attempt holds the value of the "attempt" field.
 	Attempt int `json:"attempt,omitempty"`
 	// Output holds the value of the "output" field.
@@ -69,7 +71,7 @@ func (*ActivityExecution) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case activityexecution.FieldAttempt:
 			values[i] = new(sql.NullInt64)
-		case activityexecution.FieldID, activityexecution.FieldRunID, activityexecution.FieldStatus, activityexecution.FieldError:
+		case activityexecution.FieldID, activityexecution.FieldRunID, activityexecution.FieldStatus, activityexecution.FieldQueueName, activityexecution.FieldError:
 			values[i] = new(sql.NullString)
 		case activityexecution.FieldStartedAt, activityexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -107,6 +109,12 @@ func (ae *ActivityExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				ae.Status = activityexecution.Status(value.String)
+			}
+		case activityexecution.FieldQueueName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue_name", values[i])
+			} else if value.Valid {
+				ae.QueueName = value.String
 			}
 		case activityexecution.FieldAttempt:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -193,6 +201,9 @@ func (ae *ActivityExecution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", ae.Status))
+	builder.WriteString(", ")
+	builder.WriteString("queue_name=")
+	builder.WriteString(ae.QueueName)
 	builder.WriteString(", ")
 	builder.WriteString("attempt=")
 	builder.WriteString(fmt.Sprintf("%v", ae.Attempt))

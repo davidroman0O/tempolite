@@ -23,6 +23,9 @@ func (Signal) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Paused", "Retried", "Cancelled").
 			Default("Pending"),
+		field.String("queue_name").
+			Default("default").
+			NotEmpty(),
 		field.Time("created_at").
 			Default(time.Now),
 		field.Bool("consumed").

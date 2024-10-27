@@ -57,6 +57,20 @@ func (su *SignalUpdate) SetNillableStatus(s *signal.Status) *SignalUpdate {
 	return su
 }
 
+// SetQueueName sets the "queue_name" field.
+func (su *SignalUpdate) SetQueueName(s string) *SignalUpdate {
+	su.mutation.SetQueueName(s)
+	return su
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (su *SignalUpdate) SetNillableQueueName(s *string) *SignalUpdate {
+	if s != nil {
+		su.SetQueueName(*s)
+	}
+	return su
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (su *SignalUpdate) SetCreatedAt(t time.Time) *SignalUpdate {
 	su.mutation.SetCreatedAt(t)
@@ -165,6 +179,11 @@ func (su *SignalUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Signal.status": %w`, err)}
 		}
 	}
+	if v, ok := su.mutation.QueueName(); ok {
+		if err := signal.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Signal.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -185,6 +204,9 @@ func (su *SignalUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := su.mutation.QueueName(); ok {
+		_spec.SetField(signal.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := su.mutation.CreatedAt(); ok {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)
@@ -281,6 +303,20 @@ func (suo *SignalUpdateOne) SetStatus(s signal.Status) *SignalUpdateOne {
 func (suo *SignalUpdateOne) SetNillableStatus(s *signal.Status) *SignalUpdateOne {
 	if s != nil {
 		suo.SetStatus(*s)
+	}
+	return suo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (suo *SignalUpdateOne) SetQueueName(s string) *SignalUpdateOne {
+	suo.mutation.SetQueueName(s)
+	return suo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (suo *SignalUpdateOne) SetNillableQueueName(s *string) *SignalUpdateOne {
+	if s != nil {
+		suo.SetQueueName(*s)
 	}
 	return suo
 }
@@ -406,6 +442,11 @@ func (suo *SignalUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Signal.status": %w`, err)}
 		}
 	}
+	if v, ok := suo.mutation.QueueName(); ok {
+		if err := signal.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "Signal.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -443,6 +484,9 @@ func (suo *SignalUpdateOne) sqlSave(ctx context.Context) (_node *Signal, err err
 	}
 	if value, ok := suo.mutation.Status(); ok {
 		_spec.SetField(signal.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := suo.mutation.QueueName(); ok {
+		_spec.SetField(signal.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.CreatedAt(); ok {
 		_spec.SetField(signal.FieldCreatedAt, field.TypeTime, value)

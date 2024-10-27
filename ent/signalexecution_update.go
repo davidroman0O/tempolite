@@ -58,6 +58,20 @@ func (seu *SignalExecutionUpdate) SetNillableStatus(s *signalexecution.Status) *
 	return seu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (seu *SignalExecutionUpdate) SetQueueName(s string) *SignalExecutionUpdate {
+	seu.mutation.SetQueueName(s)
+	return seu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seu *SignalExecutionUpdate) SetNillableQueueName(s *string) *SignalExecutionUpdate {
+	if s != nil {
+		seu.SetQueueName(*s)
+	}
+	return seu
+}
+
 // SetOutput sets the "output" field.
 func (seu *SignalExecutionUpdate) SetOutput(u [][]uint8) *SignalExecutionUpdate {
 	seu.mutation.SetOutput(u)
@@ -181,6 +195,11 @@ func (seu *SignalExecutionUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seu.mutation.QueueName(); ok {
+		if err := signalexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.queue_name": %w`, err)}
+		}
+	}
 	if seu.mutation.SignalCleared() && len(seu.mutation.SignalIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SignalExecution.signal"`)
 	}
@@ -204,6 +223,9 @@ func (seu *SignalExecutionUpdate) sqlSave(ctx context.Context) (n int, err error
 	}
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(signalexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seu.mutation.QueueName(); ok {
+		_spec.SetField(signalexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seu.mutation.Output(); ok {
 		_spec.SetField(signalexecution.FieldOutput, field.TypeJSON, value)
@@ -301,6 +323,20 @@ func (seuo *SignalExecutionUpdateOne) SetStatus(s signalexecution.Status) *Signa
 func (seuo *SignalExecutionUpdateOne) SetNillableStatus(s *signalexecution.Status) *SignalExecutionUpdateOne {
 	if s != nil {
 		seuo.SetStatus(*s)
+	}
+	return seuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (seuo *SignalExecutionUpdateOne) SetQueueName(s string) *SignalExecutionUpdateOne {
+	seuo.mutation.SetQueueName(s)
+	return seuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seuo *SignalExecutionUpdateOne) SetNillableQueueName(s *string) *SignalExecutionUpdateOne {
+	if s != nil {
+		seuo.SetQueueName(*s)
 	}
 	return seuo
 }
@@ -441,6 +477,11 @@ func (seuo *SignalExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.status": %w`, err)}
 		}
 	}
+	if v, ok := seuo.mutation.QueueName(); ok {
+		if err := signalexecution.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SignalExecution.queue_name": %w`, err)}
+		}
+	}
 	if seuo.mutation.SignalCleared() && len(seuo.mutation.SignalIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SignalExecution.signal"`)
 	}
@@ -481,6 +522,9 @@ func (seuo *SignalExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Signa
 	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(signalexecution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seuo.mutation.QueueName(); ok {
+		_spec.SetField(signalexecution.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seuo.mutation.Output(); ok {
 		_spec.SetField(signalexecution.FieldOutput, field.TypeJSON, value)

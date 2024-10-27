@@ -19,6 +19,8 @@ const (
 	FieldRunID = "run_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldQueueName holds the string denoting the queue_name field in the database.
+	FieldQueueName = "queue_name"
 	// FieldOutput holds the string denoting the output field in the database.
 	FieldOutput = "output"
 	// FieldError holds the string denoting the error field in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldID,
 	FieldRunID,
 	FieldStatus,
+	FieldQueueName,
 	FieldOutput,
 	FieldError,
 	FieldIsReplay,
@@ -76,6 +79,10 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultQueueName holds the default value on creation for the "queue_name" field.
+	DefaultQueueName string
+	// QueueNameValidator is a validator for the "queue_name" field. It is called by the builders before save.
+	QueueNameValidator func(string) error
 	// DefaultIsReplay holds the default value on creation for the "is_replay" field.
 	DefaultIsReplay bool
 	// DefaultStartedAt holds the default value on creation for the "started_at" field.
@@ -133,6 +140,11 @@ func ByRunID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByQueueName orders the results by the queue_name field.
+func ByQueueName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueueName, opts...).ToFunc()
 }
 
 // ByError orders the results by the error field.

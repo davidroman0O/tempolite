@@ -86,6 +86,20 @@ func (seu *SideEffectUpdate) SetNillableStatus(s *sideeffect.Status) *SideEffect
 	return seu
 }
 
+// SetQueueName sets the "queue_name" field.
+func (seu *SideEffectUpdate) SetQueueName(s string) *SideEffectUpdate {
+	seu.mutation.SetQueueName(s)
+	return seu
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seu *SideEffectUpdate) SetNillableQueueName(s *string) *SideEffectUpdate {
+	if s != nil {
+		seu.SetQueueName(*s)
+	}
+	return seu
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (seu *SideEffectUpdate) SetRetryPolicy(sp schema.RetryPolicy) *SideEffectUpdate {
 	seu.mutation.SetRetryPolicy(sp)
@@ -230,6 +244,11 @@ func (seu *SideEffectUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
 		}
 	}
+	if v, ok := seu.mutation.QueueName(); ok {
+		if err := sideeffect.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -256,6 +275,9 @@ func (seu *SideEffectUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := seu.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seu.mutation.QueueName(); ok {
+		_spec.SetField(sideeffect.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seu.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)
@@ -389,6 +411,20 @@ func (seuo *SideEffectUpdateOne) SetStatus(s sideeffect.Status) *SideEffectUpdat
 func (seuo *SideEffectUpdateOne) SetNillableStatus(s *sideeffect.Status) *SideEffectUpdateOne {
 	if s != nil {
 		seuo.SetStatus(*s)
+	}
+	return seuo
+}
+
+// SetQueueName sets the "queue_name" field.
+func (seuo *SideEffectUpdateOne) SetQueueName(s string) *SideEffectUpdateOne {
+	seuo.mutation.SetQueueName(s)
+	return seuo
+}
+
+// SetNillableQueueName sets the "queue_name" field if the given value is not nil.
+func (seuo *SideEffectUpdateOne) SetNillableQueueName(s *string) *SideEffectUpdateOne {
+	if s != nil {
+		seuo.SetQueueName(*s)
 	}
 	return seuo
 }
@@ -550,6 +586,11 @@ func (seuo *SideEffectUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SideEffect.status": %w`, err)}
 		}
 	}
+	if v, ok := seuo.mutation.QueueName(); ok {
+		if err := sideeffect.QueueNameValidator(v); err != nil {
+			return &ValidationError{Name: "queue_name", err: fmt.Errorf(`ent: validator failed for field "SideEffect.queue_name": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -593,6 +634,9 @@ func (seuo *SideEffectUpdateOne) sqlSave(ctx context.Context) (_node *SideEffect
 	}
 	if value, ok := seuo.mutation.Status(); ok {
 		_spec.SetField(sideeffect.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := seuo.mutation.QueueName(); ok {
+		_spec.SetField(sideeffect.FieldQueueName, field.TypeString, value)
 	}
 	if value, ok := seuo.mutation.RetryPolicy(); ok {
 		_spec.SetField(sideeffect.FieldRetryPolicy, field.TypeJSON, value)

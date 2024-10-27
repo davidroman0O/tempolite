@@ -10,38 +10,56 @@ import (
 	"github.com/google/uuid"
 )
 
-func (tp *Tempolite) schedulerExecutionWorkflow() {
-	defer close(tp.schedulerExecutionWorkflowDone)
+func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done chan struct{}) {
+
+	queue, err := tp.getWorkflowPoolQueue(queueName)
+	if err != nil {
+		tp.logger.Error(tp.ctx, "Scheduler workflow execution: getWorkflowPoolQueue failed", "error", err)
+		return
+	}
+
 	for {
 		select {
 		case <-tp.ctx.Done():
 			return
 		default:
 
-			availableSlots := len(tp.ListWorkersWorkflow()) - tp.workflowPool.ProcessingCount()
+			var ok bool
+
+			// Get queue workers
+			queueWorkersRaw, ok := tp.queues.Load(queueName)
+			if !ok {
+				continue
+			}
+			queueWorkers := queueWorkersRaw.(*QueueWorkers)
+
+			// Check available slots in this queue's workflow pool
+			workerIDs := queueWorkers.Workflows.GetWorkerIDs()
+			availableSlots := len(workerIDs) - queueWorkers.Workflows.ProcessingCount()
 			if availableSlots <= 0 {
 				runtime.Gosched()
 				continue
 			}
 
 			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
-				Where(workflowexecution.StatusEQ(workflowexecution.StatusPending)).
+				Where(
+					workflowexecution.StatusEQ(workflowexecution.StatusPending),
+					workflowexecution.HasWorkflowWith(workflow.QueueNameEQ(queueName)),
+				).
 				Order(ent.Asc(workflowexecution.FieldStartedAt)).
 				WithWorkflow().
 				Limit(availableSlots).
 				All(tp.ctx)
+
 			if err != nil {
 				continue
 			}
-
-			tp.schedulerWorkflowStarted.Store(true)
 
 			if len(pendingWorkflows) == 0 {
 				continue
 			}
 
 			var value any
-			var ok bool
 
 			for _, pendingWorkflowExecution := range pendingWorkflows {
 				tp.logger.Debug(tp.ctx, "Scheduler workflow execution: pending workflow", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
@@ -137,7 +155,7 @@ func (tp *Tempolite) schedulerExecutionWorkflow() {
 
 					tp.logger.Debug(tp.ctx, "Scheduler workflow execution: Dispatching", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
-					if err := tp.workflowPool.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask]()); err != nil {
+					if err := queue.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask]()); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
 						tx, txErr := tp.client.Tx(tp.ctx)
 						if txErr != nil {

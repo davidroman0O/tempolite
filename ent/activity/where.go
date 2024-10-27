@@ -75,6 +75,11 @@ func StepID(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldStepID, v))
 }
 
+// QueueName applies equality check predicate on the "queue_name" field. It's identical to QueueNameEQ.
+func QueueName(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldQueueName, v))
+}
+
 // HandlerName applies equality check predicate on the "handler_name" field. It's identical to HandlerNameEQ.
 func HandlerName(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldHandlerName, v))
@@ -238,6 +243,71 @@ func StatusIn(vs ...Status) predicate.Activity {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.Activity {
 	return predicate.Activity(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// QueueNameEQ applies the EQ predicate on the "queue_name" field.
+func QueueNameEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldQueueName, v))
+}
+
+// QueueNameNEQ applies the NEQ predicate on the "queue_name" field.
+func QueueNameNEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldNEQ(FieldQueueName, v))
+}
+
+// QueueNameIn applies the In predicate on the "queue_name" field.
+func QueueNameIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldIn(FieldQueueName, vs...))
+}
+
+// QueueNameNotIn applies the NotIn predicate on the "queue_name" field.
+func QueueNameNotIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldNotIn(FieldQueueName, vs...))
+}
+
+// QueueNameGT applies the GT predicate on the "queue_name" field.
+func QueueNameGT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGT(FieldQueueName, v))
+}
+
+// QueueNameGTE applies the GTE predicate on the "queue_name" field.
+func QueueNameGTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGTE(FieldQueueName, v))
+}
+
+// QueueNameLT applies the LT predicate on the "queue_name" field.
+func QueueNameLT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLT(FieldQueueName, v))
+}
+
+// QueueNameLTE applies the LTE predicate on the "queue_name" field.
+func QueueNameLTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLTE(FieldQueueName, v))
+}
+
+// QueueNameContains applies the Contains predicate on the "queue_name" field.
+func QueueNameContains(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContains(FieldQueueName, v))
+}
+
+// QueueNameHasPrefix applies the HasPrefix predicate on the "queue_name" field.
+func QueueNameHasPrefix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasPrefix(FieldQueueName, v))
+}
+
+// QueueNameHasSuffix applies the HasSuffix predicate on the "queue_name" field.
+func QueueNameHasSuffix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasSuffix(FieldQueueName, v))
+}
+
+// QueueNameEqualFold applies the EqualFold predicate on the "queue_name" field.
+func QueueNameEqualFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEqualFold(FieldQueueName, v))
+}
+
+// QueueNameContainsFold applies the ContainsFold predicate on the "queue_name" field.
+func QueueNameContainsFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContainsFold(FieldQueueName, v))
 }
 
 // HandlerNameEQ applies the EQ predicate on the "handler_name" field.
