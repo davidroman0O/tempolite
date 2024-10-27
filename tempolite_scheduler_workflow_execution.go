@@ -22,6 +22,8 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 		select {
 		case <-tp.ctx.Done():
 			return
+		case <-done:
+			return
 		default:
 
 			var ok bool
@@ -99,6 +101,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 						workflowType:    workflowEntity.Identity,
 						stepID:          workflowEntity.StepID,
 						handlerIdentity: HandlerIdentity(workflowEntity.Identity),
+						queueName:       queueName,
 					}
 
 					task := &workflowTask{
@@ -108,6 +111,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 						params:      inputs,
 						maxRetry:    workflowEntity.RetryPolicy.MaximumAttempts,
 						retryCount:  0,
+						queueName:   queueName,
 					}
 
 					retryIt := func() error {

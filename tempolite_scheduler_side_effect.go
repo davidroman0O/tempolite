@@ -20,6 +20,8 @@ func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done
 		select {
 		case <-tp.ctx.Done():
 			return
+		case <-done:
+			return
 		default:
 
 			queueWorkersRaw, ok := tp.queues.Load(queueName)

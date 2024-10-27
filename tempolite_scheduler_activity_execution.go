@@ -21,6 +21,8 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 		select {
 		case <-tp.ctx.Done():
 			return
+		case <-done:
+			return
 		default:
 			var ok bool
 
