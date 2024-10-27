@@ -28,14 +28,14 @@ func ProcessTask(ctx tempolite.ActivityContext, data SubWorkflowData) error {
 		data.TaskName, data.ID, count)
 
 	// Simulate some work
-	time.Sleep(5 * time.Second)
+	time.Sleep(time.Second / 4)
 	return nil
 }
 
 // SubWorkflow processes a single task
 func SubWorkflow(ctx tempolite.WorkflowContext, data SubWorkflowData) error {
 	log.Printf("[SubWorkflow] Starting task %s (ID: %d)", data.TaskName, data.ID)
-	<-time.After(1 * time.Second)
+	<-time.After(time.Second / 2)
 	if err := ctx.Activity("process-task", ProcessTask, data).Get(); err != nil {
 		return fmt.Errorf("failed to process task: %w", err)
 	}
@@ -110,7 +110,7 @@ func main() {
 
 	// Start the main workflow on the default queue
 	log.Println("Starting main workflow on default queue")
-	if err := tp.Workflow(MainWorkflow, nil, 5).Get(); err != nil {
+	if err := tp.Workflow(MainWorkflow, tempolite.WorkflowConfig(), 100).Get(); err != nil {
 		log.Fatalf("Main workflow failed: %v", err)
 	}
 

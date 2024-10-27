@@ -159,7 +159,9 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 
 					tp.logger.Debug(tp.ctx, "Scheduler workflow execution: Dispatching", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
-					if err := queue.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask]()); err != nil {
+					whenBeingDispatched := make(chan struct{})
+
+					if err := queue.Dispatch(task, retrypool.WithImmediateRetry[*workflowTask](), retrypool.WithBeingProcessed[*workflowTask](whenBeingDispatched)); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
 						tx, txErr := tp.client.Tx(tp.ctx)
 						if txErr != nil {
@@ -185,6 +187,9 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 						}
 						continue
 					}
+
+					// We wait until the task is REALLY being used by the worker
+					<-whenBeingDispatched
 
 					tx, err := tp.client.Tx(tp.ctx)
 					if err != nil {
