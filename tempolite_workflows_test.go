@@ -281,7 +281,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailChild(t *testing.T) {
 	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", failed, input, msg)
 
-		err := ctx.Workflow("test", anotherWrk).Get()
+		err := ctx.Workflow("test", anotherWrk, nil).Get()
 
 		if err != nil {
 			// fmt.Println("info.Get failed: ", err)
@@ -340,7 +340,7 @@ func TestWorkflowSimpleSubWorkflowInfoGetFailParent(t *testing.T) {
 	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 		// fmt.Println("localWrkflw: ", failed, input, msg)
 
-		err := ctx.Workflow("test", anotherWrk).Get()
+		err := ctx.Workflow("test", anotherWrk, nil).Get()
 		if err != nil {
 			// fmt.Println("info.Get failed: ", err)
 			return -1, err
@@ -756,7 +756,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 		if !once {
 			once = true
 			// fmt.Println("continue as new")
-			return 69, ctx.ContinueAsNew(ctx, "continue-me", input, msg)
+			return 69, ctx.ContinueAsNew(ctx, "continue-me", nil, input, msg)
 		}
 
 		// fmt.Println("done")
