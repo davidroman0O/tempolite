@@ -12,17 +12,12 @@ import (
 	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
-// HandlerCase represents a single case in the handler switch
-type HandlerCase[T any] struct {
-	handler interface{}
-	fn      func(*WorkflowInfo, T)
-}
-
 // HandlerSwitch is a type-safe switch for workflow handlers
 type HandlerSwitch struct {
 	info    *WorkflowInfo
 	cases   []reflect.Value
 	actions []reflect.Value
+	err     error
 }
 
 // Switch creates a new HandlerSwitch for the workflow info
@@ -35,23 +30,23 @@ func (i *WorkflowInfo) Switch() *HandlerSwitch {
 }
 
 // Case adds a handler case to the switch
-func (s *HandlerSwitch) Case(handler interface{}, action interface{}) *HandlerSwitch {
+func (s *HandlerSwitch) Case(handler interface{}, action func() error) *HandlerSwitch {
 	s.cases = append(s.cases, reflect.ValueOf(handler))
 	s.actions = append(s.actions, reflect.ValueOf(action))
 	return s
 }
 
 // Default adds a default case to handle unmatched handlers
-func (s *HandlerSwitch) Default(action func(*WorkflowInfo)) *HandlerSwitch {
+func (s *HandlerSwitch) Default(action func() error) *HandlerSwitch {
 	s.cases = append(s.cases, reflect.Value{})
 	s.actions = append(s.actions, reflect.ValueOf(action))
 	return s
 }
 
-// Execute runs the handler switch and executes the matching case
-func (s *HandlerSwitch) Execute() {
+// End executes the switch and returns any error
+func (s *HandlerSwitch) End() error {
 	if s.info.err != nil {
-		return // Don't execute if workflow info has an error
+		return s.info.err // Don't execute if workflow info has an error
 	}
 
 	handlerValue := reflect.ValueOf(s.info.handler)
@@ -60,11 +55,13 @@ func (s *HandlerSwitch) Execute() {
 	if !handlerValue.IsValid() {
 		for i, caseHandler := range s.cases {
 			if !caseHandler.IsValid() { // Found default case
-				s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
-				return
+				if action := s.actions[i].Interface().(func() error); action != nil {
+					return action()
+				}
+				return nil
 			}
 		}
-		return
+		return fmt.Errorf("no handler found and no default case")
 	}
 
 	// Compare handler with cases
@@ -74,19 +71,25 @@ func (s *HandlerSwitch) Execute() {
 		}
 
 		if handlerValue.Pointer() == caseHandler.Pointer() {
-			// Call the matching action with the workflow info
-			s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
-			return
+			// Call the matching action
+			if action := s.actions[i].Interface().(func() error); action != nil {
+				return action()
+			}
+			return nil
 		}
 	}
 
 	// Try default case if no match found
 	for i, caseHandler := range s.cases {
 		if !caseHandler.IsValid() { // Found default case
-			s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
-			return
+			if action := s.actions[i].Interface().(func() error); action != nil {
+				return action()
+			}
+			return nil
 		}
 	}
+
+	return fmt.Errorf("no matching handler found and no default case")
 }
 
 type WorkflowInfo struct {
