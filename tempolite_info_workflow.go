@@ -16,6 +16,11 @@ type WorkflowInfo struct {
 	tp         *Tempolite
 	WorkflowID WorkflowID
 	err        error
+	handler    interface{}
+}
+
+func (i *WorkflowInfo) Handler() interface{} {
+	return i.handler
 }
 
 // Try to find the latest workflow execution until it reaches a final state

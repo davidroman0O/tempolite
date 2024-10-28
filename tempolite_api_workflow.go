@@ -30,6 +30,17 @@ func (tp *Tempolite) GetWorkflow(id WorkflowID) *WorkflowInfo {
 		tp:         tp,
 		WorkflowID: id,
 	}
+	workflowEntity, err := tp.client.Workflow.Get(tp.ctx, string(id))
+	if err == nil {
+		if value, ok := tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
+			workflowHandlerInfo := value.(Workflow)
+			info.handler = workflowHandlerInfo.Handler
+		} else {
+			info.err = fmt.Errorf("workflow handler not found: %w", err)
+		}
+	} else {
+		info.err = fmt.Errorf("error getting workflow: %w", err)
+	}
 	return &info
 }
 
@@ -39,6 +50,20 @@ func (tp *Tempolite) getWorkflowRoot(id WorkflowID, err error) *WorkflowInfo {
 		tp:         tp,
 		WorkflowID: id,
 		err:        err,
+	}
+	if err != nil {
+		return &info
+	}
+	workflowEntity, err := tp.client.Workflow.Get(tp.ctx, string(id))
+	if err == nil {
+		if value, ok := tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
+			workflowHandlerInfo := value.(Workflow)
+			info.handler = workflowHandlerInfo.Handler
+		} else {
+			info.err = fmt.Errorf("workflow handler not found: %w", err)
+		}
+	} else {
+		info.err = fmt.Errorf("error getting workflow: %w", err)
 	}
 	return &info
 }
