@@ -12,15 +12,88 @@ import (
 	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
+// HandlerCase represents a single case in the handler switch
+type HandlerCase[T any] struct {
+	handler interface{}
+	fn      func(*WorkflowInfo, T)
+}
+
+// HandlerSwitch is a type-safe switch for workflow handlers
+type HandlerSwitch struct {
+	info    *WorkflowInfo
+	cases   []reflect.Value
+	actions []reflect.Value
+}
+
+// Switch creates a new HandlerSwitch for the workflow info
+func (i *WorkflowInfo) Switch() *HandlerSwitch {
+	return &HandlerSwitch{
+		info:    i,
+		cases:   make([]reflect.Value, 0),
+		actions: make([]reflect.Value, 0),
+	}
+}
+
+// Case adds a handler case to the switch
+func (s *HandlerSwitch) Case(handler interface{}, action interface{}) *HandlerSwitch {
+	s.cases = append(s.cases, reflect.ValueOf(handler))
+	s.actions = append(s.actions, reflect.ValueOf(action))
+	return s
+}
+
+// Default adds a default case to handle unmatched handlers
+func (s *HandlerSwitch) Default(action func(*WorkflowInfo)) *HandlerSwitch {
+	s.cases = append(s.cases, reflect.Value{})
+	s.actions = append(s.actions, reflect.ValueOf(action))
+	return s
+}
+
+// Execute runs the handler switch and executes the matching case
+func (s *HandlerSwitch) Execute() {
+	if s.info.err != nil {
+		return // Don't execute if workflow info has an error
+	}
+
+	handlerValue := reflect.ValueOf(s.info.handler)
+
+	// Handle nil handler
+	if !handlerValue.IsValid() {
+		for i, caseHandler := range s.cases {
+			if !caseHandler.IsValid() { // Found default case
+				s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
+				return
+			}
+		}
+		return
+	}
+
+	// Compare handler with cases
+	for i, caseHandler := range s.cases {
+		if !caseHandler.IsValid() { // Skip default case
+			continue
+		}
+
+		if handlerValue.Pointer() == caseHandler.Pointer() {
+			// Call the matching action with the workflow info
+			s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
+			return
+		}
+	}
+
+	// Try default case if no match found
+	for i, caseHandler := range s.cases {
+		if !caseHandler.IsValid() { // Found default case
+			s.actions[i].Call([]reflect.Value{reflect.ValueOf(s.info)})
+			return
+		}
+	}
+}
+
 type WorkflowInfo struct {
 	tp         *Tempolite
 	WorkflowID WorkflowID
 	err        error
 	handler    interface{}
-}
-
-func (i *WorkflowInfo) Handler() interface{} {
-	return i.handler
 }
 
 // Try to find the latest workflow execution until it reaches a final state
