@@ -404,8 +404,27 @@ func (tp *Tempolite) getCompensationPoolQueue(queueName string) (*retrypool.Pool
 	return nil, fmt.Errorf("compensation queue %s not found", queueName)
 }
 
-func (tp *Tempolite) Close() error {
+type closeConfig struct {
+	duration time.Duration
+}
+
+type closeOption func(*closeConfig)
+
+func WithCloseDuration(duration time.Duration) closeOption {
+	return func(cfg *closeConfig) {
+		cfg.duration = duration
+	}
+}
+
+func (tp *Tempolite) Close(opts ...closeOption) error {
 	tp.logger.Debug(tp.ctx, "Starting Tempolite shutdown sequence")
+
+	cfg := closeConfig{
+		duration: 10 * time.Second,
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 
 	// First cancel the context to stop new operations
 	tp.cancel()
@@ -466,7 +485,7 @@ func (tp *Tempolite) Close() error {
 	case <-shutdownDone:
 		tp.logger.Debug(tp.ctx, "Tempolite shutdown completed successfully")
 		return nil
-	case <-time.After(10 * time.Second):
+	case <-time.After(cfg.duration):
 		tp.logger.Error(tp.ctx, "Tempolite shutdown timed out")
 		return fmt.Errorf("shutdown timed out")
 	}
