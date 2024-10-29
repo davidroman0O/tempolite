@@ -23,6 +23,7 @@ func (i *ActivityInfo) Get(output ...interface{}) error {
 		i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get", "activityID", i.ActivityID, "error", i.err)
 		return i.err
 	}
+
 	for idx, out := range output {
 		if reflect.TypeOf(out).Kind() != reflect.Ptr {
 			i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output parameter is not a pointer", "index", idx)

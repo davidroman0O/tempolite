@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,27 +15,36 @@ func TestPauseResume(t *testing.T) {
 
 	slowActivity := func(ctx tempolite.ActivityContext) error {
 		progressCounter.Add(1)
+		fmt.Println("Activity started")
 		time.Sleep(2 * time.Second)
 		return nil
 	}
 
 	workflowFn := func(ctx tempolite.WorkflowContext) error {
 		// Multiple activities to ensure we can pause between them
-		if err := ctx.Activity("step1", slowActivity, nil).Get(); err != nil {
+
+		fmt.Println("Workflow started, step1")
+		info := ctx.Activity("step1", slowActivity, nil)
+		if err := info.Get(); err != nil {
 			return err
 		}
 
-		if err := ctx.Activity("step2", slowActivity, nil).Get(); err != nil {
+		fmt.Println("step2")
+		info = ctx.Activity("step2", slowActivity, nil)
+		if err := info.Get(); err != nil {
 			return err
 		}
 
-		if err := ctx.Activity("step3", slowActivity, nil).Get(); err != nil {
+		fmt.Println("step3")
+		info = ctx.Activity("step3", slowActivity, nil)
+		if err := info.Get(); err != nil {
 			return err
 		}
 
 		return nil
 	}
 
+	// go test -v -count=1 -timeout 30s -run ^TestPauseResume$/^pause_and_resume_workflow$ ./tests
 	t.Run("pause and resume workflow", func(t *testing.T) {
 		cfg := NewTestConfig(t, "pause-resume")
 		cfg.Registry.
@@ -91,6 +101,7 @@ func TestPauseResume(t *testing.T) {
 		}
 	})
 
+	// go test -v -count=1 -timeout 30s -run ^TestPauseResume$/^list_paused_workflows$ ./tests
 	t.Run("list paused workflows", func(t *testing.T) {
 		cfg := NewTestConfig(t, "list-paused")
 		cfg.Registry.

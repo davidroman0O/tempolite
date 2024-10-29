@@ -3,7 +3,9 @@ package tempolite
 import (
 	"fmt"
 
+	"github.com/davidroman0O/tempolite/ent"
 	"github.com/davidroman0O/tempolite/ent/workflow"
+	"github.com/davidroman0O/tempolite/ent/workflowexecution"
 )
 
 type WorkflowContext struct {
@@ -126,6 +128,29 @@ func (w WorkflowContext) setExecutionAsPaused() error {
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "workflowID", w.workflowID, "error", err)
 	}
+
+	// Get latest workflow execution
+	wfExec, err := w.tp.client.WorkflowExecution.Query().
+		Where(workflowexecution.HasWorkflowWith(workflow.ID(w.workflowID))).
+		Order(ent.Desc(workflowexecution.FieldStartedAt)).
+		First(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Error fetching latest workflow execution", "workflowID", w.workflowID, "error", err)
+		return err
+	}
+
+	// Set it to pause too
+	_, err = w.tp.client.WorkflowExecution.UpdateOneID(wfExec.ID).
+		SetStatus(workflowexecution.StatusPaused).
+		Save(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Error pausing latest workflow execution", "workflowID", w.workflowID, "workflowExecutionID", wfExec.ID, "error", err)
+		// if rerr := tx.Rollback(); rerr != nil {
+		// 	w.tp.logger.Error(w.tp.ctx, "Error rolling back transaction", "error", rerr)
+		// }
+		return err
+	}
+
 	return err
 }
 
@@ -148,9 +173,9 @@ func (w WorkflowContext) SideEffect(stepID string, handler interface{}) *SideEff
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &SideEffectInfo{err: uerr}
+			return &SideEffectInfo{tp: w.tp, err: uerr}
 		}
-		return &SideEffectInfo{err: err}
+		return &SideEffectInfo{tp: w.tp, err: err}
 	}
 	id, err := w.tp.enqueueSideEffect(w, stepID, handler)
 	if err != nil {
@@ -164,9 +189,9 @@ func (w WorkflowContext) Activity(stepID string, handler interface{}, options te
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &ActivityInfo{err: uerr}
+			return &ActivityInfo{tp: w.tp, err: uerr}
 		}
-		return &ActivityInfo{err: err}
+		return &ActivityInfo{tp: w.tp, err: err}
 	}
 	// Use parent workflow's queue
 	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, options, inputs...)
@@ -181,9 +206,9 @@ func (w WorkflowContext) Workflow(stepID string, handler interface{}, options te
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-			return &WorkflowInfo{err: uerr}
+			return &WorkflowInfo{tp: w.tp, err: uerr}
 		}
-		return &WorkflowInfo{err: err}
+		return &WorkflowInfo{tp: w.tp, err: err}
 	}
 	// Use parent workflow's queue by default
 	id, err := w.tp.enqueueWorkflow(w, stepID, handler, options, inputs...)
@@ -198,9 +223,9 @@ func (w WorkflowContext) Workflow(stepID string, handler interface{}, options te
 // 	if err := w.checkIfPaused(); err != nil {
 // 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 // 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
-// 			return &WorkflowInfo{err: uerr}
+// 			return &WorkflowInfo{ tp:w.tp, err: uerr}
 // 		}
-// 		return &WorkflowInfo{err: err}
+// 		return &WorkflowInfo{tp: w.tp, err: err}
 // 	}
 // 	// Create new context with specified queue
 // 	queueCtx := w

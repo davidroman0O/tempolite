@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +41,7 @@ func NewTestTempolite(t *testing.T, cfg *TestConfig) *tempolite.Tempolite {
 		cfg.Registry.Build(),
 		tempolite.WithPath(cfg.DBPath),
 		tempolite.WithDestructive(),
-		tempolite.WithDefaultLogLevel(slog.LevelDebug),
+		// tempolite.WithDefaultLogLevel(slog.LevelDebug),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create Tempolite instance: %v", err)

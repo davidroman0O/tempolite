@@ -305,7 +305,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	go tp.schedulerExecutionActivityForQueue(name, done)
 	go tp.schedulerExecutionSideEffectForQueue(name, done)
 	go tp.schedulerExecutionSagaForQueue(name, done)
-	// go tp.schedulerResumeRunningWorkflows(name, done)
+	go tp.schedulerResumeRunningWorkflows(name, done)
 
 	tp.logger.Debug(tp.ctx, "Created queue", "name", name,
 		"workflowWorkers", workflowWorkers,
@@ -403,6 +403,16 @@ func (tp *Tempolite) Close() {
 	tp.logger.Debug(tp.ctx, "Closing Tempolite")
 	tp.cancel() // it will stops other systems
 
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Pause all active workflows before closing
+	// We're not really using Wait, we just trying to pause/"close" successfully all workflows
+	if err := tp.pauseAllWorkflows(ctx); err != nil {
+		tp.logger.Error(tp.ctx, "Error pausing workflows during shutdown", "error", err)
+	}
+
 	tp.queues.Range(func(key, value interface{}) bool {
 		queueName := key.(string)
 		queue := value.(*QueueWorkers)
@@ -414,6 +424,31 @@ func (tp *Tempolite) Close() {
 		queue.Compensations.Close()
 		return true
 	})
+}
+
+func (tp *Tempolite) pauseAllWorkflows(ctx context.Context) error {
+
+	// Get all active workflows
+	activeWorkflows, err := tp.client.Workflow.Query().
+		Where(
+			workflow.StatusEQ(workflow.StatusRunning),
+			workflow.IsPausedEQ(false),
+			workflow.IsReadyEQ(false),
+		).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query active workflows: %w", err)
+	}
+
+	// Pause each workflow
+	for _, wf := range activeWorkflows {
+		if err := tp.PauseWorkflow(WorkflowID(wf.ID)); err != nil {
+			tp.logger.Error(ctx, "Failed to pause workflow during shutdown", "workflowID", wf.ID, "error", err)
+			continue
+		}
+	}
+
+	return nil
 }
 
 func (tp *Tempolite) getWorkerWorkflowID(queue string) (int, error) {
@@ -905,11 +940,14 @@ func (tp *Tempolite) PauseWorkflow(id WorkflowID) error {
 		}
 		return err
 	}
+
 	if err := tx.Commit(); err != nil {
 		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
 		return err
 	}
-	return nil
+
+	// Wait for workflow to reach paused status
+	return tp.waitWorkflowStatus(tp.ctx, id, workflow.StatusPaused)
 }
 
 func (tp *Tempolite) ResumeWorkflow(id WorkflowID) error {
@@ -932,7 +970,9 @@ func (tp *Tempolite) ResumeWorkflow(id WorkflowID) error {
 		tp.logger.Error(tp.ctx, "Error committing transaction", "workflowID", id, "error", err)
 		return err
 	}
-	return nil
+
+	// Wait for workflow to reach running status
+	return tp.waitWorkflowStatus(tp.ctx, id, workflow.StatusRunning)
 }
 
 func (tp *Tempolite) waitWorkflowStatus(ctx context.Context, id WorkflowID, status workflow.Status) error {
