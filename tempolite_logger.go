@@ -29,9 +29,9 @@ type defaultLogger struct {
 	logger *slog.Logger
 }
 
-func NewDefaultLogger() Logger {
+func NewDefaultLogger(level slog.Leveler) Logger {
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		// Level: slog.LevelDebug,
+		Level: level,
 	})
 	l := slog.New(handler)
 	return &defaultLogger{

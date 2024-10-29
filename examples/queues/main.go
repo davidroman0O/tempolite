@@ -36,7 +36,7 @@ func ProcessTask(ctx tempolite.ActivityContext, data SubWorkflowData) error {
 func SubWorkflow(ctx tempolite.WorkflowContext, data SubWorkflowData) error {
 	log.Printf("[SubWorkflow] Starting task %s (ID: %d)", data.TaskName, data.ID)
 	<-time.After(time.Second / 2)
-	if err := ctx.Activity("process-task", ProcessTask, data).Get(); err != nil {
+	if err := ctx.Activity("process-task", ProcessTask, nil, data).Get(); err != nil {
 		return fmt.Errorf("failed to process task: %w", err)
 	}
 
@@ -65,7 +65,7 @@ func MainWorkflow(ctx tempolite.WorkflowContext, numTasks int) error {
 				stepID,
 				SubWorkflow,
 				tempolite.WorkflowConfig(
-					tempolite.WithQueue("specialized-queue"),
+					tempolite.WithWorkflowQueue("specialized-queue"),
 				),
 				taskData))
 	}

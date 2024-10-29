@@ -46,7 +46,7 @@ func (tp *Tempolite) createCompensationPool(queue string, countWorkers int) (*re
 
 func (tp *Tempolite) compensationWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "compensation pool worker panicked", "workerID", workerID, "error", err)
-	tp.logger.Error(tp.ctx, "compensation pool worker panicked", "stackTrace", stackTrace)
+	tp.logger.Error(tp.ctx, "compensation pool worker panicked", "err", err, "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite) compensationOnSuccess(controller retrypool.WorkerController[*compensationTask], workerID int, worker retrypool.Worker[*compensationTask], task *retrypool.TaskWrapper[*compensationTask]) {

@@ -41,7 +41,7 @@ func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecu
 	return &info
 }
 
-func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longName HandlerIdentity, params ...interface{}) (ActivityID, error) {
+func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longName HandlerIdentity, options tempoliteActivityOptions, params ...interface{}) (ActivityID, error) {
 
 	tp.logger.Debug(tp.ctx, "EnqueueActivity", "stepID", stepID, "longName", longName)
 	switch ctx.EntityType() {
@@ -116,6 +116,29 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			return "", err
 		}
 
+		retryPolicyConfig := schema.RetryPolicy{
+			MaximumAttempts: 1,
+		}
+
+		if options != nil {
+			config := tempoliteActivityConfig{}
+			for _, opt := range options {
+				opt(&config)
+			}
+			if config.retryMaximumAttempts >= 0 {
+				retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
+			}
+			if config.retryInitialInterval >= 0 {
+				retryPolicyConfig.InitialInterval = config.retryInitialInterval
+			}
+			if config.retryBackoffCoefficient >= 0 {
+				retryPolicyConfig.BackoffCoefficient = config.retryBackoffCoefficient
+			}
+			if config.maximumInterval >= 0 {
+				retryPolicyConfig.MaximumInterval = config.maximumInterval
+			}
+		}
+
 		tp.logger.Debug(tp.ctx, "Creating activity entity", "longName", longName, "stepID", stepID)
 		var activityEntity *ent.Activity
 		if activityEntity, err = tx.
@@ -127,9 +150,7 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(serializableParams).
 			SetQueueName(ctx.QueueName()).
-			SetRetryPolicy(schema.RetryPolicy{
-				MaximumAttempts: 1,
-			}).
+			SetRetryPolicy(retryPolicyConfig).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating activity entity", "error", err)
@@ -197,9 +218,9 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 	}
 }
 
-func (tp *Tempolite) enqueueActivityFunc(ctx WorkflowContext, stepID string, activityFunc interface{}, params ...interface{}) (ActivityID, error) {
+func (tp *Tempolite) enqueueActivityFunc(ctx WorkflowContext, stepID string, activityFunc interface{}, options tempoliteActivityOptions, params ...interface{}) (ActivityID, error) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
 	handlerIdentity := HandlerIdentity(funcName)
 	tp.logger.Debug(tp.ctx, "Enqueue ActivityFunc", "stepID", stepID, "handlerIdentity", handlerIdentity)
-	return tp.enqueueActivity(ctx, stepID, handlerIdentity, params...)
+	return tp.enqueueActivity(ctx, stepID, handlerIdentity, options, params...)
 }

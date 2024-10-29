@@ -88,7 +88,7 @@ func TestWorkflowActivitySimple(t *testing.T) {
 
 		var number int
 		var str string
-		err := ctx.Activity("test", workerActivity.Run, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		err := ctx.Activity("test", workerActivity.Run, nil, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
 		if err != nil {
 			return err
 		}
@@ -158,7 +158,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 		// fmt.Println("localWrkflw: ", input, msg)
 
 		var subnumber int
-		if err := ctx.Activity("first", activtfn, 420).Get(&subnumber); err != nil {
+		if err := ctx.Activity("first", activtfn, nil, 420).Get(&subnumber); err != nil {
 			return err
 		}
 
@@ -166,7 +166,7 @@ func TestWorkflowActivityMore(t *testing.T) {
 
 		var number int
 		var str string
-		err := ctx.Activity("second", workerActivity.Run, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
+		err := ctx.Activity("second", workerActivity.Run, nil, testMessageActivitySimple{Message: "hello"}).Get(&number, &str)
 		if err != nil {
 			return err
 		}
@@ -469,7 +469,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 		log.Println("pausing1")
 
-		if err := ctx.Activity("pause1", activityWork).Get(); err != nil {
+		if err := ctx.Activity("pause1", activityWork, nil).Get(); err != nil {
 			return -1, err
 		}
 
@@ -480,7 +480,7 @@ func TestWorkflowSimplePauseResume(t *testing.T) {
 
 		log.Println("pausing2")
 
-		if err := ctx.Activity("pause2", activityWork).Get(); err != nil {
+		if err := ctx.Activity("pause2", activityWork, nil).Get(); err != nil {
 			return -1, err
 		}
 
@@ -682,11 +682,11 @@ func TestWorkflowSimpleCancel(t *testing.T) {
 
 	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
-		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("test", activtyLocal, nil).Get(); err != nil {
 			return -1, err
 		}
 		<-time.After(time.Second * 5)
-		if err := ctx.Activity("second time", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("second time", activtyLocal, nil).Get(); err != nil {
 			return -1, err
 		}
 
@@ -749,7 +749,7 @@ func TestWorkflowSimpleContinueAsNew(t *testing.T) {
 
 	localWrkflw := func(ctx WorkflowContext, input int, msg workflowData) (int, error) {
 
-		if err := ctx.Activity("test", activtyLocal).Get(); err != nil {
+		if err := ctx.Activity("test", activtyLocal, nil).Get(); err != nil {
 			return -1, err
 		}
 

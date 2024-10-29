@@ -16,7 +16,7 @@ func SimpleWorkflow(ctx tempolite.WorkflowContext, input string) (string, error)
 	var result string
 	// Inspired by how Ansible can name their steps, you use the stepID to identify the step
 	// It becomes pretty useful when you have tons of activities in your workflow you quickly know what is doing what
-	err := ctx.Activity("simple-activity", SimpleActivity, input).Get(&result)
+	err := ctx.Activity("simple-activity", SimpleActivity, nil, input).Get(&result)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +44,7 @@ func main() {
 	// Execute the workflow with retry options
 	var output string
 	err = tp.Workflow(SimpleWorkflow, tempolite.WorkflowConfig(
-		tempolite.WithRetryMaximumAttempts(3),
+		tempolite.WithWorkflowRetryMaximumAttempts(3),
 	), "Hello, Tempolite!").Get(&output)
 	if err != nil {
 		log.Fatalf("Workflow execution failed: %v", err)

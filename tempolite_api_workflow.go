@@ -144,16 +144,16 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 		if config.queueName != "" {
 			queueName = config.queueName
 		}
-		if config.retryMaximumAttempts > 0 {
+		if config.retryMaximumAttempts >= 0 {
 			retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
 		}
-		if config.retryInitialInterval > 0 {
+		if config.retryInitialInterval >= 0 {
 			retryPolicyConfig.InitialInterval = config.retryInitialInterval
 		}
-		if config.retryBackoffCoefficient > 0 {
+		if config.retryBackoffCoefficient >= 0 {
 			retryPolicyConfig.BackoffCoefficient = config.retryBackoffCoefficient
 		}
-		if config.maximumInterval > 0 {
+		if config.maximumInterval >= 0 {
 			retryPolicyConfig.MaximumInterval = config.maximumInterval
 		}
 	}
@@ -353,16 +353,16 @@ func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempolite
 			if config.queueName != "" {
 				queueName = config.queueName
 			}
-			if config.retryMaximumAttempts > 0 {
+			if config.retryMaximumAttempts >= 0 {
 				retryPolicyConfig.MaximumAttempts = config.retryMaximumAttempts
 			}
-			if config.retryInitialInterval > 0 {
+			if config.retryInitialInterval >= 0 {
 				retryPolicyConfig.InitialInterval = config.retryInitialInterval
 			}
-			if config.retryBackoffCoefficient > 0 {
+			if config.retryBackoffCoefficient >= 0 {
 				retryPolicyConfig.BackoffCoefficient = config.retryBackoffCoefficient
 			}
-			if config.maximumInterval > 0 {
+			if config.maximumInterval >= 0 {
 				retryPolicyConfig.MaximumInterval = config.maximumInterval
 			}
 		}

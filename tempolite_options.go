@@ -1,6 +1,9 @@
 package tempolite
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 // Queue configuration at startup
 type queueConfig struct {
@@ -72,9 +75,17 @@ type tempoliteConfig struct {
 
 	// Additional queues
 	queues []queueConfig
+
+	defaultLogLevel slog.Leveler
 }
 
 type tempoliteOption func(*tempoliteConfig)
+
+func WithDefaultLogLevel(level slog.Leveler) tempoliteOption {
+	return func(c *tempoliteConfig) {
+		c.defaultLogLevel = level
+	}
+}
 
 func WithQueueConfig(queue queueConfig) tempoliteOption {
 	return func(c *tempoliteConfig) {
@@ -147,13 +158,13 @@ func WorkflowConfig(opts ...tempoliteWorkflowOption) tempoliteWorkflowOptions {
 
 type tempoliteWorkflowOption func(*tempoliteWorkflowConfig)
 
-func WithQueue(queueName string) tempoliteWorkflowOption {
+func WithWorkflowQueue(queueName string) tempoliteWorkflowOption {
 	return func(c *tempoliteWorkflowConfig) {
 		c.queueName = queueName
 	}
 }
 
-func WithRetryMaximumAttempts(max int) tempoliteWorkflowOption {
+func WithWorkflowRetryMaximumAttempts(max int) tempoliteWorkflowOption {
 	return func(c *tempoliteWorkflowConfig) {
 		c.retryMaximumAttempts = max
 	}
@@ -179,3 +190,31 @@ func WithRetryMaximumAttempts(max int) tempoliteWorkflowOption {
 // 		c.maximumInterval = max
 // 	}
 // }
+
+type tempoliteActivityConfig struct {
+	retryMaximumAttempts    int
+	retryInitialInterval    time.Duration
+	retryBackoffCoefficient float64
+	maximumInterval         time.Duration
+	queueName               string
+}
+
+type tempoliteActivityOptions []tempoliteActivityOption
+
+func ActivityConfig(opts ...tempoliteActivityOption) tempoliteActivityOptions {
+	return opts
+}
+
+type tempoliteActivityOption func(*tempoliteActivityConfig)
+
+func WithActivityQueue(queueName string) tempoliteActivityOption {
+	return func(c *tempoliteActivityConfig) {
+		c.queueName = queueName
+	}
+}
+
+func WithActivityRetryMaximumAttempts(max int) tempoliteActivityOption {
+	return func(c *tempoliteActivityConfig) {
+		c.retryMaximumAttempts = max
+	}
+}

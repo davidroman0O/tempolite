@@ -139,8 +139,6 @@ func (tp *Tempolite) registerWorkflow(workflowFunc interface{}) error {
 		NumOut:          numOut - 1,              // Exclude error
 	}
 
-	log.Printf("Registering workflow %s with name %s", funcName, handlerIdentity)
-
 	tp.workflows.Store(workflow.HandlerLongName, *workflow)
 	return nil
 }

@@ -52,7 +52,7 @@ func (tp *Tempolite) createActivityPool(queue string, countWorkers int) (*retryp
 
 func (tp *Tempolite) activityWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "activity pool worker panicked", "workerID", workerID, "error", err)
-	tp.logger.Error(tp.ctx, "activity pool worker panicked", "stackTrace", stackTrace)
+	tp.logger.Error(tp.ctx, "activity pool worker panicked", "err", err, "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite) activityOnPanic(task *activityTask, v interface{}, stackTrace string) {

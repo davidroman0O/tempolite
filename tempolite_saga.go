@@ -83,25 +83,58 @@ func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 
 	for i, step := range b.steps {
 		stepType := reflect.TypeOf(step)
-		if stepType.Kind() == reflect.Ptr {
+		originalType := stepType // Keep original type for handler name
+		isPtr := stepType.Kind() == reflect.Ptr
+
+		// Get the base type for method lookup
+		if isPtr {
 			stepType = stepType.Elem()
 		}
 
-		transactionMethod, ok := stepType.MethodByName("Transaction")
-		if !ok {
+		// Try to find methods on both pointer and value receivers
+		var transactionMethod, compensationMethod reflect.Method
+		var transactionOk, compensationOk bool
+
+		// First try the original type (whether pointer or value)
+		if transactionMethod, transactionOk = originalType.MethodByName("Transaction"); !transactionOk {
+			// If not found and original wasn't a pointer, try pointer
+			if !isPtr {
+				if ptrMethod, ok := reflect.PtrTo(stepType).MethodByName("Transaction"); ok {
+					transactionMethod = ptrMethod
+					transactionOk = true
+				}
+			}
+		}
+
+		if compensationMethod, compensationOk = originalType.MethodByName("Compensation"); !compensationOk {
+			// If not found and original wasn't a pointer, try pointer
+			if !isPtr {
+				if ptrMethod, ok := reflect.PtrTo(stepType).MethodByName("Compensation"); ok {
+					compensationMethod = ptrMethod
+					compensationOk = true
+				}
+			}
+		}
+
+		if !transactionOk {
 			return nil, fmt.Errorf("Transaction method not found for step %d", i)
 		}
-		compensationMethod, ok := stepType.MethodByName("Compensation")
-		if !ok {
+		if !compensationOk {
 			return nil, fmt.Errorf("Compensation method not found for step %d", i)
 		}
 
-		transactionInfo, err := analyzeMethod(transactionMethod, stepType.Name())
+		// Use the actual type name for the handler
+		typeName := stepType.Name()
+		if isPtr {
+			typeName = "*" + typeName
+		}
+
+		transactionInfo, err := analyzeMethod(transactionMethod, typeName)
 		if err != nil {
 			return nil, fmt.Errorf("error analyzing Transaction method for step %d: %w", i, err)
 		}
 
-		compensationInfo, err := analyzeMethod(compensationMethod, stepType.Name())
+		compensationInfo, err := analyzeMethod(compensationMethod, typeName)
 		if err != nil {
 			return nil, fmt.Errorf("error analyzing Compensation method for step %d: %w", i, err)
 		}

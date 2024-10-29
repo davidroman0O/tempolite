@@ -19,7 +19,7 @@ func CoffeeShopWorkflow(ctx tempolite.WorkflowContext, order CustomerOrder) erro
 	log.Printf("Received order: %+v", order)
 
 	// Prepare the drink
-	if err := ctx.Activity("prepare-drink", PrepareDrink, order).Get(); err != nil {
+	if err := ctx.Activity("prepare-drink", PrepareDrink, nil, order).Get(); err != nil {
 		return fmt.Errorf("failed to prepare drink: %w", err)
 	}
 

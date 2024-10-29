@@ -46,7 +46,7 @@ func (tp *Tempolite) createSideEffectPool(queue string, countWorkers int) (*retr
 
 func (tp *Tempolite) sideEffectWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "sideEffect pool worker panicked", "workerID", workerID, "error", err)
-	tp.logger.Error(tp.ctx, "sideEffect pool worker panicked", "stackTrace", stackTrace)
+	tp.logger.Error(tp.ctx, "sideEffect pool worker panicked", "err", err, "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite) sideEffectOnPanic(task *sideEffectTask, v interface{}, stackTrace string) {

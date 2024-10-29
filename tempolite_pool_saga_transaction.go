@@ -47,7 +47,7 @@ func (tp *Tempolite) createTransactionPool(queue string, countWorkers int) (*ret
 
 func (tp *Tempolite) transactionWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "transaction pool worker panicked", "workerID", workerID, "error", err)
-	tp.logger.Error(tp.ctx, "transaction pool worker panicked", "stackTrace", stackTrace)
+	tp.logger.Error(tp.ctx, "transaction pool worker panicked", "err", err, "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite) transactionOnSuccess(controller retrypool.WorkerController[*transactionTask], workerID int, worker retrypool.Worker[*transactionTask], task *retrypool.TaskWrapper[*transactionTask]) {

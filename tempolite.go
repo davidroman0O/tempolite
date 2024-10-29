@@ -86,7 +86,7 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 	}
 
 	if cfg.logger == nil {
-		cfg.logger = NewDefaultLogger()
+		cfg.logger = NewDefaultLogger(cfg.defaultLogLevel)
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -196,7 +196,7 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 	}
 
 	tp.logger.Debug(ctx, "Starting resume workflows worker")
-	go tp.resumeWorkflowsWorker()
+	// go tp.resumeWorkflowsWorker()
 
 	return tp, nil
 }
@@ -305,6 +305,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	go tp.schedulerExecutionActivityForQueue(name, done)
 	go tp.schedulerExecutionSideEffectForQueue(name, done)
 	go tp.schedulerExecutionSagaForQueue(name, done)
+	// go tp.schedulerResumeRunningWorkflows(name, done)
 
 	tp.logger.Debug(tp.ctx, "Created queue", "name", name,
 		"workflowWorkers", workflowWorkers,
@@ -312,8 +313,6 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 		"sideEffectWorkers", sideEffectWorkers,
 		"transactionWorkers", transactionWorkers,
 		"compensationWorkers", compensationWorkers)
-
-	fmt.Println("queue created")
 
 	return nil
 }
@@ -711,11 +710,18 @@ func (tp *Tempolite) Wait() error {
 	newWaiters := make(chan []waitItem)
 
 	go func() {
-		waiters := []waitItem{}
+
 		ticker := time.NewTicker(time.Second)
 		for {
 			select {
+			case _, ok := <-newWaiters:
+				if !ok {
+					ticker.Stop()
+					// closed
+					return
+				}
 			case <-ticker.C:
+				waiters := []waitItem{}
 				tp.queues.Range(func(key, value interface{}) bool {
 					queueName := key.(string)
 					queue := value.(*QueueWorkers)
@@ -766,10 +772,10 @@ func (tp *Tempolite) Wait() error {
 				}
 				if allZero {
 					finished = true
+					close(newWaiters)
 				}
 			}
 		}
-		close(newWaiters) // we are done
 	}()
 
 	return nil

@@ -160,7 +160,7 @@ func (w WorkflowContext) SideEffect(stepID string, handler interface{}) *SideEff
 }
 
 // Original Activity with queue inheritance
-func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...any) *ActivityInfo {
+func (w WorkflowContext) Activity(stepID string, handler interface{}, options tempoliteActivityOptions, inputs ...any) *ActivityInfo {
 	if err := w.checkIfPaused(); err != nil {
 		if uerr := w.setExecutionAsPaused(); uerr != nil {
 			w.tp.logger.Error(w.tp.ctx, "Error setting workflow as paused", "error", uerr)
@@ -169,7 +169,7 @@ func (w WorkflowContext) Activity(stepID string, handler interface{}, inputs ...
 		return &ActivityInfo{err: err}
 	}
 	// Use parent workflow's queue
-	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, inputs...)
+	id, err := w.tp.enqueueActivityFunc(w, stepID, handler, options, inputs...)
 	if err != nil {
 		w.tp.logger.Error(w.tp.ctx, "Error enqueuing activity function", "error", err)
 	}

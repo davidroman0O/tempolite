@@ -85,7 +85,7 @@ func OrderProcessingWorkflow(ctx tempolite.WorkflowContext, order Order) error {
 	// Check inventory using struct-based activity
 	var inStock bool
 	inventoryChecker := InventoryChecker{}
-	if err := ctx.Activity("check-inventory", inventoryChecker.Run, order.Items).Get(&inStock); err != nil {
+	if err := ctx.Activity("check-inventory", inventoryChecker.Run, nil, order.Items).Get(&inStock); err != nil {
 		return fmt.Errorf("inventory check failed: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func OrderProcessingWorkflow(ctx tempolite.WorkflowContext, order Order) error {
 	}
 
 	// Process payment using function-based activity
-	if err := ctx.Activity("process-payment", ProcessPayment, order.ID, order.Total).Get(); err != nil {
+	if err := ctx.Activity("process-payment", ProcessPayment, nil, order.ID, order.Total).Get(); err != nil {
 		return fmt.Errorf("payment processing failed: %w", err)
 	}
 

@@ -19,7 +19,7 @@ func (s StorageActivity) Run(ctx tempolite.ActivityContext, iteration int) (int,
 
 func simpleWorkflow(ctx tempolite.WorkflowContext, iteration int) (int, error) {
 	var result int
-	if err := ctx.Activity("process", storage.Run, iteration).Get(&result); err != nil {
+	if err := ctx.Activity("process", storage.Run, nil, iteration).Get(&result); err != nil {
 		return 0, err
 	}
 	return result, nil // This will be stored in workflow execution output

@@ -23,7 +23,7 @@ type YtDl struct {
 
 func Workflow(ctx tempolite.WorkflowContext, task YtDl) error {
 	defer fmt.Printf("Download completed: %s\n", task.Url)
-	return ctx.Activity("ytdl", Download, task).Get()
+	return ctx.Activity("ytdl", Download, nil, task).Get()
 }
 
 func Download(ctx tempolite.ActivityContext, task YtDl) error {

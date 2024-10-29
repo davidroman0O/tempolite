@@ -22,7 +22,7 @@ func ProcessNumberActivity(ctx tempolite.ActivityContext, num int) (string, erro
 
 func ComplexWorkflow(ctx tempolite.WorkflowContext, maxNumber int) (string, error) {
 	var randomNumber int
-	err := ctx.Activity("random-number", RandomNumberActivity, maxNumber).Get(&randomNumber)
+	err := ctx.Activity("random-number", RandomNumberActivity, nil, maxNumber).Get(&randomNumber)
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +40,7 @@ func ComplexWorkflow(ctx tempolite.WorkflowContext, maxNumber int) (string, erro
 	}
 
 	var result string
-	err = ctx.Activity("process-number", ProcessNumberActivity, randomNumber).Get(&result)
+	err = ctx.Activity("process-number", ProcessNumberActivity, nil, randomNumber).Get(&result)
 	if err != nil {
 		return "", err
 	}

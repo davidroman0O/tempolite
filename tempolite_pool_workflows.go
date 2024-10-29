@@ -53,7 +53,9 @@ func (tp *Tempolite) createWorkflowPool(queue string, countWorkers int) (*retryp
 
 func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
 	tp.logger.Debug(tp.ctx, "workflow pool worker panicked", "workerID", workerID, "error", err)
-	tp.logger.Error(tp.ctx, "workflow pool worker panicked", "stackTrace", stackTrace)
+	tp.logger.Error(tp.ctx, "workflow pool worker panicked", "err", err, "stackTrace", stackTrace)
+	fmt.Println(err)
+	fmt.Println(stackTrace)
 }
 
 func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {

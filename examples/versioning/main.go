@@ -29,14 +29,14 @@ func OrderWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
 	if codeAfterUpdateOneRuntime.Load() { // on purpose to create non-deterministic behavior
 		version := ctx.GetVersion(ChangeIDCalculateTax, tempolite.DefaultVersion, 1)
 		if version == tempolite.DefaultVersion {
-			err = ctx.Activity("taxes", ActivityComputeTaxes, orderID).Get(&total)
+			err = ctx.Activity("taxes", ActivityComputeTaxes, nil, orderID).Get(&total)
 			fmt.Println("Using original logic after update: total without tax.")
 		} else {
-			err = ctx.Activity("taxes", ActivityComputeTotalWithTax, orderID, total).Get(&total)
+			err = ctx.Activity("taxes", ActivityComputeTotalWithTax, nil, orderID, total).Get(&total)
 			fmt.Println("Using new logic: total with tax.")
 		}
 	} else {
-		err = ctx.Activity("taxes", ActivityComputeTaxes, orderID).Get(&total)
+		err = ctx.Activity("taxes", ActivityComputeTaxes, nil, orderID).Get(&total)
 		fmt.Println("Using original logic before update: total without tax.")
 	}
 

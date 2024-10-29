@@ -93,10 +93,31 @@ func (s *HandlerSwitch) End() error {
 }
 
 type WorkflowInfo struct {
-	tp         *Tempolite
-	WorkflowID WorkflowID
-	err        error
-	handler    interface{}
+	tp          *Tempolite
+	WorkflowID  WorkflowID
+	err         error
+	handler     interface{}
+	IsContinued bool
+}
+
+func (i *WorkflowInfo) GetContinuation() *WorkflowInfo {
+	workflowEntity, err := i.tp.client.Workflow.Get(i.tp.ctx, i.WorkflowID.String())
+	if err != nil {
+		return &WorkflowInfo{tp: i.tp, err: err}
+	}
+
+	nextWorkflow, err := i.tp.client.Workflow.Query().
+		Where(workflow.ContinuedFromIDEQ(workflowEntity.ID)).
+		First(i.tp.ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return &WorkflowInfo{tp: i.tp, err: err}
+		}
+		return &WorkflowInfo{tp: i.tp, err: err}
+	}
+
+	info := i.tp.getWorkflow(nil, WorkflowID(nextWorkflow.ID), nil)
+	return info
 }
 
 // Try to find the latest workflow execution until it reaches a final state
@@ -129,6 +150,15 @@ func (i *WorkflowInfo) Get(output ...interface{}) error {
 			if err != nil {
 				return err
 			}
+
+			// Check for continuation
+			_, err = i.tp.client.Workflow.Query().
+				Where(workflow.ContinuedFromIDEQ(workflowEntity.ID)).
+				First(i.tp.ctx)
+			if err == nil {
+				i.IsContinued = true
+			}
+
 			if value, ok = i.tp.workflows.Load(HandlerIdentity(workflowEntity.Identity)); ok {
 				if workflowHandlerInfo, ok = value.(Workflow); !ok {
 					i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: workflow is not handler info", "workflowID", i.WorkflowID)
@@ -154,7 +184,6 @@ func (i *WorkflowInfo) Get(output ...interface{}) error {
 						}
 
 						deserializedOutput, err := i.tp.convertOutputsFromSerialization(HandlerInfo(workflowHandlerInfo), latestExec.Output)
-						// outputs, err := i.tp.convertOutputs(HandlerInfo(workflowHandlerInfo), latestExec.Output)
 						if err != nil {
 							i.tp.logger.Error(i.tp.ctx, "WorkflowInfo.Get: failed to convert outputs", "error", err)
 							return err

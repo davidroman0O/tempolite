@@ -55,7 +55,7 @@ func complexWorkflow(ctx tempolite.WorkflowContext) (string, error) {
 
 	// Activity
 	var activityResult int
-	err = ctx.Activity("calculate", activityStruct.Run, result, 10).Get(&activityResult)
+	err = ctx.Activity("calculate", activityStruct.Run, nil, result, 10).Get(&activityResult)
 	if err != nil {
 		return "", fmt.Errorf("activity failed: %w", err)
 	}

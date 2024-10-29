@@ -1,7 +1,6 @@
 package tempolite
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/davidroman0O/tempolite/ent"
@@ -157,7 +156,7 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 						if i < len(sagaDef.Steps)-1 {
 							nextIndex := i + 1
 							transactionTasks[i].next = func() error {
-								log.Printf("scheduler: Dispatching next transaction task: %s", transactionTasks[nextIndex].handlerName)
+								tp.logger.Debug(tp.ctx, "scheduler: Dispatching next transaction task", "handlerName", transactionTasks[nextIndex].handlerName)
 								tx, err := tp.client.Tx(tp.ctx)
 								if err != nil {
 									tp.logger.Error(tp.ctx, "Failed to start transaction for next transaction task", "error", err)

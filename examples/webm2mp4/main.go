@@ -32,24 +32,24 @@ func Workflow(ctx tempolite.WorkflowContext, task Webm2Mp4) error {
 	var intputFile string
 
 	if isUrl {
-		if err := ctx.Activity("downloadFile", DownloadFile, task).Get(&intputFile); err != nil {
+		if err := ctx.Activity("downloadFile", DownloadFile, nil, task).Get(&intputFile); err != nil {
 			return err
 		}
 	} else {
-		if err := ctx.Activity("checkDiskInputFile", CheckDiskInputFile, task).Get(&intputFile); err != nil {
+		if err := ctx.Activity("checkDiskInputFile", CheckDiskInputFile, nil, task).Get(&intputFile); err != nil {
 			return err
 		}
 	}
 
 	task.InputFile = intputFile
 
-	if err := ctx.Activity("checkDiskOutputFile", CheckDiskOutputFile, task).Get(); err != nil {
+	if err := ctx.Activity("checkDiskOutputFile", CheckDiskOutputFile, nil, task).Get(); err != nil {
 		return err
 	}
 
 	defer fmt.Printf("Conversion completed: %s -> %s\n", task.InputFile, task.OutputFile)
 
-	return ctx.Activity("transcoding", Transcoding, task).Get()
+	return ctx.Activity("transcoding", Transcoding, nil, task).Get()
 }
 
 func DownloadFile(ctx tempolite.ActivityContext, task Webm2Mp4) (string, error) {
