@@ -11,6 +11,7 @@ func (tp *Tempolite) resumeRunningWorkflows(queue string) error {
 			workflow.StatusEQ(workflow.StatusRunning),
 			workflow.IsPausedEQ(false),
 			workflow.IsReadyEQ(false),
+			workflow.QueueName(queue),
 		)).
 		All(tp.ctx)
 	if err != nil {
