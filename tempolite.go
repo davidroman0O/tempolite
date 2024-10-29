@@ -401,7 +401,6 @@ func (tp *Tempolite) getCompensationPoolQueue(queueName string) (*retrypool.Pool
 
 func (tp *Tempolite) Close() {
 	tp.logger.Debug(tp.ctx, "Closing Tempolite")
-	tp.cancel() // it will stops other systems
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -412,6 +411,8 @@ func (tp *Tempolite) Close() {
 	if err := tp.pauseAllWorkflows(ctx); err != nil {
 		tp.logger.Error(tp.ctx, "Error pausing workflows during shutdown", "error", err)
 	}
+
+	tp.cancel() // it will stops other systems
 
 	tp.queues.Range(func(key, value interface{}) bool {
 		queueName := key.(string)
