@@ -84,6 +84,12 @@ func (i *ActivityInfo) Get(output ...interface{}) error {
 							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: failed to convert outputs", "error", err)
 							return err
 						}
+
+						// Developer doesn't want to get the result
+						if len(output) == 0 {
+							return nil
+						}
+
 						if len(output) != len(deserializedOutput) {
 							i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get: output length mismatch", "expected", len(deserializedOutput), "got", len(output))
 							return fmt.Errorf("output length mismatch: expected %d, got %d", len(deserializedOutput), len(output))
