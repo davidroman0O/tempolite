@@ -95,9 +95,9 @@ func IsReady(v bool) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldIsReady, v))
 }
 
-// Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
-func Timeout(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldEQ(FieldTimeout, v))
+// MaxDuration applies equality check predicate on the "max_duration" field. It's identical to MaxDurationEQ.
+func MaxDuration(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldMaxDuration, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -425,54 +425,79 @@ func IsReadyNEQ(v bool) predicate.Workflow {
 	return predicate.Workflow(sql.FieldNEQ(FieldIsReady, v))
 }
 
-// TimeoutEQ applies the EQ predicate on the "timeout" field.
-func TimeoutEQ(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldEQ(FieldTimeout, v))
+// MaxDurationEQ applies the EQ predicate on the "max_duration" field.
+func MaxDurationEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldMaxDuration, v))
 }
 
-// TimeoutNEQ applies the NEQ predicate on the "timeout" field.
-func TimeoutNEQ(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldNEQ(FieldTimeout, v))
+// MaxDurationNEQ applies the NEQ predicate on the "max_duration" field.
+func MaxDurationNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldMaxDuration, v))
 }
 
-// TimeoutIn applies the In predicate on the "timeout" field.
-func TimeoutIn(vs ...time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldIn(FieldTimeout, vs...))
+// MaxDurationIn applies the In predicate on the "max_duration" field.
+func MaxDurationIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldMaxDuration, vs...))
 }
 
-// TimeoutNotIn applies the NotIn predicate on the "timeout" field.
-func TimeoutNotIn(vs ...time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldNotIn(FieldTimeout, vs...))
+// MaxDurationNotIn applies the NotIn predicate on the "max_duration" field.
+func MaxDurationNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldMaxDuration, vs...))
 }
 
-// TimeoutGT applies the GT predicate on the "timeout" field.
-func TimeoutGT(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldGT(FieldTimeout, v))
+// MaxDurationGT applies the GT predicate on the "max_duration" field.
+func MaxDurationGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldMaxDuration, v))
 }
 
-// TimeoutGTE applies the GTE predicate on the "timeout" field.
-func TimeoutGTE(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldGTE(FieldTimeout, v))
+// MaxDurationGTE applies the GTE predicate on the "max_duration" field.
+func MaxDurationGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldMaxDuration, v))
 }
 
-// TimeoutLT applies the LT predicate on the "timeout" field.
-func TimeoutLT(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldLT(FieldTimeout, v))
+// MaxDurationLT applies the LT predicate on the "max_duration" field.
+func MaxDurationLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldMaxDuration, v))
 }
 
-// TimeoutLTE applies the LTE predicate on the "timeout" field.
-func TimeoutLTE(v time.Time) predicate.Workflow {
-	return predicate.Workflow(sql.FieldLTE(FieldTimeout, v))
+// MaxDurationLTE applies the LTE predicate on the "max_duration" field.
+func MaxDurationLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldMaxDuration, v))
 }
 
-// TimeoutIsNil applies the IsNil predicate on the "timeout" field.
-func TimeoutIsNil() predicate.Workflow {
-	return predicate.Workflow(sql.FieldIsNull(FieldTimeout))
+// MaxDurationContains applies the Contains predicate on the "max_duration" field.
+func MaxDurationContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldMaxDuration, v))
 }
 
-// TimeoutNotNil applies the NotNil predicate on the "timeout" field.
-func TimeoutNotNil() predicate.Workflow {
-	return predicate.Workflow(sql.FieldNotNull(FieldTimeout))
+// MaxDurationHasPrefix applies the HasPrefix predicate on the "max_duration" field.
+func MaxDurationHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldMaxDuration, v))
+}
+
+// MaxDurationHasSuffix applies the HasSuffix predicate on the "max_duration" field.
+func MaxDurationHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldMaxDuration, v))
+}
+
+// MaxDurationIsNil applies the IsNil predicate on the "max_duration" field.
+func MaxDurationIsNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldIsNull(FieldMaxDuration))
+}
+
+// MaxDurationNotNil applies the NotNil predicate on the "max_duration" field.
+func MaxDurationNotNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotNull(FieldMaxDuration))
+}
+
+// MaxDurationEqualFold applies the EqualFold predicate on the "max_duration" field.
+func MaxDurationEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldMaxDuration, v))
+}
+
+// MaxDurationContainsFold applies the ContainsFold predicate on the "max_duration" field.
+func MaxDurationContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldMaxDuration, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

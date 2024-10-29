@@ -2,7 +2,9 @@ package tempolite
 
 import (
 	"runtime"
+	"time"
 
+	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/tempolite/ent"
 	"github.com/davidroman0O/tempolite/ent/activity"
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
@@ -154,7 +156,23 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 
 					tp.logger.Debug(tp.ctx, "scheduler: Dispatching activity", "activity", activityEntity.HandlerName, "params", activityEntity.Input)
 
-					if err := queue.Dispatch(task); err != nil {
+					whenBeingDispatched := retrypool.NewProcessedNotification()
+
+					opts := []retrypool.TaskOption[*activityTask]{
+						retrypool.WithImmediateRetry[*activityTask](),
+						retrypool.WithBeingProcessed[*activityTask](whenBeingDispatched),
+					}
+
+					if activityEntity.MaxDuration != "" {
+						d, err := time.ParseDuration(activityEntity.MaxDuration)
+						if err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to parse max duration", "error", err)
+							continue
+						}
+						opts = append(opts, retrypool.WithTimeLimit[*activityTask](d))
+					}
+
+					if err := queue.Dispatch(task, opts...); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
 
 						// Start transaction for status updates
@@ -185,6 +203,9 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 						}
 						continue
 					}
+
+					// We wait until the task is REALLY being used by the worker
+					<-whenBeingDispatched
 
 					// Start transaction for status updates
 					tx, err := tp.client.Tx(tp.ctx)

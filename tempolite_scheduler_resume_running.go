@@ -198,10 +198,23 @@ func (tp *Tempolite) schedulerResumeRunningWorkflows(queueName string, done chan
 
 				whenBeingDispatched := retrypool.NewProcessedNotification()
 
-				if err := queueWorkers.Workflows.Dispatch(
-					task,
+				opts := []retrypool.TaskOption[*workflowTask]{
 					retrypool.WithImmediateRetry[*workflowTask](),
 					retrypool.WithBeingProcessed[*workflowTask](whenBeingDispatched),
+				}
+
+				if wf.MaxDuration != "" {
+					d, err := time.ParseDuration(wf.MaxDuration)
+					if err != nil {
+						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to parse max duration", "error", err)
+						continue
+					}
+					opts = append(opts, retrypool.WithTimeLimit[*workflowTask](d))
+				}
+
+				if err := queueWorkers.Workflows.Dispatch(
+					task,
+					opts...,
 				); err != nil {
 					tp.logger.Error(tp.ctx, "Error dispatching workflow task", "workflowID", wf.ID, "error", err)
 					tx, txErr := tp.client.Tx(tp.ctx)

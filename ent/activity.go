@@ -31,6 +31,8 @@ type Activity struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Input holds the value of the "input" field.
 	Input [][]uint8 `json:"input,omitempty"`
+	// MaxDuration holds the value of the "max_duration" field.
+	MaxDuration string `json:"max_duration,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
 	RetryPolicy schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Timeout holds the value of the "timeout" field.
@@ -68,7 +70,7 @@ func (*Activity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case activity.FieldInput, activity.FieldRetryPolicy:
 			values[i] = new([]byte)
-		case activity.FieldID, activity.FieldIdentity, activity.FieldStepID, activity.FieldStatus, activity.FieldQueueName, activity.FieldHandlerName:
+		case activity.FieldID, activity.FieldIdentity, activity.FieldStepID, activity.FieldStatus, activity.FieldQueueName, activity.FieldHandlerName, activity.FieldMaxDuration:
 			values[i] = new(sql.NullString)
 		case activity.FieldTimeout, activity.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -130,6 +132,12 @@ func (a *Activity) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &a.Input); err != nil {
 					return fmt.Errorf("unmarshal field input: %w", err)
 				}
+			}
+		case activity.FieldMaxDuration:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field max_duration", values[i])
+			} else if value.Valid {
+				a.MaxDuration = value.String
 			}
 		case activity.FieldRetryPolicy:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -209,6 +217,9 @@ func (a *Activity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", a.Input))
+	builder.WriteString(", ")
+	builder.WriteString("max_duration=")
+	builder.WriteString(a.MaxDuration)
 	builder.WriteString(", ")
 	builder.WriteString("retry_policy=")
 	builder.WriteString(fmt.Sprintf("%v", a.RetryPolicy))

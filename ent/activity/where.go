@@ -85,6 +85,11 @@ func HandlerName(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldHandlerName, v))
 }
 
+// MaxDuration applies equality check predicate on the "max_duration" field. It's identical to MaxDurationEQ.
+func MaxDuration(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldMaxDuration, v))
+}
+
 // Timeout applies equality check predicate on the "timeout" field. It's identical to TimeoutEQ.
 func Timeout(v time.Time) predicate.Activity {
 	return predicate.Activity(sql.FieldEQ(FieldTimeout, v))
@@ -373,6 +378,81 @@ func HandlerNameEqualFold(v string) predicate.Activity {
 // HandlerNameContainsFold applies the ContainsFold predicate on the "handler_name" field.
 func HandlerNameContainsFold(v string) predicate.Activity {
 	return predicate.Activity(sql.FieldContainsFold(FieldHandlerName, v))
+}
+
+// MaxDurationEQ applies the EQ predicate on the "max_duration" field.
+func MaxDurationEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEQ(FieldMaxDuration, v))
+}
+
+// MaxDurationNEQ applies the NEQ predicate on the "max_duration" field.
+func MaxDurationNEQ(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldNEQ(FieldMaxDuration, v))
+}
+
+// MaxDurationIn applies the In predicate on the "max_duration" field.
+func MaxDurationIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldIn(FieldMaxDuration, vs...))
+}
+
+// MaxDurationNotIn applies the NotIn predicate on the "max_duration" field.
+func MaxDurationNotIn(vs ...string) predicate.Activity {
+	return predicate.Activity(sql.FieldNotIn(FieldMaxDuration, vs...))
+}
+
+// MaxDurationGT applies the GT predicate on the "max_duration" field.
+func MaxDurationGT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGT(FieldMaxDuration, v))
+}
+
+// MaxDurationGTE applies the GTE predicate on the "max_duration" field.
+func MaxDurationGTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldGTE(FieldMaxDuration, v))
+}
+
+// MaxDurationLT applies the LT predicate on the "max_duration" field.
+func MaxDurationLT(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLT(FieldMaxDuration, v))
+}
+
+// MaxDurationLTE applies the LTE predicate on the "max_duration" field.
+func MaxDurationLTE(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldLTE(FieldMaxDuration, v))
+}
+
+// MaxDurationContains applies the Contains predicate on the "max_duration" field.
+func MaxDurationContains(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContains(FieldMaxDuration, v))
+}
+
+// MaxDurationHasPrefix applies the HasPrefix predicate on the "max_duration" field.
+func MaxDurationHasPrefix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasPrefix(FieldMaxDuration, v))
+}
+
+// MaxDurationHasSuffix applies the HasSuffix predicate on the "max_duration" field.
+func MaxDurationHasSuffix(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldHasSuffix(FieldMaxDuration, v))
+}
+
+// MaxDurationIsNil applies the IsNil predicate on the "max_duration" field.
+func MaxDurationIsNil() predicate.Activity {
+	return predicate.Activity(sql.FieldIsNull(FieldMaxDuration))
+}
+
+// MaxDurationNotNil applies the NotNil predicate on the "max_duration" field.
+func MaxDurationNotNil() predicate.Activity {
+	return predicate.Activity(sql.FieldNotNull(FieldMaxDuration))
+}
+
+// MaxDurationEqualFold applies the EqualFold predicate on the "max_duration" field.
+func MaxDurationEqualFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldEqualFold(FieldMaxDuration, v))
+}
+
+// MaxDurationContainsFold applies the ContainsFold predicate on the "max_duration" field.
+func MaxDurationContainsFold(v string) predicate.Activity {
+	return predicate.Activity(sql.FieldContainsFold(FieldMaxDuration, v))
 }
 
 // RetryPolicyIsNil applies the IsNil predicate on the "retry_policy" field.

@@ -120,6 +120,8 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			MaximumAttempts: 1,
 		}
 
+		duration := ""
+
 		if options != nil {
 			config := tempoliteActivityConfig{}
 			for _, opt := range options {
@@ -137,6 +139,9 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			if config.maximumInterval >= 0 {
 				retryPolicyConfig.MaximumInterval = config.maximumInterval
 			}
+			if config.duration != "" {
+				duration = config.duration
+			}
 		}
 
 		tp.logger.Debug(tp.ctx, "Creating activity entity", "longName", longName, "stepID", stepID)
@@ -149,7 +154,7 @@ func (tp *Tempolite) enqueueActivity(ctx WorkflowContext, stepID string, longNam
 			SetIdentity(string(longName)).
 			SetHandlerName(activityHandlerInfo.HandlerName).
 			SetInput(serializableParams).
-			SetQueueName(ctx.QueueName()).
+			SetQueueName(ctx.QueueName()).SetMaxDuration(duration).
 			SetRetryPolicy(retryPolicyConfig).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {

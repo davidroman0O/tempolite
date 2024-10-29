@@ -136,6 +136,8 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 
 	queueName := "default"
 
+	duration := ""
+
 	if options != nil {
 		config := tempoliteWorkflowConfig{}
 		for _, opt := range options {
@@ -155,6 +157,9 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 		}
 		if config.maximumInterval >= 0 {
 			retryPolicyConfig.MaximumInterval = config.maximumInterval
+		}
+		if config.duration != "" {
+			duration = config.duration
 		}
 	}
 
@@ -212,7 +217,7 @@ func (tp *Tempolite) enqueueWorkflow(ctx TempoliteContext, stepID string, workfl
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(serializableParams).
 			SetRetryPolicy(retryPolicyConfig).
-			SetQueueName(queueName).
+			SetQueueName(queueName).SetMaxDuration(duration).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {
 				tp.logger.Error(tp.ctx, "Error rolling back transaction creating workflow entity", "error", err)
@@ -345,6 +350,8 @@ func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempolite
 
 		queueName := "default"
 
+		duration := ""
+
 		if options != nil {
 			config := tempoliteWorkflowConfig{}
 			for _, opt := range options {
@@ -365,6 +372,10 @@ func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempolite
 			if config.maximumInterval >= 0 {
 				retryPolicyConfig.MaximumInterval = config.maximumInterval
 			}
+			if config.duration != "" {
+				duration = config.duration
+			}
+
 		}
 
 		serializableParams, err := tp.convertInputsForSerialization(HandlerInfo(workflowHandlerInfo), params)
@@ -384,7 +395,7 @@ func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempolite
 			SetIdentity(string(handlerIdentity)).
 			SetHandlerName(workflowHandlerInfo.HandlerName).
 			SetInput(serializableParams).
-			SetRetryPolicy(retryPolicyConfig).
+			SetRetryPolicy(retryPolicyConfig).SetMaxDuration(duration).
 			SetQueueName(queueName).
 			Save(tp.ctx); err != nil {
 			if err = tx.Rollback(); err != nil {

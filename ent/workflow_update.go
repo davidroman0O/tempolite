@@ -161,23 +161,23 @@ func (wu *WorkflowUpdate) SetNillableIsReady(b *bool) *WorkflowUpdate {
 	return wu
 }
 
-// SetTimeout sets the "timeout" field.
-func (wu *WorkflowUpdate) SetTimeout(t time.Time) *WorkflowUpdate {
-	wu.mutation.SetTimeout(t)
+// SetMaxDuration sets the "max_duration" field.
+func (wu *WorkflowUpdate) SetMaxDuration(s string) *WorkflowUpdate {
+	wu.mutation.SetMaxDuration(s)
 	return wu
 }
 
-// SetNillableTimeout sets the "timeout" field if the given value is not nil.
-func (wu *WorkflowUpdate) SetNillableTimeout(t *time.Time) *WorkflowUpdate {
-	if t != nil {
-		wu.SetTimeout(*t)
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (wu *WorkflowUpdate) SetNillableMaxDuration(s *string) *WorkflowUpdate {
+	if s != nil {
+		wu.SetMaxDuration(*s)
 	}
 	return wu
 }
 
-// ClearTimeout clears the value of the "timeout" field.
-func (wu *WorkflowUpdate) ClearTimeout() *WorkflowUpdate {
-	wu.mutation.ClearTimeout()
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (wu *WorkflowUpdate) ClearMaxDuration() *WorkflowUpdate {
+	wu.mutation.ClearMaxDuration()
 	return wu
 }
 
@@ -463,11 +463,11 @@ func (wu *WorkflowUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := wu.mutation.IsReady(); ok {
 		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
 	}
-	if value, ok := wu.mutation.Timeout(); ok {
-		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)
+	if value, ok := wu.mutation.MaxDuration(); ok {
+		_spec.SetField(workflow.FieldMaxDuration, field.TypeString, value)
 	}
-	if wu.mutation.TimeoutCleared() {
-		_spec.ClearField(workflow.FieldTimeout, field.TypeTime)
+	if wu.mutation.MaxDurationCleared() {
+		_spec.ClearField(workflow.FieldMaxDuration, field.TypeString)
 	}
 	if value, ok := wu.mutation.CreatedAt(); ok {
 		_spec.SetField(workflow.FieldCreatedAt, field.TypeTime, value)
@@ -799,23 +799,23 @@ func (wuo *WorkflowUpdateOne) SetNillableIsReady(b *bool) *WorkflowUpdateOne {
 	return wuo
 }
 
-// SetTimeout sets the "timeout" field.
-func (wuo *WorkflowUpdateOne) SetTimeout(t time.Time) *WorkflowUpdateOne {
-	wuo.mutation.SetTimeout(t)
+// SetMaxDuration sets the "max_duration" field.
+func (wuo *WorkflowUpdateOne) SetMaxDuration(s string) *WorkflowUpdateOne {
+	wuo.mutation.SetMaxDuration(s)
 	return wuo
 }
 
-// SetNillableTimeout sets the "timeout" field if the given value is not nil.
-func (wuo *WorkflowUpdateOne) SetNillableTimeout(t *time.Time) *WorkflowUpdateOne {
-	if t != nil {
-		wuo.SetTimeout(*t)
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (wuo *WorkflowUpdateOne) SetNillableMaxDuration(s *string) *WorkflowUpdateOne {
+	if s != nil {
+		wuo.SetMaxDuration(*s)
 	}
 	return wuo
 }
 
-// ClearTimeout clears the value of the "timeout" field.
-func (wuo *WorkflowUpdateOne) ClearTimeout() *WorkflowUpdateOne {
-	wuo.mutation.ClearTimeout()
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (wuo *WorkflowUpdateOne) ClearMaxDuration() *WorkflowUpdateOne {
+	wuo.mutation.ClearMaxDuration()
 	return wuo
 }
 
@@ -1131,11 +1131,11 @@ func (wuo *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err
 	if value, ok := wuo.mutation.IsReady(); ok {
 		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
 	}
-	if value, ok := wuo.mutation.Timeout(); ok {
-		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)
+	if value, ok := wuo.mutation.MaxDuration(); ok {
+		_spec.SetField(workflow.FieldMaxDuration, field.TypeString, value)
 	}
-	if wuo.mutation.TimeoutCleared() {
-		_spec.ClearField(workflow.FieldTimeout, field.TypeTime)
+	if wuo.mutation.MaxDurationCleared() {
+		_spec.ClearField(workflow.FieldMaxDuration, field.TypeString)
 	}
 	if value, ok := wuo.mutation.CreatedAt(); ok {
 		_spec.SetField(workflow.FieldCreatedAt, field.TypeTime, value)

@@ -74,6 +74,20 @@ func (ac *ActivityCreate) SetInput(u [][]uint8) *ActivityCreate {
 	return ac
 }
 
+// SetMaxDuration sets the "max_duration" field.
+func (ac *ActivityCreate) SetMaxDuration(s string) *ActivityCreate {
+	ac.mutation.SetMaxDuration(s)
+	return ac
+}
+
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (ac *ActivityCreate) SetNillableMaxDuration(s *string) *ActivityCreate {
+	if s != nil {
+		ac.SetMaxDuration(*s)
+	}
+	return ac
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (ac *ActivityCreate) SetRetryPolicy(sp schema.RetryPolicy) *ActivityCreate {
 	ac.mutation.SetRetryPolicy(sp)
@@ -292,6 +306,10 @@ func (ac *ActivityCreate) createSpec() (*Activity, *sqlgraph.CreateSpec) {
 	if value, ok := ac.mutation.Input(); ok {
 		_spec.SetField(activity.FieldInput, field.TypeJSON, value)
 		_node.Input = value
+	}
+	if value, ok := ac.mutation.MaxDuration(); ok {
+		_spec.SetField(activity.FieldMaxDuration, field.TypeString, value)
+		_node.MaxDuration = value
 	}
 	if value, ok := ac.mutation.RetryPolicy(); ok {
 		_spec.SetField(activity.FieldRetryPolicy, field.TypeJSON, value)

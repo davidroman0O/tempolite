@@ -116,16 +116,16 @@ func (wc *WorkflowCreate) SetNillableIsReady(b *bool) *WorkflowCreate {
 	return wc
 }
 
-// SetTimeout sets the "timeout" field.
-func (wc *WorkflowCreate) SetTimeout(t time.Time) *WorkflowCreate {
-	wc.mutation.SetTimeout(t)
+// SetMaxDuration sets the "max_duration" field.
+func (wc *WorkflowCreate) SetMaxDuration(s string) *WorkflowCreate {
+	wc.mutation.SetMaxDuration(s)
 	return wc
 }
 
-// SetNillableTimeout sets the "timeout" field if the given value is not nil.
-func (wc *WorkflowCreate) SetNillableTimeout(t *time.Time) *WorkflowCreate {
-	if t != nil {
-		wc.SetTimeout(*t)
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (wc *WorkflowCreate) SetNillableMaxDuration(s *string) *WorkflowCreate {
+	if s != nil {
+		wc.SetMaxDuration(*s)
 	}
 	return wc
 }
@@ -419,9 +419,9 @@ func (wc *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 		_spec.SetField(workflow.FieldIsReady, field.TypeBool, value)
 		_node.IsReady = value
 	}
-	if value, ok := wc.mutation.Timeout(); ok {
-		_spec.SetField(workflow.FieldTimeout, field.TypeTime, value)
-		_node.Timeout = value
+	if value, ok := wc.mutation.MaxDuration(); ok {
+		_spec.SetField(workflow.FieldMaxDuration, field.TypeString, value)
+		_node.MaxDuration = value
 	}
 	if value, ok := wc.mutation.CreatedAt(); ok {
 		_spec.SetField(workflow.FieldCreatedAt, field.TypeTime, value)

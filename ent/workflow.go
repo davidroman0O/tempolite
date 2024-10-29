@@ -37,8 +37,8 @@ type Workflow struct {
 	IsPaused bool `json:"is_paused,omitempty"`
 	// IsReady holds the value of the "is_ready" field.
 	IsReady bool `json:"is_ready,omitempty"`
-	// Timeout holds the value of the "timeout" field.
-	Timeout time.Time `json:"timeout,omitempty"`
+	// MaxDuration holds the value of the "max_duration" field.
+	MaxDuration string `json:"max_duration,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// ID of the workflow this one was continued from
@@ -128,9 +128,9 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflow.FieldIsPaused, workflow.FieldIsReady:
 			values[i] = new(sql.NullBool)
-		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldQueueName, workflow.FieldContinuedFromID, workflow.FieldRetriedFromID:
+		case workflow.FieldID, workflow.FieldStepID, workflow.FieldStatus, workflow.FieldIdentity, workflow.FieldHandlerName, workflow.FieldQueueName, workflow.FieldMaxDuration, workflow.FieldContinuedFromID, workflow.FieldRetriedFromID:
 			values[i] = new(sql.NullString)
-		case workflow.FieldTimeout, workflow.FieldCreatedAt:
+		case workflow.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -211,11 +211,11 @@ func (w *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				w.IsReady = value.Bool
 			}
-		case workflow.FieldTimeout:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field timeout", values[i])
+		case workflow.FieldMaxDuration:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field max_duration", values[i])
 			} else if value.Valid {
-				w.Timeout = value.Time
+				w.MaxDuration = value.String
 			}
 		case workflow.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -324,8 +324,8 @@ func (w *Workflow) String() string {
 	builder.WriteString("is_ready=")
 	builder.WriteString(fmt.Sprintf("%v", w.IsReady))
 	builder.WriteString(", ")
-	builder.WriteString("timeout=")
-	builder.WriteString(w.Timeout.Format(time.ANSIC))
+	builder.WriteString("max_duration=")
+	builder.WriteString(w.MaxDuration)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(w.CreatedAt.Format(time.ANSIC))

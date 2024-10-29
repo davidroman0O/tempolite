@@ -30,6 +30,7 @@ func (Activity) Fields() []ent.Field {
 		field.String("handler_name").
 			NotEmpty(),
 		field.JSON("input", [][]byte{}),
+		field.String("max_duration").Optional(),
 		field.JSON("retry_policy", RetryPolicy{}).
 			Optional(),
 		field.Time("timeout").

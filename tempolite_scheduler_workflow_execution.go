@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"runtime"
+	"time"
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/tempolite/ent"
@@ -161,10 +162,23 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 
 					whenBeingDispatched := retrypool.NewProcessedNotification()
 
-					if err := queue.Dispatch(
-						task,
+					opts := []retrypool.TaskOption[*workflowTask]{
 						retrypool.WithImmediateRetry[*workflowTask](),
 						retrypool.WithBeingProcessed[*workflowTask](whenBeingDispatched),
+					}
+
+					if workflowEntity.MaxDuration != "" {
+						d, err := time.ParseDuration(workflowEntity.MaxDuration)
+						if err != nil {
+							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to parse max duration", "error", err)
+							continue
+						}
+						opts = append(opts, retrypool.WithTimeLimit[*workflowTask](d))
+					}
+
+					if err := queue.Dispatch(
+						task,
+						opts...,
 					); err != nil {
 						tp.logger.Error(tp.ctx, "Scheduler workflow execution: Dispatch failed", "error", err)
 						tx, txErr := tp.client.Tx(tp.ctx)

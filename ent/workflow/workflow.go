@@ -33,8 +33,8 @@ const (
 	FieldIsPaused = "is_paused"
 	// FieldIsReady holds the string denoting the is_ready field in the database.
 	FieldIsReady = "is_ready"
-	// FieldTimeout holds the string denoting the timeout field in the database.
-	FieldTimeout = "timeout"
+	// FieldMaxDuration holds the string denoting the max_duration field in the database.
+	FieldMaxDuration = "max_duration"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldContinuedFromID holds the string denoting the continued_from_id field in the database.
@@ -90,7 +90,7 @@ var Columns = []string{
 	FieldRetryPolicy,
 	FieldIsPaused,
 	FieldIsReady,
-	FieldTimeout,
+	FieldMaxDuration,
 	FieldCreatedAt,
 	FieldContinuedFromID,
 	FieldRetriedFromID,
@@ -199,9 +199,9 @@ func ByIsReady(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsReady, opts...).ToFunc()
 }
 
-// ByTimeout orders the results by the timeout field.
-func ByTimeout(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTimeout, opts...).ToFunc()
+// ByMaxDuration orders the results by the max_duration field.
+func ByMaxDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxDuration, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

@@ -65,6 +65,7 @@ type ActivityMutation struct {
 	handler_name      *string
 	input             *[][]uint8
 	appendinput       [][]uint8
+	max_duration      *string
 	retry_policy      *schema.RetryPolicy
 	timeout           *time.Time
 	created_at        *time.Time
@@ -412,6 +413,55 @@ func (m *ActivityMutation) ResetInput() {
 	m.appendinput = nil
 }
 
+// SetMaxDuration sets the "max_duration" field.
+func (m *ActivityMutation) SetMaxDuration(s string) {
+	m.max_duration = &s
+}
+
+// MaxDuration returns the value of the "max_duration" field in the mutation.
+func (m *ActivityMutation) MaxDuration() (r string, exists bool) {
+	v := m.max_duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxDuration returns the old "max_duration" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldMaxDuration(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxDuration: %w", err)
+	}
+	return oldValue.MaxDuration, nil
+}
+
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (m *ActivityMutation) ClearMaxDuration() {
+	m.max_duration = nil
+	m.clearedFields[activity.FieldMaxDuration] = struct{}{}
+}
+
+// MaxDurationCleared returns if the "max_duration" field was cleared in this mutation.
+func (m *ActivityMutation) MaxDurationCleared() bool {
+	_, ok := m.clearedFields[activity.FieldMaxDuration]
+	return ok
+}
+
+// ResetMaxDuration resets all changes to the "max_duration" field.
+func (m *ActivityMutation) ResetMaxDuration() {
+	m.max_duration = nil
+	delete(m.clearedFields, activity.FieldMaxDuration)
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (m *ActivityMutation) SetRetryPolicy(sp schema.RetryPolicy) {
 	m.retry_policy = &sp
@@ -634,7 +684,7 @@ func (m *ActivityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.identity != nil {
 		fields = append(fields, activity.FieldIdentity)
 	}
@@ -652,6 +702,9 @@ func (m *ActivityMutation) Fields() []string {
 	}
 	if m.input != nil {
 		fields = append(fields, activity.FieldInput)
+	}
+	if m.max_duration != nil {
+		fields = append(fields, activity.FieldMaxDuration)
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, activity.FieldRetryPolicy)
@@ -682,6 +735,8 @@ func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case activity.FieldInput:
 		return m.Input()
+	case activity.FieldMaxDuration:
+		return m.MaxDuration()
 	case activity.FieldRetryPolicy:
 		return m.RetryPolicy()
 	case activity.FieldTimeout:
@@ -709,6 +764,8 @@ func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldHandlerName(ctx)
 	case activity.FieldInput:
 		return m.OldInput(ctx)
+	case activity.FieldMaxDuration:
+		return m.OldMaxDuration(ctx)
 	case activity.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
 	case activity.FieldTimeout:
@@ -766,6 +823,13 @@ func (m *ActivityMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInput(v)
 		return nil
+	case activity.FieldMaxDuration:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxDuration(v)
+		return nil
 	case activity.FieldRetryPolicy:
 		v, ok := value.(schema.RetryPolicy)
 		if !ok {
@@ -817,6 +881,9 @@ func (m *ActivityMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ActivityMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(activity.FieldMaxDuration) {
+		fields = append(fields, activity.FieldMaxDuration)
+	}
 	if m.FieldCleared(activity.FieldRetryPolicy) {
 		fields = append(fields, activity.FieldRetryPolicy)
 	}
@@ -837,6 +904,9 @@ func (m *ActivityMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ActivityMutation) ClearField(name string) error {
 	switch name {
+	case activity.FieldMaxDuration:
+		m.ClearMaxDuration()
+		return nil
 	case activity.FieldRetryPolicy:
 		m.ClearRetryPolicy()
 		return nil
@@ -868,6 +938,9 @@ func (m *ActivityMutation) ResetField(name string) error {
 		return nil
 	case activity.FieldInput:
 		m.ResetInput()
+		return nil
+	case activity.FieldMaxDuration:
+		m.ResetMaxDuration()
 		return nil
 	case activity.FieldRetryPolicy:
 		m.ResetRetryPolicy()
@@ -8463,7 +8536,7 @@ type WorkflowMutation struct {
 	retry_policy          *schema.RetryPolicy
 	is_paused             *bool
 	is_ready              *bool
-	timeout               *time.Time
+	max_duration          *string
 	created_at            *time.Time
 	clearedFields         map[string]struct{}
 	executions            map[string]struct{}
@@ -8939,53 +9012,53 @@ func (m *WorkflowMutation) ResetIsReady() {
 	m.is_ready = nil
 }
 
-// SetTimeout sets the "timeout" field.
-func (m *WorkflowMutation) SetTimeout(t time.Time) {
-	m.timeout = &t
+// SetMaxDuration sets the "max_duration" field.
+func (m *WorkflowMutation) SetMaxDuration(s string) {
+	m.max_duration = &s
 }
 
-// Timeout returns the value of the "timeout" field in the mutation.
-func (m *WorkflowMutation) Timeout() (r time.Time, exists bool) {
-	v := m.timeout
+// MaxDuration returns the value of the "max_duration" field in the mutation.
+func (m *WorkflowMutation) MaxDuration() (r string, exists bool) {
+	v := m.max_duration
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTimeout returns the old "timeout" field's value of the Workflow entity.
+// OldMaxDuration returns the old "max_duration" field's value of the Workflow entity.
 // If the Workflow object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowMutation) OldTimeout(ctx context.Context) (v time.Time, err error) {
+func (m *WorkflowMutation) OldMaxDuration(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTimeout is only allowed on UpdateOne operations")
+		return v, errors.New("OldMaxDuration is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTimeout requires an ID field in the mutation")
+		return v, errors.New("OldMaxDuration requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTimeout: %w", err)
+		return v, fmt.Errorf("querying old value for OldMaxDuration: %w", err)
 	}
-	return oldValue.Timeout, nil
+	return oldValue.MaxDuration, nil
 }
 
-// ClearTimeout clears the value of the "timeout" field.
-func (m *WorkflowMutation) ClearTimeout() {
-	m.timeout = nil
-	m.clearedFields[workflow.FieldTimeout] = struct{}{}
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (m *WorkflowMutation) ClearMaxDuration() {
+	m.max_duration = nil
+	m.clearedFields[workflow.FieldMaxDuration] = struct{}{}
 }
 
-// TimeoutCleared returns if the "timeout" field was cleared in this mutation.
-func (m *WorkflowMutation) TimeoutCleared() bool {
-	_, ok := m.clearedFields[workflow.FieldTimeout]
+// MaxDurationCleared returns if the "max_duration" field was cleared in this mutation.
+func (m *WorkflowMutation) MaxDurationCleared() bool {
+	_, ok := m.clearedFields[workflow.FieldMaxDuration]
 	return ok
 }
 
-// ResetTimeout resets all changes to the "timeout" field.
-func (m *WorkflowMutation) ResetTimeout() {
-	m.timeout = nil
-	delete(m.clearedFields, workflow.FieldTimeout)
+// ResetMaxDuration resets all changes to the "max_duration" field.
+func (m *WorkflowMutation) ResetMaxDuration() {
+	m.max_duration = nil
+	delete(m.clearedFields, workflow.FieldMaxDuration)
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -9385,8 +9458,8 @@ func (m *WorkflowMutation) Fields() []string {
 	if m.is_ready != nil {
 		fields = append(fields, workflow.FieldIsReady)
 	}
-	if m.timeout != nil {
-		fields = append(fields, workflow.FieldTimeout)
+	if m.max_duration != nil {
+		fields = append(fields, workflow.FieldMaxDuration)
 	}
 	if m.created_at != nil {
 		fields = append(fields, workflow.FieldCreatedAt)
@@ -9423,8 +9496,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.IsPaused()
 	case workflow.FieldIsReady:
 		return m.IsReady()
-	case workflow.FieldTimeout:
-		return m.Timeout()
+	case workflow.FieldMaxDuration:
+		return m.MaxDuration()
 	case workflow.FieldCreatedAt:
 		return m.CreatedAt()
 	case workflow.FieldContinuedFromID:
@@ -9458,8 +9531,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldIsPaused(ctx)
 	case workflow.FieldIsReady:
 		return m.OldIsReady(ctx)
-	case workflow.FieldTimeout:
-		return m.OldTimeout(ctx)
+	case workflow.FieldMaxDuration:
+		return m.OldMaxDuration(ctx)
 	case workflow.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case workflow.FieldContinuedFromID:
@@ -9538,12 +9611,12 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIsReady(v)
 		return nil
-	case workflow.FieldTimeout:
-		v, ok := value.(time.Time)
+	case workflow.FieldMaxDuration:
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTimeout(v)
+		m.SetMaxDuration(v)
 		return nil
 	case workflow.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -9599,8 +9672,8 @@ func (m *WorkflowMutation) ClearedFields() []string {
 	if m.FieldCleared(workflow.FieldRetryPolicy) {
 		fields = append(fields, workflow.FieldRetryPolicy)
 	}
-	if m.FieldCleared(workflow.FieldTimeout) {
-		fields = append(fields, workflow.FieldTimeout)
+	if m.FieldCleared(workflow.FieldMaxDuration) {
+		fields = append(fields, workflow.FieldMaxDuration)
 	}
 	if m.FieldCleared(workflow.FieldContinuedFromID) {
 		fields = append(fields, workflow.FieldContinuedFromID)
@@ -9625,8 +9698,8 @@ func (m *WorkflowMutation) ClearField(name string) error {
 	case workflow.FieldRetryPolicy:
 		m.ClearRetryPolicy()
 		return nil
-	case workflow.FieldTimeout:
-		m.ClearTimeout()
+	case workflow.FieldMaxDuration:
+		m.ClearMaxDuration()
 		return nil
 	case workflow.FieldContinuedFromID:
 		m.ClearContinuedFromID()
@@ -9669,8 +9742,8 @@ func (m *WorkflowMutation) ResetField(name string) error {
 	case workflow.FieldIsReady:
 		m.ResetIsReady()
 		return nil
-	case workflow.FieldTimeout:
-		m.ResetTimeout()
+	case workflow.FieldMaxDuration:
+		m.ResetMaxDuration()
 		return nil
 	case workflow.FieldCreatedAt:
 		m.ResetCreatedAt()

@@ -45,7 +45,7 @@ func init() {
 	// activity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	activity.HandlerNameValidator = activityDescHandlerName.Validators[0].(func(string) error)
 	// activityDescCreatedAt is the schema descriptor for created_at field.
-	activityDescCreatedAt := activityFields[9].Descriptor()
+	activityDescCreatedAt := activityFields[10].Descriptor()
 	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
 	activityexecutionFields := schema.ActivityExecution{}.Fields()

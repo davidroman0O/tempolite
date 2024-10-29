@@ -27,6 +27,8 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
+	// FieldMaxDuration holds the string denoting the max_duration field in the database.
+	FieldMaxDuration = "max_duration"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
 	FieldRetryPolicy = "retry_policy"
 	// FieldTimeout holds the string denoting the timeout field in the database.
@@ -55,6 +57,7 @@ var Columns = []string{
 	FieldQueueName,
 	FieldHandlerName,
 	FieldInput,
+	FieldMaxDuration,
 	FieldRetryPolicy,
 	FieldTimeout,
 	FieldCreatedAt,
@@ -147,6 +150,11 @@ func ByQueueName(opts ...sql.OrderTermOption) OrderOption {
 // ByHandlerName orders the results by the handler_name field.
 func ByHandlerName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldHandlerName, opts...).ToFunc()
+}
+
+// ByMaxDuration orders the results by the max_duration field.
+func ByMaxDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxDuration, opts...).ToFunc()
 }
 
 // ByTimeout orders the results by the timeout field.

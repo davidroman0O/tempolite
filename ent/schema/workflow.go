@@ -34,8 +34,7 @@ func (Workflow) Fields() []ent.Field {
 			Optional(),
 		field.Bool("is_paused").Default(false),
 		field.Bool("is_ready").Default(false),
-		field.Time("timeout").
-			Optional(),
+		field.String("max_duration").Optional(),
 		field.Time("created_at").
 			Default(time.Now),
 		field.String("continued_from_id").

@@ -148,6 +148,7 @@ type tempoliteWorkflowConfig struct {
 	retryBackoffCoefficient float64
 	maximumInterval         time.Duration
 	queueName               string
+	duration                string
 }
 
 type tempoliteWorkflowOptions []tempoliteWorkflowOption
@@ -157,6 +158,12 @@ func WorkflowConfig(opts ...tempoliteWorkflowOption) tempoliteWorkflowOptions {
 }
 
 type tempoliteWorkflowOption func(*tempoliteWorkflowConfig)
+
+func WithWorkflowDuration(duration string) tempoliteWorkflowOption {
+	return func(c *tempoliteWorkflowConfig) {
+		c.duration = duration
+	}
+}
 
 func WithWorkflowQueue(queueName string) tempoliteWorkflowOption {
 	return func(c *tempoliteWorkflowConfig) {
@@ -197,6 +204,7 @@ type tempoliteActivityConfig struct {
 	retryBackoffCoefficient float64
 	maximumInterval         time.Duration
 	queueName               string
+	duration                string
 }
 
 type tempoliteActivityOptions []tempoliteActivityOption
@@ -206,6 +214,12 @@ func ActivityConfig(opts ...tempoliteActivityOption) tempoliteActivityOptions {
 }
 
 type tempoliteActivityOption func(*tempoliteActivityConfig)
+
+func WithActivityDuration(duration string) tempoliteActivityOption {
+	return func(c *tempoliteActivityConfig) {
+		c.duration = duration
+	}
+}
 
 func WithActivityQueue(queueName string) tempoliteActivityOption {
 	return func(c *tempoliteActivityConfig) {

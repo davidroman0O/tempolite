@@ -113,6 +113,26 @@ func (au *ActivityUpdate) AppendInput(u [][]uint8) *ActivityUpdate {
 	return au
 }
 
+// SetMaxDuration sets the "max_duration" field.
+func (au *ActivityUpdate) SetMaxDuration(s string) *ActivityUpdate {
+	au.mutation.SetMaxDuration(s)
+	return au
+}
+
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (au *ActivityUpdate) SetNillableMaxDuration(s *string) *ActivityUpdate {
+	if s != nil {
+		au.SetMaxDuration(*s)
+	}
+	return au
+}
+
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (au *ActivityUpdate) ClearMaxDuration() *ActivityUpdate {
+	au.mutation.ClearMaxDuration()
+	return au
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (au *ActivityUpdate) SetRetryPolicy(sp schema.RetryPolicy) *ActivityUpdate {
 	au.mutation.SetRetryPolicy(sp)
@@ -300,6 +320,12 @@ func (au *ActivityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			sqljson.Append(u, activity.FieldInput, value)
 		})
 	}
+	if value, ok := au.mutation.MaxDuration(); ok {
+		_spec.SetField(activity.FieldMaxDuration, field.TypeString, value)
+	}
+	if au.mutation.MaxDurationCleared() {
+		_spec.ClearField(activity.FieldMaxDuration, field.TypeString)
+	}
 	if value, ok := au.mutation.RetryPolicy(); ok {
 		_spec.SetField(activity.FieldRetryPolicy, field.TypeJSON, value)
 	}
@@ -459,6 +485,26 @@ func (auo *ActivityUpdateOne) SetInput(u [][]uint8) *ActivityUpdateOne {
 // AppendInput appends u to the "input" field.
 func (auo *ActivityUpdateOne) AppendInput(u [][]uint8) *ActivityUpdateOne {
 	auo.mutation.AppendInput(u)
+	return auo
+}
+
+// SetMaxDuration sets the "max_duration" field.
+func (auo *ActivityUpdateOne) SetMaxDuration(s string) *ActivityUpdateOne {
+	auo.mutation.SetMaxDuration(s)
+	return auo
+}
+
+// SetNillableMaxDuration sets the "max_duration" field if the given value is not nil.
+func (auo *ActivityUpdateOne) SetNillableMaxDuration(s *string) *ActivityUpdateOne {
+	if s != nil {
+		auo.SetMaxDuration(*s)
+	}
+	return auo
+}
+
+// ClearMaxDuration clears the value of the "max_duration" field.
+func (auo *ActivityUpdateOne) ClearMaxDuration() *ActivityUpdateOne {
+	auo.mutation.ClearMaxDuration()
 	return auo
 }
 
@@ -678,6 +724,12 @@ func (auo *ActivityUpdateOne) sqlSave(ctx context.Context) (_node *Activity, err
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, activity.FieldInput, value)
 		})
+	}
+	if value, ok := auo.mutation.MaxDuration(); ok {
+		_spec.SetField(activity.FieldMaxDuration, field.TypeString, value)
+	}
+	if auo.mutation.MaxDurationCleared() {
+		_spec.ClearField(activity.FieldMaxDuration, field.TypeString)
 	}
 	if value, ok := auo.mutation.RetryPolicy(); ok {
 		_spec.SetField(activity.FieldRetryPolicy, field.TypeJSON, value)
