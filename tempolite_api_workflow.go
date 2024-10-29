@@ -304,13 +304,13 @@ func (tp *Tempolite) executeWorkflow(workflowFunc interface{}, options tempolite
 		}
 
 		if len(params) != workflowHandlerInfo.NumIn {
-			tp.logger.Error(tp.ctx, "Parameter count mismatch", "expected", workflowHandlerInfo.NumIn, "got", len(params))
+			tp.logger.Error(tp.ctx, "Parameter count mismatch", "handlerName", workflowHandlerInfo.HandlerLongName, "expected", workflowHandlerInfo.NumIn, "got", len(params))
 			return "", fmt.Errorf("parameter count mismatch: expected %d, got %d", workflowHandlerInfo.NumIn, len(params))
 		}
 
 		for idx, param := range params {
 			if reflect.TypeOf(param) != workflowHandlerInfo.ParamTypes[idx] {
-				tp.logger.Error(tp.ctx, "Parameter type mismatch", "expected", workflowHandlerInfo.ParamTypes[idx], "got", reflect.TypeOf(param))
+				tp.logger.Error(tp.ctx, "Parameter type mismatch", "handlerName", workflowHandlerInfo.HandlerLongName, "expected", workflowHandlerInfo.ParamTypes[idx], "got", reflect.TypeOf(param))
 				return "", fmt.Errorf("parameter type mismatch: expected %s, got %s", workflowHandlerInfo.ParamTypes[idx], reflect.TypeOf(param))
 			}
 		}

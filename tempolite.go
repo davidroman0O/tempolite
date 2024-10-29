@@ -814,13 +814,13 @@ func (tp *Tempolite) Wait() error {
 func (tp *Tempolite) verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
 
 	if len(params) != handlerInfo.NumIn {
-		tp.logger.Error(tp.ctx, "Parameter count mismatch", "expected", handlerInfo.NumIn, "got", len(params))
+		tp.logger.Error(tp.ctx, "Parameter count mismatch", "handlerName", handlerInfo.HandlerLongName, "expected", handlerInfo.NumIn, "got", len(params))
 		return fmt.Errorf("parameter count mismatch (you probably put the wrong handler): expected %d, got %d", handlerInfo.NumIn, len(params))
 	}
 
 	for idx, param := range params {
 		if reflect.TypeOf(param) != handlerInfo.ParamTypes[idx] {
-			tp.logger.Error(tp.ctx, "Parameter type mismatch", "expected", handlerInfo.ParamTypes[idx], "got", reflect.TypeOf(param))
+			tp.logger.Error(tp.ctx, "Parameter type mismatch", "handlerName", handlerInfo.HandlerLongName, "expected", handlerInfo.ParamTypes[idx], "got", reflect.TypeOf(param))
 			return fmt.Errorf("parameter type mismatch (you probably put the wrong handler) at index %d: expected %s, got %s", idx, handlerInfo.ParamTypes[idx], reflect.TypeOf(param))
 		}
 	}
