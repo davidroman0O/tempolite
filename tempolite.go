@@ -299,6 +299,11 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	// Initialize queue counters
 	tp.initQueueCounters(name)
 
+	if tp.resumeRunningWorkflows(name) != nil {
+		tp.logger.Error(tp.ctx, "Error resuming running workflows")
+		return fmt.Errorf("failed to resume running workflows")
+	}
+
 	tp.logger.Debug(tp.ctx, "Starting queue-specific schedulers")
 	// Start queue-specific schedulers
 	go tp.schedulerExecutionWorkflowForQueue(name, done)
