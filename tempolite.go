@@ -405,44 +405,71 @@ func (tp *Tempolite) getCompensationPoolQueue(queueName string) (*retrypool.Pool
 }
 
 func (tp *Tempolite) Close() error {
-	tp.logger.Debug(tp.ctx, "Closing Tempolite")
+	tp.logger.Debug(tp.ctx, "Starting Tempolite shutdown sequence")
 
-	// First of all kill all the schedulers
+	// First cancel the context to stop new operations
+	tp.cancel()
+
+	// Signal all schedulers to stop
 	tp.queues.Range(func(key, value interface{}) bool {
 		queue := value.(*QueueWorkers)
 		close(queue.Done)
 		return true
 	})
 
-	<-time.After(1 * time.Second) // give it a bit of time to close for real, should be fast
+	// Short wait to allow schedulers to stop
+	<-time.After(100 * time.Millisecond)
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
+	// Create a channel to coordinate shutdown
+	shutdownDone := make(chan struct{})
 
-	// Pause all active workflows before closing
-	// We're not really using Wait, we just trying to pause/"close" successfully all workflows
-	if err := tp.preparePauseClosingWorkflow(ctx); err != nil {
-		tp.logger.Error(tp.ctx, "Error pausing workflows during shutdown", "error", err)
-		return fmt.Errorf("error pausing workflows during shutdown: %w", err)
+	go func() {
+		defer close(shutdownDone)
+
+		// First pause all active workflows using the existing PauseWorkflow function
+		workflows, err := tp.client.Workflow.Query().
+			Where(
+				workflow.StatusEQ(workflow.StatusRunning),
+				workflow.IsPausedEQ(false),
+			).
+			All(tp.ctx)
+
+		if err == nil {
+			for _, wf := range workflows {
+				if err := tp.PauseWorkflow(WorkflowID(wf.ID)); err != nil {
+					tp.logger.Error(tp.ctx, "Error pausing workflow during shutdown",
+						"workflowID", wf.ID, "error", err)
+				}
+			}
+		}
+
+		// Now close all pools in each queue
+		tp.queues.Range(func(key, value interface{}) bool {
+			queueName := key.(string)
+			queue := value.(*QueueWorkers)
+
+			tp.logger.Debug(tp.ctx, "Closing queue pools", "queueName", queueName)
+
+			// Close pools in reverse order of dependency
+			queue.SideEffects.Close()
+			queue.Activities.Close()
+			queue.Compensations.Close()
+			queue.Transactions.Close()
+			queue.Workflows.Close()
+
+			return true
+		})
+	}()
+
+	// Wait for shutdown with timeout
+	select {
+	case <-shutdownDone:
+		tp.logger.Debug(tp.ctx, "Tempolite shutdown completed successfully")
+		return nil
+	case <-time.After(10 * time.Second):
+		tp.logger.Error(tp.ctx, "Tempolite shutdown timed out")
+		return fmt.Errorf("shutdown timed out")
 	}
-
-	// We have no more schedulers, we have paused everything, we can now close all pools
-	tp.queues.Range(func(key, value interface{}) bool {
-		queueName := key.(string)
-		queue := value.(*QueueWorkers)
-		tp.logger.Debug(tp.ctx, "Closing queue", "queueName", queueName)
-		queue.Workflows.Close()
-		queue.Activities.Close()
-		queue.SideEffects.Close()
-		queue.Transactions.Close()
-		queue.Compensations.Close()
-		return true
-	})
-
-	tp.cancel() // it will stops other systems (we might forget?)
-
-	return nil
 }
 
 func (tp *Tempolite) preparePauseClosingWorkflow(ctx context.Context) error {
