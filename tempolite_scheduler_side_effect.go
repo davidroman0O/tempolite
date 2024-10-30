@@ -21,8 +21,10 @@ func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done
 	for {
 		select {
 		case <-tp.ctx.Done():
+			tp.logger.Debug(tp.ctx, "scheduler side effect execution: context done", "queue", queueName)
 			return
 		case <-done:
+			tp.logger.Debug(tp.ctx, "scheduler side effect execution: done signal", "queue", queueName)
 			return
 		default:
 

@@ -24,10 +24,10 @@ func (tp *Tempolite) schedulerResumeRunningWorkflows(queueName string, done chan
 	for {
 		select {
 		case <-tp.ctx.Done():
-			tp.logger.Debug(tp.ctx, "Resume running workflows scheduler stopped due to context done")
+			tp.logger.Debug(tp.ctx, "Resume running workflows scheduler stopped due to context done", "queue", queueName)
 			return
 		case <-done:
-			tp.logger.Debug(tp.ctx, "Resume running workflows scheduler stopped due to done signal")
+			tp.logger.Debug(tp.ctx, "Resume running workflows scheduler stopped due to done signal", "queue", queueName)
 			return
 		case <-ticker.C:
 			// Get pool for this queue

@@ -24,8 +24,10 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 	for {
 		select {
 		case <-tp.ctx.Done():
+			tp.logger.Debug(tp.ctx, "scheduler activity execution: context done", "queue", queueName)
 			return
 		case <-done:
+			tp.logger.Debug(tp.ctx, "scheduler activity execution: done signal", "queue", queueName)
 			return
 		default:
 			var ok bool

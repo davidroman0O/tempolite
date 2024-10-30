@@ -77,8 +77,10 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 	for {
 		select {
 		case <-tp.ctx.Done():
+			tp.logger.Debug(tp.ctx, "scheduler saga execution: context done", "queue", queueName)
 			return
 		case <-done:
+			tp.logger.Debug(tp.ctx, "scheduler saga execution: done signal", "queue", queueName)
 			return
 		default:
 

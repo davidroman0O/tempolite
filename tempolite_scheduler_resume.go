@@ -1,6 +1,11 @@
 package tempolite
 
-import "github.com/davidroman0O/tempolite/ent/workflow"
+import (
+	"context"
+	"errors"
+
+	"github.com/davidroman0O/tempolite/ent/workflow"
+)
 
 // One shot function at startup to resume all running workflows
 // Basically, we treat workflow with "Running false false" as paused!
@@ -15,6 +20,10 @@ func (tp *Tempolite) resumeRunningWorkflows(queue string) error {
 		)).
 		All(tp.ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			tp.logger.Debug(tp.ctx, "resume workflow execution: context canceled", "queue", queue)
+			return err
+		}
 		return err
 	}
 
@@ -26,6 +35,10 @@ func (tp *Tempolite) resumeRunningWorkflows(queue string) error {
 			SetIsReady(true).
 			Save(tp.ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				tp.logger.Debug(tp.ctx, "resume workflow execution: context canceled", "queue", queue)
+				return err
+			}
 			return err
 		}
 	}
