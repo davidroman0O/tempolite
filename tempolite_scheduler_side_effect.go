@@ -50,7 +50,7 @@ func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done
 				All(tp.ctx)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
-					tp.logger.Debug(tp.ctx, "scheduler sideeffect execution: context canceled")
+					tp.logger.Debug(tp.ctx, "scheduler sideeffect execution: context canceled", "queue", queueName)
 					return
 				}
 				tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.Query failed", "error", err)

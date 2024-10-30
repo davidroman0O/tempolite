@@ -55,7 +55,7 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 				All(tp.ctx)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
-					tp.logger.Debug(tp.ctx, "scheduler activity execution: context canceled")
+					tp.logger.Debug(tp.ctx, "scheduler activity execution: context canceled", "queue", queueName)
 					return
 				}
 				tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Query failed", "error", err)

@@ -115,7 +115,7 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 				All(tp.ctx)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
-					tp.logger.Debug(tp.ctx, "scheduler saga execution: context canceled")
+					tp.logger.Debug(tp.ctx, "scheduler saga execution: context canceled", "queue", queueName)
 					return
 				}
 				tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaExecution.Query failed", "error", err)

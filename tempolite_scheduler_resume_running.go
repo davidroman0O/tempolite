@@ -58,7 +58,7 @@ func (tp *Tempolite) schedulerResumeRunningWorkflows(queueName string, done chan
 				All(tp.ctx)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
-					tp.logger.Debug(tp.ctx, "scheduler resume running workflow execution: context canceled")
+					tp.logger.Debug(tp.ctx, "scheduler resume running workflow execution: context canceled", "queue", queueName)
 					return
 				}
 				tp.logger.Error(tp.ctx, "Error querying workflows", "queue", queueName, "error", err)
