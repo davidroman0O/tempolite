@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"time"
 
@@ -38,6 +40,10 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 			}
 
 			if pendingWorkflows, err = tp.getAvailableWorkflowExecutionForQueue(queueName, availableSlots); err != nil {
+				if errors.Is(err, context.Canceled) {
+					tp.logger.Debug(tp.ctx, "scheduler workflow execution: context canceled")
+					return
+				}
 				runtime.Gosched()
 				continue
 			}

@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"time"
 
@@ -52,6 +54,10 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					tp.logger.Debug(tp.ctx, "scheduler activity execution: context canceled")
+					return
+				}
 				tp.logger.Error(tp.ctx, "scheduler activity execution: ActivityExecution.Query failed", "error", err)
 				continue
 			}

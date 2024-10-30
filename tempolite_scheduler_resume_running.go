@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -55,6 +57,10 @@ func (tp *Tempolite) schedulerResumeRunningWorkflows(queueName string, done chan
 				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					tp.logger.Debug(tp.ctx, "scheduler resume running workflow execution: context canceled")
+					return
+				}
 				tp.logger.Error(tp.ctx, "Error querying workflows", "queue", queueName, "error", err)
 				continue
 			}

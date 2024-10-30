@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"context"
+	"errors"
 	"runtime"
 
 	"github.com/davidroman0O/tempolite/ent"
@@ -112,6 +114,10 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 				Limit(min(txAvailableSlots, compAvailableSlots)).
 				All(tp.ctx)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					tp.logger.Debug(tp.ctx, "scheduler saga execution: context canceled")
+					return
+				}
 				tp.logger.Error(tp.ctx, "Scheduler saga execution: SagaExecution.Query failed", "error", err)
 				continue
 			}

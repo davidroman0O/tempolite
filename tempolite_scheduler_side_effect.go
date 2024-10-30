@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"context"
+	"errors"
 	"runtime"
 
 	"github.com/davidroman0O/tempolite/ent"
@@ -47,6 +49,10 @@ func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done
 				Limit(availableSlots).
 				All(tp.ctx)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					tp.logger.Debug(tp.ctx, "scheduler sideeffect execution: context canceled")
+					return
+				}
 				tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: SideEffectExecution.Query failed", "error", err)
 				continue
 			}
