@@ -32,6 +32,14 @@ import (
 
 var errWorkflowPaused = errors.New("workflow is paused")
 
+type QueueStatus string
+
+const (
+	QueueStatusPending QueueStatus = "pending"
+	QueueStatusRunning QueueStatus = "running"
+	QueueStatusClosing QueueStatus = "closing"
+)
+
 // TODO: to be renamed as tempoliteEngine since it will be used to rotate/roll new databases when its database size is too big
 type Tempolite struct {
 	db     *dbSQL.DB
@@ -42,6 +50,8 @@ type Tempolite struct {
 	activities  sync.Map // map[HandlerIdentity]Activity
 	sideEffects sync.Map // map[string]SideEffect
 	sagas       sync.Map // map[string]*SagaDefinition
+
+	queueStatus sync.Map // map[string]bool
 
 	queuePoolWorkflowCounter     sync.Map // map[string]*atomic.Int64
 	queuePoolActivityCounter     sync.Map
@@ -219,6 +229,8 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 		return fmt.Errorf("queue name cannot be empty")
 	}
 
+	tp.queueStatus.Store(name, QueueStatusPending)
+
 	tp.logger.Debug(tp.ctx, "Creating queue", "name", name)
 
 	tp.logger.Debug(tp.ctx, "Creating workflow pool", "name", name, "workers", workflowWorkers)
@@ -226,6 +238,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	workflowPool, err := tp.createWorkflowPool(name, workflowWorkers)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error creating workflow pool", "error", err)
+		tp.queueStatus.Delete(name)
 		return fmt.Errorf("failed to create workflow pool: %w", err)
 	}
 
@@ -233,6 +246,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	activityPool, err := tp.createActivityPool(name, activityWorkers)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error creating activity pool", "error", err)
+		tp.queueStatus.Delete(name)
 		// Clean up the workflow pool before returning
 		workflowPool.Close()
 		return fmt.Errorf("failed to create activity pool: %w", err)
@@ -242,6 +256,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	sideEffectPool, err := tp.createSideEffectPool(name, sideEffectWorkers)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error creating side effect pool", "error", err)
+		tp.queueStatus.Delete(name)
 		// Clean up previous pools
 		workflowPool.Close()
 		activityPool.Close()
@@ -252,6 +267,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	transactionPool, err := tp.createTransactionPool(name, transactionWorkers)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error creating transaction pool", "error", err)
+		tp.queueStatus.Delete(name)
 		// Clean up previous pools
 		workflowPool.Close()
 		activityPool.Close()
@@ -263,6 +279,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	compensationPool, err := tp.createCompensationPool(name, compensationWorkers)
 	if err != nil {
 		tp.logger.Error(tp.ctx, "Error creating compensation pool", "error", err)
+		tp.queueStatus.Delete(name)
 		// Clean up previous pools
 		workflowPool.Close()
 		activityPool.Close()
@@ -286,6 +303,7 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	// Store the queue workers
 	if _, loaded := tp.queues.LoadOrStore(name, workers); loaded {
 		tp.logger.Error(tp.ctx, "Queue already exists", "name", name)
+		tp.queueStatus.Delete(name)
 		// Clean up all pools if queue already exists
 		workflowPool.Close()
 		activityPool.Close()
@@ -312,6 +330,8 @@ func (tp *Tempolite) createQueue(name string, workflowWorkers, activityWorkers,
 	go tp.schedulerExecutionSagaForQueue(name, done)
 	go tp.schedulerResumeRunningWorkflows(name, done)
 
+	tp.queueStatus.Store(name, QueueStatusRunning)
+
 	tp.logger.Debug(tp.ctx, "Created queue", "name", name,
 		"workflowWorkers", workflowWorkers,
 		"activityWorkers", activityWorkers,
@@ -327,6 +347,8 @@ func (tp *Tempolite) removeQueue(name string) error {
 	if !ok {
 		return fmt.Errorf("queue %s not found", name)
 	}
+
+	tp.queueStatus.Store(name, QueueStatusClosing)
 
 	workers := value.(*QueueWorkers)
 	close(workers.Done) // Signal schedulers to stop
@@ -346,6 +368,7 @@ func (tp *Tempolite) removeQueue(name string) error {
 	tp.queuePoolCompensationCounter.Delete(name)
 
 	tp.logger.Debug(tp.ctx, "Removed queue", "name", name)
+	tp.queueStatus.Delete(name)
 	return nil
 }
 
@@ -465,17 +488,8 @@ func (tp *Tempolite) Close(opts ...closeOption) error {
 		// Now close all pools in each queue
 		tp.queues.Range(func(key, value interface{}) bool {
 			queueName := key.(string)
-			queue := value.(*QueueWorkers)
-
 			tp.logger.Debug(tp.ctx, "Closing queue pools", "queueName", queueName)
-
-			// Close pools in reverse order of dependency
-			queue.SideEffects.Close()
-			queue.Activities.Close()
-			queue.Compensations.Close()
-			queue.Transactions.Close()
-			queue.Workflows.Close()
-
+			tp.removeQueue(queueName)
 			return true
 		})
 	}()
@@ -514,6 +528,77 @@ func (tp *Tempolite) preparePauseClosingWorkflow(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type TempoliteRetryPool struct {
+	QueueSize  int
+	Processing int
+	DeadTasks  int
+	Workers    []int
+}
+
+type TempoliteQueue struct {
+	Name             string
+	WorkflowPool     TempoliteRetryPool
+	ActivityPool     TempoliteRetryPool
+	TransactionPool  TempoliteRetryPool
+	CompensationPool TempoliteRetryPool
+	Status           QueueStatus
+}
+
+type TempoliteInfo struct {
+	Queues []TempoliteQueue
+}
+
+// NOTE: I probably missed some info
+func (tp *Tempolite) Info() *TempoliteInfo {
+	ti := &TempoliteInfo{
+		Queues: []TempoliteQueue{},
+	}
+
+	tp.queues.Range(func(key, value interface{}) bool {
+		queueName := key.(string)
+		queue := value.(*QueueWorkers)
+
+		value, ok := tp.queueStatus.Load(queueName)
+		if !ok {
+			tp.logger.Error(tp.ctx, "Error getting queue status", "queueName", queueName)
+			return false
+		}
+
+		ti.Queues = append(ti.Queues, TempoliteQueue{
+			Name:   queueName,
+			Status: QueueStatus(value.(QueueStatus)),
+			WorkflowPool: TempoliteRetryPool{
+				QueueSize:  queue.Workflows.QueueSize(),
+				Processing: queue.Workflows.ProcessingCount(),
+				DeadTasks:  queue.Workflows.DeadTaskCount(),
+				Workers:    queue.Workflows.GetWorkerIDs(),
+			},
+			ActivityPool: TempoliteRetryPool{
+				QueueSize:  queue.Activities.QueueSize(),
+				Processing: queue.Activities.ProcessingCount(),
+				DeadTasks:  queue.Activities.DeadTaskCount(),
+				Workers:    queue.Activities.GetWorkerIDs(),
+			},
+			TransactionPool: TempoliteRetryPool{
+				QueueSize:  queue.Transactions.QueueSize(),
+				Processing: queue.Transactions.ProcessingCount(),
+				DeadTasks:  queue.Transactions.DeadTaskCount(),
+				Workers:    queue.Transactions.GetWorkerIDs(),
+			},
+			CompensationPool: TempoliteRetryPool{
+				QueueSize:  queue.Compensations.QueueSize(),
+				Processing: queue.Compensations.ProcessingCount(),
+				DeadTasks:  queue.Compensations.DeadTaskCount(),
+				Workers:    queue.Compensations.GetWorkerIDs(),
+			},
+		})
+
+		return true
+	})
+
+	return ti
 }
 
 func (tp *Tempolite) getWorkerWorkflowID(queue string) (int, error) {
@@ -796,6 +881,15 @@ func (tp *Tempolite) ListWorkersCompensation(queue string) ([]int, error) {
 		return nil, err
 	}
 	return pool.GetWorkerIDs(), nil
+}
+
+func (tp *Tempolite) ListQueues() []string {
+	queues := []string{}
+	tp.queues.Range(func(key, _ interface{}) bool {
+		queues = append(queues, key.(string))
+		return true
+	})
+	return queues
 }
 
 type waitItem struct {
