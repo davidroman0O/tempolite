@@ -543,12 +543,14 @@ type WorkflowTask struct {
 	BaseTempoliteTask
 	WorkflowID string
 	IsPaused   bool
+	Params     []interface{}
 }
 
 // Specific task type for activities
 type ActivityTask struct {
 	BaseTempoliteTask
 	ActivityID string
+	Params     []interface{}
 }
 
 // Specific task type for transactions and compensations
@@ -688,6 +690,7 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 						MaxRetry:    data.maxRetry,
 						RetryCount:  data.retryCount,
 					},
+					Params:     data.params,
 					WorkflowID: data.ctx.workflowID,
 					IsPaused:   data.isPaused,
 				})
@@ -711,6 +714,7 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 						MaxRetry:    data.maxRetry,
 						RetryCount:  data.retryCount,
 					},
+					Params:     data.params,
 					ActivityID: data.ctx.activityID,
 				})
 			}
