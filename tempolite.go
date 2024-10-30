@@ -524,13 +524,57 @@ func (tp *Tempolite) preparePauseClosingWorkflow(ctx context.Context) error {
 	return nil
 }
 
+// Base task properties shared across all task types
+type BaseTempoliteTask struct {
+	EntityID    string
+	EntityType  string
+	RunID       string
+	StepID      string
+	Status      retrypool.TaskStatus
+	ExecutionID string
+	HandlerName string
+	QueueName   string
+	MaxRetry    int
+	RetryCount  int
+}
+
+// Specific task type for workflows
+type WorkflowTask struct {
+	BaseTempoliteTask
+	WorkflowID string
+	IsPaused   bool
+}
+
+// Specific task type for activities
+type ActivityTask struct {
+	BaseTempoliteTask
+	ActivityID string
+}
+
+// Specific task type for transactions and compensations
+type TransactionTask struct {
+	BaseTempoliteTask
+	SagaID string
+}
+
+// Worker information including all tasks assigned to it
+type WorkerInfo struct {
+	WorkerID      int
+	Workflows     []WorkflowTask
+	Activities    []ActivityTask
+	Transactions  []TransactionTask
+	Compensations []TransactionTask
+}
+
+// Pool statistics and workers
 type TempoliteRetryPool struct {
 	QueueSize  int
 	Processing int
 	DeadTasks  int
-	Workers    []int
+	Workers    map[int]*WorkerInfo // Changed to map for direct worker lookup
 }
 
+// Queue information including all pool types
 type TempoliteQueue struct {
 	Name             string
 	WorkflowPool     TempoliteRetryPool
@@ -540,11 +584,12 @@ type TempoliteQueue struct {
 	Status           QueueStatus
 }
 
+// Overall Tempolite system information
 type TempoliteInfo struct {
 	Queues []TempoliteQueue
 }
 
-// NOTE: I probably missed some info
+// Implementation of the Info method
 func (tp *Tempolite) Info() *TempoliteInfo {
 	ti := &TempoliteInfo{
 		Queues: []TempoliteQueue{},
@@ -560,41 +605,162 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			return false
 		}
 
-		ti.Queues = append(ti.Queues, TempoliteQueue{
+		tq := TempoliteQueue{
 			Name:   queueName,
 			Status: QueueStatus(value.(QueueStatus)),
 			WorkflowPool: TempoliteRetryPool{
 				QueueSize:  queue.Workflows.QueueSize(),
 				Processing: queue.Workflows.ProcessingCount(),
 				DeadTasks:  queue.Workflows.DeadTaskCount(),
-				Workers:    queue.Workflows.GetWorkerIDs(),
+				Workers:    make(map[int]*WorkerInfo),
 			},
 			ActivityPool: TempoliteRetryPool{
 				QueueSize:  queue.Activities.QueueSize(),
 				Processing: queue.Activities.ProcessingCount(),
 				DeadTasks:  queue.Activities.DeadTaskCount(),
-				Workers:    queue.Activities.GetWorkerIDs(),
+				Workers:    make(map[int]*WorkerInfo),
 			},
 			TransactionPool: TempoliteRetryPool{
 				QueueSize:  queue.Transactions.QueueSize(),
 				Processing: queue.Transactions.ProcessingCount(),
 				DeadTasks:  queue.Transactions.DeadTaskCount(),
-				Workers:    queue.Transactions.GetWorkerIDs(),
+				Workers:    make(map[int]*WorkerInfo),
 			},
 			CompensationPool: TempoliteRetryPool{
 				QueueSize:  queue.Compensations.QueueSize(),
 				Processing: queue.Compensations.ProcessingCount(),
 				DeadTasks:  queue.Compensations.DeadTaskCount(),
-				Workers:    queue.Compensations.GetWorkerIDs(),
+				Workers:    make(map[int]*WorkerInfo),
 			},
+		}
+
+		// Initialize worker maps for each pool
+		for _, workerID := range queue.Workflows.GetWorkerIDs() {
+			tq.WorkflowPool.Workers[workerID] = &WorkerInfo{
+				WorkerID:      workerID,
+				Workflows:     []WorkflowTask{},
+				Activities:    []ActivityTask{},
+				Transactions:  []TransactionTask{},
+				Compensations: []TransactionTask{},
+			}
+		}
+		for _, workerID := range queue.Activities.GetWorkerIDs() {
+			tq.ActivityPool.Workers[workerID] = &WorkerInfo{
+				WorkerID:      workerID,
+				Workflows:     []WorkflowTask{},
+				Activities:    []ActivityTask{},
+				Transactions:  []TransactionTask{},
+				Compensations: []TransactionTask{},
+			}
+		}
+		for _, workerID := range queue.Transactions.GetWorkerIDs() {
+			tq.TransactionPool.Workers[workerID] = &WorkerInfo{
+				WorkerID:      workerID,
+				Workflows:     []WorkflowTask{},
+				Activities:    []ActivityTask{},
+				Transactions:  []TransactionTask{},
+				Compensations: []TransactionTask{},
+			}
+		}
+		for _, workerID := range queue.Compensations.GetWorkerIDs() {
+			tq.CompensationPool.Workers[workerID] = &WorkerInfo{
+				WorkerID:      workerID,
+				Workflows:     []WorkflowTask{},
+				Activities:    []ActivityTask{},
+				Transactions:  []TransactionTask{},
+				Compensations: []TransactionTask{},
+			}
+		}
+
+		// Collect workflow tasks per worker
+		queue.Workflows.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+			if workerInfo, exists := tq.WorkflowPool.Workers[workerID]; exists {
+				workerInfo.Workflows = append(workerInfo.Workflows, WorkflowTask{
+					BaseTempoliteTask: BaseTempoliteTask{
+						EntityID:    data.ctx.TempoliteContext.EntityID(),
+						EntityType:  data.ctx.TempoliteContext.EntityType(),
+						RunID:       data.ctx.TempoliteContext.RunID(),
+						StepID:      data.ctx.TempoliteContext.StepID(),
+						Status:      retrypool.TaskStatus(status),
+						ExecutionID: data.ctx.executionID,
+						HandlerName: string(data.handlerName),
+						QueueName:   data.queueName,
+						MaxRetry:    data.maxRetry,
+						RetryCount:  data.retryCount,
+					},
+					WorkflowID: data.ctx.workflowID,
+					IsPaused:   data.isPaused,
+				})
+			}
+			return true
 		})
 
+		// Collect activity tasks per worker
+		queue.Activities.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
+			if workerInfo, exists := tq.ActivityPool.Workers[workerID]; exists {
+				workerInfo.Activities = append(workerInfo.Activities, ActivityTask{
+					BaseTempoliteTask: BaseTempoliteTask{
+						EntityID:    data.ctx.TempoliteContext.EntityID(),
+						EntityType:  data.ctx.TempoliteContext.EntityType(),
+						RunID:       data.ctx.TempoliteContext.RunID(),
+						StepID:      data.ctx.TempoliteContext.StepID(),
+						Status:      retrypool.TaskStatus(status),
+						ExecutionID: data.ctx.executionID,
+						HandlerName: string(data.handlerName),
+						QueueName:   data.queueName,
+						MaxRetry:    data.maxRetry,
+						RetryCount:  data.retryCount,
+					},
+					ActivityID: data.ctx.activityID,
+				})
+			}
+			return true
+		})
+
+		// Collect transaction tasks per worker
+		queue.Transactions.RangeTasks(func(data *transactionTask, workerID int, status retrypool.TaskStatus) bool {
+			if workerInfo, exists := tq.TransactionPool.Workers[workerID]; exists {
+				workerInfo.Transactions = append(workerInfo.Transactions, TransactionTask{
+					BaseTempoliteTask: BaseTempoliteTask{
+						EntityID:    data.ctx.TempoliteContext.EntityID(),
+						EntityType:  data.ctx.TempoliteContext.EntityType(),
+						RunID:       data.ctx.TempoliteContext.RunID(),
+						StepID:      data.ctx.TempoliteContext.StepID(),
+						Status:      retrypool.TaskStatus(status),
+						ExecutionID: data.executionID,
+						HandlerName: string(data.handlerName),
+					},
+					SagaID: data.sagaID,
+				})
+			}
+			return true
+		})
+
+		// Collect compensation tasks per worker
+		queue.Compensations.RangeTasks(func(data *compensationTask, workerID int, status retrypool.TaskStatus) bool {
+			if workerInfo, exists := tq.CompensationPool.Workers[workerID]; exists {
+				workerInfo.Compensations = append(workerInfo.Compensations, TransactionTask{
+					BaseTempoliteTask: BaseTempoliteTask{
+						EntityID:    data.ctx.TempoliteContext.EntityID(),
+						EntityType:  data.ctx.TempoliteContext.EntityType(),
+						RunID:       data.ctx.TempoliteContext.RunID(),
+						StepID:      data.ctx.TempoliteContext.StepID(),
+						Status:      retrypool.TaskStatus(status),
+						ExecutionID: data.executionID,
+						HandlerName: string(data.handlerName),
+					},
+					SagaID: data.sagaID,
+				})
+			}
+			return true
+		})
+
+		ti.Queues = append(ti.Queues, tq)
 		return true
 	})
 
 	return ti
 }
-
 func (tp *Tempolite) getWorkerWorkflowID(queue string) (int, error) {
 	counter, _ := tp.queuePoolWorkflowCounter.LoadOrStore(queue, &atomic.Int64{})
 	return int(counter.(*atomic.Int64).Add(1)), nil
