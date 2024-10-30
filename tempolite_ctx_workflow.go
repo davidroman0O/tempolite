@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/davidroman0O/tempolite/ent"
@@ -9,7 +10,7 @@ import (
 )
 
 type WorkflowContext struct {
-	TempoliteContext
+	context.Context
 	tp              *Tempolite
 	workflowID      string
 	executionID     string

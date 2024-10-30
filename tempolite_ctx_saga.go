@@ -1,7 +1,9 @@
 package tempolite
 
+import "context"
+
 type TransactionContext struct {
-	TempoliteContext
+	context.Context
 	tp *Tempolite
 }
 
@@ -10,7 +12,7 @@ func (w TransactionContext) EntityType() string {
 }
 
 type CompensationContext struct {
-	TempoliteContext
+	context.Context
 	tp *Tempolite
 }
 

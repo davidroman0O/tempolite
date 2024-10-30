@@ -1,7 +1,9 @@
 package tempolite
 
+import "context"
+
 type ActivityContext struct {
-	TempoliteContext
+	context.Context
 	tp          *Tempolite
 	activityID  string
 	executionID string

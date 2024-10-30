@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -56,6 +57,10 @@ func (tp *Tempolite) createWorkflowPool(queue string, countWorkers int) (*retryp
 }
 
 func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+	if errors.Is(err, context.Canceled) {
+		// It's not a REAL panic
+		return
+	}
 	tp.logger.Debug(tp.ctx, "workflow pool worker panicked", "workerID", workerID, "error", err)
 	tp.logger.Error(tp.ctx, "workflow pool worker panicked", "err", err, "stackTrace", stackTrace)
 	fmt.Println(err)
@@ -63,6 +68,42 @@ func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, 
 }
 
 func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {
+	// fmt.Println("workflowOnPanic", v, stackTrace)
+	if errors.Is(v.(error), context.Canceled) {
+		tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task)
+		// It's not a REAL panic
+		// Manage the case when the context is canceled
+		tx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Failed to start transaction for updating workflow status", "error", err)
+			return
+		}
+
+		if _, err := tx.WorkflowExecution.UpdateOneID(task.ctx.executionID).SetStatus(workflowexecution.StatusCancelled).
+			Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "workflow task on panic: WorkflowExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return
+		}
+
+		if _, err := tx.Workflow.UpdateOneID(task.ctx.workflowID).SetStatus(workflow.StatusCancelled).Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "workflow task on panic: workflow.UpdateOneID failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
+		}
+
+		tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task, "error", v)
+		return
+	}
+
 	tp.logger.Debug(tp.ctx, "workflow pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "workflow pool task panicked", "stackTrace", stackTrace)
 	fmt.Println(v)
@@ -229,79 +270,77 @@ type workflowWorker struct {
 }
 
 func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
 
-		w.tp.logger.Debug(data.ctx, "workflow pool worker run", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+	w.tp.logger.Debug(data.ctx, "workflow pool worker run", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 
-		values := []reflect.Value{reflect.ValueOf(data.ctx)}
+	data.ctx.Context = ctx // we spread the context of the task to the handler to be able to manage the cancellation
 
-		for _, v := range data.params {
-			values = append(values, reflect.ValueOf(v))
+	values := []reflect.Value{reflect.ValueOf(data.ctx)}
+
+	for _, v := range data.params {
+		values = append(values, reflect.ValueOf(v))
+	}
+
+	returnedValues := reflect.ValueOf(data.handler).Call(values)
+
+	var res []interface{}
+	var errRes error
+	if len(returnedValues) > 0 {
+		res = make([]interface{}, len(returnedValues)-1)
+		for i := 0; i < len(returnedValues)-1; i++ {
+			res[i] = returnedValues[i].Interface()
 		}
-
-		returnedValues := reflect.ValueOf(data.handler).Call(values)
-
-		var res []interface{}
-		var errRes error
-		if len(returnedValues) > 0 {
-			res = make([]interface{}, len(returnedValues)-1)
-			for i := 0; i < len(returnedValues)-1; i++ {
-				res[i] = returnedValues[i].Interface()
-			}
-			if !returnedValues[len(returnedValues)-1].IsNil() {
-				errRes = returnedValues[len(returnedValues)-1].Interface().(error)
-			}
+		if !returnedValues[len(returnedValues)-1].IsNil() {
+			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
 		}
+	}
 
-		if errRes == errWorkflowPaused {
-			data.isPaused = true
-			w.tp.logger.Debug(data.ctx, "workflow pool worker paused", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID)
-			return nil
-		}
+	if errRes == errWorkflowPaused {
+		data.isPaused = true
+		w.tp.logger.Debug(data.ctx, "workflow pool worker paused", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID)
+		return nil
+	}
 
-		var value any
-		var ok bool
-		var workflowInfo Workflow
+	var value any
+	var ok bool
+	var workflowInfo Workflow
 
-		if value, ok = w.tp.workflows.Load(data.handlerName); ok {
-			if workflowInfo, ok = value.(Workflow); !ok {
-				w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
-				return fmt.Errorf("workflow %s not found", data.handlerName)
-			}
-		} else {
+	if value, ok = w.tp.workflows.Load(data.handlerName); ok {
+		if workflowInfo, ok = value.(Workflow); !ok {
 			w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 			return fmt.Errorf("workflow %s not found", data.handlerName)
 		}
-
-		serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(workflowInfo), res)
-		if err != nil {
-			w.tp.logger.Error(data.ctx, "workflow pool worker: convertOutputsForSerialization failed", "error", err)
-			return err
-		}
-
-		// fmt.Println("output to save", res, errRes)
-		tx, err := w.tp.client.Tx(w.tp.ctx)
-		if err != nil {
-			w.tp.logger.Error(data.ctx, "Failed to start transaction for updating workflow execution output", "error", err)
-			return err
-		}
-
-		if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
-			w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
-			}
-			return err
-		}
-
-		if err := tx.Commit(); err != nil {
-			w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating workflow execution output", "error", err)
-			return err
-		}
-
-		return errRes
+	} else {
+		w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+		return fmt.Errorf("workflow %s not found", data.handlerName)
 	}
+
+	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(workflowInfo), res)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "workflow pool worker: convertOutputsForSerialization failed", "error", err)
+		return err
+	}
+
+	// fmt.Println("output to save", res, errRes)
+	tx, err := w.tp.client.Tx(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to start transaction for updating workflow execution output", "error", err)
+		return err
+	}
+
+	if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
+		w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating workflow execution output", "error", err)
+		return err
+	}
+
+	return errRes
+
 }

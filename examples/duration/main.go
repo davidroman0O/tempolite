@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync/atomic"
@@ -15,60 +16,72 @@ type LongRunningActivity struct{}
 
 func (l LongRunningActivity) Run(ctx tempolite.ActivityContext, duration time.Duration) error {
 	log.Printf("Activity starting, will run for %v", duration)
-	time.Sleep(duration)
-	log.Printf("Activity completed")
-	return nil
+	select {
+	case <-ctx.Done():
+		fmt.Println("Activity cancelled")
+		return ctx.Err()
+	case <-time.After(duration):
+		log.Printf("Activity completed")
+		return nil
+	}
 }
 
 var failed atomic.Bool
 
 // WorkflowWithTimeouts demonstrates using durations for both workflows and activities
 func WorkflowWithTimeouts(ctx tempolite.WorkflowContext) error {
-	activity := LongRunningActivity{}
+	// Meaning that you can retry, but if we decide to cancel the workflow then you have to stop
+	select {
+	case <-ctx.Done():
+		fmt.Println("Workflow cancelled")
+		return ctx.Err()
+	default:
+		activity := LongRunningActivity{}
 
-	fmt.Println("Workflow starting")
+		fmt.Println("Workflow starting")
 
-	// First activity: Should complete within duration
-	log.Println("Starting first activity (should complete)")
-	err := ctx.Activity(
-		"quick-task",
-		activity.Run,
-		tempolite.ActivityConfig(
-			tempolite.WithActivityDuration("2s"),
-			tempolite.WithActivityRetryMaximumAttempts(0),
-		),
-		3*time.Second,
-	).Get()
-	if err != nil {
-		return fmt.Errorf("first activity failed: %w", err)
+		// First activity: Should complete within duration
+		log.Println("Starting first activity (should complete)")
+		err := ctx.Activity(
+			"quick-task",
+			activity.Run,
+			tempolite.ActivityConfig(
+				tempolite.WithActivityContextDuration("2s"),
+				tempolite.WithActivityRetryMaximumAttempts(0),
+			),
+			3*time.Second,
+		).Get()
+		if err != nil {
+			return err
+		}
+
+		if !failed.Load() {
+			failed.Store(true)
+			return errors.Join(fmt.Errorf("failed first activity"))
+		}
+
+		// Second activity: Should exceed duration and fail
+		log.Println("Starting second activity (should timeout)")
+		err = ctx.Activity(
+			"slow-task",
+			activity.Run,
+			tempolite.ActivityConfig(
+				tempolite.WithActivityContextDuration("1s"),
+				tempolite.WithActivityRetryMaximumAttempts(0),
+			),
+			3*time.Second,
+		).Get()
+		if err != nil {
+			log.Printf("Second activity failed as expected: %v", err)
+			// Continue workflow execution despite activity timeout
+			return err
+		}
+
+		log.Println("Workflow completing")
+		return nil
 	}
-
-	if !failed.Load() {
-		failed.Store(true)
-		return fmt.Errorf("first activity failed")
-	}
-
-	// Second activity: Should exceed duration and fail
-	log.Println("Starting second activity (should timeout)")
-	err = ctx.Activity(
-		"slow-task",
-		activity.Run,
-		tempolite.ActivityConfig(
-			tempolite.WithActivityDuration("1s"),
-			tempolite.WithActivityRetryMaximumAttempts(0),
-		),
-		3*time.Second,
-	).Get()
-	if err != nil {
-		log.Printf("Second activity failed as expected: %v", err)
-		// Continue workflow execution despite activity timeout
-	}
-
-	log.Println("Workflow completing")
-	return nil
 }
 
-// TODO: that feature doesn't works YET
 func main() {
 	tp, err := tempolite.New(
 		context.Background(),
@@ -88,7 +101,7 @@ func main() {
 	workflowInfo := tp.Workflow(
 		WorkflowWithTimeouts,
 		tempolite.WorkflowConfig(
-			tempolite.WithWorkflowDuration("1s"),
+			tempolite.WithWorkflowContextDuration("0s"),
 			tempolite.WithWorkflowRetryMaximumAttempts(1),
 		),
 	)

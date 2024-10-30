@@ -18,6 +18,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 		tp.logger.Error(tp.ctx, "Scheduler workflow execution: getWorkflowPoolQueue failed", "error", err)
 		return
 	}
+	var pendingWorkflows []*ent.WorkflowExecution
 
 	for {
 		select {
@@ -29,36 +30,20 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 
 			var ok bool
 
-			// Get queue workers
-			queueWorkersRaw, ok := tp.queues.Load(queueName)
-			if !ok {
-				continue
-			}
-			queueWorkers := queueWorkersRaw.(*QueueWorkers)
+			availableSlots := tp.getAvailableWorkflowExecutionSlots(queueName)
 
-			// Check available slots in this queue's workflow pool
-			workerIDs := queueWorkers.Workflows.GetWorkerIDs()
-			availableSlots := len(workerIDs) - queueWorkers.Workflows.ProcessingCount()
 			if availableSlots <= 0 {
 				runtime.Gosched()
 				continue
 			}
 
-			pendingWorkflows, err := tp.client.WorkflowExecution.Query().
-				Where(
-					workflowexecution.StatusEQ(workflowexecution.StatusPending),
-					workflowexecution.HasWorkflowWith(workflow.QueueNameEQ(queueName)),
-				).
-				Order(ent.Asc(workflowexecution.FieldStartedAt)).
-				WithWorkflow().
-				Limit(availableSlots).
-				All(tp.ctx)
-
-			if err != nil {
+			if pendingWorkflows, err = tp.getAvailableWorkflowExecutionForQueue(queueName, availableSlots); err != nil {
+				runtime.Gosched()
 				continue
 			}
 
 			if len(pendingWorkflows) == 0 {
+				runtime.Gosched()
 				continue
 			}
 
@@ -68,7 +53,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 				tp.logger.Debug(tp.ctx, "Scheduler workflow execution: pending workflow", "workflow_id", pendingWorkflowExecution.Edges.Workflow.ID, "workflow_execution_id", pendingWorkflowExecution.ID)
 
 				var workflowEntity *ent.Workflow
-				if workflowEntity, err = tp.client.Workflow.Get(tp.ctx, pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
+				if workflowEntity, err = tp.getWorkflowByID(pendingWorkflowExecution.Edges.Workflow.ID); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler workflow execution: workflow.Get failed", "error", err)
 					continue
 				}
@@ -163,7 +148,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 					whenBeingDispatched := retrypool.NewProcessedNotification()
 
 					opts := []retrypool.TaskOption[*workflowTask]{
-						retrypool.WithPanicOnTimeout[*workflowTask](),
+						// retrypool.WithPanicOnTimeout[*workflowTask](),
 						retrypool.WithImmediateRetry[*workflowTask](),
 						retrypool.WithBeingProcessed[*workflowTask](whenBeingDispatched),
 					}
@@ -174,8 +159,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to parse max duration", "error", err)
 							continue
 						}
-						opts = append(opts, retrypool.WithTimeLimit[*workflowTask](d))
-						opts = append(opts, retrypool.WithMaxDuration[*workflowTask](d))
+						opts = append(opts, retrypool.WithMaxContextDuration[*workflowTask](d))
 					}
 
 					if err := queue.Dispatch(

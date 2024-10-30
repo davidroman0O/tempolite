@@ -9,6 +9,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/sagaexecution"
 )
 
+// TODO: should we mange the cancellation the same way too?
 type compensationTask struct {
 	ctx         CompensationContext
 	sagaID      string
@@ -175,28 +176,25 @@ type compensationWorker struct {
 }
 
 func (w compensationWorker) Run(ctx context.Context, data *compensationTask) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		w.tp.logger.Debug(ctx, "Executing compensation step", "handlerName", data.handlerName)
+	w.tp.logger.Debug(ctx, "Executing compensation step", "handlerName", data.handlerName)
 
-		sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
-		if !ok {
-			w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
-			return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
-		}
-		sagaDef := sagaHandlerInfo.(*SagaDefinition)
-		step := sagaDef.Steps[data.stepIndex]
+	data.ctx.Context = ctx
 
-		result, err := step.Compensation(data.ctx)
-		if err != nil {
-			w.tp.logger.Error(ctx, "Compensation step failed", "handlerName", data.handlerName, "error", err)
-			return err
-		}
-
-		w.tp.logger.Debug(ctx, "Compensation step completed", "handlerName", data.handlerName, "result", result)
-
-		return nil
+	sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
+	if !ok {
+		w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
+		return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
 	}
+	sagaDef := sagaHandlerInfo.(*SagaDefinition)
+	step := sagaDef.Steps[data.stepIndex]
+
+	result, err := step.Compensation(data.ctx)
+	if err != nil {
+		w.tp.logger.Error(ctx, "Compensation step failed", "handlerName", data.handlerName, "error", err)
+		return err
+	}
+
+	w.tp.logger.Debug(ctx, "Compensation step completed", "handlerName", data.handlerName, "result", result)
+
+	return nil
 }

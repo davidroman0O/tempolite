@@ -32,7 +32,7 @@ var (
 	ActivityExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "run_id", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled"}, Default: "Pending"},
 		{Name: "queue_name", Type: field.TypeString, Default: "default"},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},

@@ -1,7 +1,9 @@
 package tempolite
 
+import "context"
+
 type SideEffectContext struct {
-	TempoliteContext
+	context.Context
 	tp           *Tempolite
 	sideEffectID string
 	executionID  string

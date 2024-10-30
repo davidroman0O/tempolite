@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -51,11 +52,50 @@ func (tp *Tempolite) createActivityPool(queue string, countWorkers int) (*retryp
 }
 
 func (tp *Tempolite) activityWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
+	if errors.Is(err, context.Canceled) {
+		// It's not a REAL panic
+		return
+	}
 	tp.logger.Debug(tp.ctx, "activity pool worker panicked", "workerID", workerID, "error", err)
 	tp.logger.Error(tp.ctx, "activity pool worker panicked", "err", err, "stackTrace", stackTrace)
 }
 
 func (tp *Tempolite) activityOnPanic(task *activityTask, v interface{}, stackTrace string) {
+
+	if errors.Is(v.(error), context.Canceled) {
+		// It's not a REAL panic
+		tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
+		// Manage the case when the context is canceled
+		tx, err := tp.client.Tx(tp.ctx)
+		if err != nil {
+			tp.logger.Error(tp.ctx, "Failed to start transaction for updating activity status", "error", err)
+			return
+		}
+
+		if _, err := tx.ActivityExecution.UpdateOneID(task.ctx.executionID).SetStatus(activityexecution.StatusCancelled).
+			Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "activity task on panic: ActivityExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return
+		}
+
+		if _, err := tx.Activity.UpdateOneID(task.ctx.activityID).SetStatus(activity.StatusCancelled).Save(tp.ctx); err != nil {
+			tp.logger.Error(tp.ctx, "activity task on panic: activity.UpdateOneID failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
+		}
+
+		tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
+		return
+	}
 	tp.logger.Debug(tp.ctx, "activity pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "activity pool task panicked", "stackTrace", stackTrace)
 }
@@ -176,74 +216,73 @@ type activityWorker struct {
 }
 
 func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
 
-		w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "params", data.params)
+	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "params", data.params)
 
-		values := []reflect.Value{reflect.ValueOf(data.ctx)}
+	data.ctx.Context = ctx // we spread the context of the task to the handler to be able to manage the cancellation
 
-		for _, v := range data.params {
-			values = append(values, reflect.ValueOf(v))
+	values := []reflect.Value{reflect.ValueOf(data.ctx)}
+
+	for _, v := range data.params {
+		values = append(values, reflect.ValueOf(v))
+	}
+
+	// If context is canceled, the `Call` function will panic
+	// Therefore, we need to manage that panic on the callbacks, and make sure the Activity is failed
+	returnedValues := reflect.ValueOf(data.handler).Call(values)
+
+	var res []interface{}
+	var errRes error
+	if len(returnedValues) > 0 {
+		res = make([]interface{}, len(returnedValues)-1)
+		for i := 0; i < len(returnedValues)-1; i++ {
+			res[i] = returnedValues[i].Interface()
 		}
-
-		returnedValues := reflect.ValueOf(data.handler).Call(values)
-
-		var res []interface{}
-		var errRes error
-		if len(returnedValues) > 0 {
-			res = make([]interface{}, len(returnedValues)-1)
-			for i := 0; i < len(returnedValues)-1; i++ {
-				res[i] = returnedValues[i].Interface()
-			}
-			if !returnedValues[len(returnedValues)-1].IsNil() {
-				errRes = returnedValues[len(returnedValues)-1].Interface().(error)
-			}
+		if !returnedValues[len(returnedValues)-1].IsNil() {
+			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
 		}
+	}
 
-		var value any
-		var ok bool
-		var activityInfo Activity
+	var value any
+	var ok bool
+	var activityInfo Activity
 
-		if value, ok = w.tp.activities.Load(data.handlerName); ok {
-			if activityInfo, ok = value.(Activity); !ok {
-				w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
-				return fmt.Errorf("activity %s not found", data.handlerName)
-			}
-		} else {
+	if value, ok = w.tp.activities.Load(data.handlerName); ok {
+		if activityInfo, ok = value.(Activity); !ok {
 			w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 			return fmt.Errorf("activity %s not found", data.handlerName)
 		}
-
-		serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(activityInfo), res)
-		if err != nil {
-			w.tp.logger.Error(data.ctx, "activity pool worker: convertOutputsForSerialization failed", "error", err)
-			return err
-		}
-
-		tx, err := w.tp.client.Tx(w.tp.ctx)
-		if err != nil {
-			w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
-			return err
-		}
-
-		if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
-			w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)
-			}
-			return err
-		}
-
-		if err := tx.Commit(); err != nil {
-			w.tp.logger.Error(w.tp.ctx, "Failed to commit transaction for updating activity execution output", "error", err)
-			return err
-		}
-
-		w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "output", res)
-
-		return errRes
+	} else {
+		w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+		return fmt.Errorf("activity %s not found", data.handlerName)
 	}
+
+	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(activityInfo), res)
+	if err != nil {
+		w.tp.logger.Error(data.ctx, "activity pool worker: convertOutputsForSerialization failed", "error", err)
+		return err
+	}
+
+	tx, err := w.tp.client.Tx(w.tp.ctx)
+	if err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
+		return err
+	}
+
+	if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
+		w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
+		if rerr := tx.Rollback(); rerr != nil {
+			w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.tp.logger.Error(w.tp.ctx, "Failed to commit transaction for updating activity execution output", "error", err)
+		return err
+	}
+
+	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "output", res)
+
+	return errRes
 }

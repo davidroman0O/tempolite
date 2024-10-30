@@ -121,7 +121,7 @@ func TestQueues(t *testing.T) {
 		originalCount := len(workers)
 
 		// Remove a worker
-		if err := tp.RemoveWorkerActivity("default", workers[0]); err != nil {
+		if err := tp.RemoveWorkerActivityByID("default", workers[0]); err != nil {
 			t.Fatalf("Failed to remove worker: %v", err)
 		}
 

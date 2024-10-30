@@ -728,10 +728,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.TransactionPool.Workers[workerID]; exists {
 				workerInfo.Transactions = append(workerInfo.Transactions, TransactionTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.EntityID(),
-						EntityType:  data.ctx.EntityType(),
-						RunID:       data.ctx.RunID(),
-						StepID:      data.ctx.StepID(),
+						// EntityID:    data.ctx.EntityID(),
+						EntityType: data.ctx.EntityType(),
+						// RunID:       data.ctx.RunID(),
+						// StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.executionID,
 						HandlerName: string(data.handlerName),
@@ -747,10 +747,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.CompensationPool.Workers[workerID]; exists {
 				workerInfo.Compensations = append(workerInfo.Compensations, TransactionTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.EntityID(),
-						EntityType:  data.ctx.EntityType(),
-						RunID:       data.ctx.RunID(),
-						StepID:      data.ctx.StepID(),
+						// EntityID:    data.ctx.EntityID(),
+						EntityType: data.ctx.EntityType(),
+						// RunID:       data.ctx.RunID(),
+						// StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.executionID,
 						HandlerName: string(data.handlerName),
@@ -969,15 +969,16 @@ func (tp *Tempolite) GetCompensationsInfo(queue string) (*WorkerPoolInfo, error)
 	}, nil
 }
 
-func (tp *Tempolite) RemoveWorkerWorkflow(queue string, id int) error {
+func (tp *Tempolite) RemoveWorkerWorkflowByID(queue string, id int) error {
 	pool, err := tp.getWorkflowPoolQueue(queue)
 	if err != nil {
 		return err
 	}
+	pool.ForceClose()
 	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerActivity(queue string, id int) error {
+func (tp *Tempolite) RemoveWorkerActivityByID(queue string, id int) error {
 	pool, err := tp.getActivityPoolQueue(queue)
 	if err != nil {
 		return err
@@ -985,7 +986,7 @@ func (tp *Tempolite) RemoveWorkerActivity(queue string, id int) error {
 	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerSideEffect(queue string, id int) error {
+func (tp *Tempolite) RemoveWorkerSideEffectByID(queue string, id int) error {
 	pool, err := tp.getSideEffectPoolQueue(queue)
 	if err != nil {
 		return err
@@ -993,7 +994,7 @@ func (tp *Tempolite) RemoveWorkerSideEffect(queue string, id int) error {
 	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerTransaction(queue string, id int) error {
+func (tp *Tempolite) RemoveWorkerTransactionByID(queue string, id int) error {
 	pool, err := tp.getTransactionPoolQueue(queue)
 	if err != nil {
 		return err
@@ -1001,7 +1002,7 @@ func (tp *Tempolite) RemoveWorkerTransaction(queue string, id int) error {
 	return pool.RemoveWorker(id)
 }
 
-func (tp *Tempolite) RemoveWorkerCompensation(queue string, id int) error {
+func (tp *Tempolite) RemoveWorkerCompensationByID(queue string, id int) error {
 	pool, err := tp.getCompensationPoolQueue(queue)
 	if err != nil {
 		return err

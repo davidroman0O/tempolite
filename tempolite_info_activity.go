@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 )
 
 type ActivityInfo struct {
+	context.Context
 	tp         *Tempolite
 	ActivityID ActivityID
 	err        error

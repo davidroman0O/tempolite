@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -21,9 +22,10 @@ func (tp *Tempolite) GetActivity(id ActivityID) (*ActivityInfo, error) {
 	return &info, nil
 }
 
-func (tp *Tempolite) getActivity(ctx TempoliteContext, id ActivityID, err error) *ActivityInfo {
+func (tp *Tempolite) getActivity(ctx context.Context, id ActivityID, err error) *ActivityInfo {
 	tp.logger.Debug(tp.ctx, "getActivity", "activityID", id, "error", err)
 	info := ActivityInfo{
+		Context:    ctx,
 		tp:         tp,
 		ActivityID: id,
 		err:        err,
@@ -31,9 +33,10 @@ func (tp *Tempolite) getActivity(ctx TempoliteContext, id ActivityID, err error)
 	return &info
 }
 
-func (tp *Tempolite) getActivityExecution(ctx TempoliteContext, id ActivityExecutionID, err error) *ActivityExecutionInfo {
+func (tp *Tempolite) getActivityExecution(ctx context.Context, id ActivityExecutionID, err error) *ActivityExecutionInfo {
 	tp.logger.Debug(tp.ctx, "getActivityExecution", "activityExecutionID", id, "error", err)
 	info := ActivityExecutionInfo{
+		Context:     ctx,
 		tp:          tp,
 		ExecutionID: id,
 		err:         err,

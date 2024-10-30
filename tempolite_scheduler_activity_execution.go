@@ -169,7 +169,7 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 							tp.logger.Error(tp.ctx, "Scheduler workflow execution: Failed to parse max duration", "error", err)
 							continue
 						}
-						opts = append(opts, retrypool.WithTimeLimit[*activityTask](d))
+						opts = append(opts, retrypool.WithMaxContextDuration[*activityTask](d))
 					}
 
 					if err := queue.Dispatch(task, opts...); err != nil {
