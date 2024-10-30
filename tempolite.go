@@ -452,10 +452,11 @@ func (tp *Tempolite) Close(opts ...closeOption) error {
 	// First cancel the context to stop new operations
 	tp.cancel()
 
-	// Signal all schedulers to stop
+	// Now close all pools in each queue
 	tp.queues.Range(func(key, value interface{}) bool {
-		queue := value.(*QueueWorkers)
-		close(queue.Done)
+		queueName := key.(string)
+		tp.logger.Debug(tp.ctx, "Closing queue pools", "queueName", queueName)
+		tp.removeQueue(queueName)
 		return true
 	})
 
@@ -485,13 +486,6 @@ func (tp *Tempolite) Close(opts ...closeOption) error {
 			}
 		}
 
-		// Now close all pools in each queue
-		tp.queues.Range(func(key, value interface{}) bool {
-			queueName := key.(string)
-			tp.logger.Debug(tp.ctx, "Closing queue pools", "queueName", queueName)
-			tp.removeQueue(queueName)
-			return true
-		})
 	}()
 
 	// Wait for shutdown with timeout
