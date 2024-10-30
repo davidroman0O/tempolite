@@ -677,10 +677,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.WorkflowPool.Workers[workerID]; exists {
 				workerInfo.Workflows = append(workerInfo.Workflows, WorkflowTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.TempoliteContext.EntityID(),
-						EntityType:  data.ctx.TempoliteContext.EntityType(),
-						RunID:       data.ctx.TempoliteContext.RunID(),
-						StepID:      data.ctx.TempoliteContext.StepID(),
+						EntityID:    data.ctx.EntityID(),
+						EntityType:  data.ctx.EntityType(),
+						RunID:       data.ctx.RunID(),
+						StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.ctx.executionID,
 						HandlerName: string(data.handlerName),
@@ -700,10 +700,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.ActivityPool.Workers[workerID]; exists {
 				workerInfo.Activities = append(workerInfo.Activities, ActivityTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.TempoliteContext.EntityID(),
-						EntityType:  data.ctx.TempoliteContext.EntityType(),
-						RunID:       data.ctx.TempoliteContext.RunID(),
-						StepID:      data.ctx.TempoliteContext.StepID(),
+						EntityID:    data.ctx.EntityID(),
+						EntityType:  data.ctx.EntityType(),
+						RunID:       data.ctx.RunID(),
+						StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.ctx.executionID,
 						HandlerName: string(data.handlerName),
@@ -722,10 +722,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.TransactionPool.Workers[workerID]; exists {
 				workerInfo.Transactions = append(workerInfo.Transactions, TransactionTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.TempoliteContext.EntityID(),
-						EntityType:  data.ctx.TempoliteContext.EntityType(),
-						RunID:       data.ctx.TempoliteContext.RunID(),
-						StepID:      data.ctx.TempoliteContext.StepID(),
+						EntityID:    data.ctx.EntityID(),
+						EntityType:  data.ctx.EntityType(),
+						RunID:       data.ctx.RunID(),
+						StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.executionID,
 						HandlerName: string(data.handlerName),
@@ -741,10 +741,10 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 			if workerInfo, exists := tq.CompensationPool.Workers[workerID]; exists {
 				workerInfo.Compensations = append(workerInfo.Compensations, TransactionTask{
 					BaseTempoliteTask: BaseTempoliteTask{
-						EntityID:    data.ctx.TempoliteContext.EntityID(),
-						EntityType:  data.ctx.TempoliteContext.EntityType(),
-						RunID:       data.ctx.TempoliteContext.RunID(),
-						StepID:      data.ctx.TempoliteContext.StepID(),
+						EntityID:    data.ctx.EntityID(),
+						EntityType:  data.ctx.EntityType(),
+						RunID:       data.ctx.RunID(),
+						StepID:      data.ctx.StepID(),
 						Status:      retrypool.TaskStatus(status),
 						ExecutionID: data.executionID,
 						HandlerName: string(data.handlerName),
