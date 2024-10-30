@@ -129,54 +129,59 @@ type sideEffectWorker struct {
 }
 
 func (w sideEffectWorker) Run(ctx context.Context, data *sideEffectTask) error {
-	w.tp.logger.Debug(data.ctx, "sideEffect pool worker run", "executionID", data.ctx.executionID, "handler", data.handlerName)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		w.tp.logger.Debug(data.ctx, "sideEffect pool worker run", "executionID", data.ctx.executionID, "handler", data.handlerName)
 
-	values := []reflect.Value{reflect.ValueOf(data.ctx)}
-	returnedValues := reflect.ValueOf(data.handler).Call(values)
+		values := []reflect.Value{reflect.ValueOf(data.ctx)}
+		returnedValues := reflect.ValueOf(data.handler).Call(values)
 
-	res := make([]interface{}, len(returnedValues))
-	for i, v := range returnedValues {
-		res[i] = v.Interface()
-	}
+		res := make([]interface{}, len(returnedValues))
+		for i, v := range returnedValues {
+			res[i] = v.Interface()
+		}
 
-	var value any
-	var ok bool
-	var sideEffectInfo SideEffect
+		var value any
+		var ok bool
+		var sideEffectInfo SideEffect
 
-	if value, ok = w.tp.sideEffects.Load(data.ctx.sideEffectID); ok {
-		if sideEffectInfo, ok = value.(SideEffect); !ok {
+		if value, ok = w.tp.sideEffects.Load(data.ctx.sideEffectID); ok {
+			if sideEffectInfo, ok = value.(SideEffect); !ok {
+				w.tp.logger.Error(data.ctx, "sideEffect pool worker: sideEffect not found", "sideEffectID", data.ctx.sideEffectID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+				return fmt.Errorf("sideEffect %s not found", data.handlerName)
+			}
+		} else {
 			w.tp.logger.Error(data.ctx, "sideEffect pool worker: sideEffect not found", "sideEffectID", data.ctx.sideEffectID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 			return fmt.Errorf("sideEffect %s not found", data.handlerName)
 		}
-	} else {
-		w.tp.logger.Error(data.ctx, "sideEffect pool worker: sideEffect not found", "sideEffectID", data.ctx.sideEffectID, "executionID", data.ctx.executionID, "handler", data.handlerName)
-		return fmt.Errorf("sideEffect %s not found", data.handlerName)
-	}
 
-	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(sideEffectInfo), res)
-	if err != nil {
-		w.tp.logger.Error(data.ctx, "sideEffect pool worker: convertOutputsForSerialization failed", "error", err)
-		return err
-	}
-
-	tx, err := w.tp.client.Tx(w.tp.ctx)
-	if err != nil {
-		w.tp.logger.Error(data.ctx, "Failed to start transaction for updating side effect execution output", "error", err)
-		return err
-	}
-
-	if _, err := tx.SideEffectExecution.UpdateOneID(data.ctx.ExecutionID()).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
-		w.tp.logger.Error(data.ctx, "sideEffect pool worker run: SideEffectExecution.Update failed", "error", err)
-		if rerr := tx.Rollback(); rerr != nil {
-			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+		serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(sideEffectInfo), res)
+		if err != nil {
+			w.tp.logger.Error(data.ctx, "sideEffect pool worker: convertOutputsForSerialization failed", "error", err)
+			return err
 		}
-		return err
-	}
 
-	if err := tx.Commit(); err != nil {
-		w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating side effect execution output", "error", err)
-		return err
-	}
+		tx, err := w.tp.client.Tx(w.tp.ctx)
+		if err != nil {
+			w.tp.logger.Error(data.ctx, "Failed to start transaction for updating side effect execution output", "error", err)
+			return err
+		}
 
-	return nil
+		if _, err := tx.SideEffectExecution.UpdateOneID(data.ctx.ExecutionID()).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
+			w.tp.logger.Error(data.ctx, "sideEffect pool worker run: SideEffectExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating side effect execution output", "error", err)
+			return err
+		}
+
+		return nil
+	}
 }

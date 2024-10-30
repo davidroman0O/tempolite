@@ -85,11 +85,13 @@ type Tempolite struct {
 
 func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tempolite, error) {
 	cfg := tempoliteConfig{
-		initialWorkflowsWorkers:    5,
-		initialActivityWorkers:     5,
-		initialSideEffectWorkers:   5,
-		initialTransctionWorkers:   5,
-		initialCompensationWorkers: 5,
+		workerConfig: WorkerConfig{
+			InitialWorkflowsWorkers:    5,
+			InitialActivityWorkers:     5,
+			InitialSideEffectWorkers:   5,
+			InitialTransctionWorkers:   5,
+			InitialCompensationWorkers: 5,
+		},
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -192,7 +194,7 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 
 	tp.logger.Debug(ctx, "Registering default queue")
 	// priority
-	if err := tp.createQueue("default", cfg.initialWorkflowsWorkers, cfg.initialActivityWorkers, cfg.initialSideEffectWorkers, cfg.initialTransctionWorkers, cfg.initialCompensationWorkers); err != nil {
+	if err := tp.createQueue("default", cfg.workerConfig.InitialWorkflowsWorkers, cfg.workerConfig.InitialActivityWorkers, cfg.workerConfig.InitialSideEffectWorkers, cfg.workerConfig.InitialTransctionWorkers, cfg.workerConfig.InitialCompensationWorkers); err != nil {
 		tp.logger.Error(ctx, "Error creating default queue", "error", err)
 		return nil, err
 	}

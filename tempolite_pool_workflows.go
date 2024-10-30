@@ -33,6 +33,8 @@ func (tp *Tempolite) createWorkflowPool(queue string, countWorkers int) (*retryp
 		retrypool.WithPanicWorker[*workflowTask](tp.workflowWorkerPanic),
 	}
 
+	var futurePool *retrypool.Pool[*workflowTask]
+
 	tp.logger.Debug(tp.ctx, "creating workflow pool", "queue", queue, "workers", countWorkers)
 
 	workers := []retrypool.Worker[*workflowTask]{}
@@ -45,10 +47,12 @@ func (tp *Tempolite) createWorkflowPool(queue string, countWorkers int) (*retryp
 		workers = append(workers, workflowWorker{id: id, tp: tp})
 	}
 
-	return retrypool.New(
+	futurePool = retrypool.New(
 		tp.ctx,
 		workers,
-		opts...), nil
+		opts...)
+
+	return futurePool, nil
 }
 
 func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, stackTrace string) {
@@ -225,74 +229,79 @@ type workflowWorker struct {
 }
 
 func (w workflowWorker) Run(ctx context.Context, data *workflowTask) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 
-	w.tp.logger.Debug(data.ctx, "workflow pool worker run", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+		w.tp.logger.Debug(data.ctx, "workflow pool worker run", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 
-	values := []reflect.Value{reflect.ValueOf(data.ctx)}
+		values := []reflect.Value{reflect.ValueOf(data.ctx)}
 
-	for _, v := range data.params {
-		values = append(values, reflect.ValueOf(v))
-	}
-
-	returnedValues := reflect.ValueOf(data.handler).Call(values)
-
-	var res []interface{}
-	var errRes error
-	if len(returnedValues) > 0 {
-		res = make([]interface{}, len(returnedValues)-1)
-		for i := 0; i < len(returnedValues)-1; i++ {
-			res[i] = returnedValues[i].Interface()
+		for _, v := range data.params {
+			values = append(values, reflect.ValueOf(v))
 		}
-		if !returnedValues[len(returnedValues)-1].IsNil() {
-			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
+
+		returnedValues := reflect.ValueOf(data.handler).Call(values)
+
+		var res []interface{}
+		var errRes error
+		if len(returnedValues) > 0 {
+			res = make([]interface{}, len(returnedValues)-1)
+			for i := 0; i < len(returnedValues)-1; i++ {
+				res[i] = returnedValues[i].Interface()
+			}
+			if !returnedValues[len(returnedValues)-1].IsNil() {
+				errRes = returnedValues[len(returnedValues)-1].Interface().(error)
+			}
 		}
-	}
 
-	if errRes == errWorkflowPaused {
-		data.isPaused = true
-		w.tp.logger.Debug(data.ctx, "workflow pool worker paused", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID)
-		return nil
-	}
+		if errRes == errWorkflowPaused {
+			data.isPaused = true
+			w.tp.logger.Debug(data.ctx, "workflow pool worker paused", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID)
+			return nil
+		}
 
-	var value any
-	var ok bool
-	var workflowInfo Workflow
+		var value any
+		var ok bool
+		var workflowInfo Workflow
 
-	if value, ok = w.tp.workflows.Load(data.handlerName); ok {
-		if workflowInfo, ok = value.(Workflow); !ok {
+		if value, ok = w.tp.workflows.Load(data.handlerName); ok {
+			if workflowInfo, ok = value.(Workflow); !ok {
+				w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+				return fmt.Errorf("workflow %s not found", data.handlerName)
+			}
+		} else {
 			w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 			return fmt.Errorf("workflow %s not found", data.handlerName)
 		}
-	} else {
-		w.tp.logger.Error(data.ctx, "workflow pool worker: workflow not found", "workflowID", data.ctx.workflowID, "executionID", data.ctx.executionID, "handler", data.handlerName)
-		return fmt.Errorf("workflow %s not found", data.handlerName)
-	}
 
-	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(workflowInfo), res)
-	if err != nil {
-		w.tp.logger.Error(data.ctx, "workflow pool worker: convertOutputsForSerialization failed", "error", err)
-		return err
-	}
-
-	// fmt.Println("output to save", res, errRes)
-	tx, err := w.tp.client.Tx(w.tp.ctx)
-	if err != nil {
-		w.tp.logger.Error(data.ctx, "Failed to start transaction for updating workflow execution output", "error", err)
-		return err
-	}
-
-	if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
-		w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
-		if rerr := tx.Rollback(); rerr != nil {
-			w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+		serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(workflowInfo), res)
+		if err != nil {
+			w.tp.logger.Error(data.ctx, "workflow pool worker: convertOutputsForSerialization failed", "error", err)
+			return err
 		}
-		return err
-	}
 
-	if err := tx.Commit(); err != nil {
-		w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating workflow execution output", "error", err)
-		return err
-	}
+		// fmt.Println("output to save", res, errRes)
+		tx, err := w.tp.client.Tx(w.tp.ctx)
+		if err != nil {
+			w.tp.logger.Error(data.ctx, "Failed to start transaction for updating workflow execution output", "error", err)
+			return err
+		}
 
-	return errRes
+		if _, err := tx.WorkflowExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
+			w.tp.logger.Error(data.ctx, "workflowWorker: WorkflowExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				w.tp.logger.Error(data.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			w.tp.logger.Error(data.ctx, "Failed to commit transaction for updating workflow execution output", "error", err)
+			return err
+		}
+
+		return errRes
+	}
 }

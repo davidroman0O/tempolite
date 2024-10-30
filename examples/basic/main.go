@@ -33,8 +33,13 @@ func main() {
 						Build(),
 		tempolite.WithPath("./db/tempolite-basic.db"), // once you executed it once, go check the db!
 		tempolite.WithDestructive(),                   // means it will attempt to destroy the previous path db at starts
-		tempolite.WithInitialWorkflowsWorkers(10),     // completely overkill
-		tempolite.WithInitialActivityWorkers(10),      // completely overkill
+		tempolite.WithWorkerConfig(tempolite.WorkerConfig{
+			InitialWorkflowsWorkers:    10,
+			InitialActivityWorkers:     10,
+			InitialSideEffectWorkers:   10,
+			InitialTransctionWorkers:   10,
+			InitialCompensationWorkers: 10,
+		}), // overkill
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Tempolite instance: %v", err)

@@ -67,11 +67,7 @@ type tempoliteConfig struct {
 	destructive bool
 	logger      Logger
 
-	initialWorkflowsWorkers    int
-	initialActivityWorkers     int
-	initialSideEffectWorkers   int
-	initialTransctionWorkers   int
-	initialCompensationWorkers int
+	workerConfig WorkerConfig
 
 	// Additional queues
 	queues []queueConfig
@@ -117,28 +113,17 @@ func WithDestructive() tempoliteOption {
 	}
 }
 
-// If you intent to have sub-workflows you should increase this number accordingly
-func WithInitialWorkflowsWorkers(n int) tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.initialWorkflowsWorkers = n
-	}
+type WorkerConfig struct {
+	InitialWorkflowsWorkers    int
+	InitialActivityWorkers     int
+	InitialSideEffectWorkers   int
+	InitialTransctionWorkers   int
+	InitialCompensationWorkers int
 }
 
-func WithInitialActivityWorkers(n int) tempoliteOption {
+func WithWorkerConfig(config WorkerConfig) tempoliteOption {
 	return func(c *tempoliteConfig) {
-		c.initialActivityWorkers = n
-	}
-}
-
-func WithInitialSideEffectWorkers(n int) tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.initialSideEffectWorkers = n
-	}
-}
-
-func WithInitialTransctionWorkers(n int) tempoliteOption {
-	return func(c *tempoliteConfig) {
-		c.initialTransctionWorkers = n
+		c.workerConfig = config
 	}
 }
 

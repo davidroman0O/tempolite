@@ -186,24 +186,29 @@ type transactionWorker struct {
 }
 
 func (w transactionWorker) Run(ctx context.Context, data *transactionTask) error {
-	w.tp.logger.Debug(ctx, "Executing transaction step", "handlerName", data.handlerName)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		w.tp.logger.Debug(ctx, "Executing transaction step", "handlerName", data.handlerName)
 
-	sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
-	if !ok {
-		w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
-		return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
+		sagaHandlerInfo, ok := w.tp.sagas.Load(data.sagaID)
+		if !ok {
+			w.tp.logger.Error(ctx, "saga handler info not found", "sagaID", data.sagaID)
+			return fmt.Errorf("saga handler info not found for ID: %s", data.sagaID)
+		}
+
+		sagaDef := sagaHandlerInfo.(*SagaDefinition)
+		step := sagaDef.Steps[data.stepIndex]
+
+		result, err := step.Transaction(data.ctx)
+		if err != nil {
+			w.tp.logger.Error(ctx, "Transaction step failed", "handlerName", data.handlerName, "error", err)
+			return err
+		}
+
+		w.tp.logger.Debug(ctx, "Transaction step completed", "handlerName", data.handlerName, "result", result)
+
+		return nil
 	}
-
-	sagaDef := sagaHandlerInfo.(*SagaDefinition)
-	step := sagaDef.Steps[data.stepIndex]
-
-	result, err := step.Transaction(data.ctx)
-	if err != nil {
-		w.tp.logger.Error(ctx, "Transaction step failed", "handlerName", data.handlerName, "error", err)
-		return err
-	}
-
-	w.tp.logger.Debug(ctx, "Transaction step completed", "handlerName", data.handlerName, "result", result)
-
-	return nil
 }

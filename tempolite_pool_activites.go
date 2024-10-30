@@ -176,69 +176,74 @@ type activityWorker struct {
 }
 
 func (w activityWorker) Run(ctx context.Context, data *activityTask) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 
-	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "params", data.params)
+		w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "params", data.params)
 
-	values := []reflect.Value{reflect.ValueOf(data.ctx)}
+		values := []reflect.Value{reflect.ValueOf(data.ctx)}
 
-	for _, v := range data.params {
-		values = append(values, reflect.ValueOf(v))
-	}
-
-	returnedValues := reflect.ValueOf(data.handler).Call(values)
-
-	var res []interface{}
-	var errRes error
-	if len(returnedValues) > 0 {
-		res = make([]interface{}, len(returnedValues)-1)
-		for i := 0; i < len(returnedValues)-1; i++ {
-			res[i] = returnedValues[i].Interface()
+		for _, v := range data.params {
+			values = append(values, reflect.ValueOf(v))
 		}
-		if !returnedValues[len(returnedValues)-1].IsNil() {
-			errRes = returnedValues[len(returnedValues)-1].Interface().(error)
+
+		returnedValues := reflect.ValueOf(data.handler).Call(values)
+
+		var res []interface{}
+		var errRes error
+		if len(returnedValues) > 0 {
+			res = make([]interface{}, len(returnedValues)-1)
+			for i := 0; i < len(returnedValues)-1; i++ {
+				res[i] = returnedValues[i].Interface()
+			}
+			if !returnedValues[len(returnedValues)-1].IsNil() {
+				errRes = returnedValues[len(returnedValues)-1].Interface().(error)
+			}
 		}
-	}
 
-	var value any
-	var ok bool
-	var activityInfo Activity
+		var value any
+		var ok bool
+		var activityInfo Activity
 
-	if value, ok = w.tp.activities.Load(data.handlerName); ok {
-		if activityInfo, ok = value.(Activity); !ok {
+		if value, ok = w.tp.activities.Load(data.handlerName); ok {
+			if activityInfo, ok = value.(Activity); !ok {
+				w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
+				return fmt.Errorf("activity %s not found", data.handlerName)
+			}
+		} else {
 			w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
 			return fmt.Errorf("activity %s not found", data.handlerName)
 		}
-	} else {
-		w.tp.logger.Error(data.ctx, "activity pool worker: activity not found", "activityID", data.ctx.activityID, "executionID", data.ctx.executionID, "handler", data.handlerName)
-		return fmt.Errorf("activity %s not found", data.handlerName)
-	}
 
-	serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(activityInfo), res)
-	if err != nil {
-		w.tp.logger.Error(data.ctx, "activity pool worker: convertOutputsForSerialization failed", "error", err)
-		return err
-	}
-
-	tx, err := w.tp.client.Tx(w.tp.ctx)
-	if err != nil {
-		w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
-		return err
-	}
-
-	if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
-		w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
-		if rerr := tx.Rollback(); rerr != nil {
-			w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)
+		serializableOutput, err := w.tp.convertOutputsForSerialization(HandlerInfo(activityInfo), res)
+		if err != nil {
+			w.tp.logger.Error(data.ctx, "activity pool worker: convertOutputsForSerialization failed", "error", err)
+			return err
 		}
-		return err
+
+		tx, err := w.tp.client.Tx(w.tp.ctx)
+		if err != nil {
+			w.tp.logger.Error(w.tp.ctx, "Failed to start transaction for updating activity execution output", "error", err)
+			return err
+		}
+
+		if _, err := tx.ActivityExecution.UpdateOneID(data.ctx.executionID).SetOutput(serializableOutput).Save(w.tp.ctx); err != nil {
+			w.tp.logger.Error(w.tp.ctx, "activityWorker: ActivityExecution.Update failed", "error", err)
+			if rerr := tx.Rollback(); rerr != nil {
+				w.tp.logger.Error(w.tp.ctx, "Failed to rollback transaction", "error", rerr)
+			}
+			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			w.tp.logger.Error(w.tp.ctx, "Failed to commit transaction for updating activity execution output", "error", err)
+			return err
+		}
+
+		w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "output", res)
+
+		return errRes
 	}
-
-	if err := tx.Commit(); err != nil {
-		w.tp.logger.Error(w.tp.ctx, "Failed to commit transaction for updating activity execution output", "error", err)
-		return err
-	}
-
-	w.tp.logger.Debug(w.tp.ctx, "activityWorker: Run", "handlerName", data.handlerName, "output", res)
-
-	return errRes
 }

@@ -163,6 +163,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 					whenBeingDispatched := retrypool.NewProcessedNotification()
 
 					opts := []retrypool.TaskOption[*workflowTask]{
+						retrypool.WithPanicOnTimeout[*workflowTask](),
 						retrypool.WithImmediateRetry[*workflowTask](),
 						retrypool.WithBeingProcessed[*workflowTask](whenBeingDispatched),
 					}
@@ -174,6 +175,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 							continue
 						}
 						opts = append(opts, retrypool.WithTimeLimit[*workflowTask](d))
+						opts = append(opts, retrypool.WithMaxDuration[*workflowTask](d))
 					}
 
 					if err := queue.Dispatch(
