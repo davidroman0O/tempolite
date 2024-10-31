@@ -207,9 +207,6 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 		}
 	}
 
-	tp.logger.Debug(ctx, "Starting resume workflows worker")
-	// go tp.resumeWorkflowsWorker()
-
 	return tp, nil
 }
 
