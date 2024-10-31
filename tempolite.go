@@ -535,6 +535,10 @@ type BaseTempoliteTask struct {
 	QueueName   string
 	MaxRetry    int
 	RetryCount  int
+	QueuedAt    []time.Time
+	ProcessedAt []time.Time
+	Durations   []time.Duration
+	ScheduledAt time.Time
 }
 
 // Specific task type for workflows
@@ -674,45 +678,53 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 		}
 
 		// Collect workflow tasks per worker
-		queue.Workflows.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
+		queue.Workflows.RangeTasks(func(data retrypool.TaskWrapper[*workflowTask], workerID int, status retrypool.TaskStatus) bool {
 			if workerInfo, exists := tq.WorkflowPool.Workers[workerID]; exists {
 
 				switch status {
 				case retrypool.TaskStatusProcessing:
 					workerInfo.ProcessingTasks = append(workerInfo.ProcessingTasks, WorkflowTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							EntityID:    data.ctx.EntityID(),
-							EntityType:  data.ctx.EntityType(),
-							RunID:       data.ctx.RunID(),
-							StepID:      data.ctx.StepID(),
+							EntityID:    data.Data().ctx.EntityID(),
+							EntityType:  data.Data().ctx.EntityType(),
+							RunID:       data.Data().ctx.RunID(),
+							StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.ctx.executionID,
-							HandlerName: string(data.handlerName),
-							QueueName:   data.queueName,
-							MaxRetry:    data.maxRetry,
-							RetryCount:  data.retryCount,
+							ExecutionID: data.Data().ctx.executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueueName:   data.Data().queueName,
+							MaxRetry:    data.Data().maxRetry,
+							RetryCount:  data.Data().retryCount,
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						Params:     data.params,
-						WorkflowID: data.ctx.workflowID,
-						IsPaused:   data.isPaused,
+						Params:     data.Data().params,
+						WorkflowID: data.Data().ctx.workflowID,
+						IsPaused:   data.Data().isPaused,
 					})
 				case retrypool.TaskStatusQueued:
 					workerInfo.QueuedTasks = append(workerInfo.QueuedTasks, WorkflowTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							EntityID:    data.ctx.EntityID(),
-							EntityType:  data.ctx.EntityType(),
-							RunID:       data.ctx.RunID(),
-							StepID:      data.ctx.StepID(),
+							EntityID:    data.Data().ctx.EntityID(),
+							EntityType:  data.Data().ctx.EntityType(),
+							RunID:       data.Data().ctx.RunID(),
+							StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.ctx.executionID,
-							HandlerName: string(data.handlerName),
-							QueueName:   data.queueName,
-							MaxRetry:    data.maxRetry,
-							RetryCount:  data.retryCount,
+							ExecutionID: data.Data().ctx.executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueueName:   data.Data().queueName,
+							MaxRetry:    data.Data().maxRetry,
+							RetryCount:  data.Data().retryCount,
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						Params:     data.params,
-						WorkflowID: data.ctx.workflowID,
-						IsPaused:   data.isPaused,
+						Params:     data.Data().params,
+						WorkflowID: data.Data().ctx.workflowID,
+						IsPaused:   data.Data().isPaused,
 					})
 				}
 
@@ -721,43 +733,51 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 		})
 
 		// Collect activity tasks per worker
-		queue.Activities.RangeTasks(func(data *activityTask, workerID int, status retrypool.TaskStatus) bool {
+		queue.Activities.RangeTasks(func(data retrypool.TaskWrapper[*activityTask], workerID int, status retrypool.TaskStatus) bool {
 			if workerInfo, exists := tq.ActivityPool.Workers[workerID]; exists {
 
 				switch status {
 				case retrypool.TaskStatusProcessing:
 					workerInfo.ProcessingTasks = append(workerInfo.ProcessingTasks, ActivityTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							EntityID:    data.ctx.EntityID(),
-							EntityType:  data.ctx.EntityType(),
-							RunID:       data.ctx.RunID(),
-							StepID:      data.ctx.StepID(),
+							EntityID:    data.Data().ctx.EntityID(),
+							EntityType:  data.Data().ctx.EntityType(),
+							RunID:       data.Data().ctx.RunID(),
+							StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.ctx.executionID,
-							HandlerName: string(data.handlerName),
-							QueueName:   data.queueName,
-							MaxRetry:    data.maxRetry,
-							RetryCount:  data.retryCount,
+							ExecutionID: data.Data().ctx.executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueueName:   data.Data().queueName,
+							MaxRetry:    data.Data().maxRetry,
+							RetryCount:  data.Data().retryCount,
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						Params:     data.params,
-						ActivityID: data.ctx.activityID,
+						Params:     data.Data().params,
+						ActivityID: data.Data().ctx.activityID,
 					})
 				case retrypool.TaskStatusQueued:
 					workerInfo.QueuedTasks = append(workerInfo.QueuedTasks, ActivityTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							EntityID:    data.ctx.EntityID(),
-							EntityType:  data.ctx.EntityType(),
-							RunID:       data.ctx.RunID(),
-							StepID:      data.ctx.StepID(),
+							EntityID:    data.Data().ctx.EntityID(),
+							EntityType:  data.Data().ctx.EntityType(),
+							RunID:       data.Data().ctx.RunID(),
+							StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.ctx.executionID,
-							HandlerName: string(data.handlerName),
-							QueueName:   data.queueName,
-							MaxRetry:    data.maxRetry,
-							RetryCount:  data.retryCount,
+							ExecutionID: data.Data().ctx.executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueueName:   data.Data().queueName,
+							MaxRetry:    data.Data().maxRetry,
+							RetryCount:  data.Data().retryCount,
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						Params:     data.params,
-						ActivityID: data.ctx.activityID,
+						Params:     data.Data().params,
+						ActivityID: data.Data().ctx.activityID,
 					})
 				}
 
@@ -766,34 +786,42 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 		})
 
 		// Collect transaction tasks per worker
-		queue.Transactions.RangeTasks(func(data *transactionTask, workerID int, status retrypool.TaskStatus) bool {
+		queue.Transactions.RangeTasks(func(data retrypool.TaskWrapper[*transactionTask], workerID int, status retrypool.TaskStatus) bool {
 			if workerInfo, exists := tq.TransactionPool.Workers[workerID]; exists {
 				switch status {
 				case retrypool.TaskStatusProcessing:
 					workerInfo.ProcessingTasks = append(workerInfo.ProcessingTasks, TransactionTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							// EntityID:    data.ctx.EntityID(),
-							EntityType: data.ctx.EntityType(),
-							// RunID:       data.ctx.RunID(),
-							// StepID:      data.ctx.StepID(),
+							// EntityID:    data.Data().ctx.EntityID(),
+							EntityType: data.Data().ctx.EntityType(),
+							// RunID:       data.Data().ctx.RunID(),
+							// StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.executionID,
-							HandlerName: string(data.handlerName),
+							ExecutionID: data.Data().executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						SagaID: data.sagaID,
+						SagaID: data.Data().sagaID,
 					})
 				case retrypool.TaskStatusQueued:
 					workerInfo.QueuedTasks = append(workerInfo.QueuedTasks, TransactionTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							// EntityID:    data.ctx.EntityID(),
-							EntityType: data.ctx.EntityType(),
-							// RunID:       data.ctx.RunID(),
-							// StepID:      data.ctx.StepID(),
+							// EntityID:    data.Data().ctx.EntityID(),
+							EntityType: data.Data().ctx.EntityType(),
+							// RunID:       data.Data().ctx.RunID(),
+							// StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.executionID,
-							HandlerName: string(data.handlerName),
+							ExecutionID: data.Data().executionID,
+							HandlerName: string(data.Data().handlerName),
+							QueuedAt:    data.QueuedAt(),
+							ProcessedAt: data.ProcessedAt(),
+							Durations:   data.Durations(),
+							ScheduledAt: data.ScheduledTime(),
 						},
-						SagaID: data.sagaID,
+						SagaID: data.Data().sagaID,
 					})
 				}
 
@@ -802,34 +830,34 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 		})
 
 		// Collect compensation tasks per worker
-		queue.Compensations.RangeTasks(func(data *compensationTask, workerID int, status retrypool.TaskStatus) bool {
+		queue.Compensations.RangeTasks(func(data retrypool.TaskWrapper[*compensationTask], workerID int, status retrypool.TaskStatus) bool {
 			if workerInfo, exists := tq.CompensationPool.Workers[workerID]; exists {
 				switch status {
 				case retrypool.TaskStatusProcessing:
 					workerInfo.ProcessingTasks = append(workerInfo.ProcessingTasks, TransactionTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							// EntityID:    data.ctx.EntityID(),
-							EntityType: data.ctx.EntityType(),
-							// RunID:       data.ctx.RunID(),
-							// StepID:      data.ctx.StepID(),
+							// EntityID:    data.Data().ctx.EntityID(),
+							EntityType: data.Data().ctx.EntityType(),
+							// RunID:       data.Data().ctx.RunID(),
+							// StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.executionID,
-							HandlerName: string(data.handlerName),
+							ExecutionID: data.Data().executionID,
+							HandlerName: string(data.Data().handlerName),
 						},
-						SagaID: data.sagaID,
+						SagaID: data.Data().sagaID,
 					})
 				case retrypool.TaskStatusQueued:
 					workerInfo.QueuedTasks = append(workerInfo.QueuedTasks, TransactionTask{
 						BaseTempoliteTask: BaseTempoliteTask{
-							// EntityID:    data.ctx.EntityID(),
-							EntityType: data.ctx.EntityType(),
-							// RunID:       data.ctx.RunID(),
-							// StepID:      data.ctx.StepID(),
+							// EntityID:    data.Data().ctx.EntityID(),
+							EntityType: data.Data().ctx.EntityType(),
+							// RunID:       data.Data().ctx.RunID(),
+							// StepID:      data.Data().ctx.StepID(),
 							Status:      retrypool.TaskStatus(status),
-							ExecutionID: data.executionID,
-							HandlerName: string(data.handlerName),
+							ExecutionID: data.Data().executionID,
+							HandlerName: string(data.Data().handlerName),
 						},
-						SagaID: data.sagaID,
+						SagaID: data.Data().sagaID,
 					})
 				}
 
@@ -1475,9 +1503,9 @@ func (tp *Tempolite) CancelWorkflow(id WorkflowID) error {
 	switch result {
 	case "paused":
 		// fmt.Println("ranging")
-		queueWorkflow.RangeTasks(func(data *workflowTask, workerID int, status retrypool.TaskStatus) bool {
-			tp.logger.Debug(tp.ctx, "task still within the workflow", "workflowID", data.ctx.workflowID, "id", id.String())
-			if data.ctx.workflowID == id.String() {
+		queueWorkflow.RangeTasks(func(data retrypool.TaskWrapper[*workflowTask], workerID int, status retrypool.TaskStatus) bool {
+			tp.logger.Debug(tp.ctx, "task still within the workflow", "workflowID", data.Data().ctx.workflowID, "id", id.String())
+			if data.Data().ctx.workflowID == id.String() {
 				queueWorkflow.InterruptWorker(workerID, retrypool.WithForcePanic(), retrypool.WithRemoveTask())
 			}
 			return true

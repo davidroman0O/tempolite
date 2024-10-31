@@ -7,7 +7,7 @@ require github.com/google/uuid v1.6.0
 require (
 	entgo.io/ent v0.14.1
 	github.com/davidroman0O/comfylite3 v0.0.0-20241022160053-48675714331c
-	github.com/davidroman0O/retrypool v0.0.0-20241030180557-104c2a3113ad
+	github.com/davidroman0O/retrypool v0.0.0-20241031140509-b7f5a403714c
 	github.com/stephenfire/go-rtl v1.2.1
 )
 
