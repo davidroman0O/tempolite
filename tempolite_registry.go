@@ -2,7 +2,6 @@ package tempolite
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"runtime"
 )
@@ -76,7 +75,7 @@ func activityRegisterType[T any](dataType reflect.Type, instance T) ActivityRegi
 			NumOut:          numOut - 1,                // Exclude error
 		}
 
-		log.Printf("Registering activity %s with name %s", dataType.Name(), act.HandlerLongName)
+		// log.Printf("Registering activity %s with name %s", dataType.Name(), act.HandlerLongName)
 
 		return act, nil
 	}
@@ -200,7 +199,7 @@ func (tp *Tempolite) registerActivity(activityFunc interface{}) error {
 		NumOut:          numOut - 1,              // Exclude error
 	}
 
-	log.Printf("Registering activity function %s with name %s", funcName, handlerIdentity)
+	// log.Printf("Registering activity function %s with name %s", funcName, handlerIdentity)
 
 	tp.activities.Store(activity.HandlerLongName, *activity)
 	return nil
