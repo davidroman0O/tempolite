@@ -115,7 +115,7 @@ func New(ctx context.Context, registry *Registry, opts ...tempoliteOption) (*Tem
 		} else {
 			firstTime = true
 		}
-		cfg.logger.Debug(ctx, "Fist timer check %v", firstTime)
+		cfg.logger.Debug(ctx, "Fist timer check", "firstTime", firstTime)
 		if cfg.destructive {
 			cfg.logger.Debug(ctx, "Destructive option triggered", "firstTime", firstTime)
 			if err := os.Remove(*cfg.path); err != nil {
@@ -871,6 +871,7 @@ func (tp *Tempolite) Info() *TempoliteInfo {
 
 	return ti
 }
+
 func (tp *Tempolite) getWorkerWorkflowID(queue string) (int, error) {
 	counter, _ := tp.queuePoolWorkflowCounter.LoadOrStore(queue, &atomic.Int64{})
 	return int(counter.(*atomic.Int64).Add(1)), nil
