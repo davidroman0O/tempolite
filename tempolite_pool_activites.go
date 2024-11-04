@@ -62,39 +62,43 @@ func (tp *Tempolite) activityWorkerPanic(workerID int, recovery any, err error, 
 
 func (tp *Tempolite) activityOnPanic(task *activityTask, v interface{}, stackTrace string) {
 
-	if errors.Is(v.(error), context.Canceled) {
-		// It's not a REAL panic
-		tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
-		// Manage the case when the context is canceled
-		tx, err := tp.client.Tx(tp.ctx)
-		if err != nil {
-			tp.logger.Error(tp.ctx, "Failed to start transaction for updating activity status", "error", err)
-			return
-		}
-
-		if _, err := tx.ActivityExecution.UpdateOneID(task.ctx.executionID).SetStatus(activityexecution.StatusCancelled).
-			Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "activity task on panic: ActivityExecution.Update failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+	if value, ok := v.(error); ok {
+		if errors.Is(value, context.Canceled) {
+			// It's not a REAL panic
+			tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
+			// Manage the case when the context is canceled
+			tx, err := tp.client.Tx(tp.ctx)
+			if err != nil {
+				tp.logger.Error(tp.ctx, "Failed to start transaction for updating activity status", "error", err)
+				return
 			}
-			return
-		}
 
-		if _, err := tx.Activity.UpdateOneID(task.ctx.activityID).SetStatus(activity.StatusCancelled).Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "activity task on panic: activity.UpdateOneID failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			if _, err := tx.ActivityExecution.UpdateOneID(task.ctx.executionID).SetStatus(activityexecution.StatusCancelled).
+				Save(tp.ctx); err != nil {
+				tp.logger.Error(tp.ctx, "activity task on panic: ActivityExecution.Update failed", "error", err)
+				if rerr := tx.Rollback(); rerr != nil {
+					tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+				}
+				return
 			}
+
+			if _, err := tx.Activity.UpdateOneID(task.ctx.activityID).SetStatus(activity.StatusCancelled).Save(tp.ctx); err != nil {
+				tp.logger.Error(tp.ctx, "activity task on panic: activity.UpdateOneID failed", "error", err)
+				if rerr := tx.Rollback(); rerr != nil {
+					tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+				}
+				return
+			}
+
+			if err := tx.Commit(); err != nil {
+				tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
+			}
+
+			tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
 			return
 		}
-
-		if err := tx.Commit(); err != nil {
-			tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
-		}
-
-		tp.logger.Debug(tp.ctx, "activity pool task cancelled", "task", task, "error", v)
-		return
+	} else {
+		tp.logger.Error(tp.ctx, "activity pool task panicked when v is not error", "task", task, "error", v)
 	}
 	tp.logger.Debug(tp.ctx, "activity pool task panicked", "task", task, "error", v)
 	tp.logger.Error(tp.ctx, "activity pool task panicked", "stackTrace", stackTrace)

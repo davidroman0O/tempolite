@@ -69,39 +69,44 @@ func (tp *Tempolite) workflowWorkerPanic(workerID int, recovery any, err error, 
 
 func (tp *Tempolite) workflowOnPanic(task *workflowTask, v interface{}, stackTrace string) {
 	// fmt.Println("workflowOnPanic", v, stackTrace)
-	if errors.Is(v.(error), context.Canceled) {
-		tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task)
-		// It's not a REAL panic
-		// Manage the case when the context is canceled
-		tx, err := tp.client.Tx(tp.ctx)
-		if err != nil {
-			tp.logger.Error(tp.ctx, "Failed to start transaction for updating workflow status", "error", err)
-			return
-		}
 
-		if _, err := tx.WorkflowExecution.UpdateOneID(task.ctx.executionID).SetStatus(workflowexecution.StatusCancelled).
-			Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "workflow task on panic: WorkflowExecution.Update failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+	if value, ok := v.(error); ok {
+		if errors.Is(value, context.Canceled) {
+			tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task)
+			// It's not a REAL panic
+			// Manage the case when the context is canceled
+			tx, err := tp.client.Tx(tp.ctx)
+			if err != nil {
+				tp.logger.Error(tp.ctx, "Failed to start transaction for updating workflow status", "error", err)
+				return
 			}
-			return
-		}
 
-		if _, err := tx.Workflow.UpdateOneID(task.ctx.workflowID).SetStatus(workflow.StatusCancelled).Save(tp.ctx); err != nil {
-			tp.logger.Error(tp.ctx, "workflow task on panic: workflow.UpdateOneID failed", "error", err)
-			if rerr := tx.Rollback(); rerr != nil {
-				tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+			if _, err := tx.WorkflowExecution.UpdateOneID(task.ctx.executionID).SetStatus(workflowexecution.StatusCancelled).
+				Save(tp.ctx); err != nil {
+				tp.logger.Error(tp.ctx, "workflow task on panic: WorkflowExecution.Update failed", "error", err)
+				if rerr := tx.Rollback(); rerr != nil {
+					tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+				}
+				return
 			}
+
+			if _, err := tx.Workflow.UpdateOneID(task.ctx.workflowID).SetStatus(workflow.StatusCancelled).Save(tp.ctx); err != nil {
+				tp.logger.Error(tp.ctx, "workflow task on panic: workflow.UpdateOneID failed", "error", err)
+				if rerr := tx.Rollback(); rerr != nil {
+					tp.logger.Error(tp.ctx, "Failed to rollback transaction", "error", rerr)
+				}
+				return
+			}
+
+			if err := tx.Commit(); err != nil {
+				tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
+			}
+
+			tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task, "error", v)
 			return
 		}
-
-		if err := tx.Commit(); err != nil {
-			tp.logger.Error(tp.ctx, "Failed to commit transaction", "error", err)
-		}
-
-		tp.logger.Debug(tp.ctx, "workflow pool task cancelled", "task", task, "error", v)
-		return
+	} else {
+		tp.logger.Error(tp.ctx, "workflow pool task panicked when v is not error", "task", task, "error", v)
 	}
 
 	tp.logger.Debug(tp.ctx, "workflow pool task panicked", "task", task, "error", v)

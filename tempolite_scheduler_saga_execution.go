@@ -198,7 +198,7 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 
 								// Before moving to the next transaction, update the last successful index
 								lastSuccessfulIndex = i
-								return queueTransaction.Dispatch(transactionTasks[nextIndex])
+								return queueTransaction.Submit(transactionTasks[nextIndex])
 							}
 						} else {
 							// For the last transaction
@@ -248,7 +248,7 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 								compensationTasks[lastSuccessfulIndex].executionID = compensationExecution.ID
 
 								// Start compensation from the last successful transaction
-								return queueCompensation.Dispatch(compensationTasks[lastSuccessfulIndex])
+								return queueCompensation.Submit(compensationTasks[lastSuccessfulIndex])
 							}
 
 							tx, err := tp.client.Tx(tp.ctx)
@@ -314,7 +314,7 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 
 								compensationTasks[prevIndex].executionID = compensationExecution.ID
 
-								return queueCompensation.Dispatch(compensationTasks[prevIndex])
+								return queueCompensation.Submit(compensationTasks[prevIndex])
 							}
 						} else {
 							// Optionally, for the first compensation task, you might decide to loop back or end the chain
@@ -324,8 +324,8 @@ func (tp *Tempolite) schedulerExecutionSagaForQueue(queueName string, done chan 
 
 				}
 
-				// Dispatch the first transaction task
-				if err := queueTransaction.Dispatch(transactionTasks[0]); err != nil {
+				// Submit the first transaction task
+				if err := queueTransaction.Submit(transactionTasks[0]); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler saga execution: Failed to dispatch first transaction task", "error", err)
 					tx, err := tp.client.Tx(tp.ctx)
 					if err != nil {

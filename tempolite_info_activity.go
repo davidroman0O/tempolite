@@ -22,6 +22,10 @@ type ActivityInfo struct {
 
 func (i *ActivityInfo) Get(output ...interface{}) error {
 	if i.err != nil {
+		if errors.Is(i.err, errWorkflowPaused) {
+			i.tp.logger.Debug(i.tp.ctx, "ActivityInfo paused", "activityID", i.ActivityID, "error", i.err)
+			return i.err
+		}
 		i.tp.logger.Error(i.tp.ctx, "ActivityInfo.Get", "activityID", i.ActivityID, "error", i.err)
 		return i.err
 	}

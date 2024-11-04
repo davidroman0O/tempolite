@@ -87,7 +87,7 @@ func (tp *Tempolite) schedulerExecutionSideEffectForQueue(queueName string, done
 
 				tp.logger.Debug(tp.ctx, "Scheduler sideeffect execution: Dispatching side effect", "sideEffectHandler", se.Edges.SideEffect.HandlerName)
 
-				if err := queue.Dispatch(task); err != nil {
+				if err := queue.Submit(task); err != nil {
 					tp.logger.Error(tp.ctx, "Scheduler sideeffect execution: Dispatch failed", "error", err)
 
 					tx, err := tp.client.Tx(tp.ctx)

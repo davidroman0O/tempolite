@@ -218,7 +218,7 @@ func (tp *Tempolite) schedulerResumeRunningWorkflows(queueName string, done chan
 					opts = append(opts, retrypool.WithTimeLimit[*workflowTask](d))
 				}
 
-				if err := queueWorkers.Workflows.Dispatch(
+				if err := queueWorkers.Workflows.Submit(
 					task,
 					opts...,
 				); err != nil {

@@ -8,6 +8,23 @@ import (
 	"github.com/stephenfire/go-rtl"
 )
 
+func (tp *Tempolite) verifyHandlerAndParams(handlerInfo HandlerInfo, params []interface{}) error {
+
+	if len(params) != handlerInfo.NumIn {
+		tp.logger.Error(tp.ctx, "Parameter count mismatch", "handlerName", handlerInfo.HandlerLongName, "expected", handlerInfo.NumIn, "got", len(params))
+		return fmt.Errorf("parameter count mismatch (you probably put the wrong handler): expected %d, got %d", handlerInfo.NumIn, len(params))
+	}
+
+	for idx, param := range params {
+		if reflect.TypeOf(param) != handlerInfo.ParamTypes[idx] {
+			tp.logger.Error(tp.ctx, "Parameter type mismatch", "handlerName", handlerInfo.HandlerLongName, "expected", handlerInfo.ParamTypes[idx], "got", reflect.TypeOf(param))
+			return fmt.Errorf("parameter type mismatch (you probably put the wrong handler) at index %d: expected %s, got %s", idx, handlerInfo.ParamTypes[idx], reflect.TypeOf(param))
+		}
+	}
+
+	return nil
+}
+
 func (tp *Tempolite) convertInputsForSerialization(handlerInfo HandlerInfo, executionInputs []interface{}) ([][]byte, error) {
 	inputs := [][]byte{}
 
@@ -34,6 +51,7 @@ func (tp *Tempolite) convertOutputsForSerialization(handlerInfo HandlerInfo, exe
 
 	for _, output := range executionOutputs {
 		buf := new(bytes.Buffer)
+
 		// just get the real one
 		if reflect.TypeOf(output).Kind() == reflect.Ptr {
 			output = reflect.ValueOf(output).Elem().Interface()
@@ -57,14 +75,9 @@ func (tp *Tempolite) convertInputsFromSerialization(handlerInfo HandlerInfo, exe
 		// Get the pointer of the type of the parameter that we target
 		decodedObj := reflect.New(inputType).Elem().Addr().Interface()
 
-		// fmt.Println("convertInputsFromSerialization decodedObj before", decodedObj)
-		// fmt.Println("convertInputsFromSerialization serialized input", executionInputs[idx])
-
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
 		}
-
-		// fmt.Println("convertInputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
 
 		inputs = append(inputs, reflect.ValueOf(decodedObj).Elem().Interface())
 	}
@@ -81,13 +94,9 @@ func (tp *Tempolite) convertOutputsFromSerialization(handlerInfo HandlerInfo, ex
 		// Get the pointer of the type of the parameter that we target
 		decodedObj := reflect.New(outputType).Elem().Addr().Interface()
 
-		// fmt.Println("convertOutputsFromSerialization decodedObj before", decodedObj)
-		// fmt.Println("convertOutputsFromSerialization serialized output", executionOutputs[idx])
-
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
 		}
-		// fmt.Println("convertOutputsFromSerialization decodedObj", reflect.ValueOf(decodedObj).Elem().Interface())
 
 		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
 	}
@@ -100,8 +109,6 @@ func (tp *Tempolite) convertInputsForSerializationFromValues(regularValues []int
 
 	for _, inputPointer := range regularValues {
 		buf := new(bytes.Buffer)
-
-		// fmt.Printf("convertInputsForSerializationFromValues inputPointer: %v\n", inputPointer)
 
 		decodedObj := reflect.ValueOf(inputPointer).Interface()
 

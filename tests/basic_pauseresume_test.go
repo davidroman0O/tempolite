@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"fmt"
+	"log"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,7 +15,7 @@ func TestPauseResume(t *testing.T) {
 
 	slowActivity := func(ctx tempolite.ActivityContext) error {
 		progressCounter.Add(1)
-		fmt.Println("Activity started")
+		log.Println("Activity started")
 		time.Sleep(2 * time.Second)
 		return nil
 	}
@@ -23,19 +23,19 @@ func TestPauseResume(t *testing.T) {
 	workflowFn := func(ctx tempolite.WorkflowContext) error {
 		// Multiple activities to ensure we can pause between them
 
-		fmt.Println("Workflow started, step1")
+		log.Println("Workflow started, step1")
 		info := ctx.Activity("step1", slowActivity, nil)
 		if err := info.Get(); err != nil {
 			return err
 		}
 
-		fmt.Println("step2")
+		log.Println("step2")
 		info = ctx.Activity("step2", slowActivity, nil)
 		if err := info.Get(); err != nil {
 			return err
 		}
 
-		fmt.Println("step3")
+		log.Println("step3")
 		info = ctx.Activity("step3", slowActivity, nil)
 		if err := info.Get(); err != nil {
 			return err

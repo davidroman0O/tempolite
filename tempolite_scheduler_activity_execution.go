@@ -180,7 +180,7 @@ func (tp *Tempolite) schedulerExecutionActivityForQueue(queueName string, done c
 						opts = append(opts, retrypool.WithMaxContextDuration[*activityTask](d))
 					}
 
-					if err := queue.Dispatch(task, opts...); err != nil {
+					if err := queue.Submit(task, opts...); err != nil {
 						tp.logger.Error(tp.ctx, "scheduler activity execution: Dispatch failed", "error", err)
 
 						// Start transaction for status updates

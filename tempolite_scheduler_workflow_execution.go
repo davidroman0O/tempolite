@@ -170,7 +170,7 @@ func (tp *Tempolite) schedulerExecutionWorkflowForQueue(queueName string, done c
 						opts = append(opts, retrypool.WithMaxContextDuration[*workflowTask](d))
 					}
 
-					if err := queue.Dispatch(
+					if err := queue.Submit(
 						task,
 						opts...,
 					); err != nil {
