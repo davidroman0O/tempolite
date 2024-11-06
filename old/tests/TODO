@@ -1,0 +1,19 @@
+
+[x] - Basic Workflow tests
+[x] - Basic Activity Execution tests
+[x] - Basic Activity Retry tests
+[x] - Basic Signal tests
+[x] - Basic SideEffect tests
+[x] - Basic versions tests
+[x] - Basic Queue tests
+[x] - Basic ContinueAsNew test 
+[x] - Basic ContinueAsNew with side effect test 
+[x] - Basic Saga
+[x] - Basic Recovery
+[x] - Basic Replay
+[x] - Basic Pause Resume
+[x] - Basic restart
+
+
+[ ] - Add timeout on workflows and activities to force retry
+
