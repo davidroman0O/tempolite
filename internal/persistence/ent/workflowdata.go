@@ -19,6 +19,8 @@ type WorkflowData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Duration holds the value of the "duration" field.
+	Duration string `json:"duration,omitempty"`
 	// Paused holds the value of the "paused" field.
 	Paused bool `json:"paused,omitempty"`
 	// Resumable holds the value of the "resumable" field.
@@ -65,6 +67,8 @@ func (*WorkflowData) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case workflowdata.FieldID:
 			values[i] = new(sql.NullInt64)
+		case workflowdata.FieldDuration:
+			values[i] = new(sql.NullString)
 		case workflowdata.ForeignKeys[0]: // entity_workflow_data
 			values[i] = new(sql.NullInt64)
 		default:
@@ -88,6 +92,12 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			wd.ID = int(value.Int64)
+		case workflowdata.FieldDuration:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field duration", values[i])
+			} else if value.Valid {
+				wd.Duration = value.String
+			}
 		case workflowdata.FieldPaused:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field paused", values[i])
@@ -164,6 +174,9 @@ func (wd *WorkflowData) String() string {
 	var builder strings.Builder
 	builder.WriteString("WorkflowData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", wd.ID))
+	builder.WriteString("duration=")
+	builder.WriteString(wd.Duration)
+	builder.WriteString(", ")
 	builder.WriteString("paused=")
 	builder.WriteString(fmt.Sprintf("%v", wd.Paused))
 	builder.WriteString(", ")

@@ -952,15 +952,15 @@ func (c *EntityClient) QueryExecutions(e *Entity) *ExecutionQuery {
 	return query
 }
 
-// QueryQueues queries the queues edge of a Entity.
-func (c *EntityClient) QueryQueues(e *Entity) *QueueQuery {
+// QueryQueue queries the queue edge of a Entity.
+func (c *EntityClient) QueryQueue(e *Entity) *QueueQuery {
 	query := (&QueueClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := e.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(entity.Table, entity.FieldID, id),
 			sqlgraph.To(queue.Table, queue.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, entity.QueuesTable, entity.QueuesPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, entity.QueueTable, entity.QueueColumn),
 		)
 		fromV = sqlgraph.Neighbors(e.driver.Dialect(), step)
 		return fromV, nil
@@ -1583,7 +1583,7 @@ func (c *QueueClient) QueryEntities(q *Queue) *EntityQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(queue.Table, queue.FieldID, id),
 			sqlgraph.To(entity.Table, entity.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, queue.EntitiesTable, queue.EntitiesPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.O2M, false, queue.EntitiesTable, queue.EntitiesColumn),
 		)
 		fromV = sqlgraph.Neighbors(q.driver.Dialect(), step)
 		return fromV, nil

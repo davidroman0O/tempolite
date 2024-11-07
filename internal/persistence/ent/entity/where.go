@@ -240,6 +240,26 @@ func TypeNotIn(vs ...Type) predicate.Entity {
 	return predicate.Entity(sql.FieldNotIn(FieldType, vs...))
 }
 
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v Status) predicate.Entity {
+	return predicate.Entity(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v Status) predicate.Entity {
+	return predicate.Entity(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...Status) predicate.Entity {
+	return predicate.Entity(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...Status) predicate.Entity {
+	return predicate.Entity(sql.FieldNotIn(FieldStatus, vs...))
+}
+
 // StepIDEQ applies the EQ predicate on the "step_id" field.
 func StepIDEQ(v string) predicate.Entity {
 	return predicate.Entity(sql.FieldEQ(FieldStepID, v))
@@ -351,21 +371,21 @@ func HasExecutionsWith(preds ...predicate.Execution) predicate.Entity {
 	})
 }
 
-// HasQueues applies the HasEdge predicate on the "queues" edge.
-func HasQueues() predicate.Entity {
+// HasQueue applies the HasEdge predicate on the "queue" edge.
+func HasQueue() predicate.Entity {
 	return predicate.Entity(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, QueuesTable, QueuesPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, QueueTable, QueueColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasQueuesWith applies the HasEdge predicate on the "queues" edge with a given conditions (other predicates).
-func HasQueuesWith(preds ...predicate.Queue) predicate.Entity {
+// HasQueueWith applies the HasEdge predicate on the "queue" edge with a given conditions (other predicates).
+func HasQueueWith(preds ...predicate.Queue) predicate.Entity {
 	return predicate.Entity(func(s *sql.Selector) {
-		step := newQueuesStep()
+		step := newQueueStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

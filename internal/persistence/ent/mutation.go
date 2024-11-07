@@ -2184,6 +2184,7 @@ type EntityMutation struct {
 	updated_at              *time.Time
 	handler_name            *string
 	_type                   *entity.Type
+	status                  *entity.Status
 	step_id                 *string
 	clearedFields           map[string]struct{}
 	run                     *int
@@ -2191,9 +2192,8 @@ type EntityMutation struct {
 	executions              map[int]struct{}
 	removedexecutions       map[int]struct{}
 	clearedexecutions       bool
-	queues                  map[int]struct{}
-	removedqueues           map[int]struct{}
-	clearedqueues           bool
+	queue                   *int
+	clearedqueue            bool
 	versions                map[int]struct{}
 	removedversions         map[int]struct{}
 	clearedversions         bool
@@ -2452,6 +2452,42 @@ func (m *EntityMutation) ResetType() {
 	m._type = nil
 }
 
+// SetStatus sets the "status" field.
+func (m *EntityMutation) SetStatus(e entity.Status) {
+	m.status = &e
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EntityMutation) Status() (r entity.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Entity entity.
+// If the Entity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityMutation) OldStatus(ctx context.Context) (v entity.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EntityMutation) ResetStatus() {
+	m.status = nil
+}
+
 // SetStepID sets the "step_id" field.
 func (m *EntityMutation) SetStepID(s string) {
 	m.step_id = &s
@@ -2581,58 +2617,43 @@ func (m *EntityMutation) ResetExecutions() {
 	m.removedexecutions = nil
 }
 
-// AddQueueIDs adds the "queues" edge to the Queue entity by ids.
-func (m *EntityMutation) AddQueueIDs(ids ...int) {
-	if m.queues == nil {
-		m.queues = make(map[int]struct{})
-	}
-	for i := range ids {
-		m.queues[ids[i]] = struct{}{}
-	}
+// SetQueueID sets the "queue" edge to the Queue entity by id.
+func (m *EntityMutation) SetQueueID(id int) {
+	m.queue = &id
 }
 
-// ClearQueues clears the "queues" edge to the Queue entity.
-func (m *EntityMutation) ClearQueues() {
-	m.clearedqueues = true
+// ClearQueue clears the "queue" edge to the Queue entity.
+func (m *EntityMutation) ClearQueue() {
+	m.clearedqueue = true
 }
 
-// QueuesCleared reports if the "queues" edge to the Queue entity was cleared.
-func (m *EntityMutation) QueuesCleared() bool {
-	return m.clearedqueues
+// QueueCleared reports if the "queue" edge to the Queue entity was cleared.
+func (m *EntityMutation) QueueCleared() bool {
+	return m.clearedqueue
 }
 
-// RemoveQueueIDs removes the "queues" edge to the Queue entity by IDs.
-func (m *EntityMutation) RemoveQueueIDs(ids ...int) {
-	if m.removedqueues == nil {
-		m.removedqueues = make(map[int]struct{})
-	}
-	for i := range ids {
-		delete(m.queues, ids[i])
-		m.removedqueues[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedQueues returns the removed IDs of the "queues" edge to the Queue entity.
-func (m *EntityMutation) RemovedQueuesIDs() (ids []int) {
-	for id := range m.removedqueues {
-		ids = append(ids, id)
+// QueueID returns the "queue" edge ID in the mutation.
+func (m *EntityMutation) QueueID() (id int, exists bool) {
+	if m.queue != nil {
+		return *m.queue, true
 	}
 	return
 }
 
-// QueuesIDs returns the "queues" edge IDs in the mutation.
-func (m *EntityMutation) QueuesIDs() (ids []int) {
-	for id := range m.queues {
-		ids = append(ids, id)
+// QueueIDs returns the "queue" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// QueueID instead. It exists only for internal usage by the builders.
+func (m *EntityMutation) QueueIDs() (ids []int) {
+	if id := m.queue; id != nil {
+		ids = append(ids, *id)
 	}
 	return
 }
 
-// ResetQueues resets all changes to the "queues" edge.
-func (m *EntityMutation) ResetQueues() {
-	m.queues = nil
-	m.clearedqueues = false
-	m.removedqueues = nil
+// ResetQueue resets all changes to the "queue" edge.
+func (m *EntityMutation) ResetQueue() {
+	m.queue = nil
+	m.clearedqueue = false
 }
 
 // AddVersionIDs adds the "versions" edge to the Version entity by ids.
@@ -2879,7 +2900,7 @@ func (m *EntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntityMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, entity.FieldCreatedAt)
 	}
@@ -2891,6 +2912,9 @@ func (m *EntityMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, entity.FieldType)
+	}
+	if m.status != nil {
+		fields = append(fields, entity.FieldStatus)
 	}
 	if m.step_id != nil {
 		fields = append(fields, entity.FieldStepID)
@@ -2911,6 +2935,8 @@ func (m *EntityMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case entity.FieldType:
 		return m.GetType()
+	case entity.FieldStatus:
+		return m.Status()
 	case entity.FieldStepID:
 		return m.StepID()
 	}
@@ -2930,6 +2956,8 @@ func (m *EntityMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldHandlerName(ctx)
 	case entity.FieldType:
 		return m.OldType(ctx)
+	case entity.FieldStatus:
+		return m.OldStatus(ctx)
 	case entity.FieldStepID:
 		return m.OldStepID(ctx)
 	}
@@ -2968,6 +2996,13 @@ func (m *EntityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
+		return nil
+	case entity.FieldStatus:
+		v, ok := value.(entity.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
 		return nil
 	case entity.FieldStepID:
 		v, ok := value.(string)
@@ -3037,6 +3072,9 @@ func (m *EntityMutation) ResetField(name string) error {
 	case entity.FieldType:
 		m.ResetType()
 		return nil
+	case entity.FieldStatus:
+		m.ResetStatus()
+		return nil
 	case entity.FieldStepID:
 		m.ResetStepID()
 		return nil
@@ -3053,8 +3091,8 @@ func (m *EntityMutation) AddedEdges() []string {
 	if m.executions != nil {
 		edges = append(edges, entity.EdgeExecutions)
 	}
-	if m.queues != nil {
-		edges = append(edges, entity.EdgeQueues)
+	if m.queue != nil {
+		edges = append(edges, entity.EdgeQueue)
 	}
 	if m.versions != nil {
 		edges = append(edges, entity.EdgeVersions)
@@ -3088,12 +3126,10 @@ func (m *EntityMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
-	case entity.EdgeQueues:
-		ids := make([]ent.Value, 0, len(m.queues))
-		for id := range m.queues {
-			ids = append(ids, id)
+	case entity.EdgeQueue:
+		if id := m.queue; id != nil {
+			return []ent.Value{*id}
 		}
-		return ids
 	case entity.EdgeVersions:
 		ids := make([]ent.Value, 0, len(m.versions))
 		for id := range m.versions {
@@ -3126,9 +3162,6 @@ func (m *EntityMutation) RemovedEdges() []string {
 	if m.removedexecutions != nil {
 		edges = append(edges, entity.EdgeExecutions)
 	}
-	if m.removedqueues != nil {
-		edges = append(edges, entity.EdgeQueues)
-	}
 	if m.removedversions != nil {
 		edges = append(edges, entity.EdgeVersions)
 	}
@@ -3142,12 +3175,6 @@ func (m *EntityMutation) RemovedIDs(name string) []ent.Value {
 	case entity.EdgeExecutions:
 		ids := make([]ent.Value, 0, len(m.removedexecutions))
 		for id := range m.removedexecutions {
-			ids = append(ids, id)
-		}
-		return ids
-	case entity.EdgeQueues:
-		ids := make([]ent.Value, 0, len(m.removedqueues))
-		for id := range m.removedqueues {
 			ids = append(ids, id)
 		}
 		return ids
@@ -3170,8 +3197,8 @@ func (m *EntityMutation) ClearedEdges() []string {
 	if m.clearedexecutions {
 		edges = append(edges, entity.EdgeExecutions)
 	}
-	if m.clearedqueues {
-		edges = append(edges, entity.EdgeQueues)
+	if m.clearedqueue {
+		edges = append(edges, entity.EdgeQueue)
 	}
 	if m.clearedversions {
 		edges = append(edges, entity.EdgeVersions)
@@ -3199,8 +3226,8 @@ func (m *EntityMutation) EdgeCleared(name string) bool {
 		return m.clearedrun
 	case entity.EdgeExecutions:
 		return m.clearedexecutions
-	case entity.EdgeQueues:
-		return m.clearedqueues
+	case entity.EdgeQueue:
+		return m.clearedqueue
 	case entity.EdgeVersions:
 		return m.clearedversions
 	case entity.EdgeWorkflowData:
@@ -3221,6 +3248,9 @@ func (m *EntityMutation) ClearEdge(name string) error {
 	switch name {
 	case entity.EdgeRun:
 		m.ClearRun()
+		return nil
+	case entity.EdgeQueue:
+		m.ClearQueue()
 		return nil
 	case entity.EdgeWorkflowData:
 		m.ClearWorkflowData()
@@ -3248,8 +3278,8 @@ func (m *EntityMutation) ResetEdge(name string) error {
 	case entity.EdgeExecutions:
 		m.ResetExecutions()
 		return nil
-	case entity.EdgeQueues:
-		m.ResetQueues()
+	case entity.EdgeQueue:
+		m.ResetQueue()
 		return nil
 	case entity.EdgeVersions:
 		m.ResetVersions()
@@ -5537,7 +5567,6 @@ type RunMutation struct {
 	id                 *int
 	created_at         *time.Time
 	updated_at         *time.Time
-	name               *string
 	status             *run.Status
 	clearedFields      map[string]struct{}
 	entities           map[int]struct{}
@@ -5721,42 +5750,6 @@ func (m *RunMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// SetName sets the "name" field.
-func (m *RunMutation) SetName(s string) {
-	m.name = &s
-}
-
-// Name returns the value of the "name" field in the mutation.
-func (m *RunMutation) Name() (r string, exists bool) {
-	v := m.name
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldName returns the old "name" field's value of the Run entity.
-// If the Run object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RunMutation) OldName(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldName is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldName requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldName: %w", err)
-	}
-	return oldValue.Name, nil
-}
-
-// ResetName resets all changes to the "name" field.
-func (m *RunMutation) ResetName() {
-	m.name = nil
-}
-
 // SetStatus sets the "status" field.
 func (m *RunMutation) SetStatus(r run.Status) {
 	m.status = &r
@@ -5935,15 +5928,12 @@ func (m *RunMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RunMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 3)
 	if m.created_at != nil {
 		fields = append(fields, run.FieldCreatedAt)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, run.FieldUpdatedAt)
-	}
-	if m.name != nil {
-		fields = append(fields, run.FieldName)
 	}
 	if m.status != nil {
 		fields = append(fields, run.FieldStatus)
@@ -5960,8 +5950,6 @@ func (m *RunMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case run.FieldUpdatedAt:
 		return m.UpdatedAt()
-	case run.FieldName:
-		return m.Name()
 	case run.FieldStatus:
 		return m.Status()
 	}
@@ -5977,8 +5965,6 @@ func (m *RunMutation) OldField(ctx context.Context, name string) (ent.Value, err
 		return m.OldCreatedAt(ctx)
 	case run.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
-	case run.FieldName:
-		return m.OldName(ctx)
 	case run.FieldStatus:
 		return m.OldStatus(ctx)
 	}
@@ -6003,13 +5989,6 @@ func (m *RunMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedAt(v)
-		return nil
-	case run.FieldName:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetName(v)
 		return nil
 	case run.FieldStatus:
 		v, ok := value.(run.Status)
@@ -6072,9 +6051,6 @@ func (m *RunMutation) ResetField(name string) error {
 		return nil
 	case run.FieldUpdatedAt:
 		m.ResetUpdatedAt()
-		return nil
-	case run.FieldName:
-		m.ResetName()
 		return nil
 	case run.FieldStatus:
 		m.ResetStatus()
@@ -9916,6 +9892,7 @@ type WorkflowDataMutation struct {
 	op            Op
 	typ           string
 	id            *int
+	duration      *string
 	paused        *bool
 	resumable     *bool
 	retry_policy  **schema.RetryPolicy
@@ -10025,6 +10002,55 @@ func (m *WorkflowDataMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetDuration sets the "duration" field.
+func (m *WorkflowDataMutation) SetDuration(s string) {
+	m.duration = &s
+}
+
+// Duration returns the value of the "duration" field in the mutation.
+func (m *WorkflowDataMutation) Duration() (r string, exists bool) {
+	v := m.duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDuration returns the old "duration" field's value of the WorkflowData entity.
+// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowDataMutation) OldDuration(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDuration: %w", err)
+	}
+	return oldValue.Duration, nil
+}
+
+// ClearDuration clears the value of the "duration" field.
+func (m *WorkflowDataMutation) ClearDuration() {
+	m.duration = nil
+	m.clearedFields[workflowdata.FieldDuration] = struct{}{}
+}
+
+// DurationCleared returns if the "duration" field was cleared in this mutation.
+func (m *WorkflowDataMutation) DurationCleared() bool {
+	_, ok := m.clearedFields[workflowdata.FieldDuration]
+	return ok
+}
+
+// ResetDuration resets all changes to the "duration" field.
+func (m *WorkflowDataMutation) ResetDuration() {
+	m.duration = nil
+	delete(m.clearedFields, workflowdata.FieldDuration)
 }
 
 // SetPaused sets the "paused" field.
@@ -10273,7 +10299,10 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
+	if m.duration != nil {
+		fields = append(fields, workflowdata.FieldDuration)
+	}
 	if m.paused != nil {
 		fields = append(fields, workflowdata.FieldPaused)
 	}
@@ -10294,6 +10323,8 @@ func (m *WorkflowDataMutation) Fields() []string {
 // schema.
 func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case workflowdata.FieldDuration:
+		return m.Duration()
 	case workflowdata.FieldPaused:
 		return m.Paused()
 	case workflowdata.FieldResumable:
@@ -10311,6 +10342,8 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case workflowdata.FieldDuration:
+		return m.OldDuration(ctx)
 	case workflowdata.FieldPaused:
 		return m.OldPaused(ctx)
 	case workflowdata.FieldResumable:
@@ -10328,6 +10361,13 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 // type.
 func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case workflowdata.FieldDuration:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDuration(v)
+		return nil
 	case workflowdata.FieldPaused:
 		v, ok := value.(bool)
 		if !ok {
@@ -10386,6 +10426,9 @@ func (m *WorkflowDataMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *WorkflowDataMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(workflowdata.FieldDuration) {
+		fields = append(fields, workflowdata.FieldDuration)
+	}
 	if m.FieldCleared(workflowdata.FieldInput) {
 		fields = append(fields, workflowdata.FieldInput)
 	}
@@ -10403,6 +10446,9 @@ func (m *WorkflowDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *WorkflowDataMutation) ClearField(name string) error {
 	switch name {
+	case workflowdata.FieldDuration:
+		m.ClearDuration()
+		return nil
 	case workflowdata.FieldInput:
 		m.ClearInput()
 		return nil
@@ -10414,6 +10460,9 @@ func (m *WorkflowDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowDataMutation) ResetField(name string) error {
 	switch name {
+	case workflowdata.FieldDuration:
+		m.ResetDuration()
+		return nil
 	case workflowdata.FieldPaused:
 		m.ResetPaused()
 		return nil

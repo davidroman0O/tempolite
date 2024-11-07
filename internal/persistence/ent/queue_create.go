@@ -166,10 +166,10 @@ func (qc *QueueCreate) createSpec() (*Queue, *sqlgraph.CreateSpec) {
 	}
 	if nodes := qc.mutation.EntitiesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),

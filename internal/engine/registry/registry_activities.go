@@ -67,16 +67,16 @@ func (r *Registry) registerActivity(activityFunc interface{}) error {
 	}
 
 	// log.Printf("Registering activity function %s with name %s", funcName, handlerIdentity)
-	r.Lock()
+	r.mu.Lock()
 	r.activities[activity.HandlerLongName] = *activity
-	r.Unlock()
+	r.mu.Unlock()
 
 	return nil
 }
 
 func (r *Registry) IsActivityRegistered(longName types.HandlerIdentity) bool {
-	r.Lock()
+	r.mu.Lock()
 	_, ok := r.activities[longName]
-	r.Unlock()
+	r.mu.Unlock()
 	return ok
 }

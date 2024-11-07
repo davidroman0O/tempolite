@@ -85,7 +85,9 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
 		{Name: "step_id", Type: field.TypeString, Unique: true},
+		{Name: "queue_entities", Type: field.TypeInt, Nullable: true},
 		{Name: "run_entities", Type: field.TypeInt},
 	}
 	// EntitiesTable holds the schema information for the "entities" table.
@@ -95,8 +97,14 @@ var (
 		PrimaryKey: []*schema.Column{EntitiesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "entities_queues_entities",
+				Columns:    []*schema.Column{EntitiesColumns[7]},
+				RefColumns: []*schema.Column{QueuesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
 				Symbol:     "entities_runs_entities",
-				Columns:    []*schema.Column{EntitiesColumns[6]},
+				Columns:    []*schema.Column{EntitiesColumns[8]},
 				RefColumns: []*schema.Column{RunsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -109,7 +117,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "completed", "failed"}, Default: "running"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
 		{Name: "entity_executions", Type: field.TypeInt},
 	}
 	// ExecutionsTable holds the schema information for the "executions" table.
@@ -181,8 +189,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "name", Type: field.TypeString},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "completed", "failed", "cancelled"}, Default: "running"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Cancelled"}, Default: "Pending"},
 	}
 	// RunsTable holds the schema information for the "runs" table.
 	RunsTable = &schema.Table{
@@ -341,6 +348,7 @@ var (
 	// WorkflowDataColumns holds the columns for the "workflow_data" table.
 	WorkflowDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "duration", Type: field.TypeString, Nullable: true},
 		{Name: "paused", Type: field.TypeBool, Default: false},
 		{Name: "resumable", Type: field.TypeBool, Default: false},
 		{Name: "retry_policy", Type: field.TypeJSON},
@@ -355,7 +363,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[5]},
+				Columns:    []*schema.Column{WorkflowDataColumns[6]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -403,31 +411,6 @@ var (
 			},
 		},
 	}
-	// EntityQueuesColumns holds the columns for the "entity_queues" table.
-	EntityQueuesColumns = []*schema.Column{
-		{Name: "entity_id", Type: field.TypeInt},
-		{Name: "queue_id", Type: field.TypeInt},
-	}
-	// EntityQueuesTable holds the schema information for the "entity_queues" table.
-	EntityQueuesTable = &schema.Table{
-		Name:       "entity_queues",
-		Columns:    EntityQueuesColumns,
-		PrimaryKey: []*schema.Column{EntityQueuesColumns[0], EntityQueuesColumns[1]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "entity_queues_entity_id",
-				Columns:    []*schema.Column{EntityQueuesColumns[0]},
-				RefColumns: []*schema.Column{EntitiesColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-			{
-				Symbol:     "entity_queues_queue_id",
-				Columns:    []*schema.Column{EntityQueuesColumns[1]},
-				RefColumns: []*schema.Column{QueuesColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-		},
-	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		ActivityDataTable,
@@ -448,7 +431,6 @@ var (
 		WorkflowDataTable,
 		WorkflowExecutionsTable,
 		WorkflowExecutionDataTable,
-		EntityQueuesTable,
 	}
 )
 
@@ -465,7 +447,8 @@ func init() {
 	ActivityExecutionDataTable.Annotation = &entsql.Annotation{
 		Table: "activity_execution_data",
 	}
-	EntitiesTable.ForeignKeys[0].RefTable = RunsTable
+	EntitiesTable.ForeignKeys[0].RefTable = QueuesTable
+	EntitiesTable.ForeignKeys[1].RefTable = RunsTable
 	EntitiesTable.Annotation = &entsql.Annotation{
 		Table: "entities",
 	}
@@ -525,6 +508,4 @@ func init() {
 	WorkflowExecutionDataTable.Annotation = &entsql.Annotation{
 		Table: "workflow_execution_data",
 	}
-	EntityQueuesTable.ForeignKeys[0].RefTable = EntitiesTable
-	EntityQueuesTable.ForeignKeys[1].RefTable = QueuesTable
 }

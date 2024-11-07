@@ -24,11 +24,13 @@ const (
 	EdgeEntities = "entities"
 	// Table holds the table name of the queue in the database.
 	Table = "queues"
-	// EntitiesTable is the table that holds the entities relation/edge. The primary key declared below.
-	EntitiesTable = "entity_queues"
+	// EntitiesTable is the table that holds the entities relation/edge.
+	EntitiesTable = "entities"
 	// EntitiesInverseTable is the table name for the Entity entity.
 	// It exists in this package in order to avoid circular dependency with the "entity" package.
 	EntitiesInverseTable = "entities"
+	// EntitiesColumn is the table column denoting the entities relation/edge.
+	EntitiesColumn = "queue_entities"
 )
 
 // Columns holds all SQL columns for queue fields.
@@ -38,12 +40,6 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldName,
 }
-
-var (
-	// EntitiesPrimaryKey and EntitiesColumn2 are the table columns denoting the
-	// primary key for the entities relation (M2M).
-	EntitiesPrimaryKey = []string{"entity_id", "queue_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -104,6 +100,6 @@ func newEntitiesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(EntitiesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, EntitiesTable, EntitiesPrimaryKey...),
+		sqlgraph.Edge(sqlgraph.O2M, false, EntitiesTable, EntitiesColumn),
 	)
 }

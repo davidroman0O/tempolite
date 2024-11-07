@@ -61,7 +61,6 @@ func TestComplexWorkflowScenario(t *testing.T) {
 
 	// Create a complex order processing run
 	run, err := client.Run.Create().
-		SetName("complex-order-123").
 		SetStatus("running").
 		Save(ctx)
 	if err != nil {
@@ -74,7 +73,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 		SetHandlerName("ComplexOrderWorkflow").
 		SetStepID("order-workflow-root").
 		SetRun(run).
-		AddQueues(queues["high"]).
+		SetQueue(queues["high"]).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating root workflow: %v", err)
@@ -278,7 +277,7 @@ func createSubWorkflow(t *testing.T, ctx context.Context, client *ent.Client, ru
 		SetHandlerName(handler).
 		SetStepID(stepID).
 		SetRun(run).
-		AddQueues(queue).
+		SetQueue(queue).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating sub-workflow: %v", err)
@@ -342,7 +341,7 @@ func createActivity(t *testing.T, ctx context.Context, client *ent.Client, run *
 		SetHandlerName(handler).
 		SetStepID(stepID).
 		SetRun(run).
-		AddQueues(queue).
+		SetQueue(queue).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating activity: %v", err)
@@ -423,7 +422,7 @@ func createSaga(t *testing.T, ctx context.Context, client *ent.Client, run *ent.
 		SetHandlerName(handler).
 		SetStepID(stepID).
 		SetRun(run).
-		AddQueues(queue).
+		SetQueue(queue).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating saga: %v", err)
@@ -500,7 +499,7 @@ func createSideEffect(t *testing.T, ctx context.Context, client *ent.Client, run
 		SetHandlerName(handler).
 		SetStepID(stepID).
 		SetRun(run).
-		AddQueues(queue).
+		SetQueue(queue).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating side effect: %v", err)

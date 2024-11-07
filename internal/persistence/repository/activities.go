@@ -9,7 +9,6 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
@@ -29,7 +28,6 @@ type ActivityDataInfo struct {
 
 type ActivityExecutionInfo struct {
 	ExecutionInfo
-	Result          []byte     `json:"result,omitempty"`
 	StartedAt       time.Time  `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	LastUpdatedTime time.Time  `json:"last_updated_time"`
@@ -39,7 +37,7 @@ type CreateActivityInput struct {
 	RunID       int
 	HandlerName string
 	StepID      string
-	QueueIDs    []int
+	QueueID     int
 	RetryPolicy *schema.RetryPolicy
 	Input       [][]byte
 }
@@ -102,18 +100,16 @@ func (r *activityRepository) Create(tx *ent.Tx, input CreateActivityInput) (*Act
 		SetRun(runObj)
 
 	// Add queues if specified
-	if len(input.QueueIDs) > 0 {
-		queueObjs, err := tx.Queue.Query().
-			Where(queue.IDIn(input.QueueIDs...)).
-			All(r.ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting queues: %w", err)
-		}
-		if len(queueObjs) != len(input.QueueIDs) {
-			return nil, fmt.Errorf("some queues not found")
-		}
-		builder.AddQueues(queueObjs...)
+	if input.QueueID == 0 {
+		return nil, fmt.Errorf("queue ID is required")
 	}
+
+	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting queues: %w", err)
+	}
+
+	builder.SetQueue(queueObj)
 
 	// Save entity
 	entObj, err := builder.Save(r.ctx)
@@ -179,7 +175,7 @@ func (r *activityRepository) Create(tx *ent.Tx, input CreateActivityInput) (*Act
 	}
 
 	// Get queue IDs for response
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue IDs: %w", err)
 	}
@@ -191,7 +187,7 @@ func (r *activityRepository) Create(tx *ent.Tx, input CreateActivityInput) (*Act
 			Type:        ComponentType(entObj.Type),
 			StepID:      entObj.StepID,
 			RunID:       runObj.ID,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     assignedQueueIDs,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
 		},
@@ -211,7 +207,6 @@ func (r *activityRepository) Create(tx *ent.Tx, input CreateActivityInput) (*Act
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
 			},
-			Result:          nil,
 			StartedAt:       execObj.StartedAt,
 			CompletedAt:     execObj.CompletedAt,
 			LastUpdatedTime: execObj.UpdatedAt,
@@ -233,7 +228,7 @@ func (r *activityRepository) Get(tx *ent.Tx, id int) (*ActivityInfo, error) {
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue IDs: %w", err)
 	}
@@ -260,7 +255,7 @@ func (r *activityRepository) Get(tx *ent.Tx, id int) (*ActivityInfo, error) {
 			Type:        ComponentType(entObj.Type),
 			StepID:      entObj.StepID,
 			RunID:       runID,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     assignedQueueIDs,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
 		},
@@ -280,7 +275,6 @@ func (r *activityRepository) Get(tx *ent.Tx, id int) (*ActivityInfo, error) {
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
 			},
-			Result:          nil,
 			StartedAt:       execObj.StartedAt,
 			CompletedAt:     execObj.CompletedAt,
 			LastUpdatedTime: execObj.UpdatedAt,

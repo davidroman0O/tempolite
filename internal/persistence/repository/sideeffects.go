@@ -8,7 +8,6 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sideeffectdata"
 )
@@ -36,7 +35,7 @@ type CreateSideEffectInput struct {
 	RunID       int
 	HandlerName string
 	StepID      string
-	QueueIDs    []int
+	QueueID     int
 	Input       [][]byte
 	Metadata    []byte
 }
@@ -95,18 +94,11 @@ func (r *sideEffectRepository) Create(tx *ent.Tx, input CreateSideEffectInput) (
 		SetStepID(input.StepID).
 		SetRun(runObj)
 
-	if len(input.QueueIDs) > 0 {
-		queueObjs, err := tx.Queue.Query().
-			Where(queue.IDIn(input.QueueIDs...)).
-			All(r.ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting queues: %w", err)
-		}
-		if len(queueObjs) != len(input.QueueIDs) {
-			return nil, fmt.Errorf("some queues not found")
-		}
-		builder.AddQueues(queueObjs...)
+	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting queue: %w", err)
 	}
+	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
@@ -158,9 +150,9 @@ func (r *sideEffectRepository) Create(tx *ent.Tx, input CreateSideEffectInput) (
 		return nil, fmt.Errorf("creating side effect execution data: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	return &SideEffectInfo{
@@ -172,7 +164,7 @@ func (r *sideEffectRepository) Create(tx *ent.Tx, input CreateSideEffectInput) (
 			RunID:       input.RunID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		},
 		Data: &SideEffectDataInfo{
 			ID:    sideEffectData.ID,
@@ -211,9 +203,9 @@ func (r *sideEffectRepository) Get(tx *ent.Tx, id int) (*SideEffectInfo, error) 
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	sideEffectData, err := tx.SideEffectData.Query().
@@ -250,7 +242,7 @@ func (r *sideEffectRepository) Get(tx *ent.Tx, id int) (*SideEffectInfo, error) 
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		},
 		Data: &SideEffectDataInfo{
 			ID:     sideEffectData.ID,

@@ -21,8 +21,6 @@ type Run struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Name holds the value of the "name" field.
-	Name string `json:"name,omitempty"`
 	// Status holds the value of the "status" field.
 	Status run.Status `json:"status,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -67,7 +65,7 @@ func (*Run) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case run.FieldID:
 			values[i] = new(sql.NullInt64)
-		case run.FieldName, run.FieldStatus:
+		case run.FieldStatus:
 			values[i] = new(sql.NullString)
 		case run.FieldCreatedAt, run.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -103,12 +101,6 @@ func (r *Run) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				r.UpdatedAt = value.Time
-			}
-		case run.FieldName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field name", values[i])
-			} else if value.Valid {
-				r.Name = value.String
 			}
 		case run.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -167,9 +159,6 @@ func (r *Run) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(r.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("name=")
-	builder.WriteString(r.Name)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", r.Status))

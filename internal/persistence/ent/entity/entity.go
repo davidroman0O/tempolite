@@ -23,14 +23,16 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
 	// FieldStepID holds the string denoting the step_id field in the database.
 	FieldStepID = "step_id"
 	// EdgeRun holds the string denoting the run edge name in mutations.
 	EdgeRun = "run"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
-	// EdgeQueues holds the string denoting the queues edge name in mutations.
-	EdgeQueues = "queues"
+	// EdgeQueue holds the string denoting the queue edge name in mutations.
+	EdgeQueue = "queue"
 	// EdgeVersions holds the string denoting the versions edge name in mutations.
 	EdgeVersions = "versions"
 	// EdgeWorkflowData holds the string denoting the workflow_data edge name in mutations.
@@ -57,11 +59,13 @@ const (
 	ExecutionsInverseTable = "executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "entity_executions"
-	// QueuesTable is the table that holds the queues relation/edge. The primary key declared below.
-	QueuesTable = "entity_queues"
-	// QueuesInverseTable is the table name for the Queue entity.
+	// QueueTable is the table that holds the queue relation/edge.
+	QueueTable = "entities"
+	// QueueInverseTable is the table name for the Queue entity.
 	// It exists in this package in order to avoid circular dependency with the "queue" package.
-	QueuesInverseTable = "queues"
+	QueueInverseTable = "queues"
+	// QueueColumn is the table column denoting the queue relation/edge.
+	QueueColumn = "queue_entities"
 	// VersionsTable is the table that holds the versions relation/edge.
 	VersionsTable = "versions"
 	// VersionsInverseTable is the table name for the Version entity.
@@ -106,20 +110,16 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldHandlerName,
 	FieldType,
+	FieldStatus,
 	FieldStepID,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entities"
 // table and are not defined as standalone fields in the schema.
 var ForeignKeys = []string{
+	"queue_entities",
 	"run_entities",
 }
-
-var (
-	// QueuesPrimaryKey and QueuesColumn2 are the table columns denoting the
-	// primary key for the queues relation (M2M).
-	QueuesPrimaryKey = []string{"entity_id", "queue_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -172,6 +172,37 @@ func TypeValidator(_type Type) error {
 	}
 }
 
+// Status defines the type for the "status" enum field.
+type Status string
+
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
+
+// Status values.
+const (
+	StatusPending   Status = "Pending"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+	StatusRetried   Status = "Retried"
+	StatusCancelled Status = "Cancelled"
+	StatusPaused    Status = "Paused"
+)
+
+func (s Status) String() string {
+	return string(s)
+}
+
+// StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
+func StatusValidator(s Status) error {
+	switch s {
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusRetried, StatusCancelled, StatusPaused:
+		return nil
+	default:
+		return fmt.Errorf("entity: invalid enum value for status field: %q", s)
+	}
+}
+
 // OrderOption defines the ordering options for the Entity queries.
 type OrderOption func(*sql.Selector)
 
@@ -200,6 +231,11 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
 // ByStepID orders the results by the step_id field.
 func ByStepID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStepID, opts...).ToFunc()
@@ -226,17 +262,10 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByQueuesCount orders the results by queues count.
-func ByQueuesCount(opts ...sql.OrderTermOption) OrderOption {
+// ByQueueField orders the results by queue field.
+func ByQueueField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newQueuesStep(), opts...)
-	}
-}
-
-// ByQueues orders the results by queues terms.
-func ByQueues(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newQueuesStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newQueueStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -295,11 +324,11 @@ func newExecutionsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
 	)
 }
-func newQueuesStep() *sqlgraph.Step {
+func newQueueStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(QueuesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, QueuesTable, QueuesPrimaryKey...),
+		sqlgraph.To(QueueInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, QueueTable, QueueColumn),
 	)
 }
 func newVersionsStep() *sqlgraph.Step {

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sideeffectdata"
@@ -30,13 +31,16 @@ type Entity struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Type holds the value of the "type" field.
 	Type entity.Type `json:"type,omitempty"`
+	// Status holds the value of the "status" field.
+	Status entity.Status `json:"status,omitempty"`
 	// StepID holds the value of the "step_id" field.
 	StepID string `json:"step_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the EntityQuery when eager-loading is set.
-	Edges        EntityEdges `json:"edges"`
-	run_entities *int
-	selectValues sql.SelectValues
+	Edges          EntityEdges `json:"edges"`
+	queue_entities *int
+	run_entities   *int
+	selectValues   sql.SelectValues
 }
 
 // EntityEdges holds the relations/edges for other nodes in the graph.
@@ -45,8 +49,8 @@ type EntityEdges struct {
 	Run *Run `json:"run,omitempty"`
 	// Executions holds the value of the executions edge.
 	Executions []*Execution `json:"executions,omitempty"`
-	// Queues holds the value of the queues edge.
-	Queues []*Queue `json:"queues,omitempty"`
+	// Queue holds the value of the queue edge.
+	Queue *Queue `json:"queue,omitempty"`
 	// Versions holds the value of the versions edge.
 	Versions []*Version `json:"versions,omitempty"`
 	// WorkflowData holds the value of the workflow_data edge.
@@ -82,13 +86,15 @@ func (e EntityEdges) ExecutionsOrErr() ([]*Execution, error) {
 	return nil, &NotLoadedError{edge: "executions"}
 }
 
-// QueuesOrErr returns the Queues value or an error if the edge
-// was not loaded in eager-loading.
-func (e EntityEdges) QueuesOrErr() ([]*Queue, error) {
-	if e.loadedTypes[2] {
-		return e.Queues, nil
+// QueueOrErr returns the Queue value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e EntityEdges) QueueOrErr() (*Queue, error) {
+	if e.Queue != nil {
+		return e.Queue, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: queue.Label}
 	}
-	return nil, &NotLoadedError{edge: "queues"}
+	return nil, &NotLoadedError{edge: "queue"}
 }
 
 // VersionsOrErr returns the Versions value or an error if the edge
@@ -151,11 +157,13 @@ func (*Entity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entity.FieldID:
 			values[i] = new(sql.NullInt64)
-		case entity.FieldHandlerName, entity.FieldType, entity.FieldStepID:
+		case entity.FieldHandlerName, entity.FieldType, entity.FieldStatus, entity.FieldStepID:
 			values[i] = new(sql.NullString)
 		case entity.FieldCreatedAt, entity.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case entity.ForeignKeys[0]: // run_entities
+		case entity.ForeignKeys[0]: // queue_entities
+			values[i] = new(sql.NullInt64)
+		case entity.ForeignKeys[1]: // run_entities
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -202,6 +210,12 @@ func (e *Entity) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.Type = entity.Type(value.String)
 			}
+		case entity.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				e.Status = entity.Status(value.String)
+			}
 		case entity.FieldStepID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field step_id", values[i])
@@ -209,6 +223,13 @@ func (e *Entity) assignValues(columns []string, values []any) error {
 				e.StepID = value.String
 			}
 		case entity.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field queue_entities", value)
+			} else if value.Valid {
+				e.queue_entities = new(int)
+				*e.queue_entities = int(value.Int64)
+			}
+		case entity.ForeignKeys[1]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field run_entities", value)
 			} else if value.Valid {
@@ -238,9 +259,9 @@ func (e *Entity) QueryExecutions() *ExecutionQuery {
 	return NewEntityClient(e.config).QueryExecutions(e)
 }
 
-// QueryQueues queries the "queues" edge of the Entity entity.
-func (e *Entity) QueryQueues() *QueueQuery {
-	return NewEntityClient(e.config).QueryQueues(e)
+// QueryQueue queries the "queue" edge of the Entity entity.
+func (e *Entity) QueryQueue() *QueueQuery {
+	return NewEntityClient(e.config).QueryQueue(e)
 }
 
 // QueryVersions queries the "versions" edge of the Entity entity.
@@ -302,6 +323,9 @@ func (e *Entity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(fmt.Sprintf("%v", e.Type))
+	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(fmt.Sprintf("%v", e.Status))
 	builder.WriteString(", ")
 	builder.WriteString("step_id=")
 	builder.WriteString(e.StepID)

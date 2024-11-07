@@ -7,7 +7,6 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
@@ -36,9 +35,10 @@ type CreateWorkflowInput struct {
 	RunID       int
 	HandlerName string
 	StepID      string
-	QueueIDs    []int
+	QueueID     int
 	RetryPolicy *schema.RetryPolicy
 	Input       [][]byte
+	Duration    string
 }
 
 type UpdateWorkflowDataInput struct {
@@ -98,18 +98,16 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		SetStepID(input.StepID).
 		SetRun(runObj)
 
-	if len(input.QueueIDs) > 0 {
-		queueObjs, err := tx.Queue.Query().
-			Where(queue.IDIn(input.QueueIDs...)).
-			All(r.ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting queues: %w", err)
-		}
-		if len(queueObjs) != len(input.QueueIDs) {
-			return nil, fmt.Errorf("some queues not found")
-		}
-		builder.AddQueues(queueObjs...)
+	if input.QueueID == 0 {
+		return nil, fmt.Errorf("queue ID is required")
 	}
+
+	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting queue: %w", err)
+	}
+
+	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
@@ -121,17 +119,23 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		retryPolicy = *input.RetryPolicy
 	}
 
-	workflowData, err := tx.WorkflowData.Create().
+	builderWorkflow := tx.WorkflowData.Create().
 		SetEntity(entObj).
 		SetRetryPolicy(&retryPolicy).
-		SetInput(input.Input).
+		SetInput(input.Input)
+
+	if input.Duration != "" {
+		builderWorkflow.SetDuration(input.Duration)
+	}
+
+	workflowData, err := builderWorkflow.
 		Save(r.ctx)
 	if err != nil {
 		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
 		return nil, fmt.Errorf("creating workflow data: %w", err)
 	}
 
-	realStatus := execution.Status(StatusRunning)
+	realStatus := execution.Status(entity.StatusPending)
 
 	execObj, err := tx.Execution.Create().
 		SetEntity(entObj).
@@ -164,9 +168,9 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		return nil, fmt.Errorf("creating workflow execution data: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	return &WorkflowInfo{
@@ -178,7 +182,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 			RunID:       input.RunID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		},
 		Data: &WorkflowDataInfo{
 			ID:          workflowData.ID,
@@ -219,7 +223,7 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue IDs: %w", err)
 	}
@@ -259,7 +263,7 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     assignedQueueIDs,
 		},
 		Data: &WorkflowDataInfo{
 			ID:          workflowData.ID,

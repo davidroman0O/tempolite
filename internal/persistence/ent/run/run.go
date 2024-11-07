@@ -19,8 +19,6 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// FieldName holds the string denoting the name field in the database.
-	FieldName = "name"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// EdgeEntities holds the string denoting the entities edge name in mutations.
@@ -50,7 +48,6 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
-	FieldName,
 	FieldStatus,
 }
 
@@ -71,22 +68,21 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// NameValidator is a validator for the "name" field. It is called by the builders before save.
-	NameValidator func(string) error
 )
 
 // Status defines the type for the "status" enum field.
 type Status string
 
-// StatusRunning is the default value of the Status enum.
-const DefaultStatus = StatusRunning
+// StatusPending is the default value of the Status enum.
+const DefaultStatus = StatusPending
 
 // Status values.
 const (
-	StatusRunning   Status = "running"
-	StatusCompleted Status = "completed"
-	StatusFailed    Status = "failed"
-	StatusCancelled Status = "cancelled"
+	StatusPending   Status = "Pending"
+	StatusRunning   Status = "Running"
+	StatusCompleted Status = "Completed"
+	StatusFailed    Status = "Failed"
+	StatusCancelled Status = "Cancelled"
 )
 
 func (s Status) String() string {
@@ -96,7 +92,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusRunning, StatusCompleted, StatusFailed, StatusCancelled:
+	case StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusCancelled:
 		return nil
 	default:
 		return fmt.Errorf("run: invalid enum value for status field: %q", s)
@@ -119,11 +115,6 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByName orders the results by the name field.
-func ByName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

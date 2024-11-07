@@ -38,6 +38,8 @@ type Repository interface {
 	Activities() ActivityRepository
 	Sagas() SagaRepository
 	SideEffects() SideEffectRepository
+
+	Tx() (*ent.Tx, error)
 }
 
 // repository implements Repository
@@ -108,4 +110,8 @@ func (r *repository) Sagas() SagaRepository {
 
 func (r *repository) SideEffects() SideEffectRepository {
 	return r.sideeffects
+}
+
+func (r *repository) Tx() (*ent.Tx, error) {
+	return r.client.Tx(context.Background())
 }

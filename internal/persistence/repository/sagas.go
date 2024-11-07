@@ -7,7 +7,6 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
 )
@@ -36,7 +35,7 @@ type CreateSagaInput struct {
 	RunID            int
 	HandlerName      string
 	StepID           string
-	QueueIDs         []int
+	QueueID          int
 	CompensationData [][]byte
 	Input            [][]byte
 }
@@ -97,18 +96,12 @@ func (r *sagaRepository) Create(tx *ent.Tx, input CreateSagaInput) (*SagaInfo, e
 		SetStepID(input.StepID).
 		SetRun(runObj)
 
-	if len(input.QueueIDs) > 0 {
-		queueObjs, err := tx.Queue.Query().
-			Where(queue.IDIn(input.QueueIDs...)).
-			All(r.ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting queues: %w", err)
-		}
-		if len(queueObjs) != len(input.QueueIDs) {
-			return nil, fmt.Errorf("some queues not found")
-		}
-		builder.AddQueues(queueObjs...)
+	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting queue: %w", err)
 	}
+
+	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
@@ -159,9 +152,9 @@ func (r *sagaRepository) Create(tx *ent.Tx, input CreateSagaInput) (*SagaInfo, e
 		return nil, fmt.Errorf("creating saga execution data: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	return &SagaInfo{
@@ -173,7 +166,7 @@ func (r *sagaRepository) Create(tx *ent.Tx, input CreateSagaInput) (*SagaInfo, e
 			RunID:       input.RunID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		},
 		Data: &SagaDataInfo{
 			ID:               sagaData.ID,
@@ -214,9 +207,9 @@ func (r *sagaRepository) Get(tx *ent.Tx, id int) (*SagaInfo, error) {
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	sagaData, err := tx.SagaData.Query().
@@ -248,7 +241,7 @@ func (r *sagaRepository) Get(tx *ent.Tx, id int) (*SagaInfo, error) {
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		},
 		Data: &SagaDataInfo{
 			ID:               sagaData.ID,

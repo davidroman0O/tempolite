@@ -56,6 +56,20 @@ func (eu *EntityUpdate) SetNillableHandlerName(s *string) *EntityUpdate {
 	return eu
 }
 
+// SetStatus sets the "status" field.
+func (eu *EntityUpdate) SetStatus(e entity.Status) *EntityUpdate {
+	eu.mutation.SetStatus(e)
+	return eu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (eu *EntityUpdate) SetNillableStatus(e *entity.Status) *EntityUpdate {
+	if e != nil {
+		eu.SetStatus(*e)
+	}
+	return eu
+}
+
 // SetStepID sets the "step_id" field.
 func (eu *EntityUpdate) SetStepID(s string) *EntityUpdate {
 	eu.mutation.SetStepID(s)
@@ -96,19 +110,23 @@ func (eu *EntityUpdate) AddExecutions(e ...*Execution) *EntityUpdate {
 	return eu.AddExecutionIDs(ids...)
 }
 
-// AddQueueIDs adds the "queues" edge to the Queue entity by IDs.
-func (eu *EntityUpdate) AddQueueIDs(ids ...int) *EntityUpdate {
-	eu.mutation.AddQueueIDs(ids...)
+// SetQueueID sets the "queue" edge to the Queue entity by ID.
+func (eu *EntityUpdate) SetQueueID(id int) *EntityUpdate {
+	eu.mutation.SetQueueID(id)
 	return eu
 }
 
-// AddQueues adds the "queues" edges to the Queue entity.
-func (eu *EntityUpdate) AddQueues(q ...*Queue) *EntityUpdate {
-	ids := make([]int, len(q))
-	for i := range q {
-		ids[i] = q[i].ID
+// SetNillableQueueID sets the "queue" edge to the Queue entity by ID if the given value is not nil.
+func (eu *EntityUpdate) SetNillableQueueID(id *int) *EntityUpdate {
+	if id != nil {
+		eu = eu.SetQueueID(*id)
 	}
-	return eu.AddQueueIDs(ids...)
+	return eu
+}
+
+// SetQueue sets the "queue" edge to the Queue entity.
+func (eu *EntityUpdate) SetQueue(q *Queue) *EntityUpdate {
+	return eu.SetQueueID(q.ID)
 }
 
 // AddVersionIDs adds the "versions" edge to the Version entity by IDs.
@@ -234,25 +252,10 @@ func (eu *EntityUpdate) RemoveExecutions(e ...*Execution) *EntityUpdate {
 	return eu.RemoveExecutionIDs(ids...)
 }
 
-// ClearQueues clears all "queues" edges to the Queue entity.
-func (eu *EntityUpdate) ClearQueues() *EntityUpdate {
-	eu.mutation.ClearQueues()
+// ClearQueue clears the "queue" edge to the Queue entity.
+func (eu *EntityUpdate) ClearQueue() *EntityUpdate {
+	eu.mutation.ClearQueue()
 	return eu
-}
-
-// RemoveQueueIDs removes the "queues" edge to Queue entities by IDs.
-func (eu *EntityUpdate) RemoveQueueIDs(ids ...int) *EntityUpdate {
-	eu.mutation.RemoveQueueIDs(ids...)
-	return eu
-}
-
-// RemoveQueues removes "queues" edges to Queue entities.
-func (eu *EntityUpdate) RemoveQueues(q ...*Queue) *EntityUpdate {
-	ids := make([]int, len(q))
-	for i := range q {
-		ids[i] = q[i].ID
-	}
-	return eu.RemoveQueueIDs(ids...)
 }
 
 // ClearVersions clears all "versions" edges to the Version entity.
@@ -343,6 +346,11 @@ func (eu *EntityUpdate) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Entity.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := eu.mutation.Status(); ok {
+		if err := entity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Entity.status": %w`, err)}
+		}
+	}
 	if eu.mutation.RunCleared() && len(eu.mutation.RunIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Entity.run"`)
 	}
@@ -366,6 +374,9 @@ func (eu *EntityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := eu.mutation.HandlerName(); ok {
 		_spec.SetField(entity.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := eu.mutation.Status(); ok {
+		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := eu.mutation.StepID(); ok {
 		_spec.SetField(entity.FieldStepID, field.TypeString, value)
@@ -444,12 +455,12 @@ func (eu *EntityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if eu.mutation.QueuesCleared() {
+	if eu.mutation.QueueCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   entity.QueueTable,
+			Columns: []string{entity.QueueColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
@@ -457,28 +468,12 @@ func (eu *EntityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := eu.mutation.RemovedQueuesIDs(); len(nodes) > 0 && !eu.mutation.QueuesCleared() {
+	if nodes := eu.mutation.QueueIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := eu.mutation.QueuesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   entity.QueueTable,
+			Columns: []string{entity.QueueColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
@@ -690,6 +685,20 @@ func (euo *EntityUpdateOne) SetNillableHandlerName(s *string) *EntityUpdateOne {
 	return euo
 }
 
+// SetStatus sets the "status" field.
+func (euo *EntityUpdateOne) SetStatus(e entity.Status) *EntityUpdateOne {
+	euo.mutation.SetStatus(e)
+	return euo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (euo *EntityUpdateOne) SetNillableStatus(e *entity.Status) *EntityUpdateOne {
+	if e != nil {
+		euo.SetStatus(*e)
+	}
+	return euo
+}
+
 // SetStepID sets the "step_id" field.
 func (euo *EntityUpdateOne) SetStepID(s string) *EntityUpdateOne {
 	euo.mutation.SetStepID(s)
@@ -730,19 +739,23 @@ func (euo *EntityUpdateOne) AddExecutions(e ...*Execution) *EntityUpdateOne {
 	return euo.AddExecutionIDs(ids...)
 }
 
-// AddQueueIDs adds the "queues" edge to the Queue entity by IDs.
-func (euo *EntityUpdateOne) AddQueueIDs(ids ...int) *EntityUpdateOne {
-	euo.mutation.AddQueueIDs(ids...)
+// SetQueueID sets the "queue" edge to the Queue entity by ID.
+func (euo *EntityUpdateOne) SetQueueID(id int) *EntityUpdateOne {
+	euo.mutation.SetQueueID(id)
 	return euo
 }
 
-// AddQueues adds the "queues" edges to the Queue entity.
-func (euo *EntityUpdateOne) AddQueues(q ...*Queue) *EntityUpdateOne {
-	ids := make([]int, len(q))
-	for i := range q {
-		ids[i] = q[i].ID
+// SetNillableQueueID sets the "queue" edge to the Queue entity by ID if the given value is not nil.
+func (euo *EntityUpdateOne) SetNillableQueueID(id *int) *EntityUpdateOne {
+	if id != nil {
+		euo = euo.SetQueueID(*id)
 	}
-	return euo.AddQueueIDs(ids...)
+	return euo
+}
+
+// SetQueue sets the "queue" edge to the Queue entity.
+func (euo *EntityUpdateOne) SetQueue(q *Queue) *EntityUpdateOne {
+	return euo.SetQueueID(q.ID)
 }
 
 // AddVersionIDs adds the "versions" edge to the Version entity by IDs.
@@ -868,25 +881,10 @@ func (euo *EntityUpdateOne) RemoveExecutions(e ...*Execution) *EntityUpdateOne {
 	return euo.RemoveExecutionIDs(ids...)
 }
 
-// ClearQueues clears all "queues" edges to the Queue entity.
-func (euo *EntityUpdateOne) ClearQueues() *EntityUpdateOne {
-	euo.mutation.ClearQueues()
+// ClearQueue clears the "queue" edge to the Queue entity.
+func (euo *EntityUpdateOne) ClearQueue() *EntityUpdateOne {
+	euo.mutation.ClearQueue()
 	return euo
-}
-
-// RemoveQueueIDs removes the "queues" edge to Queue entities by IDs.
-func (euo *EntityUpdateOne) RemoveQueueIDs(ids ...int) *EntityUpdateOne {
-	euo.mutation.RemoveQueueIDs(ids...)
-	return euo
-}
-
-// RemoveQueues removes "queues" edges to Queue entities.
-func (euo *EntityUpdateOne) RemoveQueues(q ...*Queue) *EntityUpdateOne {
-	ids := make([]int, len(q))
-	for i := range q {
-		ids[i] = q[i].ID
-	}
-	return euo.RemoveQueueIDs(ids...)
 }
 
 // ClearVersions clears all "versions" edges to the Version entity.
@@ -990,6 +988,11 @@ func (euo *EntityUpdateOne) check() error {
 			return &ValidationError{Name: "handler_name", err: fmt.Errorf(`ent: validator failed for field "Entity.handler_name": %w`, err)}
 		}
 	}
+	if v, ok := euo.mutation.Status(); ok {
+		if err := entity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Entity.status": %w`, err)}
+		}
+	}
 	if euo.mutation.RunCleared() && len(euo.mutation.RunIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Entity.run"`)
 	}
@@ -1030,6 +1033,9 @@ func (euo *EntityUpdateOne) sqlSave(ctx context.Context) (_node *Entity, err err
 	}
 	if value, ok := euo.mutation.HandlerName(); ok {
 		_spec.SetField(entity.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := euo.mutation.Status(); ok {
+		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := euo.mutation.StepID(); ok {
 		_spec.SetField(entity.FieldStepID, field.TypeString, value)
@@ -1108,12 +1114,12 @@ func (euo *EntityUpdateOne) sqlSave(ctx context.Context) (_node *Entity, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if euo.mutation.QueuesCleared() {
+	if euo.mutation.QueueCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   entity.QueueTable,
+			Columns: []string{entity.QueueColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
@@ -1121,28 +1127,12 @@ func (euo *EntityUpdateOne) sqlSave(ctx context.Context) (_node *Entity, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := euo.mutation.RemovedQueuesIDs(); len(nodes) > 0 && !euo.mutation.QueuesCleared() {
+	if nodes := euo.mutation.QueueIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := euo.mutation.QueuesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   entity.QueueTable,
+			Columns: []string{entity.QueueColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),

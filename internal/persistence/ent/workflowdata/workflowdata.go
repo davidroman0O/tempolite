@@ -13,6 +13,8 @@ const (
 	Label = "workflow_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldDuration holds the string denoting the duration field in the database.
+	FieldDuration = "duration"
 	// FieldPaused holds the string denoting the paused field in the database.
 	FieldPaused = "paused"
 	// FieldResumable holds the string denoting the resumable field in the database.
@@ -37,6 +39,7 @@ const (
 // Columns holds all SQL columns for workflowdata fields.
 var Columns = []string{
 	FieldID,
+	FieldDuration,
 	FieldPaused,
 	FieldResumable,
 	FieldRetryPolicy,
@@ -79,6 +82,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByDuration orders the results by the duration field.
+func ByDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDuration, opts...).ToFunc()
 }
 
 // ByPaused orders the results by the paused field.

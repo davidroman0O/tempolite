@@ -30,6 +30,26 @@ func (wdu *WorkflowDataUpdate) Where(ps ...predicate.WorkflowData) *WorkflowData
 	return wdu
 }
 
+// SetDuration sets the "duration" field.
+func (wdu *WorkflowDataUpdate) SetDuration(s string) *WorkflowDataUpdate {
+	wdu.mutation.SetDuration(s)
+	return wdu
+}
+
+// SetNillableDuration sets the "duration" field if the given value is not nil.
+func (wdu *WorkflowDataUpdate) SetNillableDuration(s *string) *WorkflowDataUpdate {
+	if s != nil {
+		wdu.SetDuration(*s)
+	}
+	return wdu
+}
+
+// ClearDuration clears the value of the "duration" field.
+func (wdu *WorkflowDataUpdate) ClearDuration() *WorkflowDataUpdate {
+	wdu.mutation.ClearDuration()
+	return wdu
+}
+
 // SetPaused sets the "paused" field.
 func (wdu *WorkflowDataUpdate) SetPaused(b bool) *WorkflowDataUpdate {
 	wdu.mutation.SetPaused(b)
@@ -151,6 +171,12 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			}
 		}
 	}
+	if value, ok := wdu.mutation.Duration(); ok {
+		_spec.SetField(workflowdata.FieldDuration, field.TypeString, value)
+	}
+	if wdu.mutation.DurationCleared() {
+		_spec.ClearField(workflowdata.FieldDuration, field.TypeString)
+	}
 	if value, ok := wdu.mutation.Paused(); ok {
 		_spec.SetField(workflowdata.FieldPaused, field.TypeBool, value)
 	}
@@ -218,6 +244,26 @@ type WorkflowDataUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowDataMutation
+}
+
+// SetDuration sets the "duration" field.
+func (wduo *WorkflowDataUpdateOne) SetDuration(s string) *WorkflowDataUpdateOne {
+	wduo.mutation.SetDuration(s)
+	return wduo
+}
+
+// SetNillableDuration sets the "duration" field if the given value is not nil.
+func (wduo *WorkflowDataUpdateOne) SetNillableDuration(s *string) *WorkflowDataUpdateOne {
+	if s != nil {
+		wduo.SetDuration(*s)
+	}
+	return wduo
+}
+
+// ClearDuration clears the value of the "duration" field.
+func (wduo *WorkflowDataUpdateOne) ClearDuration() *WorkflowDataUpdateOne {
+	wduo.mutation.ClearDuration()
+	return wduo
 }
 
 // SetPaused sets the "paused" field.
@@ -370,6 +416,12 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := wduo.mutation.Duration(); ok {
+		_spec.SetField(workflowdata.FieldDuration, field.TypeString, value)
+	}
+	if wduo.mutation.DurationCleared() {
+		_spec.ClearField(workflowdata.FieldDuration, field.TypeString)
 	}
 	if value, ok := wduo.mutation.Paused(); ok {
 		_spec.SetField(workflowdata.FieldPaused, field.TypeBool, value)

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,6 +16,10 @@ type QueueInfo struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+var (
+	ErrQueues = fmt.Errorf("queues error")
+)
 
 type QueueRepository interface {
 	Create(tx *ent.Tx, name string) (*QueueInfo, error)
@@ -67,7 +72,7 @@ func (r *queueRepository) Get(tx *ent.Tx, id int) (*QueueInfo, error) {
 	queueObj, err := tx.Queue.Get(r.ctx, id)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, ErrNotFound
+			return nil, errors.Join(ErrQueues, ErrNotFound)
 		}
 		return nil, fmt.Errorf("getting queue: %w", err)
 	}
@@ -86,9 +91,9 @@ func (r *queueRepository) GetByName(tx *ent.Tx, name string) (*QueueInfo, error)
 		Only(r.ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, ErrNotFound
+			return nil, errors.Join(ErrQueues, ErrNotFound)
 		}
-		return nil, fmt.Errorf("getting queue by name: %w", err)
+		return nil, errors.Join(ErrQueues, fmt.Errorf("getting queue by name: %w", err))
 	}
 
 	return &QueueInfo{
@@ -125,7 +130,7 @@ func (r *queueRepository) Delete(tx *ent.Tx, id int) error {
 		return fmt.Errorf("checking queue existence: %w", err)
 	}
 	if !exists {
-		return ErrNotFound
+		return errors.Join(ErrQueues, ErrNotFound)
 	}
 
 	inUse, err := tx.Queue.Query().
@@ -166,7 +171,7 @@ func (r *queueRepository) Update(tx *ent.Tx, id int, name string) (*QueueInfo, e
 		Save(r.ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, ErrNotFound
+			return nil, errors.Join(ErrQueues, ErrNotFound)
 		}
 		return nil, fmt.Errorf("updating queue: %w", err)
 	}

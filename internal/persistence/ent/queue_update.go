@@ -143,10 +143,10 @@ func (qu *QueueUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if qu.mutation.EntitiesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),
@@ -156,10 +156,10 @@ func (qu *QueueUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if nodes := qu.mutation.RemovedEntitiesIDs(); len(nodes) > 0 && !qu.mutation.EntitiesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),
@@ -172,10 +172,10 @@ func (qu *QueueUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if nodes := qu.mutation.EntitiesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),
@@ -350,10 +350,10 @@ func (quo *QueueUpdateOne) sqlSave(ctx context.Context) (_node *Queue, err error
 	}
 	if quo.mutation.EntitiesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),
@@ -363,10 +363,10 @@ func (quo *QueueUpdateOne) sqlSave(ctx context.Context) (_node *Queue, err error
 	}
 	if nodes := quo.mutation.RemovedEntitiesIDs(); len(nodes) > 0 && !quo.mutation.EntitiesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),
@@ -379,10 +379,10 @@ func (quo *QueueUpdateOne) sqlSave(ctx context.Context) (_node *Queue, err error
 	}
 	if nodes := quo.mutation.EntitiesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
 			Table:   queue.EntitiesTable,
-			Columns: queue.EntitiesPrimaryKey,
+			Columns: []string{queue.EntitiesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entity.FieldID, field.TypeInt),

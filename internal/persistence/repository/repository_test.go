@@ -53,7 +53,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 		"payment-batch-001", "user-registration-002", "data-sync-003",
 		"billing-cycle-004", "marketing-campaign-005", "audit-process-006",
 		"notification-batch-007"} {
-		run, err := repo.Runs().Create(tx, runName)
+		run, err := repo.Runs().Create(tx)
 		if err != nil {
 			t.Fatalf("failed creating run %s: %v", runName, err)
 		}
@@ -79,7 +79,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 			RunID:       run.ID,
 			HandlerName: fmt.Sprintf("%sRootWorkflow", runName),
 			StepID:      fmt.Sprintf("%s-root", runName),
-			QueueIDs:    []int{queues["high"].ID},
+			QueueID:     queues["high"].ID,
 			RetryPolicy: &schema.RetryPolicy{
 				MaxAttempts:        3,
 				InitialInterval:    1000000000,
@@ -102,7 +102,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 				RunID:       run.ID,
 				HandlerName: fmt.Sprintf("%s%sWorkflow", runName, name),
 				StepID:      fmt.Sprintf("%s-%s", runName, name),
-				QueueIDs:    []int{queues["default"].ID},
+				QueueID:     queues["default"].ID,
 				RetryPolicy: &schema.RetryPolicy{MaxAttempts: 2},
 				Input:       [][]byte{[]byte(fmt.Sprintf(`{"parentWorkflow":"%s-root"}`, runName))},
 			})
@@ -116,7 +116,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 			RunID:       run.ID,
 			HandlerName: fmt.Sprintf("%sTransactionSaga", runName),
 			StepID:      fmt.Sprintf("%s-saga", runName),
-			QueueIDs:    []int{queues["critical"].ID},
+			QueueID:     queues["critical"].ID,
 			CompensationData: [][]byte{[]byte(fmt.Sprintf(`{
 				"steps": [
 					{"step": "Step1", "compensation": "CompensateStep1"},
@@ -138,7 +138,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 					RunID:       run.ID,
 					HandlerName: fmt.Sprintf("%s%sActivity", subWorkflow.EntityInfo.HandlerName, actType),
 					StepID:      fmt.Sprintf("%s-%s", subWorkflow.EntityInfo.StepID, actType),
-					QueueIDs:    []int{queues["default"].ID, queues["background"].ID},
+					QueueID:     queues["default"].ID,
 					RetryPolicy: &schema.RetryPolicy{MaxAttempts: 3},
 					Input:       [][]byte{[]byte(fmt.Sprintf(`{"workflowId":"%s","type":"%s"}`, runName, actType))},
 				})
@@ -164,7 +164,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 				RunID:       run.ID,
 				HandlerName: fmt.Sprintf("%s%sEffect", runName, effectType),
 				StepID:      fmt.Sprintf("%s-%s-effect", runName, effectType),
-				QueueIDs:    []int{queues["background"].ID},
+				QueueID:     queues["background"].ID,
 				Input:       [][]byte{[]byte(fmt.Sprintf(`{"workflowId":"%s","type":"%s"}`, runName, effectType))},
 				Metadata:    []byte(fmt.Sprintf(`{"category":"%s","priority":"low"}`, effectType)),
 			})

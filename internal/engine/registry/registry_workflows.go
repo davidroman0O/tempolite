@@ -66,8 +66,8 @@ func (r *Registry) registerWorkflow(workflowFunc interface{}) error {
 		NumOut:          numOut - 1,              // Exclude error
 	}
 
-	r.Lock()
+	r.mu.Lock()
 	r.workflows[workflow.HandlerLongName] = *workflow
-	r.Unlock()
+	r.mu.Unlock()
 	return nil
 }

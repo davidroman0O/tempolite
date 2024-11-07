@@ -36,20 +36,6 @@ func (ru *RunUpdate) SetUpdatedAt(t time.Time) *RunUpdate {
 	return ru
 }
 
-// SetName sets the "name" field.
-func (ru *RunUpdate) SetName(s string) *RunUpdate {
-	ru.mutation.SetName(s)
-	return ru
-}
-
-// SetNillableName sets the "name" field if the given value is not nil.
-func (ru *RunUpdate) SetNillableName(s *string) *RunUpdate {
-	if s != nil {
-		ru.SetName(*s)
-	}
-	return ru
-}
-
 // SetStatus sets the "status" field.
 func (ru *RunUpdate) SetStatus(r run.Status) *RunUpdate {
 	ru.mutation.SetStatus(r)
@@ -179,11 +165,6 @@ func (ru *RunUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (ru *RunUpdate) check() error {
-	if v, ok := ru.mutation.Name(); ok {
-		if err := run.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Run.name": %w`, err)}
-		}
-	}
 	if v, ok := ru.mutation.Status(); ok {
 		if err := run.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Run.status": %w`, err)}
@@ -206,9 +187,6 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := ru.mutation.UpdatedAt(); ok {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := ru.mutation.Name(); ok {
-		_spec.SetField(run.FieldName, field.TypeString, value)
 	}
 	if value, ok := ru.mutation.Status(); ok {
 		_spec.SetField(run.FieldStatus, field.TypeEnum, value)
@@ -326,20 +304,6 @@ type RunUpdateOne struct {
 // SetUpdatedAt sets the "updated_at" field.
 func (ruo *RunUpdateOne) SetUpdatedAt(t time.Time) *RunUpdateOne {
 	ruo.mutation.SetUpdatedAt(t)
-	return ruo
-}
-
-// SetName sets the "name" field.
-func (ruo *RunUpdateOne) SetName(s string) *RunUpdateOne {
-	ruo.mutation.SetName(s)
-	return ruo
-}
-
-// SetNillableName sets the "name" field if the given value is not nil.
-func (ruo *RunUpdateOne) SetNillableName(s *string) *RunUpdateOne {
-	if s != nil {
-		ruo.SetName(*s)
-	}
 	return ruo
 }
 
@@ -485,11 +449,6 @@ func (ruo *RunUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (ruo *RunUpdateOne) check() error {
-	if v, ok := ruo.mutation.Name(); ok {
-		if err := run.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Run.name": %w`, err)}
-		}
-	}
 	if v, ok := ruo.mutation.Status(); ok {
 		if err := run.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Run.status": %w`, err)}
@@ -529,9 +488,6 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 	}
 	if value, ok := ruo.mutation.UpdatedAt(); ok {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := ruo.mutation.Name(); ok {
-		_spec.SetField(run.FieldName, field.TypeString, value)
 	}
 	if value, ok := ruo.mutation.Status(); ok {
 		_spec.SetField(run.FieldStatus, field.TypeEnum, value)

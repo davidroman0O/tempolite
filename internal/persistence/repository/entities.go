@@ -42,12 +42,12 @@ type EntityInfo struct {
 	RunID       int           `json:"run_id"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
-	QueueIDs    []int         `json:"queue_ids"`
+	QueueID     int           `json:"queue_id"`
 }
 
 type EntityRepository interface {
 	Create(tx *ent.Tx, runID int, handlerName string, componentType ComponentType,
-		stepID string, queueIDs []int) (*EntityInfo, error)
+		stepID string, queueID int) (*EntityInfo, error)
 	Get(tx *ent.Tx, id int) (*EntityInfo, error)
 	GetByStepID(tx *ent.Tx, stepID string) (*EntityInfo, error)
 	List(tx *ent.Tx, runID int) ([]*EntityInfo, error)
@@ -70,7 +70,7 @@ func NewEntityRepository(ctx context.Context, client *ent.Client) EntityReposito
 }
 
 func (r *entityRepository) Create(tx *ent.Tx, runID int, handlerName string,
-	componentType ComponentType, stepID string, queueIDs []int) (*EntityInfo, error) {
+	componentType ComponentType, stepID string, queueID int) (*EntityInfo, error) {
 
 	runObj, err := tx.Run.Get(r.ctx, runID)
 	if err != nil {
@@ -98,25 +98,23 @@ func (r *entityRepository) Create(tx *ent.Tx, runID int, handlerName string,
 		SetStepID(stepID).
 		SetRun(runObj)
 
-	if len(queueIDs) > 0 {
-		queueObjs, err := tx.Queue.Query().
-			Where(queue.IDIn(queueIDs...)).
-			All(r.ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting queues: %w", err)
-		}
-		if len(queueObjs) != len(queueIDs) {
-			return nil, fmt.Errorf("some queues not found")
-		}
-		builder.AddQueues(queueObjs...)
+	if queueID == 0 {
+		return nil, fmt.Errorf("queue ID is required")
 	}
+
+	queueObj, err := tx.Queue.Get(r.ctx, queueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting queue: %w", err)
+	}
+
+	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating entity: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue IDs: %w", err)
 	}
@@ -129,7 +127,7 @@ func (r *entityRepository) Create(tx *ent.Tx, runID int, handlerName string,
 		RunID:       runID,
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
-		QueueIDs:    assignedQueueIDs,
+		QueueID:     assignedQueueIDs,
 	}, nil
 }
 
@@ -147,9 +145,9 @@ func (r *entityRepository) Get(tx *ent.Tx, id int) (*EntityInfo, error) {
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	return &EntityInfo{
@@ -160,7 +158,7 @@ func (r *entityRepository) Get(tx *ent.Tx, id int) (*EntityInfo, error) {
 		RunID:       runID,
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
-		QueueIDs:    assignedQueueIDs,
+		QueueID:     queueID,
 	}, nil
 }
 
@@ -180,7 +178,7 @@ func (r *entityRepository) GetByStepID(tx *ent.Tx, stepID string) (*EntityInfo, 
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue IDs: %w", err)
 	}
@@ -193,7 +191,7 @@ func (r *entityRepository) GetByStepID(tx *ent.Tx, stepID string) (*EntityInfo, 
 		RunID:       runID,
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
-		QueueIDs:    assignedQueueIDs,
+		QueueID:     assignedQueueIDs,
 	}, nil
 }
 
@@ -207,9 +205,9 @@ func (r *entityRepository) List(tx *ent.Tx, runID int) ([]*EntityInfo, error) {
 
 	result := make([]*EntityInfo, len(entObjs))
 	for i, entObj := range entObjs {
-		assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+		queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 		if err != nil {
-			return nil, fmt.Errorf("getting queue IDs: %w", err)
+			return nil, fmt.Errorf("getting queue ID: %w", err)
 		}
 
 		result[i] = &EntityInfo{
@@ -220,7 +218,7 @@ func (r *entityRepository) List(tx *ent.Tx, runID int) ([]*EntityInfo, error) {
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		}
 	}
 
@@ -242,9 +240,9 @@ func (r *entityRepository) ListByType(tx *ent.Tx, runID int, componentType Compo
 
 	result := make([]*EntityInfo, len(entObjs))
 	for i, entObj := range entObjs {
-		assignedQueueIDs, err := entObj.QueryQueues().IDs(r.ctx)
+		queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 		if err != nil {
-			return nil, fmt.Errorf("getting queue IDs: %w", err)
+			return nil, fmt.Errorf("getting queue ID: %w", err)
 		}
 
 		result[i] = &EntityInfo{
@@ -255,7 +253,7 @@ func (r *entityRepository) ListByType(tx *ent.Tx, runID int, componentType Compo
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueIDs:    assignedQueueIDs,
+			QueueID:     queueID,
 		}
 	}
 
@@ -279,7 +277,7 @@ func (r *entityRepository) AddToQueue(tx *ent.Tx, entityID int, queueID int) err
 		return fmt.Errorf("getting queue: %w", err)
 	}
 
-	exists, err := entObj.QueryQueues().
+	exists, err := entObj.QueryQueue().
 		Where(queue.IDEQ(queueID)).
 		Exist(r.ctx)
 	if err != nil {
@@ -290,7 +288,7 @@ func (r *entityRepository) AddToQueue(tx *ent.Tx, entityID int, queueID int) err
 	}
 
 	err = entObj.Update().
-		AddQueues(queueObj).
+		SetQueue(queueObj).
 		Exec(r.ctx)
 	if err != nil {
 		return fmt.Errorf("adding to queue: %w", err)
@@ -308,7 +306,7 @@ func (r *entityRepository) RemoveFromQueue(tx *ent.Tx, entityID int, queueID int
 		return fmt.Errorf("getting entity: %w", err)
 	}
 
-	exists, err := entObj.QueryQueues().
+	exists, err := entObj.QueryQueue().
 		Where(queue.IDEQ(queueID)).
 		Exist(r.ctx)
 	if err != nil {
@@ -319,7 +317,7 @@ func (r *entityRepository) RemoveFromQueue(tx *ent.Tx, entityID int, queueID int
 	}
 
 	err = entObj.Update().
-		RemoveQueueIDs(queueID).
+		SetNillableQueueID(nil).
 		Exec(r.ctx)
 	if err != nil {
 		return fmt.Errorf("removing from queue: %w", err)

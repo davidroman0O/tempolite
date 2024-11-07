@@ -4,6 +4,10 @@ import "reflect"
 
 type HandlerIdentity string
 
+func (h HandlerIdentity) String() string {
+	return string(h)
+}
+
 type HandlerInfo struct {
 	HandlerName     string
 	HandlerLongName HandlerIdentity

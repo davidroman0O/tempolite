@@ -50,12 +50,6 @@ func (rc *RunCreate) SetNillableUpdatedAt(t *time.Time) *RunCreate {
 	return rc
 }
 
-// SetName sets the "name" field.
-func (rc *RunCreate) SetName(s string) *RunCreate {
-	rc.mutation.SetName(s)
-	return rc
-}
-
 // SetStatus sets the "status" field.
 func (rc *RunCreate) SetStatus(r run.Status) *RunCreate {
 	rc.mutation.SetStatus(r)
@@ -157,14 +151,6 @@ func (rc *RunCreate) check() error {
 	if _, ok := rc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Run.updated_at"`)}
 	}
-	if _, ok := rc.mutation.Name(); !ok {
-		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Run.name"`)}
-	}
-	if v, ok := rc.mutation.Name(); ok {
-		if err := run.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Run.name": %w`, err)}
-		}
-	}
 	if _, ok := rc.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Run.status"`)}
 	}
@@ -206,10 +192,6 @@ func (rc *RunCreate) createSpec() (*Run, *sqlgraph.CreateSpec) {
 	if value, ok := rc.mutation.UpdatedAt(); ok {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if value, ok := rc.mutation.Name(); ok {
-		_spec.SetField(run.FieldName, field.TypeString, value)
-		_node.Name = value
 	}
 	if value, ok := rc.mutation.Status(); ok {
 		_spec.SetField(run.FieldStatus, field.TypeEnum, value)

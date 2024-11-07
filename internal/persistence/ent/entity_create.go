@@ -68,6 +68,20 @@ func (ec *EntityCreate) SetType(e entity.Type) *EntityCreate {
 	return ec
 }
 
+// SetStatus sets the "status" field.
+func (ec *EntityCreate) SetStatus(e entity.Status) *EntityCreate {
+	ec.mutation.SetStatus(e)
+	return ec
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (ec *EntityCreate) SetNillableStatus(e *entity.Status) *EntityCreate {
+	if e != nil {
+		ec.SetStatus(*e)
+	}
+	return ec
+}
+
 // SetStepID sets the "step_id" field.
 func (ec *EntityCreate) SetStepID(s string) *EntityCreate {
 	ec.mutation.SetStepID(s)
@@ -100,19 +114,23 @@ func (ec *EntityCreate) AddExecutions(e ...*Execution) *EntityCreate {
 	return ec.AddExecutionIDs(ids...)
 }
 
-// AddQueueIDs adds the "queues" edge to the Queue entity by IDs.
-func (ec *EntityCreate) AddQueueIDs(ids ...int) *EntityCreate {
-	ec.mutation.AddQueueIDs(ids...)
+// SetQueueID sets the "queue" edge to the Queue entity by ID.
+func (ec *EntityCreate) SetQueueID(id int) *EntityCreate {
+	ec.mutation.SetQueueID(id)
 	return ec
 }
 
-// AddQueues adds the "queues" edges to the Queue entity.
-func (ec *EntityCreate) AddQueues(q ...*Queue) *EntityCreate {
-	ids := make([]int, len(q))
-	for i := range q {
-		ids[i] = q[i].ID
+// SetNillableQueueID sets the "queue" edge to the Queue entity by ID if the given value is not nil.
+func (ec *EntityCreate) SetNillableQueueID(id *int) *EntityCreate {
+	if id != nil {
+		ec = ec.SetQueueID(*id)
 	}
-	return ec.AddQueueIDs(ids...)
+	return ec
+}
+
+// SetQueue sets the "queue" edge to the Queue entity.
+func (ec *EntityCreate) SetQueue(q *Queue) *EntityCreate {
+	return ec.SetQueueID(q.ID)
 }
 
 // AddVersionIDs adds the "versions" edge to the Version entity by IDs.
@@ -249,6 +267,10 @@ func (ec *EntityCreate) defaults() {
 		v := entity.DefaultUpdatedAt()
 		ec.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := ec.mutation.Status(); !ok {
+		v := entity.DefaultStatus
+		ec.mutation.SetStatus(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -273,6 +295,14 @@ func (ec *EntityCreate) check() error {
 	if v, ok := ec.mutation.GetType(); ok {
 		if err := entity.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Entity.type": %w`, err)}
+		}
+	}
+	if _, ok := ec.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Entity.status"`)}
+	}
+	if v, ok := ec.mutation.Status(); ok {
+		if err := entity.StatusValidator(v); err != nil {
+			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Entity.status": %w`, err)}
 		}
 	}
 	if _, ok := ec.mutation.StepID(); !ok {
@@ -323,6 +353,10 @@ func (ec *EntityCreate) createSpec() (*Entity, *sqlgraph.CreateSpec) {
 		_spec.SetField(entity.FieldType, field.TypeEnum, value)
 		_node.Type = value
 	}
+	if value, ok := ec.mutation.Status(); ok {
+		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)
+		_node.Status = value
+	}
 	if value, ok := ec.mutation.StepID(); ok {
 		_spec.SetField(entity.FieldStepID, field.TypeString, value)
 		_node.StepID = value
@@ -360,12 +394,12 @@ func (ec *EntityCreate) createSpec() (*Entity, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := ec.mutation.QueuesIDs(); len(nodes) > 0 {
+	if nodes := ec.mutation.QueueIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   entity.QueuesTable,
-			Columns: entity.QueuesPrimaryKey,
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   entity.QueueTable,
+			Columns: []string{entity.QueueColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(queue.FieldID, field.TypeInt),
@@ -374,6 +408,7 @@ func (ec *EntityCreate) createSpec() (*Entity, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_node.queue_entities = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := ec.mutation.VersionsIDs(); len(nodes) > 0 {

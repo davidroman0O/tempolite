@@ -105,10 +105,6 @@ func init() {
 	run.DefaultUpdatedAt = runDescUpdatedAt.Default.(func() time.Time)
 	// run.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	run.UpdateDefaultUpdatedAt = runDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// runDescName is the schema descriptor for name field.
-	runDescName := runFields[0].Descriptor()
-	// run.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	run.NameValidator = runDescName.Validators[0].(func(string) error)
 	sagadataFields := schema.SagaData{}.Fields()
 	_ = sagadataFields
 	// sagadataDescCompensating is the schema descriptor for compensating field.
@@ -124,15 +120,15 @@ func init() {
 	workflowdataFields := schema.WorkflowData{}.Fields()
 	_ = workflowdataFields
 	// workflowdataDescPaused is the schema descriptor for paused field.
-	workflowdataDescPaused := workflowdataFields[0].Descriptor()
+	workflowdataDescPaused := workflowdataFields[1].Descriptor()
 	// workflowdata.DefaultPaused holds the default value on creation for the paused field.
 	workflowdata.DefaultPaused = workflowdataDescPaused.Default.(bool)
 	// workflowdataDescResumable is the schema descriptor for resumable field.
-	workflowdataDescResumable := workflowdataFields[1].Descriptor()
+	workflowdataDescResumable := workflowdataFields[2].Descriptor()
 	// workflowdata.DefaultResumable holds the default value on creation for the resumable field.
 	workflowdata.DefaultResumable = workflowdataDescResumable.Default.(bool)
 	// workflowdataDescRetryPolicy is the schema descriptor for retry_policy field.
-	workflowdataDescRetryPolicy := workflowdataFields[2].Descriptor()
+	workflowdataDescRetryPolicy := workflowdataFields[3].Descriptor()
 	// workflowdata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
 	workflowdata.DefaultRetryPolicy = workflowdataDescRetryPolicy.Default.(*schema.RetryPolicy)
 }

@@ -21,6 +21,20 @@ type WorkflowDataCreate struct {
 	hooks    []Hook
 }
 
+// SetDuration sets the "duration" field.
+func (wdc *WorkflowDataCreate) SetDuration(s string) *WorkflowDataCreate {
+	wdc.mutation.SetDuration(s)
+	return wdc
+}
+
+// SetNillableDuration sets the "duration" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillableDuration(s *string) *WorkflowDataCreate {
+	if s != nil {
+		wdc.SetDuration(*s)
+	}
+	return wdc
+}
+
 // SetPaused sets the "paused" field.
 func (wdc *WorkflowDataCreate) SetPaused(b bool) *WorkflowDataCreate {
 	wdc.mutation.SetPaused(b)
@@ -161,6 +175,10 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 		_node = &WorkflowData{config: wdc.config}
 		_spec = sqlgraph.NewCreateSpec(workflowdata.Table, sqlgraph.NewFieldSpec(workflowdata.FieldID, field.TypeInt))
 	)
+	if value, ok := wdc.mutation.Duration(); ok {
+		_spec.SetField(workflowdata.FieldDuration, field.TypeString, value)
+		_node.Duration = value
+	}
 	if value, ok := wdc.mutation.Paused(); ok {
 		_spec.SetField(workflowdata.FieldPaused, field.TypeBool, value)
 		_node.Paused = value

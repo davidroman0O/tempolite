@@ -299,12 +299,12 @@ func (wdq *WorkflowDataQuery) WithEntity(opts ...func(*EntityQuery)) *WorkflowDa
 // Example:
 //
 //	var v []struct {
-//		Paused bool `json:"paused,omitempty"`
+//		Duration string `json:"duration,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.WorkflowData.Query().
-//		GroupBy(workflowdata.FieldPaused).
+//		GroupBy(workflowdata.FieldDuration).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (wdq *WorkflowDataQuery) GroupBy(field string, fields ...string) *WorkflowDataGroupBy {
@@ -322,11 +322,11 @@ func (wdq *WorkflowDataQuery) GroupBy(field string, fields ...string) *WorkflowD
 // Example:
 //
 //	var v []struct {
-//		Paused bool `json:"paused,omitempty"`
+//		Duration string `json:"duration,omitempty"`
 //	}
 //
 //	client.WorkflowData.Query().
-//		Select(workflowdata.FieldPaused).
+//		Select(workflowdata.FieldDuration).
 //		Scan(ctx, &v)
 func (wdq *WorkflowDataQuery) Select(fields ...string) *WorkflowDataSelect {
 	wdq.ctx.Fields = append(wdq.ctx.Fields, fields...)

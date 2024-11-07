@@ -49,11 +49,9 @@ func (Run) Mixin() []ent.Mixin {
 
 func (Run) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("name").
-			NotEmpty(),
 		field.Enum("status").
-			Values("running", "completed", "failed", "cancelled").
-			Default("running"),
+			Values("Pending", "Running", "Completed", "Failed", "Cancelled").
+			Default("Pending"),
 	}
 }
 
@@ -82,6 +80,9 @@ func (Entity) Fields() []ent.Field {
 		field.Enum("type").
 			Values("Workflow", "Activity", "Saga", "SideEffect").
 			Immutable(),
+		field.Enum("status").
+			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			Default("Pending"),
 		field.String("step_id").
 			Unique(),
 	}
@@ -94,7 +95,9 @@ func (Entity) Edges() []ent.Edge {
 			Unique().
 			Required(),
 		edge.To("executions", Execution.Type),
-		edge.To("queues", Queue.Type),
+		edge.From("queue", Queue.Type).
+			Ref("entities").
+			Unique(),
 		edge.To("versions", Version.Type),
 		edge.To("workflow_data", WorkflowData.Type).
 			Unique(),
@@ -126,8 +129,8 @@ func (Execution) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.Enum("status").
-			Values("running", "completed", "failed").
-			Default("running"),
+			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			Default("Pending"),
 	}
 }
 
@@ -168,8 +171,7 @@ func (Queue) Fields() []ent.Field {
 
 func (Queue) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("entities", Entity.Type).
-			Ref("queues"),
+		edge.To("entities", Entity.Type),
 	}
 }
 
@@ -238,6 +240,8 @@ type WorkflowData struct {
 
 func (WorkflowData) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("duration").
+			Optional(),
 		field.Bool("paused").
 			Default(false),
 		field.Bool("resumable").

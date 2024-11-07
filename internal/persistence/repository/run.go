@@ -26,16 +26,14 @@ import (
 
 type RunInfo struct {
 	ID        int       `json:"id"`
-	Name      string    `json:"name"`
 	Status    Status    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type RunRepository interface {
-	Create(tx *ent.Tx, name string) (*RunInfo, error)
+	Create(tx *ent.Tx) (*RunInfo, error)
 	Get(tx *ent.Tx, id int) (*RunInfo, error)
-	GetByName(tx *ent.Tx, name string) (*RunInfo, error)
 	List(tx *ent.Tx) ([]*RunInfo, error)
 	UpdateStatus(tx *ent.Tx, id int, status Status) (*RunInfo, error)
 	Delete(tx *ent.Tx, id int) error
@@ -53,9 +51,8 @@ func NewRunRepository(ctx context.Context, client *ent.Client) RunRepository {
 	}
 }
 
-func (r *runRepository) Create(tx *ent.Tx, name string) (*RunInfo, error) {
+func (r *runRepository) Create(tx *ent.Tx) (*RunInfo, error) {
 	exists, err := tx.Run.Query().
-		Where(run.NameEQ(name)).
 		Exist(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("checking run existence: %w", err)
@@ -65,8 +62,7 @@ func (r *runRepository) Create(tx *ent.Tx, name string) (*RunInfo, error) {
 	}
 
 	runObj, err := tx.Run.Create().
-		SetName(name).
-		SetStatus(run.StatusRunning).
+		SetStatus(run.StatusPending).
 		Save(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating run: %w", err)
@@ -74,7 +70,6 @@ func (r *runRepository) Create(tx *ent.Tx, name string) (*RunInfo, error) {
 
 	return &RunInfo{
 		ID:        runObj.ID,
-		Name:      runObj.Name,
 		Status:    Status(runObj.Status),
 		CreatedAt: runObj.CreatedAt,
 		UpdatedAt: runObj.UpdatedAt,
@@ -92,27 +87,6 @@ func (r *runRepository) Get(tx *ent.Tx, id int) (*RunInfo, error) {
 
 	return &RunInfo{
 		ID:        runObj.ID,
-		Name:      runObj.Name,
-		Status:    Status(runObj.Status),
-		CreatedAt: runObj.CreatedAt,
-		UpdatedAt: runObj.UpdatedAt,
-	}, nil
-}
-
-func (r *runRepository) GetByName(tx *ent.Tx, name string) (*RunInfo, error) {
-	runObj, err := tx.Run.Query().
-		Where(run.NameEQ(name)).
-		Only(r.ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("getting run by name: %w", err)
-	}
-
-	return &RunInfo{
-		ID:        runObj.ID,
-		Name:      runObj.Name,
 		Status:    Status(runObj.Status),
 		CreatedAt: runObj.CreatedAt,
 		UpdatedAt: runObj.UpdatedAt,
@@ -129,7 +103,6 @@ func (r *runRepository) List(tx *ent.Tx) ([]*RunInfo, error) {
 	for i, runObj := range runObjs {
 		result[i] = &RunInfo{
 			ID:        runObj.ID,
-			Name:      runObj.Name,
 			Status:    Status(runObj.Status),
 			CreatedAt: runObj.CreatedAt,
 			UpdatedAt: runObj.UpdatedAt,
@@ -163,7 +136,6 @@ func (r *runRepository) UpdateStatus(tx *ent.Tx, id int, status Status) (*RunInf
 
 	return &RunInfo{
 		ID:        runObj.ID,
-		Name:      runObj.Name,
 		Status:    Status(runObj.Status),
 		CreatedAt: runObj.CreatedAt,
 		UpdatedAt: runObj.UpdatedAt,

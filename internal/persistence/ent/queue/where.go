@@ -220,7 +220,7 @@ func HasEntities() predicate.Queue {
 	return predicate.Queue(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, EntitiesTable, EntitiesPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.O2M, false, EntitiesTable, EntitiesColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

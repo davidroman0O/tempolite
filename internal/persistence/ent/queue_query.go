@@ -75,7 +75,7 @@ func (qq *QueueQuery) QueryEntities() *EntityQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(queue.Table, queue.FieldID, selector),
 			sqlgraph.To(entity.Table, entity.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, queue.EntitiesTable, queue.EntitiesPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.O2M, false, queue.EntitiesTable, queue.EntitiesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(qq.driver.Dialect(), step)
 		return fromU, nil
@@ -404,63 +404,33 @@ func (qq *QueueQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Queue,
 }
 
 func (qq *QueueQuery) loadEntities(ctx context.Context, query *EntityQuery, nodes []*Queue, init func(*Queue), assign func(*Queue, *Entity)) error {
-	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[int]*Queue)
-	nids := make(map[int]map[*Queue]struct{})
-	for i, node := range nodes {
-		edgeIDs[i] = node.ID
-		byID[node.ID] = node
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Queue)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
 		if init != nil {
-			init(node)
+			init(nodes[i])
 		}
 	}
-	query.Where(func(s *sql.Selector) {
-		joinT := sql.Table(queue.EntitiesTable)
-		s.Join(joinT).On(s.C(entity.FieldID), joinT.C(queue.EntitiesPrimaryKey[0]))
-		s.Where(sql.InValues(joinT.C(queue.EntitiesPrimaryKey[1]), edgeIDs...))
-		columns := s.SelectedColumns()
-		s.Select(joinT.C(queue.EntitiesPrimaryKey[1]))
-		s.AppendSelect(columns...)
-		s.SetDistinct(false)
-	})
-	if err := query.prepareQuery(ctx); err != nil {
-		return err
-	}
-	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
-		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
-			assign := spec.Assign
-			values := spec.ScanValues
-			spec.ScanValues = func(columns []string) ([]any, error) {
-				values, err := values(columns[1:])
-				if err != nil {
-					return nil, err
-				}
-				return append([]any{new(sql.NullInt64)}, values...), nil
-			}
-			spec.Assign = func(columns []string, values []any) error {
-				outValue := int(values[0].(*sql.NullInt64).Int64)
-				inValue := int(values[1].(*sql.NullInt64).Int64)
-				if nids[inValue] == nil {
-					nids[inValue] = map[*Queue]struct{}{byID[outValue]: {}}
-					return assign(columns[1:], values[1:])
-				}
-				nids[inValue][byID[outValue]] = struct{}{}
-				return nil
-			}
-		})
-	})
-	neighbors, err := withInterceptors[[]*Entity](ctx, query, qr, query.inters)
+	query.withFKs = true
+	query.Where(predicate.Entity(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(queue.EntitiesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		nodes, ok := nids[n.ID]
+		fk := n.queue_entities
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "queue_entities" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected "entities" node returned %v`, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "queue_entities" returned %v for node %v`, *fk, n.ID)
 		}
-		for kn := range nodes {
-			assign(kn, n)
-		}
+		assign(node, n)
 	}
 	return nil
 }
