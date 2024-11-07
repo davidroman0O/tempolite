@@ -7,6 +7,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
@@ -54,6 +55,10 @@ type WorkflowRepository interface {
 	Get(tx *ent.Tx, id int) (*WorkflowInfo, error)
 	GetByStepID(tx *ent.Tx, stepID string) (*WorkflowInfo, error)
 	List(tx *ent.Tx, runID int) ([]*WorkflowInfo, error)
+
+	ListPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
+	ListExecutionsPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
+
 	UpdateData(tx *ent.Tx, id int, input UpdateWorkflowDataInput) (*WorkflowInfo, error)
 	Pause(tx *ent.Tx, id int) error
 	Resume(tx *ent.Tx, id int) error
@@ -381,4 +386,47 @@ func (r *workflowRepository) Resume(tx *ent.Tx, id int) error {
 	}
 
 	return nil
+}
+
+func (r *workflowRepository) ListPending(tx *ent.Tx, queueName string) ([]*WorkflowInfo, error) {
+	return nil, nil
+}
+
+func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string) ([]*WorkflowInfo, error) {
+	// First get all pending executions for workflows in the specified queue
+	execObjs, err := tx.Execution.Query().
+		Where(
+			execution.StatusEQ(execution.StatusPending), // Using StatusRunning from the Status type
+			execution.HasEntityWith(
+				entity.And(
+					entity.TypeEQ(entity.Type(ComponentWorkflow)),
+					entity.HasQueueWith(queue.NameEQ(queueName)),
+				),
+			),
+		).
+		Order(ent.Asc(execution.FieldCreatedAt)).
+		All(r.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("querying pending executions: %w", err)
+	}
+
+	// For each execution, get the full workflow info
+	result := make([]*WorkflowInfo, 0, len(execObjs))
+	for _, execObj := range execObjs {
+		// Get the entity ID for this execution
+		entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting entity ID for execution %d: %w", execObj.ID, err)
+		}
+
+		// Get the full workflow info using the existing Get method
+		workflowInfo, err := r.Get(tx, entityID)
+		if err != nil {
+			return nil, fmt.Errorf("getting workflow info for entity %d: %w", entityID, err)
+		}
+
+		result = append(result, workflowInfo)
+	}
+
+	return result, nil
 }

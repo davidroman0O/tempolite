@@ -34,7 +34,7 @@ func TestBasic(t *testing.T) {
 
 	info := tp.Workflow(wrk, nil)
 
-	fmt.Println(info.Get())
+	fmt.Println("Info", info.Get())
 
 	if err = tp.Shutdown(); err != nil {
 		t.Fatal(err)

@@ -2,6 +2,7 @@ package schedulers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -31,7 +32,7 @@ func New(
 		registry: registry,
 		clock: NewClock(
 			ctx,
-			WithInterval(time.Millisecond),
+			WithInterval(time.Nanosecond),
 			WithName("scheduler"),
 			WithOnError(func(err error) {
 				// TODO: i don't know what to do with the errors
@@ -46,11 +47,13 @@ func New(
 }
 
 func (s *Scheduler) Stop() {
+	fmt.Println("Stopping scheduler")
 	s.clock.Stop()
+	defer fmt.Println("Scheduler stopped")
 }
 
 func (s *Scheduler) addScheduler(ticker Ticker) {
-	s.clock.Add(ticker, BestEffort)
+	s.clock.Add(ticker, NonBlocking)
 }
 
 func (s *Scheduler) AddQueue(queue string) {

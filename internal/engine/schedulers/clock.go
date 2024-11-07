@@ -2,9 +2,10 @@ package schedulers
 
 import (
 	"context"
-	"sync"
 	"time"
 )
+
+/// TODO: big big mutex problem
 
 var DefaultClock = NewClock(context.Background(), WithInterval(100*time.Millisecond))
 
@@ -50,17 +51,17 @@ type Clock struct {
 	subs     []TickerSubscriber
 	ticking  bool
 	started  bool
-	mu       sync.Mutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	cerr     chan error
+	// mu       sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
+	cerr   chan error
 
 	onError func(error)
 }
 
 func (tm *Clock) Ticking() bool {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
+	// defer tm.mu.Unlock()
 	return tm.ticking
 }
 
@@ -104,8 +105,8 @@ func NewClock(ctx context.Context, opts ...ClockOption) *Clock {
 }
 
 func (tm *Clock) Start() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
+	// defer tm.mu.Unlock()
 
 	if tm.started {
 		if !tm.ticking {
@@ -118,14 +119,14 @@ func (tm *Clock) Start() {
 }
 
 func (tm *Clock) Clear() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
+	// defer tm.mu.Unlock()
 	tm.subs = []TickerSubscriber{}
 }
 
 func (tm *Clock) Add(rb Ticker, mode ExecutionMode, opts ...TickerSubscriberOption) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
+	// defer tm.mu.Unlock()
 
 	sub := TickerSubscriber{
 		Ticker: rb,
@@ -140,8 +141,8 @@ func (tm *Clock) Add(rb Ticker, mode ExecutionMode, opts ...TickerSubscriberOpti
 }
 
 func (tm *Clock) Remove(rb Ticker) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
+	// defer tm.mu.Unlock()
 
 	for i, sub := range tm.subs {
 		if sub.Ticker == rb {
@@ -152,9 +153,14 @@ func (tm *Clock) Remove(rb Ticker) {
 }
 
 func (tm *Clock) dispatchTicks() {
-	tm.mu.Lock()
+	// tm.mu.Lock()
 	tm.ticking = true
-	tm.mu.Unlock()
+	// tm.mu.Unlock()
+
+	defer func() {
+		close(tm.stopCh)
+		close(tm.cerr)
+	}()
 
 	for {
 		select {
@@ -164,7 +170,7 @@ func (tm *Clock) dispatchTicks() {
 			}
 		case <-tm.ticker.C:
 			now := time.Now()
-			tm.mu.Lock()
+			// tm.mu.Lock()
 			for i := range tm.subs {
 				sub := &tm.subs[i]
 
@@ -186,39 +192,32 @@ func (tm *Clock) dispatchTicks() {
 					}
 				}
 			}
-			tm.mu.Unlock()
+			// tm.mu.Unlock()
 
 		case <-tm.stopCh:
-			tm.mu.Lock()
-			close(tm.cerr)
 			tm.ticker.Stop()
 			tm.ticking = false
-			tm.mu.Unlock()
 			return
 
 		case <-tm.ctx.Done():
-			tm.mu.Lock()
-			close(tm.cerr)
 			tm.ticker.Stop()
 			tm.ticking = false
-			tm.mu.Unlock()
 			return
 		}
 	}
 }
 
 func (tm *Clock) Pause() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	// tm.mu.Lock()
 	tm.ticking = false
+	// tm.mu.Unlock()
 	tm.ticker.Stop()
 }
 
 func (tm *Clock) Stop() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	close(tm.stopCh)
+	// tm.mu.Lock()
 	tm.cancel()
+	// tm.mu.Unlock()
 	tm.ticker.Stop()
 	tm.ticking = false
 }

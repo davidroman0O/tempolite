@@ -84,6 +84,10 @@ func New(
 			},
 		),
 	}
+
+	// TODO: change with option of initial workers configs
+	q.AddWorker()
+
 	return q, nil
 }
 
@@ -130,21 +134,26 @@ func (q *Queue) Shutdown() error {
 	shutdownErrGroup := errgroup.Group{}
 
 	shutdownErrGroup.Go(func() error {
+		fmt.Println("\t Shutting down workflows worker")
 		return q.workflowsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
+		fmt.Println("\t Shutting down activities worker")
 		return q.activitiesWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
+		fmt.Println("\t Shutting down side effects worker")
 		return q.sideEffectsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
+		fmt.Println("\t Shutting down sagas worker")
 		return q.sagasWorker.Shutdown()
 	})
 
+	defer fmt.Println("Queue shutdown complete")
 	return shutdownErrGroup.Wait()
 }
 

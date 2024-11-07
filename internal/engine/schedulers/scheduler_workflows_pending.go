@@ -1,6 +1,8 @@
 package schedulers
 
 import (
+	"fmt"
+
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 )
@@ -14,6 +16,8 @@ func (s SchedulerWorkflowsPending) Tick() error {
 	var err error
 	var queues []*repository.QueueInfo
 
+	fmt.Println("SchedulerWorkflowsPending tick")
+
 	if tx, err = s.db.Tx(); err != nil {
 		return err
 	}
@@ -25,11 +29,18 @@ func (s SchedulerWorkflowsPending) Tick() error {
 	for _, q := range queues {
 		queue := s.Scheduler.getQueue(q.Name)
 
+		fmt.Println("Queue", q.Name, "available workers", queue.AvailableWorkflowWorkers())
 		if queue.AvailableWorkflowWorkers() <= 0 {
 			continue
 		}
 
 		// TODO: we need more methods to get pending workflows
+		workflows, err := s.db.Workflows().ListExecutionsPending(tx, q.Name)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(workflows)
 	}
 
 	return nil

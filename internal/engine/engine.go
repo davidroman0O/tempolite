@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
@@ -61,6 +62,7 @@ func (e *Engine) GetQueue(queue string) *queues.Queue {
 func (e *Engine) AddQueue(queue string) error {
 	var err error
 	var defaultQueue *queues.Queue
+	// TODO: add options for initial workers
 	if defaultQueue, err = queues.New(e.ctx, queue, e.registry, e.db); err != nil {
 		return err
 	}
@@ -75,17 +77,19 @@ func (e *Engine) Shutdown() error {
 	shutdown := errgroup.Group{}
 
 	shutdown.Go(func() error {
+		fmt.Println("Shutting down scheduler")
 		e.scheduler.Stop()
 		return nil
 	})
 
-	for _, q := range e.workerQueues {
-		q := q
+	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
+			fmt.Println("Shutting down queue", n)
 			return q.Shutdown()
 		})
 	}
 
+	defer fmt.Println("Engine shutdown complete")
 	return shutdown.Wait()
 }
 
