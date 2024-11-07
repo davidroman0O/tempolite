@@ -87,6 +87,22 @@ func New(
 	return q, nil
 }
 
+func (q *Queue) AvailableWorkflowWorkers() int {
+	return q.workflowsWorker.AvailableWorkers()
+}
+
+func (q *Queue) AvailableActivityWorkers() int {
+	return q.activitiesWorker.AvailableWorkers()
+}
+
+func (q *Queue) AvailableSideEffectWorkers() int {
+	return q.sideEffectsWorker.AvailableWorkers()
+}
+
+func (q *Queue) AvailableSagaWorkers() int {
+	return q.sagasWorker.AvailableWorkers()
+}
+
 func (q *Queue) Wait() error {
 	waitErrGroup := errgroup.Group{}
 

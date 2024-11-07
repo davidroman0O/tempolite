@@ -9,7 +9,7 @@ import (
 var DefaultClock = NewClock(context.Background(), WithInterval(100*time.Millisecond))
 
 type Ticker interface {
-	Tick()
+	Tick() error
 }
 
 type ExecutionMode int
@@ -53,6 +53,9 @@ type Clock struct {
 	mu       sync.Mutex
 	ctx      context.Context
 	cancel   context.CancelFunc
+	cerr     chan error
+
+	onError func(error)
 }
 
 func (tm *Clock) Ticking() bool {
@@ -75,9 +78,16 @@ func WithInterval(interval time.Duration) ClockOption {
 	}
 }
 
+func WithOnError(onError func(error)) ClockOption {
+	return func(c *Clock) {
+		c.onError = onError
+	}
+}
+
 func NewClock(ctx context.Context, opts ...ClockOption) *Clock {
 	ctx, cancel := context.WithCancel(ctx)
 	tm := &Clock{
+		cerr:   make(chan error),
 		stopCh: make(chan struct{}),
 		subs:   []TickerSubscriber{},
 		ctx:    ctx,
@@ -148,6 +158,10 @@ func (tm *Clock) dispatchTicks() {
 
 	for {
 		select {
+		case err := <-tm.cerr:
+			if tm.onError != nil {
+				tm.onError(err)
+			}
 		case <-tm.ticker.C:
 			now := time.Now()
 			tm.mu.Lock()
@@ -162,10 +176,12 @@ func (tm *Clock) dispatchTicks() {
 
 				switch sub.Mode {
 				case NonBlocking:
-					go sub.Ticker.Tick()
+					go func() {
+						tm.cerr <- sub.Ticker.Tick()
+					}()
 				case ManagedTimeline, BestEffort:
 					if now.Sub(sub.lastExecTime) >= interval {
-						sub.Ticker.Tick()
+						tm.cerr <- sub.Ticker.Tick()
 						sub.lastExecTime = now
 					}
 				}
@@ -174,6 +190,7 @@ func (tm *Clock) dispatchTicks() {
 
 		case <-tm.stopCh:
 			tm.mu.Lock()
+			close(tm.cerr)
 			tm.ticker.Stop()
 			tm.ticking = false
 			tm.mu.Unlock()
@@ -181,6 +198,7 @@ func (tm *Clock) dispatchTicks() {
 
 		case <-tm.ctx.Done():
 			tm.mu.Lock()
+			close(tm.cerr)
 			tm.ticker.Stop()
 			tm.ticking = false
 			tm.mu.Unlock()

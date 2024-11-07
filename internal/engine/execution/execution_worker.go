@@ -84,3 +84,7 @@ func (e *WorkerPool[Request, Response]) RemoveWorker() error {
 	id := e.workers[rand.Intn(len(e.workers))]
 	return e.pool.RemoveWorker(id)
 }
+
+func (e *WorkerPool[Request, Response]) AvailableWorkers() int {
+	return e.pool.AvailableWorkers()
+}

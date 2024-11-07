@@ -38,7 +38,9 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, repository repos
 
 	if e.scheduler, err = schedulers.New(
 		ctx,
-		repository,
+		e.db,
+		e.registry,
+		e.GetQueue,
 	); err != nil {
 		return nil, err
 	}
@@ -48,6 +50,12 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, repository repos
 	}
 
 	return e, nil
+}
+
+func (e *Engine) GetQueue(queue string) *queues.Queue {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.workerQueues[queue]
 }
 
 func (e *Engine) AddQueue(queue string) error {
@@ -65,6 +73,11 @@ func (e *Engine) AddQueue(queue string) error {
 
 func (e *Engine) Shutdown() error {
 	shutdown := errgroup.Group{}
+
+	shutdown.Go(func() error {
+		e.scheduler.Stop()
+		return nil
+	})
 
 	for _, q := range e.workerQueues {
 		q := q
