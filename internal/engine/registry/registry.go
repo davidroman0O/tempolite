@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/davidroman0O/tempolite/internal/types"
-	"github.com/stephenfire/go-rtl"
 )
 
 /// The only contraint of a Registry is its static nature, it is not meant to be modified at runtime
@@ -28,26 +26,6 @@ func newRegistry() *Registry {
 		workflows:  make(map[types.HandlerIdentity]types.Workflow),
 		activities: make(map[types.HandlerIdentity]types.Activity),
 	}
-}
-
-func (r *Registry) ConvertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
-	inputs := [][]byte{}
-
-	for _, input := range executionInputs {
-		buf := new(bytes.Buffer)
-
-		// just get the real one
-		if reflect.TypeOf(input).Kind() == reflect.Ptr {
-			input = reflect.ValueOf(input).Elem().Interface()
-		}
-
-		if err := rtl.Encode(input, buf); err != nil {
-			return nil, err
-		}
-		inputs = append(inputs, buf.Bytes())
-	}
-
-	return inputs, nil
 }
 
 var (

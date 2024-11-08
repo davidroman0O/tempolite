@@ -1,15 +1,20 @@
 package context
 
-import "github.com/davidroman0O/tempolite/internal/types"
+import (
+	"github.com/davidroman0O/tempolite/internal/persistence/repository"
+	"github.com/davidroman0O/tempolite/internal/types"
+)
 
 type WorkflowInfo struct {
-	EntityID types.WorkflowID
+	db       repository.Repository
+	entityID types.WorkflowID
 	err      error
 }
 
-func NewWorkflowInfo(id types.WorkflowID) *WorkflowInfo {
+func NewWorkflowInfo(id types.WorkflowID, db repository.Repository) *WorkflowInfo {
 	return &WorkflowInfo{
-		EntityID: id,
+		db:       db,
+		entityID: id,
 	}
 }
 

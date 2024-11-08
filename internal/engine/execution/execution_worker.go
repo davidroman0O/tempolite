@@ -2,7 +2,9 @@ package execution
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/davidroman0O/retrypool"
@@ -27,6 +29,7 @@ type WorkerPool[Request, Response any] struct {
 	builder WorkerBuilder[Request, Response]
 	queue   string
 	workers []int
+	mu      sync.Mutex
 }
 
 func NewWorkerPool[Request, Response any](
@@ -74,17 +77,41 @@ func (e *WorkerPool[Request, Response]) Wait() error {
 }
 
 func (e *WorkerPool[Request, Response]) AddWorker() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	id := e.pool.AddWorker(e.builder(e.ctx, e.queue))
 	e.workers = append(e.workers, id)
 	return id
 }
 
 func (e *WorkerPool[Request, Response]) RemoveWorker() error {
-	// get random id in the e.workers
-	id := e.workers[rand.Intn(len(e.workers))]
-	return e.pool.RemoveWorker(id)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if len(e.workers) == 0 {
+		return fmt.Errorf("no workers to remove")
+	}
+
+	fmt.Println("Removing worker total:", len(e.workers))
+	index := rand.Intn(len(e.workers))
+	fmt.Println("Removing worker index:", index)
+	id := e.workers[index]
+
+	// Remove the worker ID from the slice
+	e.workers = append(e.workers[:index], e.workers[index+1:]...)
+
+	err := e.pool.RemoveWorker(id)
+	if err != nil {
+		// If removal failed, add the worker back to the list
+		e.workers = append(e.workers, id)
+		return err
+	}
+
+	return nil
 }
 
 func (e *WorkerPool[Request, Response]) AvailableWorkers() int {
-	return e.pool.AvailableWorkers()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.workers)
 }

@@ -36,6 +36,11 @@ type RetryPolicy struct {
 	MaxInterval        int64   `json:"max_interval"`
 }
 
+// RetryState
+type RetryState struct {
+	Attempts int `json:"attempts"`
+}
+
 // Run represents a workflow execution instance
 type Run struct {
 	ent.Schema
@@ -246,6 +251,10 @@ func (WorkflowData) Fields() []ent.Field {
 			Default(false),
 		field.Bool("resumable").
 			Default(false),
+		field.String("errors").
+			Optional(),
+		field.JSON("retry_state", &RetryState{}).
+			Default(&RetryState{Attempts: 0}),
 		field.JSON("retry_policy", &RetryPolicy{}).
 			Default(&RetryPolicy{
 				MaxAttempts:        1,

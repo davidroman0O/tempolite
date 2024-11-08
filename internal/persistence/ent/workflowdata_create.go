@@ -63,6 +63,26 @@ func (wdc *WorkflowDataCreate) SetNillableResumable(b *bool) *WorkflowDataCreate
 	return wdc
 }
 
+// SetErrors sets the "errors" field.
+func (wdc *WorkflowDataCreate) SetErrors(s string) *WorkflowDataCreate {
+	wdc.mutation.SetErrors(s)
+	return wdc
+}
+
+// SetNillableErrors sets the "errors" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillableErrors(s *string) *WorkflowDataCreate {
+	if s != nil {
+		wdc.SetErrors(*s)
+	}
+	return wdc
+}
+
+// SetRetryState sets the "retry_state" field.
+func (wdc *WorkflowDataCreate) SetRetryState(ss *schema.RetryState) *WorkflowDataCreate {
+	wdc.mutation.SetRetryState(ss)
+	return wdc
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (wdc *WorkflowDataCreate) SetRetryPolicy(sp *schema.RetryPolicy) *WorkflowDataCreate {
 	wdc.mutation.SetRetryPolicy(sp)
@@ -129,6 +149,10 @@ func (wdc *WorkflowDataCreate) defaults() {
 		v := workflowdata.DefaultResumable
 		wdc.mutation.SetResumable(v)
 	}
+	if _, ok := wdc.mutation.RetryState(); !ok {
+		v := workflowdata.DefaultRetryState
+		wdc.mutation.SetRetryState(v)
+	}
 	if _, ok := wdc.mutation.RetryPolicy(); !ok {
 		v := workflowdata.DefaultRetryPolicy
 		wdc.mutation.SetRetryPolicy(v)
@@ -142,6 +166,9 @@ func (wdc *WorkflowDataCreate) check() error {
 	}
 	if _, ok := wdc.mutation.Resumable(); !ok {
 		return &ValidationError{Name: "resumable", err: errors.New(`ent: missing required field "WorkflowData.resumable"`)}
+	}
+	if _, ok := wdc.mutation.RetryState(); !ok {
+		return &ValidationError{Name: "retry_state", err: errors.New(`ent: missing required field "WorkflowData.retry_state"`)}
 	}
 	if _, ok := wdc.mutation.RetryPolicy(); !ok {
 		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "WorkflowData.retry_policy"`)}
@@ -186,6 +213,14 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 	if value, ok := wdc.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
 		_node.Resumable = value
+	}
+	if value, ok := wdc.mutation.Errors(); ok {
+		_spec.SetField(workflowdata.FieldErrors, field.TypeString, value)
+		_node.Errors = value
+	}
+	if value, ok := wdc.mutation.RetryState(); ok {
+		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
+		_node.RetryState = value
 	}
 	if value, ok := wdc.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)

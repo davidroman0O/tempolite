@@ -12,6 +12,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowexecution"
 )
 
 type WorkflowInfo struct {
@@ -53,6 +54,9 @@ type UpdateWorkflowDataInput struct {
 
 type WorkflowRepository interface {
 	Create(tx *ent.Tx, input CreateWorkflowInput) (*WorkflowInfo, error)
+
+	CreateRetry(tx *ent.Tx, id int) (*WorkflowExecutionInfo, error)
+
 	Get(tx *ent.Tx, id int) (*WorkflowInfo, error)
 	GetByStepID(tx *ent.Tx, stepID string) (*WorkflowInfo, error)
 	List(tx *ent.Tx, runID int) ([]*WorkflowInfo, error)
@@ -60,7 +64,18 @@ type WorkflowRepository interface {
 	ListPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 	ListExecutionsPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 
-	UpdatePendingToRunning(tx *ent.Tx, id int) error
+	UpdateExecutionPendingToRunning(tx *ent.Tx, id int) error
+	UpdateExecutionDataError(tx *ent.Tx, id int, errormsg string) error
+	UpdateExecutionDataOuput(tx *ent.Tx, id int, output [][]byte) error
+
+	UpdateExecutionSuccess(tx *ent.Tx, id int) error
+	UpdateExecutionFailed(tx *ent.Tx, id int) error
+	UpdateExecutionPaused(tx *ent.Tx, id int) error
+	UpdateExecutionRetried(tx *ent.Tx, id int) error
+
+	IncrementRetryAttempt(tx *ent.Tx, id int) error
+	GetRetryState(tx *ent.Tx, id int) (*schema.RetryState, error)
+	GetRetryPolicy(tx *ent.Tx, id int) (*schema.RetryPolicy, error)
 
 	UpdateData(tx *ent.Tx, id int, input UpdateWorkflowDataInput) (*WorkflowInfo, error)
 	Pause(tx *ent.Tx, id int) error
@@ -104,6 +119,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		SetHandlerName(input.HandlerName).
 		SetType(realType).
 		SetStepID(input.StepID).
+		SetStatus(entity.StatusPending).
 		SetRun(runObj)
 
 	if input.QueueID == 0 {
@@ -143,11 +159,9 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		return nil, errors.Join(err, fmt.Errorf("creating workflow data"))
 	}
 
-	realStatus := execution.Status(entity.StatusPending)
-
 	execObj, err := tx.Execution.Create().
 		SetEntity(entObj).
-		SetStatus(realStatus).
+		SetStatus(execution.StatusPending).
 		Save(r.ctx)
 	if err != nil {
 		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
@@ -209,6 +223,75 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
 			},
+		},
+	}, nil
+}
+
+func (r *workflowRepository) GetFromExecution(tx *ent.Tx, executionID int) (*WorkflowInfo, error) {
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	entityObj, err := tx.Entity.Get(r.ctx, entityID)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting entity"))
+	}
+
+	workflowExecData, err := execObj.QueryWorkflowExecution().QueryExecutionData().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow execution data"))
+	}
+
+	workflowData, err := entityObj.QueryWorkflowData().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow data"))
+	}
+
+	queueObj, err := entityObj.QueryQueue().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting queue"))
+	}
+
+	runID := entityObj.QueryRun().OnlyX(r.ctx)
+
+	return &WorkflowInfo{
+		EntityInfo: EntityInfo{
+			ID:          entityObj.ID,
+			HandlerName: entityObj.HandlerName,
+			Type:        ComponentType(entityObj.Type),
+			StepID:      entityObj.StepID,
+			RunID:       runID.ID,
+			CreatedAt:   entityObj.CreatedAt,
+			UpdatedAt:   entityObj.UpdatedAt,
+			QueueID:     queueObj.ID,
+		},
+		Data: &WorkflowDataInfo{
+			ID:          workflowData.ID,
+			Paused:      workflowData.Paused,
+			Resumable:   workflowData.Resumable,
+			RetryPolicy: *workflowData.RetryPolicy,
+			Input:       workflowData.Input,
+		},
+		Execution: &WorkflowExecutionInfo{
+			ExecutionInfo: ExecutionInfo{
+				ID:          execObj.ID,
+				EntityID:    entityObj.ID,
+				Status:      Status(execObj.Status),
+				StartedAt:   execObj.StartedAt,
+				CompletedAt: execObj.CompletedAt,
+				CreatedAt:   execObj.CreatedAt,
+				UpdatedAt:   execObj.UpdatedAt,
+			},
+			Outputs: workflowExecData.Output,
 		},
 	}, nil
 }
@@ -291,6 +374,52 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 				UpdatedAt:   execObj.UpdatedAt,
 			},
 			Outputs: workflowExecData.Output,
+		},
+	}, nil
+}
+
+// Create a new execution for the entity
+func (r *workflowRepository) CreateRetry(tx *ent.Tx, id int) (*WorkflowExecutionInfo, error) {
+
+	entityObj, err := tx.Entity.Get(r.ctx, id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(err, ErrNotFound, fmt.Errorf("getting entity:%v", id))
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting entity: %v", id))
+	}
+
+	execObj, err := tx.Execution.Create().
+		SetEntity(entityObj).
+		SetStatus(execution.StatusPending).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating execution"))
+	}
+
+	workflowExec, err := tx.WorkflowExecution.Create().
+		SetExecution(execObj).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
+	}
+
+	_, err = tx.WorkflowExecutionData.Create().
+		SetWorkflowExecution(workflowExec).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution data"))
+	}
+
+	return &WorkflowExecutionInfo{
+		ExecutionInfo: ExecutionInfo{
+			ID:          execObj.ID,
+			EntityID:    id,
+			Status:      Status(execObj.Status),
+			StartedAt:   execObj.StartedAt,
+			CreatedAt:   execObj.CreatedAt,
+			UpdatedAt:   execObj.UpdatedAt,
+			CompletedAt: execObj.CompletedAt,
 		},
 	}, nil
 }
@@ -416,16 +545,11 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 	// For each execution, get the full workflow info
 	result := make([]*WorkflowInfo, 0, len(execObjs))
 	for _, execObj := range execObjs {
-		// Get the entity ID for this execution
-		entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
-		if err != nil {
-			return nil, errors.Join(err, fmt.Errorf("getting entity ID for execution %d", execObj.ID))
-		}
 
 		// Get the full workflow info using the existing Get method
-		workflowInfo, err := r.Get(tx, entityID)
+		workflowInfo, err := r.GetFromExecution(tx, execObj.ID)
 		if err != nil {
-			return nil, errors.Join(err, fmt.Errorf("getting workflow info for entity %d", entityID))
+			return nil, errors.Join(err, fmt.Errorf("getting workflow info for entity %d", execObj.ID))
 		}
 
 		result = append(result, workflowInfo)
@@ -434,23 +558,213 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 	return result, nil
 }
 
-func (r *workflowRepository) UpdatePendingToRunning(tx *ent.Tx, id int) error {
+func (r *workflowRepository) UpdateExecutionDataOuput(tx *ent.Tx, executionID int, output [][]byte) error {
+	workflowExec, err := tx.WorkflowExecution.Query().
+		Where(workflowexecution.HasExecutionWith(execution.IDEQ(executionID))).
+		WithExecutionData().
+		Only(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting workflow execution"))
+	}
 
-	if err := tx.Entity.UpdateOneID(id).SetStatus(entity.StatusRunning).Exec(r.ctx); err != nil {
+	_, err = tx.WorkflowExecutionData.UpdateOneID(workflowExec.Edges.ExecutionData.ID).
+		SetOutput(output).
+		Save(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("updating workflow execution data"))
+	}
+
+	return nil
+}
+
+func (r *workflowRepository) UpdateExecutionDataError(tx *ent.Tx, executionID int, errormsg string) error {
+	workflowExec, err := tx.WorkflowExecution.Query().
+		Where(workflowexecution.HasExecutionWith(execution.IDEQ(executionID))).
+		WithExecutionData().
+		Only(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting workflow execution"))
+	}
+
+	_, err = tx.WorkflowExecutionData.UpdateOneID(workflowExec.Edges.ExecutionData.ID).
+		SetError(errormsg).
+		Save(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("updating workflow execution data"))
+	}
+
+	return nil
+}
+
+func (r *workflowRepository) UpdateExecutionPendingToRunning(tx *ent.Tx, executionID int) error {
+
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusRunning).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	if err := tx.Entity.UpdateOneID(entityID).SetStatus(entity.StatusRunning).Exec(r.ctx); err != nil {
 		if ent.IsNotFound(err) {
 			return ErrNotFound
 		}
 		return errors.Join(err, fmt.Errorf("updating entity status"))
 	}
 
-	if err := tx.Execution.UpdateOneID(id).
-		SetStatus(execution.StatusRunning).
-		Exec(r.ctx); err != nil {
+	return nil
+}
+
+func (r *workflowRepository) UpdateExecutionPaused(tx *ent.Tx, executionID int) error {
+
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusPaused).Exec(r.ctx); err != nil {
 		if ent.IsNotFound(err) {
 			return ErrNotFound
 		}
-		return errors.Join(err, fmt.Errorf("updating execution"))
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	if err := tx.WorkflowData.UpdateOneID(entityID).SetPaused(true).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating workflow data"))
 	}
 
 	return nil
+}
+
+// When successful then everything is updated
+func (r *workflowRepository) UpdateExecutionSuccess(tx *ent.Tx, executionID int) error {
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusCompleted).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	if err := tx.Entity.UpdateOneID(entityID).SetStatus(entity.StatusCompleted).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating entity status"))
+	}
+
+	return nil
+}
+
+// When retrying only the execution status is updated
+func (r *workflowRepository) UpdateExecutionRetried(tx *ent.Tx, executionID int) error {
+
+	fmt.Println("set Retried status to", executionID)
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusRetried).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	return nil
+}
+
+// When a workflow fails, the entity and execution status are updated
+func (r *workflowRepository) UpdateExecutionFailed(tx *ent.Tx, executionID int) error {
+
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusFailed).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	if err := tx.Entity.UpdateOneID(entityID).SetStatus(entity.StatusFailed).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating entity status"))
+	}
+
+	return nil
+}
+
+func (r *workflowRepository) IncrementRetryAttempt(tx *ent.Tx, id int) error {
+	workflowData, err := tx.WorkflowData.Query().
+		Where(workflowdata.HasEntityWith(entity.IDEQ(id))).
+		Only(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting workflow data"))
+	}
+
+	workflowData.RetryState.Attempts++
+
+	_, err = tx.WorkflowData.UpdateOneID(workflowData.ID).
+		SetRetryState(workflowData.RetryState).
+		Save(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("incrementing retry attempt"))
+	}
+
+	return nil
+}
+
+func (r *workflowRepository) GetRetryState(tx *ent.Tx, id int) (*schema.RetryState, error) {
+	workflowData, err := tx.WorkflowData.Query().
+		Where(workflowdata.HasEntityWith(entity.IDEQ(id))).
+		Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow data"))
+	}
+
+	return workflowData.RetryState, nil
+}
+
+func (r *workflowRepository) GetRetryPolicy(tx *ent.Tx, id int) (*schema.RetryPolicy, error) {
+	workflowData, err := tx.WorkflowData.Query().
+		Where(workflowdata.HasEntityWith(entity.IDEQ(id))).
+		Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow data"))
+	}
+
+	return workflowData.RetryPolicy, nil
 }

@@ -9895,6 +9895,8 @@ type WorkflowDataMutation struct {
 	duration      *string
 	paused        *bool
 	resumable     *bool
+	errors        *string
+	retry_state   **schema.RetryState
 	retry_policy  **schema.RetryPolicy
 	input         *[][]uint8
 	appendinput   [][]uint8
@@ -10125,6 +10127,91 @@ func (m *WorkflowDataMutation) ResetResumable() {
 	m.resumable = nil
 }
 
+// SetErrors sets the "errors" field.
+func (m *WorkflowDataMutation) SetErrors(s string) {
+	m.errors = &s
+}
+
+// Errors returns the value of the "errors" field in the mutation.
+func (m *WorkflowDataMutation) Errors() (r string, exists bool) {
+	v := m.errors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrors returns the old "errors" field's value of the WorkflowData entity.
+// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowDataMutation) OldErrors(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrors is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrors requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrors: %w", err)
+	}
+	return oldValue.Errors, nil
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (m *WorkflowDataMutation) ClearErrors() {
+	m.errors = nil
+	m.clearedFields[workflowdata.FieldErrors] = struct{}{}
+}
+
+// ErrorsCleared returns if the "errors" field was cleared in this mutation.
+func (m *WorkflowDataMutation) ErrorsCleared() bool {
+	_, ok := m.clearedFields[workflowdata.FieldErrors]
+	return ok
+}
+
+// ResetErrors resets all changes to the "errors" field.
+func (m *WorkflowDataMutation) ResetErrors() {
+	m.errors = nil
+	delete(m.clearedFields, workflowdata.FieldErrors)
+}
+
+// SetRetryState sets the "retry_state" field.
+func (m *WorkflowDataMutation) SetRetryState(ss *schema.RetryState) {
+	m.retry_state = &ss
+}
+
+// RetryState returns the value of the "retry_state" field in the mutation.
+func (m *WorkflowDataMutation) RetryState() (r *schema.RetryState, exists bool) {
+	v := m.retry_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryState returns the old "retry_state" field's value of the WorkflowData entity.
+// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowDataMutation) OldRetryState(ctx context.Context) (v *schema.RetryState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryState: %w", err)
+	}
+	return oldValue.RetryState, nil
+}
+
+// ResetRetryState resets all changes to the "retry_state" field.
+func (m *WorkflowDataMutation) ResetRetryState() {
+	m.retry_state = nil
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (m *WorkflowDataMutation) SetRetryPolicy(sp *schema.RetryPolicy) {
 	m.retry_policy = &sp
@@ -10299,7 +10386,7 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 7)
 	if m.duration != nil {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
@@ -10308,6 +10395,12 @@ func (m *WorkflowDataMutation) Fields() []string {
 	}
 	if m.resumable != nil {
 		fields = append(fields, workflowdata.FieldResumable)
+	}
+	if m.errors != nil {
+		fields = append(fields, workflowdata.FieldErrors)
+	}
+	if m.retry_state != nil {
+		fields = append(fields, workflowdata.FieldRetryState)
 	}
 	if m.retry_policy != nil {
 		fields = append(fields, workflowdata.FieldRetryPolicy)
@@ -10329,6 +10422,10 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 		return m.Paused()
 	case workflowdata.FieldResumable:
 		return m.Resumable()
+	case workflowdata.FieldErrors:
+		return m.Errors()
+	case workflowdata.FieldRetryState:
+		return m.RetryState()
 	case workflowdata.FieldRetryPolicy:
 		return m.RetryPolicy()
 	case workflowdata.FieldInput:
@@ -10348,6 +10445,10 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPaused(ctx)
 	case workflowdata.FieldResumable:
 		return m.OldResumable(ctx)
+	case workflowdata.FieldErrors:
+		return m.OldErrors(ctx)
+	case workflowdata.FieldRetryState:
+		return m.OldRetryState(ctx)
 	case workflowdata.FieldRetryPolicy:
 		return m.OldRetryPolicy(ctx)
 	case workflowdata.FieldInput:
@@ -10381,6 +10482,20 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetResumable(v)
+		return nil
+	case workflowdata.FieldErrors:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrors(v)
+		return nil
+	case workflowdata.FieldRetryState:
+		v, ok := value.(*schema.RetryState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryState(v)
 		return nil
 	case workflowdata.FieldRetryPolicy:
 		v, ok := value.(*schema.RetryPolicy)
@@ -10429,6 +10544,9 @@ func (m *WorkflowDataMutation) ClearedFields() []string {
 	if m.FieldCleared(workflowdata.FieldDuration) {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
+	if m.FieldCleared(workflowdata.FieldErrors) {
+		fields = append(fields, workflowdata.FieldErrors)
+	}
 	if m.FieldCleared(workflowdata.FieldInput) {
 		fields = append(fields, workflowdata.FieldInput)
 	}
@@ -10449,6 +10567,9 @@ func (m *WorkflowDataMutation) ClearField(name string) error {
 	case workflowdata.FieldDuration:
 		m.ClearDuration()
 		return nil
+	case workflowdata.FieldErrors:
+		m.ClearErrors()
+		return nil
 	case workflowdata.FieldInput:
 		m.ClearInput()
 		return nil
@@ -10468,6 +10589,12 @@ func (m *WorkflowDataMutation) ResetField(name string) error {
 		return nil
 	case workflowdata.FieldResumable:
 		m.ResetResumable()
+		return nil
+	case workflowdata.FieldErrors:
+		m.ResetErrors()
+		return nil
+	case workflowdata.FieldRetryState:
+		m.ResetRetryState()
 		return nil
 	case workflowdata.FieldRetryPolicy:
 		m.ResetRetryPolicy()

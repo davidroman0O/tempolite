@@ -13,9 +13,15 @@ import (
 
 func TestBasic(t *testing.T) {
 
-	wrk := func(ctx tempoliteContext.WorkflowContext) error {
+	failure := true
+
+	wrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		if failure {
+			failure = false
+			return 0, fmt.Errorf("error on purpose")
+		}
 		fmt.Println("workflow executed")
-		return nil
+		return 420, nil
 	}
 
 	ctx := context.Background()
@@ -37,6 +43,34 @@ func TestBasic(t *testing.T) {
 	info := tp.Workflow(wrk, nil)
 
 	fmt.Println("Info", info.Get())
+
+	// fmt.Println("scale up")
+	// tp.Scale("default", map[string]int{
+	// 	"workflows":   4,
+	// 	"activities":  2,
+	// 	"sideEffects": 2,
+	// 	"sagas":       2,
+	// })
+
+	// <-time.After(1 * time.Second)
+
+	// fmt.Println("scale down")
+	// tp.Scale("default", map[string]int{
+	// 	"workflows":   1,
+	// 	"activities":  0,
+	// 	"sideEffects": 0,
+	// 	"sagas":       0,
+	// })
+
+	// <-time.After(1 * time.Second)
+
+	// fmt.Println("scale up")
+	// tp.Scale("default", map[string]int{
+	// 	"workflows":   2,
+	// 	"activities":  2,
+	// 	"sideEffects": 2,
+	// 	"sagas":       2,
+	// })
 
 	<-time.After(1 * time.Second)
 

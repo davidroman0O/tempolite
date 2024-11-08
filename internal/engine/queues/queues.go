@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/tempolite/internal/engine/execution"
@@ -18,6 +20,7 @@ type Queue struct {
 	activitiesWorker  *execution.WorkerPool[execution.ActivityRequest, execution.ActivityReponse]
 	sideEffectsWorker *execution.WorkerPool[execution.SideEffectRequest, execution.SideEffectReponse]
 	sagasWorker       *execution.WorkerPool[execution.SagaRequest, execution.SagaReponse]
+	scaleMu           sync.Mutex
 }
 
 func New(
@@ -51,39 +54,48 @@ func New(
 
 	q := &Queue{
 		ctx: ctx,
-		workflowsWorker: execution.NewWorkerPool(
-			ctx,
-			queue,
-			execution.NewWorkflowsExecutor(ctx, queue),
-			func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]] {
-				return execution.NewWorkflowsWorker(ctx, queue, registry)
-			},
-		),
-		activitiesWorker: execution.NewWorkerPool(
-			ctx,
-			queue,
-			execution.NewActivitiesExecutor(ctx, queue),
-			func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.ActivityRequest, execution.ActivityReponse]] {
-				return execution.NewActivitiesWorker(ctx, queue, registry)
-			},
-		),
-		sideEffectsWorker: execution.NewWorkerPool(
-			ctx,
-			queue,
-			execution.NewSideEffectsExecutor(ctx, queue),
-			func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.SideEffectRequest, execution.SideEffectReponse]] {
-				return execution.NewSideEffectsWorker(ctx, queue, registry)
-			},
-		),
-		sagasWorker: execution.NewWorkerPool(
-			ctx,
-			queue,
-			execution.NewSagasExecutor(ctx, queue),
-			func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.SagaRequest, execution.SagaReponse]] {
-				return execution.NewSagasWorker(ctx, queue, registry)
-			},
-		),
 	}
+
+	q.workflowsWorker = execution.NewWorkerPool(
+		ctx,
+		queue,
+		execution.NewWorkflowsExecutor(ctx, queue, db),
+		func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]] {
+			return execution.NewWorkflowsWorker(
+				ctx,
+				queue,
+				registry,
+				db,
+			)
+		},
+	)
+
+	q.activitiesWorker = execution.NewWorkerPool(
+		ctx,
+		queue,
+		execution.NewActivitiesExecutor(ctx, queue),
+		func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.ActivityRequest, execution.ActivityReponse]] {
+			return execution.NewActivitiesWorker(ctx, queue, registry)
+		},
+	)
+
+	q.sideEffectsWorker = execution.NewWorkerPool(
+		ctx,
+		queue,
+		execution.NewSideEffectsExecutor(ctx, queue),
+		func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.SideEffectRequest, execution.SideEffectReponse]] {
+			return execution.NewSideEffectsWorker(ctx, queue, registry)
+		},
+	)
+
+	q.sagasWorker = execution.NewWorkerPool(
+		ctx,
+		queue,
+		execution.NewSagasExecutor(ctx, queue),
+		func(ctx context.Context, queue string) retrypool.Worker[*retrypool.RequestResponse[execution.SagaRequest, execution.SagaReponse]] {
+			return execution.NewSagasWorker(ctx, queue, registry)
+		},
+	)
 
 	// TODO: change with option of initial workers configs
 	q.AddWorker()
@@ -91,12 +103,19 @@ func New(
 	return q, nil
 }
 
-func (q *Queue) SubmitWorkflow(request *repository.WorkflowInfo) (chan struct{}, error) {
+func (q *Queue) submitRetryWorkflow(data *retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]) error {
+	if err := q.workflowsWorker.Submit(data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (q *Queue) SubmitWorkflow(task *retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]) (chan struct{}, error) {
 
 	processed := retrypool.NewProcessedNotification()
 
 	if err := q.workflowsWorker.Submit(
-		&retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]{Request: execution.WorkflowRequest{WorkflowInfo: request}},
+		task,
 		retrypool.WithBeingProcessed[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](processed),
 	); err != nil {
 		return nil, err
@@ -216,4 +235,101 @@ func (q *Queue) RemoveWorker() error {
 	})
 
 	return errG.Wait()
+}
+
+func (q *Queue) Scale(targets map[string]int) error {
+	q.scaleMu.Lock()
+	defer q.scaleMu.Unlock()
+
+	type pool struct {
+		name      string
+		available func() int
+		add       func() int
+		remove    func() error
+	}
+
+	pools := []pool{
+		{
+			name:      "workflows",
+			available: q.workflowsWorker.AvailableWorkers,
+			add:       q.workflowsWorker.AddWorker,
+			remove:    q.workflowsWorker.RemoveWorker,
+		},
+		{
+			name:      "activities",
+			available: q.activitiesWorker.AvailableWorkers,
+			add:       q.activitiesWorker.AddWorker,
+			remove:    q.activitiesWorker.RemoveWorker,
+		},
+		{
+			name:      "sideEffects",
+			available: q.sideEffectsWorker.AvailableWorkers,
+			add:       q.sideEffectsWorker.AddWorker,
+			remove:    q.sideEffectsWorker.RemoveWorker,
+		},
+		{
+			name:      "sagas",
+			available: q.sagasWorker.AvailableWorkers,
+			add:       q.sagasWorker.AddWorker,
+			remove:    q.sagasWorker.RemoveWorker,
+		},
+	}
+
+	var wg sync.WaitGroup
+
+	for _, p := range pools {
+		target, ok := targets[p.name]
+		if !ok {
+			continue
+		}
+
+		p := p // capture loop variable
+		wg.Add(1)
+
+		go func(p pool, target int) {
+			defer wg.Done()
+			for {
+				current := p.available()
+				fmt.Println("Current workers for", p.name, ":", current)
+				if current == target {
+					fmt.Println("Already at target workers for", p.name)
+					break
+				} else if current < target {
+					fmt.Println("Adding worker to", p.name, "pool")
+					p.add()
+				} else if current > target {
+					fmt.Println("Removing worker from", p.name, "pool")
+					err := p.remove()
+					if err != nil {
+						if errors.Is(err, retrypool.ErrAlreadyRemovingWorker) {
+							// Wait for the worker count to decrease
+							for {
+								time.Sleep(100 * time.Millisecond)
+								newCurrent := p.available()
+								if newCurrent < current {
+									break
+								}
+							}
+						} else if err.Error() == "no workers to remove" {
+							fmt.Println("No workers to remove from", p.name)
+							break
+						} else {
+							fmt.Printf("Error removing worker from %s pool: %v\n", p.name, err)
+							break
+						}
+					}
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}(p, target)
+	}
+
+	wg.Wait()
+
+	fmt.Println("Available workflows workers:", q.AvailableWorkflowWorkers())
+	fmt.Println("Available activities workers:", q.AvailableActivityWorkers())
+	fmt.Println("Available side effects workers:", q.AvailableSideEffectWorkers())
+	fmt.Println("Available sagas workers:", q.AvailableSagaWorkers())
+
+	return nil
 }

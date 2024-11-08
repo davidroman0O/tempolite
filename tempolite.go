@@ -14,7 +14,6 @@ import (
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
-	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
 	"github.com/davidroman0O/tempolite/pkg/logs"
 )
@@ -129,9 +128,8 @@ type Tempolite struct {
 
 	engine *engine.Engine
 
-	comfy      *comfylite3.ComfyDB
-	client     *ent.Client
-	repository repository.Repository
+	comfy  *comfylite3.ComfyDB
+	client *ent.Client
 }
 
 func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempoliteOption) (*Tempolite, error) {
@@ -161,14 +159,18 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 		return nil, err
 	}
 
-	// db accesses
-	tp.repository = repository.NewRepository(ctx, tp.client)
-
-	if tp.engine, err = engine.New(ctx, builder, tp.repository); err != nil {
+	if tp.engine, err = engine.New(ctx, builder, tp.client); err != nil {
 		return nil, err
 	}
 
 	return tp, nil
+}
+
+func (tp *Tempolite) Scale(queue string, targets map[string]int) error {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	return tp.engine.Scale(queue, targets)
 }
 
 func (tp *Tempolite) createClient(cfg tempoliteConfig) error {

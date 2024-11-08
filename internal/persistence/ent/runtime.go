@@ -127,8 +127,12 @@ func init() {
 	workflowdataDescResumable := workflowdataFields[2].Descriptor()
 	// workflowdata.DefaultResumable holds the default value on creation for the resumable field.
 	workflowdata.DefaultResumable = workflowdataDescResumable.Default.(bool)
+	// workflowdataDescRetryState is the schema descriptor for retry_state field.
+	workflowdataDescRetryState := workflowdataFields[4].Descriptor()
+	// workflowdata.DefaultRetryState holds the default value on creation for the retry_state field.
+	workflowdata.DefaultRetryState = workflowdataDescRetryState.Default.(*schema.RetryState)
 	// workflowdataDescRetryPolicy is the schema descriptor for retry_policy field.
-	workflowdataDescRetryPolicy := workflowdataFields[3].Descriptor()
+	workflowdataDescRetryPolicy := workflowdataFields[5].Descriptor()
 	// workflowdata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
 	workflowdata.DefaultRetryPolicy = workflowdataDescRetryPolicy.Default.(*schema.RetryPolicy)
 }

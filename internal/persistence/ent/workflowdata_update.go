@@ -78,6 +78,32 @@ func (wdu *WorkflowDataUpdate) SetNillableResumable(b *bool) *WorkflowDataUpdate
 	return wdu
 }
 
+// SetErrors sets the "errors" field.
+func (wdu *WorkflowDataUpdate) SetErrors(s string) *WorkflowDataUpdate {
+	wdu.mutation.SetErrors(s)
+	return wdu
+}
+
+// SetNillableErrors sets the "errors" field if the given value is not nil.
+func (wdu *WorkflowDataUpdate) SetNillableErrors(s *string) *WorkflowDataUpdate {
+	if s != nil {
+		wdu.SetErrors(*s)
+	}
+	return wdu
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (wdu *WorkflowDataUpdate) ClearErrors() *WorkflowDataUpdate {
+	wdu.mutation.ClearErrors()
+	return wdu
+}
+
+// SetRetryState sets the "retry_state" field.
+func (wdu *WorkflowDataUpdate) SetRetryState(ss *schema.RetryState) *WorkflowDataUpdate {
+	wdu.mutation.SetRetryState(ss)
+	return wdu
+}
+
 // SetRetryPolicy sets the "retry_policy" field.
 func (wdu *WorkflowDataUpdate) SetRetryPolicy(sp *schema.RetryPolicy) *WorkflowDataUpdate {
 	wdu.mutation.SetRetryPolicy(sp)
@@ -182,6 +208,15 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := wdu.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
+	}
+	if value, ok := wdu.mutation.Errors(); ok {
+		_spec.SetField(workflowdata.FieldErrors, field.TypeString, value)
+	}
+	if wdu.mutation.ErrorsCleared() {
+		_spec.ClearField(workflowdata.FieldErrors, field.TypeString)
+	}
+	if value, ok := wdu.mutation.RetryState(); ok {
+		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
 	}
 	if value, ok := wdu.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)
@@ -291,6 +326,32 @@ func (wduo *WorkflowDataUpdateOne) SetNillableResumable(b *bool) *WorkflowDataUp
 	if b != nil {
 		wduo.SetResumable(*b)
 	}
+	return wduo
+}
+
+// SetErrors sets the "errors" field.
+func (wduo *WorkflowDataUpdateOne) SetErrors(s string) *WorkflowDataUpdateOne {
+	wduo.mutation.SetErrors(s)
+	return wduo
+}
+
+// SetNillableErrors sets the "errors" field if the given value is not nil.
+func (wduo *WorkflowDataUpdateOne) SetNillableErrors(s *string) *WorkflowDataUpdateOne {
+	if s != nil {
+		wduo.SetErrors(*s)
+	}
+	return wduo
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (wduo *WorkflowDataUpdateOne) ClearErrors() *WorkflowDataUpdateOne {
+	wduo.mutation.ClearErrors()
+	return wduo
+}
+
+// SetRetryState sets the "retry_state" field.
+func (wduo *WorkflowDataUpdateOne) SetRetryState(ss *schema.RetryState) *WorkflowDataUpdateOne {
+	wduo.mutation.SetRetryState(ss)
 	return wduo
 }
 
@@ -428,6 +489,15 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 	}
 	if value, ok := wduo.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
+	}
+	if value, ok := wduo.mutation.Errors(); ok {
+		_spec.SetField(workflowdata.FieldErrors, field.TypeString, value)
+	}
+	if wduo.mutation.ErrorsCleared() {
+		_spec.ClearField(workflowdata.FieldErrors, field.TypeString)
+	}
+	if value, ok := wduo.mutation.RetryState(); ok {
+		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
 	}
 	if value, ok := wduo.mutation.RetryPolicy(); ok {
 		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)

@@ -68,6 +68,11 @@ func Resumable(v bool) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldEQ(FieldResumable, v))
 }
 
+// Errors applies equality check predicate on the "errors" field. It's identical to ErrorsEQ.
+func Errors(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldEQ(FieldErrors, v))
+}
+
 // DurationEQ applies the EQ predicate on the "duration" field.
 func DurationEQ(v string) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldEQ(FieldDuration, v))
@@ -161,6 +166,81 @@ func ResumableEQ(v bool) predicate.WorkflowData {
 // ResumableNEQ applies the NEQ predicate on the "resumable" field.
 func ResumableNEQ(v bool) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldNEQ(FieldResumable, v))
+}
+
+// ErrorsEQ applies the EQ predicate on the "errors" field.
+func ErrorsEQ(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldEQ(FieldErrors, v))
+}
+
+// ErrorsNEQ applies the NEQ predicate on the "errors" field.
+func ErrorsNEQ(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldNEQ(FieldErrors, v))
+}
+
+// ErrorsIn applies the In predicate on the "errors" field.
+func ErrorsIn(vs ...string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldIn(FieldErrors, vs...))
+}
+
+// ErrorsNotIn applies the NotIn predicate on the "errors" field.
+func ErrorsNotIn(vs ...string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldNotIn(FieldErrors, vs...))
+}
+
+// ErrorsGT applies the GT predicate on the "errors" field.
+func ErrorsGT(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldGT(FieldErrors, v))
+}
+
+// ErrorsGTE applies the GTE predicate on the "errors" field.
+func ErrorsGTE(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldGTE(FieldErrors, v))
+}
+
+// ErrorsLT applies the LT predicate on the "errors" field.
+func ErrorsLT(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldLT(FieldErrors, v))
+}
+
+// ErrorsLTE applies the LTE predicate on the "errors" field.
+func ErrorsLTE(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldLTE(FieldErrors, v))
+}
+
+// ErrorsContains applies the Contains predicate on the "errors" field.
+func ErrorsContains(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldContains(FieldErrors, v))
+}
+
+// ErrorsHasPrefix applies the HasPrefix predicate on the "errors" field.
+func ErrorsHasPrefix(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldHasPrefix(FieldErrors, v))
+}
+
+// ErrorsHasSuffix applies the HasSuffix predicate on the "errors" field.
+func ErrorsHasSuffix(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldHasSuffix(FieldErrors, v))
+}
+
+// ErrorsIsNil applies the IsNil predicate on the "errors" field.
+func ErrorsIsNil() predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldIsNull(FieldErrors))
+}
+
+// ErrorsNotNil applies the NotNil predicate on the "errors" field.
+func ErrorsNotNil() predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldNotNull(FieldErrors))
+}
+
+// ErrorsEqualFold applies the EqualFold predicate on the "errors" field.
+func ErrorsEqualFold(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldEqualFold(FieldErrors, v))
+}
+
+// ErrorsContainsFold applies the ContainsFold predicate on the "errors" field.
+func ErrorsContainsFold(v string) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldContainsFold(FieldErrors, v))
 }
 
 // InputIsNil applies the IsNil predicate on the "input" field.

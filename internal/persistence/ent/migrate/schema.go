@@ -351,6 +351,8 @@ var (
 		{Name: "duration", Type: field.TypeString, Nullable: true},
 		{Name: "paused", Type: field.TypeBool, Default: false},
 		{Name: "resumable", Type: field.TypeBool, Default: false},
+		{Name: "errors", Type: field.TypeString, Nullable: true},
+		{Name: "retry_state", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
 		{Name: "entity_workflow_data", Type: field.TypeInt, Unique: true},
@@ -363,7 +365,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[6]},
+				Columns:    []*schema.Column{WorkflowDataColumns[8]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

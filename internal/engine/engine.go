@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
+	"github.com/davidroman0O/tempolite/internal/engine/io"
 	"github.com/davidroman0O/tempolite/internal/engine/queues"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/engine/schedulers"
@@ -25,17 +26,24 @@ type Engine struct {
 	scheduler    *schedulers.Scheduler
 }
 
-func New(ctx context.Context, builder registry.RegistryBuildFn, repository repository.Repository) (*Engine, error) {
+func New(
+	ctx context.Context,
+	builder registry.RegistryBuildFn,
+	client *ent.Client,
+) (*Engine, error) {
 	var err error
 	e := &Engine{
 		ctx:          ctx,
 		workerQueues: make(map[string]*queues.Queue),
-		db:           repository,
 	}
 
 	if e.registry, err = builder(); err != nil {
 		return nil, err
 	}
+
+	e.db = repository.NewRepository(
+		ctx,
+		client)
 
 	if e.scheduler, err = schedulers.New(
 		ctx,
@@ -91,6 +99,13 @@ func (e *Engine) Shutdown() error {
 
 	defer fmt.Println("Engine shutdown complete")
 	return shutdown.Wait()
+}
+
+func (e *Engine) Scale(queue string, targets map[string]int) error {
+	e.mu.Lock()
+	q := e.workerQueues[queue]
+	e.mu.Unlock()
+	return q.Scale(targets)
 }
 
 // Create a new run workflow
@@ -177,7 +192,8 @@ func (e *Engine) commandWorkflow(workflowFunc interface{}, options types.Workflo
 
 	}
 
-	serializableParams, err := e.registry.ConvertInputsForSerialization(params)
+	// Extremely important conversion
+	serializableParams, err := io.ConvertInputsForSerialization(params)
 	if err != nil {
 		return types.NoWorkflowID, err
 	}
@@ -209,7 +225,7 @@ func (e *Engine) commandWorkflow(workflowFunc interface{}, options types.Workflo
 }
 
 func (e *Engine) queryWorfklow(id types.WorkflowID) *tempoliteContext.WorkflowInfo {
-	return tempoliteContext.NewWorkflowInfo(id)
+	return tempoliteContext.NewWorkflowInfo(id, e.db)
 }
 
 func (e *Engine) queryNoWorkflow(err error) *tempoliteContext.WorkflowInfo {

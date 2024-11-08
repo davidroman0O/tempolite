@@ -57,7 +57,10 @@ type repository struct {
 }
 
 // NewRepository creates a new repository instance with initialized sub-repositories
-func NewRepository(ctx context.Context, client *ent.Client) Repository {
+func NewRepository(
+	ctx context.Context,
+	client *ent.Client,
+) Repository {
 	r := &repository{
 		client: client,
 	}
