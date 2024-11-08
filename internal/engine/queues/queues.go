@@ -91,6 +91,30 @@ func New(
 	return q, nil
 }
 
+func (q *Queue) SubmitWorkflow(request *repository.WorkflowInfo) error {
+	return q.workflowsWorker.Submit(
+		&retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]{Request: execution.WorkflowRequest{}},
+	)
+}
+
+func (q *Queue) SubmitActivity(request *repository.ActivityInfo) error {
+	return q.activitiesWorker.Submit(
+		&retrypool.RequestResponse[execution.ActivityRequest, execution.ActivityReponse]{Request: execution.ActivityRequest{}},
+	)
+}
+
+func (q *Queue) SubmitSideEffect(request *repository.SideEffectInfo) error {
+	return q.sideEffectsWorker.Submit(
+		&retrypool.RequestResponse[execution.SideEffectRequest, execution.SideEffectReponse]{Request: execution.SideEffectRequest{}},
+	)
+}
+
+func (q *Queue) SubmitSaga(request *repository.SagaInfo) error {
+	return q.sagasWorker.Submit(
+		&retrypool.RequestResponse[execution.SagaRequest, execution.SagaReponse]{Request: execution.SagaRequest{}},
+	)
+}
+
 func (q *Queue) AvailableWorkflowWorkers() int {
 	return q.workflowsWorker.AvailableWorkers()
 }

@@ -32,12 +32,11 @@ func New(
 		registry: registry,
 		clock: NewClock(
 			ctx,
-			WithInterval(time.Nanosecond),
-			WithName("scheduler"),
-			WithOnError(func(err error) {
+			time.Nanosecond,
+			func(err error) {
 				// TODO: i don't know what to do with the errors
 				log.Println(err)
-			}),
+			},
 		),
 	}
 
@@ -53,7 +52,7 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) addScheduler(ticker Ticker) {
-	s.clock.Add(ticker, NonBlocking)
+	s.clock.Add(ticker, BestEffort)
 }
 
 func (s *Scheduler) AddQueue(queue string) {

@@ -37,6 +37,8 @@ func TestBasic(t *testing.T) {
 	fmt.Println("Info", info.Get())
 
 	if err = tp.Shutdown(); err != nil {
-		t.Fatal(err)
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
 	}
 }

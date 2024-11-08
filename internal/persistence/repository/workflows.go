@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
@@ -80,16 +81,16 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 	runObj, err := tx.Run.Get(r.ctx, input.RunID)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("run %d not found", input.RunID)
+			return nil, errors.Join(err, fmt.Errorf("run %d not found", input.RunID))
 		}
-		return nil, fmt.Errorf("getting run: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting run"))
 	}
 
 	exists, err := tx.Entity.Query().
 		Where(entity.StepIDEQ(input.StepID)).
 		Exist(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("checking step ID existence: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("checking step ID existence"))
 	}
 	if exists {
 		return nil, ErrAlreadyExists
@@ -104,19 +105,19 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		SetRun(runObj)
 
 	if input.QueueID == 0 {
-		return nil, fmt.Errorf("queue ID is required")
+		return nil, errors.Join(err, fmt.Errorf("queue ID is required"))
 	}
 
 	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting queue"))
 	}
 
 	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("creating workflow entity: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow entity"))
 	}
 
 	retryPolicy := defaultRetryPolicy()
@@ -137,7 +138,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		Save(r.ctx)
 	if err != nil {
 		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
-		return nil, fmt.Errorf("creating workflow data: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow data"))
 	}
 
 	realStatus := execution.Status(entity.StatusPending)
@@ -149,7 +150,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 	if err != nil {
 		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
 		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
-		return nil, fmt.Errorf("creating workflow execution: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
 	}
 
 	workflowExec, err := tx.WorkflowExecution.Create().
@@ -159,7 +160,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		_ = tx.Execution.DeleteOne(execObj).Exec(r.ctx)
 		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
 		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
-		return nil, fmt.Errorf("creating workflow execution: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
 	}
 
 	_, err = tx.WorkflowExecutionData.Create().
@@ -170,12 +171,12 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		_ = tx.Execution.DeleteOne(execObj).Exec(r.ctx)
 		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
 		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
-		return nil, fmt.Errorf("creating workflow execution data: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution data"))
 	}
 
 	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue ID: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting queue ID"))
 	}
 
 	return &WorkflowInfo{
@@ -216,7 +217,7 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 		if ent.IsNotFound(err) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("getting entity: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting entity"))
 	}
 
 	if entObj.Type != entity.Type(ComponentWorkflow) {
@@ -225,17 +226,17 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 
 	runID, err := entObj.QueryRun().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting run ID: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting run ID"))
 	}
 
 	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting queue IDs"))
 	}
 
 	workflowData, err := entObj.QueryWorkflowData().Only(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting workflow data: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting workflow data"))
 	}
 
 	execObj, err := tx.Execution.Query().
@@ -246,17 +247,17 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 		if ent.IsNotFound(err) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("getting execution: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting execution"))
 	}
 
 	workflowExec, err := execObj.QueryWorkflowExecution().Only(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting workflow execution: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting workflow execution"))
 	}
 
 	workflowExecData, err := workflowExec.QueryExecutionData().Only(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting workflow execution data: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting workflow execution data"))
 	}
 
 	return &WorkflowInfo{
@@ -300,7 +301,7 @@ func (r *workflowRepository) GetByStepID(tx *ent.Tx, stepID string) (*WorkflowIn
 		if ent.IsNotFound(err) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("getting entity by step ID: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting entity by step ID"))
 	}
 
 	return r.Get(tx, entObj.ID)
@@ -314,7 +315,7 @@ func (r *workflowRepository) List(tx *ent.Tx, runID int) ([]*WorkflowInfo, error
 		).
 		All(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("querying entities: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("querying entities"))
 	}
 
 	result := make([]*WorkflowInfo, 0, len(entObjs))
@@ -348,7 +349,7 @@ func (r *workflowRepository) UpdateData(tx *ent.Tx, id int, input UpdateWorkflow
 
 	_, err := dataUpdate.Save(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("updating workflow data: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("updating workflow data"))
 	}
 
 	return r.Get(tx, id)
@@ -360,7 +361,7 @@ func (r *workflowRepository) Pause(tx *ent.Tx, id int) error {
 		SetPaused(true).
 		Save(r.ctx)
 	if err != nil {
-		return fmt.Errorf("pausing workflow: %w", err)
+		return errors.Join(err, fmt.Errorf("pausing workflow"))
 	}
 	return nil
 }
@@ -370,11 +371,11 @@ func (r *workflowRepository) Resume(tx *ent.Tx, id int) error {
 		Where(workflowdata.HasEntityWith(entity.IDEQ(id))).
 		Only(r.ctx)
 	if err != nil {
-		return fmt.Errorf("getting workflow data: %w", err)
+		return errors.Join(err, fmt.Errorf("getting workflow data"))
 	}
 
 	if !workflowData.Resumable {
-		return fmt.Errorf("%w: workflow is not resumable", ErrInvalidOperation)
+		return errors.Join(err, fmt.Errorf("workflow is not resumable"), ErrInvalidOperation)
 	}
 
 	_, err = tx.WorkflowData.Update().
@@ -382,7 +383,7 @@ func (r *workflowRepository) Resume(tx *ent.Tx, id int) error {
 		SetPaused(false).
 		Save(r.ctx)
 	if err != nil {
-		return fmt.Errorf("resuming workflow: %w", err)
+		return errors.Join(err, fmt.Errorf("resuming workflow"))
 	}
 
 	return nil
@@ -396,7 +397,7 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 	// First get all pending executions for workflows in the specified queue
 	execObjs, err := tx.Execution.Query().
 		Where(
-			execution.StatusEQ(execution.StatusPending), // Using StatusRunning from the Status type
+			execution.StatusEQ(execution.StatusPending), // Using StatusPending from the Status type
 			execution.HasEntityWith(
 				entity.And(
 					entity.TypeEQ(entity.Type(ComponentWorkflow)),
@@ -407,7 +408,7 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 		Order(ent.Asc(execution.FieldCreatedAt)).
 		All(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("querying pending executions: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("querying pending executions"))
 	}
 
 	// For each execution, get the full workflow info
@@ -416,13 +417,13 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 		// Get the entity ID for this execution
 		entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
 		if err != nil {
-			return nil, fmt.Errorf("getting entity ID for execution %d: %w", execObj.ID, err)
+			return nil, errors.Join(err, fmt.Errorf("getting entity ID for execution %d", execObj.ID))
 		}
 
 		// Get the full workflow info using the existing Get method
 		workflowInfo, err := r.Get(tx, entityID)
 		if err != nil {
-			return nil, fmt.Errorf("getting workflow info for entity %d: %w", entityID, err)
+			return nil, errors.Join(err, fmt.Errorf("getting workflow info for entity %d", entityID))
 		}
 
 		result = append(result, workflowInfo)

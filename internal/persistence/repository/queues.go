@@ -47,7 +47,7 @@ func (r *queueRepository) Create(tx *ent.Tx, name string) (*QueueInfo, error) {
 		Where(queue.NameEQ(name)).
 		Exist(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("checking queue existence: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("checking queue existence"))
 	}
 	if exists {
 		return nil, ErrAlreadyExists
@@ -57,7 +57,7 @@ func (r *queueRepository) Create(tx *ent.Tx, name string) (*QueueInfo, error) {
 		SetName(name).
 		Save(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("creating queue: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("creating queue"))
 	}
 
 	return &QueueInfo{
@@ -74,7 +74,7 @@ func (r *queueRepository) Get(tx *ent.Tx, id int) (*QueueInfo, error) {
 		if ent.IsNotFound(err) {
 			return nil, errors.Join(ErrQueues, ErrNotFound)
 		}
-		return nil, fmt.Errorf("getting queue: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("getting queue"))
 	}
 
 	return &QueueInfo{
@@ -107,7 +107,7 @@ func (r *queueRepository) GetByName(tx *ent.Tx, name string) (*QueueInfo, error)
 func (r *queueRepository) List(tx *ent.Tx) ([]*QueueInfo, error) {
 	queueObjs, err := tx.Queue.Query().All(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("listing queues: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("listing queues"))
 	}
 
 	result := make([]*QueueInfo, len(queueObjs))
@@ -127,7 +127,7 @@ func (r *queueRepository) Delete(tx *ent.Tx, id int) error {
 		Where(queue.IDEQ(id)).
 		Exist(r.ctx)
 	if err != nil {
-		return fmt.Errorf("checking queue existence: %w", err)
+		return errors.Join(err, fmt.Errorf("checking queue existence"))
 	}
 	if !exists {
 		return errors.Join(ErrQueues, ErrNotFound)
@@ -138,15 +138,15 @@ func (r *queueRepository) Delete(tx *ent.Tx, id int) error {
 		QueryEntities().
 		Exist(r.ctx)
 	if err != nil {
-		return fmt.Errorf("checking queue usage: %w", err)
+		return errors.Join(err, fmt.Errorf("checking queue usage"))
 	}
 	if inUse {
-		return fmt.Errorf("queue is in use by entities")
+		return errors.Join(err, fmt.Errorf("queue is in use by entities"))
 	}
 
 	err = tx.Queue.DeleteOneID(id).Exec(r.ctx)
 	if err != nil {
-		return fmt.Errorf("deleting queue: %w", err)
+		return errors.Join(err, fmt.Errorf("deleting queue"))
 	}
 
 	return nil
@@ -160,7 +160,7 @@ func (r *queueRepository) Update(tx *ent.Tx, id int, name string) (*QueueInfo, e
 		)).
 		Exist(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("checking queue name existence: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("checking queue name existence"))
 	}
 	if exists {
 		return nil, ErrAlreadyExists
@@ -173,7 +173,7 @@ func (r *queueRepository) Update(tx *ent.Tx, id int, name string) (*QueueInfo, e
 		if ent.IsNotFound(err) {
 			return nil, errors.Join(ErrQueues, ErrNotFound)
 		}
-		return nil, fmt.Errorf("updating queue: %w", err)
+		return nil, errors.Join(err, fmt.Errorf("updating queue"))
 	}
 
 	return &QueueInfo{
