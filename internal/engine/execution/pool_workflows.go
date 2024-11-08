@@ -2,12 +2,17 @@ package execution
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
+	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 )
 
-type WorkflowRequest struct{}
+type WorkflowRequest struct {
+	WorkflowInfo *repository.WorkflowInfo
+}
+
 type WorkflowReponse struct{}
 
 type PoolWorkflows struct {
@@ -61,5 +66,8 @@ func NewWorkflowsWorker(ctx context.Context, queue string, registry *registry.Re
 }
 
 func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]) error {
+
+	fmt.Println("worker running", data.Request)
+
 	return nil
 }

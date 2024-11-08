@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/davidroman0O/tempolite"
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
@@ -13,6 +14,7 @@ import (
 func TestBasic(t *testing.T) {
 
 	wrk := func(ctx tempoliteContext.WorkflowContext) error {
+		fmt.Println("workflow executed")
 		return nil
 	}
 
@@ -35,6 +37,8 @@ func TestBasic(t *testing.T) {
 	info := tp.Workflow(wrk, nil)
 
 	fmt.Println("Info", info.Get())
+
+	<-time.After(1 * time.Second)
 
 	if err = tp.Shutdown(); err != nil {
 		if err != context.Canceled {

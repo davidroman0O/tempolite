@@ -48,8 +48,9 @@ func (s SchedulerWorkflowsPending) Tick() error {
 		}
 
 		for _, w := range workflows {
+			var processed chan struct{}
 			// TODO: if we fail, then we should retry while updating the workflow somehow cause we need to fail
-			if err := queue.SubmitWorkflow(w); err != nil {
+			if processed, err = queue.SubmitWorkflow(w); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil
 				}
@@ -57,8 +58,17 @@ func (s SchedulerWorkflowsPending) Tick() error {
 					return err
 				}
 			}
+			<-processed // Should we?
+			if err := s.db.Workflows().UpdatePendingToRunning(tx, w.ID); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+				if err := tx.Rollback(); err != nil {
+					return err
+				}
+				return err
+			}
 		}
-
 	}
 
 	if err := tx.Commit(); err != nil {

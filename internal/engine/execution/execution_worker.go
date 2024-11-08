@@ -59,8 +59,8 @@ func NewWorkerPool[Request, Response any](
 	return e
 }
 
-func (e *WorkerPool[Request, Response]) Submit(task *retrypool.RequestResponse[Request, Response]) error {
-	return e.pool.Submit(task)
+func (e *WorkerPool[Request, Response]) Submit(task *retrypool.RequestResponse[Request, Response], options ...retrypool.TaskOption[*retrypool.RequestResponse[Request, Response]]) error {
+	return e.pool.Submit(task, options...)
 }
 
 func (e *WorkerPool[Request, Response]) Shutdown() error {

@@ -60,6 +60,8 @@ type WorkflowRepository interface {
 	ListPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 	ListExecutionsPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 
+	UpdatePendingToRunning(tx *ent.Tx, id int) error
+
 	UpdateData(tx *ent.Tx, id int, input UpdateWorkflowDataInput) (*WorkflowInfo, error)
 	Pause(tx *ent.Tx, id int) error
 	Resume(tx *ent.Tx, id int) error
@@ -430,4 +432,25 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 	}
 
 	return result, nil
+}
+
+func (r *workflowRepository) UpdatePendingToRunning(tx *ent.Tx, id int) error {
+
+	if err := tx.Entity.UpdateOneID(id).SetStatus(entity.StatusRunning).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating entity status"))
+	}
+
+	if err := tx.Execution.UpdateOneID(id).
+		SetStatus(execution.StatusRunning).
+		Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution"))
+	}
+
+	return nil
 }

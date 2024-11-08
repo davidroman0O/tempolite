@@ -91,10 +91,18 @@ func New(
 	return q, nil
 }
 
-func (q *Queue) SubmitWorkflow(request *repository.WorkflowInfo) error {
-	return q.workflowsWorker.Submit(
-		&retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]{Request: execution.WorkflowRequest{}},
-	)
+func (q *Queue) SubmitWorkflow(request *repository.WorkflowInfo) (chan struct{}, error) {
+
+	processed := retrypool.NewProcessedNotification()
+
+	if err := q.workflowsWorker.Submit(
+		&retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]{Request: execution.WorkflowRequest{WorkflowInfo: request}},
+		retrypool.WithBeingProcessed[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](processed),
+	); err != nil {
+		return nil, err
+	}
+
+	return processed, nil
 }
 
 func (q *Queue) SubmitActivity(request *repository.ActivityInfo) error {
