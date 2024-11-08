@@ -1,4 +1,4 @@
-package schedulers
+package clock
 
 import (
 	"context"

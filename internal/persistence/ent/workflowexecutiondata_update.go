@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -27,44 +26,6 @@ type WorkflowExecutionDataUpdate struct {
 // Where appends a list predicates to the WorkflowExecutionDataUpdate builder.
 func (wedu *WorkflowExecutionDataUpdate) Where(ps ...predicate.WorkflowExecutionData) *WorkflowExecutionDataUpdate {
 	wedu.mutation.Where(ps...)
-	return wedu
-}
-
-// SetCheckpoints sets the "checkpoints" field.
-func (wedu *WorkflowExecutionDataUpdate) SetCheckpoints(u [][]uint8) *WorkflowExecutionDataUpdate {
-	wedu.mutation.SetCheckpoints(u)
-	return wedu
-}
-
-// AppendCheckpoints appends u to the "checkpoints" field.
-func (wedu *WorkflowExecutionDataUpdate) AppendCheckpoints(u [][]uint8) *WorkflowExecutionDataUpdate {
-	wedu.mutation.AppendCheckpoints(u)
-	return wedu
-}
-
-// ClearCheckpoints clears the value of the "checkpoints" field.
-func (wedu *WorkflowExecutionDataUpdate) ClearCheckpoints() *WorkflowExecutionDataUpdate {
-	wedu.mutation.ClearCheckpoints()
-	return wedu
-}
-
-// SetCheckpointTime sets the "checkpoint_time" field.
-func (wedu *WorkflowExecutionDataUpdate) SetCheckpointTime(t time.Time) *WorkflowExecutionDataUpdate {
-	wedu.mutation.SetCheckpointTime(t)
-	return wedu
-}
-
-// SetNillableCheckpointTime sets the "checkpoint_time" field if the given value is not nil.
-func (wedu *WorkflowExecutionDataUpdate) SetNillableCheckpointTime(t *time.Time) *WorkflowExecutionDataUpdate {
-	if t != nil {
-		wedu.SetCheckpointTime(*t)
-	}
-	return wedu
-}
-
-// ClearCheckpointTime clears the value of the "checkpoint_time" field.
-func (wedu *WorkflowExecutionDataUpdate) ClearCheckpointTime() *WorkflowExecutionDataUpdate {
-	wedu.mutation.ClearCheckpointTime()
 	return wedu
 }
 
@@ -175,23 +136,6 @@ func (wedu *WorkflowExecutionDataUpdate) sqlSave(ctx context.Context) (n int, er
 			}
 		}
 	}
-	if value, ok := wedu.mutation.Checkpoints(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpoints, field.TypeJSON, value)
-	}
-	if value, ok := wedu.mutation.AppendedCheckpoints(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, workflowexecutiondata.FieldCheckpoints, value)
-		})
-	}
-	if wedu.mutation.CheckpointsCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldCheckpoints, field.TypeJSON)
-	}
-	if value, ok := wedu.mutation.CheckpointTime(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpointTime, field.TypeTime, value)
-	}
-	if wedu.mutation.CheckpointTimeCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldCheckpointTime, field.TypeTime)
-	}
 	if value, ok := wedu.mutation.Error(); ok {
 		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)
 	}
@@ -256,44 +200,6 @@ type WorkflowExecutionDataUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowExecutionDataMutation
-}
-
-// SetCheckpoints sets the "checkpoints" field.
-func (weduo *WorkflowExecutionDataUpdateOne) SetCheckpoints(u [][]uint8) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.SetCheckpoints(u)
-	return weduo
-}
-
-// AppendCheckpoints appends u to the "checkpoints" field.
-func (weduo *WorkflowExecutionDataUpdateOne) AppendCheckpoints(u [][]uint8) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.AppendCheckpoints(u)
-	return weduo
-}
-
-// ClearCheckpoints clears the value of the "checkpoints" field.
-func (weduo *WorkflowExecutionDataUpdateOne) ClearCheckpoints() *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.ClearCheckpoints()
-	return weduo
-}
-
-// SetCheckpointTime sets the "checkpoint_time" field.
-func (weduo *WorkflowExecutionDataUpdateOne) SetCheckpointTime(t time.Time) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.SetCheckpointTime(t)
-	return weduo
-}
-
-// SetNillableCheckpointTime sets the "checkpoint_time" field if the given value is not nil.
-func (weduo *WorkflowExecutionDataUpdateOne) SetNillableCheckpointTime(t *time.Time) *WorkflowExecutionDataUpdateOne {
-	if t != nil {
-		weduo.SetCheckpointTime(*t)
-	}
-	return weduo
-}
-
-// ClearCheckpointTime clears the value of the "checkpoint_time" field.
-func (weduo *WorkflowExecutionDataUpdateOne) ClearCheckpointTime() *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.ClearCheckpointTime()
-	return weduo
 }
 
 // SetError sets the "error" field.
@@ -432,23 +338,6 @@ func (weduo *WorkflowExecutionDataUpdateOne) sqlSave(ctx context.Context) (_node
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := weduo.mutation.Checkpoints(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpoints, field.TypeJSON, value)
-	}
-	if value, ok := weduo.mutation.AppendedCheckpoints(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, workflowexecutiondata.FieldCheckpoints, value)
-		})
-	}
-	if weduo.mutation.CheckpointsCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldCheckpoints, field.TypeJSON)
-	}
-	if value, ok := weduo.mutation.CheckpointTime(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpointTime, field.TypeTime, value)
-	}
-	if weduo.mutation.CheckpointTimeCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldCheckpointTime, field.TypeTime)
 	}
 	if value, ok := weduo.mutation.Error(); ok {
 		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)

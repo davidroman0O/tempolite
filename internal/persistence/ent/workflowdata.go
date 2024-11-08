@@ -25,8 +25,6 @@ type WorkflowData struct {
 	Paused bool `json:"paused,omitempty"`
 	// Resumable holds the value of the "resumable" field.
 	Resumable bool `json:"resumable,omitempty"`
-	// Errors holds the value of the "errors" field.
-	Errors string `json:"errors,omitempty"`
 	// RetryState holds the value of the "retry_state" field.
 	RetryState *schema.RetryState `json:"retry_state,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
@@ -71,7 +69,7 @@ func (*WorkflowData) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case workflowdata.FieldID:
 			values[i] = new(sql.NullInt64)
-		case workflowdata.FieldDuration, workflowdata.FieldErrors:
+		case workflowdata.FieldDuration:
 			values[i] = new(sql.NullString)
 		case workflowdata.ForeignKeys[0]: // entity_workflow_data
 			values[i] = new(sql.NullInt64)
@@ -113,12 +111,6 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field resumable", values[i])
 			} else if value.Valid {
 				wd.Resumable = value.Bool
-			}
-		case workflowdata.FieldErrors:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field errors", values[i])
-			} else if value.Valid {
-				wd.Errors = value.String
 			}
 		case workflowdata.FieldRetryState:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -200,9 +192,6 @@ func (wd *WorkflowData) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("resumable=")
 	builder.WriteString(fmt.Sprintf("%v", wd.Resumable))
-	builder.WriteString(", ")
-	builder.WriteString("errors=")
-	builder.WriteString(wd.Errors)
 	builder.WriteString(", ")
 	builder.WriteString("retry_state=")
 	builder.WriteString(fmt.Sprintf("%v", wd.RetryState))

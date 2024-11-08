@@ -63,20 +63,6 @@ func (wdc *WorkflowDataCreate) SetNillableResumable(b *bool) *WorkflowDataCreate
 	return wdc
 }
 
-// SetErrors sets the "errors" field.
-func (wdc *WorkflowDataCreate) SetErrors(s string) *WorkflowDataCreate {
-	wdc.mutation.SetErrors(s)
-	return wdc
-}
-
-// SetNillableErrors sets the "errors" field if the given value is not nil.
-func (wdc *WorkflowDataCreate) SetNillableErrors(s *string) *WorkflowDataCreate {
-	if s != nil {
-		wdc.SetErrors(*s)
-	}
-	return wdc
-}
-
 // SetRetryState sets the "retry_state" field.
 func (wdc *WorkflowDataCreate) SetRetryState(ss *schema.RetryState) *WorkflowDataCreate {
 	wdc.mutation.SetRetryState(ss)
@@ -213,10 +199,6 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 	if value, ok := wdc.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
 		_node.Resumable = value
-	}
-	if value, ok := wdc.mutation.Errors(); ok {
-		_spec.SetField(workflowdata.FieldErrors, field.TypeString, value)
-		_node.Errors = value
 	}
 	if value, ok := wdc.mutation.RetryState(); ok {
 		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)

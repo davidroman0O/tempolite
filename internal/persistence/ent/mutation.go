@@ -9895,7 +9895,6 @@ type WorkflowDataMutation struct {
 	duration      *string
 	paused        *bool
 	resumable     *bool
-	errors        *string
 	retry_state   **schema.RetryState
 	retry_policy  **schema.RetryPolicy
 	input         *[][]uint8
@@ -10127,55 +10126,6 @@ func (m *WorkflowDataMutation) ResetResumable() {
 	m.resumable = nil
 }
 
-// SetErrors sets the "errors" field.
-func (m *WorkflowDataMutation) SetErrors(s string) {
-	m.errors = &s
-}
-
-// Errors returns the value of the "errors" field in the mutation.
-func (m *WorkflowDataMutation) Errors() (r string, exists bool) {
-	v := m.errors
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldErrors returns the old "errors" field's value of the WorkflowData entity.
-// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowDataMutation) OldErrors(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldErrors is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldErrors requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldErrors: %w", err)
-	}
-	return oldValue.Errors, nil
-}
-
-// ClearErrors clears the value of the "errors" field.
-func (m *WorkflowDataMutation) ClearErrors() {
-	m.errors = nil
-	m.clearedFields[workflowdata.FieldErrors] = struct{}{}
-}
-
-// ErrorsCleared returns if the "errors" field was cleared in this mutation.
-func (m *WorkflowDataMutation) ErrorsCleared() bool {
-	_, ok := m.clearedFields[workflowdata.FieldErrors]
-	return ok
-}
-
-// ResetErrors resets all changes to the "errors" field.
-func (m *WorkflowDataMutation) ResetErrors() {
-	m.errors = nil
-	delete(m.clearedFields, workflowdata.FieldErrors)
-}
-
 // SetRetryState sets the "retry_state" field.
 func (m *WorkflowDataMutation) SetRetryState(ss *schema.RetryState) {
 	m.retry_state = &ss
@@ -10386,7 +10336,7 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 6)
 	if m.duration != nil {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
@@ -10395,9 +10345,6 @@ func (m *WorkflowDataMutation) Fields() []string {
 	}
 	if m.resumable != nil {
 		fields = append(fields, workflowdata.FieldResumable)
-	}
-	if m.errors != nil {
-		fields = append(fields, workflowdata.FieldErrors)
 	}
 	if m.retry_state != nil {
 		fields = append(fields, workflowdata.FieldRetryState)
@@ -10422,8 +10369,6 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 		return m.Paused()
 	case workflowdata.FieldResumable:
 		return m.Resumable()
-	case workflowdata.FieldErrors:
-		return m.Errors()
 	case workflowdata.FieldRetryState:
 		return m.RetryState()
 	case workflowdata.FieldRetryPolicy:
@@ -10445,8 +10390,6 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPaused(ctx)
 	case workflowdata.FieldResumable:
 		return m.OldResumable(ctx)
-	case workflowdata.FieldErrors:
-		return m.OldErrors(ctx)
 	case workflowdata.FieldRetryState:
 		return m.OldRetryState(ctx)
 	case workflowdata.FieldRetryPolicy:
@@ -10482,13 +10425,6 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetResumable(v)
-		return nil
-	case workflowdata.FieldErrors:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetErrors(v)
 		return nil
 	case workflowdata.FieldRetryState:
 		v, ok := value.(*schema.RetryState)
@@ -10544,9 +10480,6 @@ func (m *WorkflowDataMutation) ClearedFields() []string {
 	if m.FieldCleared(workflowdata.FieldDuration) {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
-	if m.FieldCleared(workflowdata.FieldErrors) {
-		fields = append(fields, workflowdata.FieldErrors)
-	}
 	if m.FieldCleared(workflowdata.FieldInput) {
 		fields = append(fields, workflowdata.FieldInput)
 	}
@@ -10567,9 +10500,6 @@ func (m *WorkflowDataMutation) ClearField(name string) error {
 	case workflowdata.FieldDuration:
 		m.ClearDuration()
 		return nil
-	case workflowdata.FieldErrors:
-		m.ClearErrors()
-		return nil
 	case workflowdata.FieldInput:
 		m.ClearInput()
 		return nil
@@ -10589,9 +10519,6 @@ func (m *WorkflowDataMutation) ResetField(name string) error {
 		return nil
 	case workflowdata.FieldResumable:
 		m.ResetResumable()
-		return nil
-	case workflowdata.FieldErrors:
-		m.ResetErrors()
 		return nil
 	case workflowdata.FieldRetryState:
 		m.ResetRetryState()
@@ -11076,9 +11003,6 @@ type WorkflowExecutionDataMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
-	checkpoints               *[][]uint8
-	appendcheckpoints         [][]uint8
-	checkpoint_time           *time.Time
 	error                     *string
 	output                    *[][]uint8
 	appendoutput              [][]uint8
@@ -11186,120 +11110,6 @@ func (m *WorkflowExecutionDataMutation) IDs(ctx context.Context) ([]int, error) 
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetCheckpoints sets the "checkpoints" field.
-func (m *WorkflowExecutionDataMutation) SetCheckpoints(u [][]uint8) {
-	m.checkpoints = &u
-	m.appendcheckpoints = nil
-}
-
-// Checkpoints returns the value of the "checkpoints" field in the mutation.
-func (m *WorkflowExecutionDataMutation) Checkpoints() (r [][]uint8, exists bool) {
-	v := m.checkpoints
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCheckpoints returns the old "checkpoints" field's value of the WorkflowExecutionData entity.
-// If the WorkflowExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionDataMutation) OldCheckpoints(ctx context.Context) (v [][]uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCheckpoints is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCheckpoints requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCheckpoints: %w", err)
-	}
-	return oldValue.Checkpoints, nil
-}
-
-// AppendCheckpoints adds u to the "checkpoints" field.
-func (m *WorkflowExecutionDataMutation) AppendCheckpoints(u [][]uint8) {
-	m.appendcheckpoints = append(m.appendcheckpoints, u...)
-}
-
-// AppendedCheckpoints returns the list of values that were appended to the "checkpoints" field in this mutation.
-func (m *WorkflowExecutionDataMutation) AppendedCheckpoints() ([][]uint8, bool) {
-	if len(m.appendcheckpoints) == 0 {
-		return nil, false
-	}
-	return m.appendcheckpoints, true
-}
-
-// ClearCheckpoints clears the value of the "checkpoints" field.
-func (m *WorkflowExecutionDataMutation) ClearCheckpoints() {
-	m.checkpoints = nil
-	m.appendcheckpoints = nil
-	m.clearedFields[workflowexecutiondata.FieldCheckpoints] = struct{}{}
-}
-
-// CheckpointsCleared returns if the "checkpoints" field was cleared in this mutation.
-func (m *WorkflowExecutionDataMutation) CheckpointsCleared() bool {
-	_, ok := m.clearedFields[workflowexecutiondata.FieldCheckpoints]
-	return ok
-}
-
-// ResetCheckpoints resets all changes to the "checkpoints" field.
-func (m *WorkflowExecutionDataMutation) ResetCheckpoints() {
-	m.checkpoints = nil
-	m.appendcheckpoints = nil
-	delete(m.clearedFields, workflowexecutiondata.FieldCheckpoints)
-}
-
-// SetCheckpointTime sets the "checkpoint_time" field.
-func (m *WorkflowExecutionDataMutation) SetCheckpointTime(t time.Time) {
-	m.checkpoint_time = &t
-}
-
-// CheckpointTime returns the value of the "checkpoint_time" field in the mutation.
-func (m *WorkflowExecutionDataMutation) CheckpointTime() (r time.Time, exists bool) {
-	v := m.checkpoint_time
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCheckpointTime returns the old "checkpoint_time" field's value of the WorkflowExecutionData entity.
-// If the WorkflowExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionDataMutation) OldCheckpointTime(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCheckpointTime is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCheckpointTime requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCheckpointTime: %w", err)
-	}
-	return oldValue.CheckpointTime, nil
-}
-
-// ClearCheckpointTime clears the value of the "checkpoint_time" field.
-func (m *WorkflowExecutionDataMutation) ClearCheckpointTime() {
-	m.checkpoint_time = nil
-	m.clearedFields[workflowexecutiondata.FieldCheckpointTime] = struct{}{}
-}
-
-// CheckpointTimeCleared returns if the "checkpoint_time" field was cleared in this mutation.
-func (m *WorkflowExecutionDataMutation) CheckpointTimeCleared() bool {
-	_, ok := m.clearedFields[workflowexecutiondata.FieldCheckpointTime]
-	return ok
-}
-
-// ResetCheckpointTime resets all changes to the "checkpoint_time" field.
-func (m *WorkflowExecutionDataMutation) ResetCheckpointTime() {
-	m.checkpoint_time = nil
-	delete(m.clearedFields, workflowexecutiondata.FieldCheckpointTime)
 }
 
 // SetError sets the "error" field.
@@ -11489,13 +11299,7 @@ func (m *WorkflowExecutionDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionDataMutation) Fields() []string {
-	fields := make([]string, 0, 4)
-	if m.checkpoints != nil {
-		fields = append(fields, workflowexecutiondata.FieldCheckpoints)
-	}
-	if m.checkpoint_time != nil {
-		fields = append(fields, workflowexecutiondata.FieldCheckpointTime)
-	}
+	fields := make([]string, 0, 2)
 	if m.error != nil {
 		fields = append(fields, workflowexecutiondata.FieldError)
 	}
@@ -11510,10 +11314,6 @@ func (m *WorkflowExecutionDataMutation) Fields() []string {
 // schema.
 func (m *WorkflowExecutionDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case workflowexecutiondata.FieldCheckpoints:
-		return m.Checkpoints()
-	case workflowexecutiondata.FieldCheckpointTime:
-		return m.CheckpointTime()
 	case workflowexecutiondata.FieldError:
 		return m.Error()
 	case workflowexecutiondata.FieldOutput:
@@ -11527,10 +11327,6 @@ func (m *WorkflowExecutionDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *WorkflowExecutionDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case workflowexecutiondata.FieldCheckpoints:
-		return m.OldCheckpoints(ctx)
-	case workflowexecutiondata.FieldCheckpointTime:
-		return m.OldCheckpointTime(ctx)
 	case workflowexecutiondata.FieldError:
 		return m.OldError(ctx)
 	case workflowexecutiondata.FieldOutput:
@@ -11544,20 +11340,6 @@ func (m *WorkflowExecutionDataMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *WorkflowExecutionDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case workflowexecutiondata.FieldCheckpoints:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCheckpoints(v)
-		return nil
-	case workflowexecutiondata.FieldCheckpointTime:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCheckpointTime(v)
-		return nil
 	case workflowexecutiondata.FieldError:
 		v, ok := value.(string)
 		if !ok {
@@ -11602,12 +11384,6 @@ func (m *WorkflowExecutionDataMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *WorkflowExecutionDataMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(workflowexecutiondata.FieldCheckpoints) {
-		fields = append(fields, workflowexecutiondata.FieldCheckpoints)
-	}
-	if m.FieldCleared(workflowexecutiondata.FieldCheckpointTime) {
-		fields = append(fields, workflowexecutiondata.FieldCheckpointTime)
-	}
 	if m.FieldCleared(workflowexecutiondata.FieldError) {
 		fields = append(fields, workflowexecutiondata.FieldError)
 	}
@@ -11628,12 +11404,6 @@ func (m *WorkflowExecutionDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *WorkflowExecutionDataMutation) ClearField(name string) error {
 	switch name {
-	case workflowexecutiondata.FieldCheckpoints:
-		m.ClearCheckpoints()
-		return nil
-	case workflowexecutiondata.FieldCheckpointTime:
-		m.ClearCheckpointTime()
-		return nil
 	case workflowexecutiondata.FieldError:
 		m.ClearError()
 		return nil
@@ -11648,12 +11418,6 @@ func (m *WorkflowExecutionDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowExecutionDataMutation) ResetField(name string) error {
 	switch name {
-	case workflowexecutiondata.FieldCheckpoints:
-		m.ResetCheckpoints()
-		return nil
-	case workflowexecutiondata.FieldCheckpointTime:
-		m.ResetCheckpointTime()
-		return nil
 	case workflowexecutiondata.FieldError:
 		m.ResetError()
 		return nil

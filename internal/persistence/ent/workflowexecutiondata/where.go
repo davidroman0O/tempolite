@@ -3,8 +3,6 @@
 package workflowexecutiondata
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -55,74 +53,9 @@ func IDLTE(id int) predicate.WorkflowExecutionData {
 	return predicate.WorkflowExecutionData(sql.FieldLTE(FieldID, id))
 }
 
-// CheckpointTime applies equality check predicate on the "checkpoint_time" field. It's identical to CheckpointTimeEQ.
-func CheckpointTime(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldCheckpointTime, v))
-}
-
 // Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
 func Error(v string) predicate.WorkflowExecutionData {
 	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldError, v))
-}
-
-// CheckpointsIsNil applies the IsNil predicate on the "checkpoints" field.
-func CheckpointsIsNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldCheckpoints))
-}
-
-// CheckpointsNotNil applies the NotNil predicate on the "checkpoints" field.
-func CheckpointsNotNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldCheckpoints))
-}
-
-// CheckpointTimeEQ applies the EQ predicate on the "checkpoint_time" field.
-func CheckpointTimeEQ(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeNEQ applies the NEQ predicate on the "checkpoint_time" field.
-func CheckpointTimeNEQ(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNEQ(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeIn applies the In predicate on the "checkpoint_time" field.
-func CheckpointTimeIn(vs ...time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIn(FieldCheckpointTime, vs...))
-}
-
-// CheckpointTimeNotIn applies the NotIn predicate on the "checkpoint_time" field.
-func CheckpointTimeNotIn(vs ...time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotIn(FieldCheckpointTime, vs...))
-}
-
-// CheckpointTimeGT applies the GT predicate on the "checkpoint_time" field.
-func CheckpointTimeGT(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldGT(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeGTE applies the GTE predicate on the "checkpoint_time" field.
-func CheckpointTimeGTE(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldGTE(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeLT applies the LT predicate on the "checkpoint_time" field.
-func CheckpointTimeLT(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldLT(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeLTE applies the LTE predicate on the "checkpoint_time" field.
-func CheckpointTimeLTE(v time.Time) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldLTE(FieldCheckpointTime, v))
-}
-
-// CheckpointTimeIsNil applies the IsNil predicate on the "checkpoint_time" field.
-func CheckpointTimeIsNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldCheckpointTime))
-}
-
-// CheckpointTimeNotNil applies the NotNil predicate on the "checkpoint_time" field.
-func CheckpointTimeNotNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldCheckpointTime))
 }
 
 // ErrorEQ applies the EQ predicate on the "error" field.

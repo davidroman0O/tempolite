@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -19,10 +18,6 @@ type WorkflowExecutionData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Checkpoints holds the value of the "checkpoints" field.
-	Checkpoints [][]uint8 `json:"checkpoints,omitempty"`
-	// CheckpointTime holds the value of the "checkpoint_time" field.
-	CheckpointTime *time.Time `json:"checkpoint_time,omitempty"`
 	// Error holds the value of the "error" field.
 	Error string `json:"error,omitempty"`
 	// Output holds the value of the "output" field.
@@ -59,14 +54,12 @@ func (*WorkflowExecutionData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case workflowexecutiondata.FieldCheckpoints, workflowexecutiondata.FieldOutput:
+		case workflowexecutiondata.FieldOutput:
 			values[i] = new([]byte)
 		case workflowexecutiondata.FieldID:
 			values[i] = new(sql.NullInt64)
 		case workflowexecutiondata.FieldError:
 			values[i] = new(sql.NullString)
-		case workflowexecutiondata.FieldCheckpointTime:
-			values[i] = new(sql.NullTime)
 		case workflowexecutiondata.ForeignKeys[0]: // workflow_execution_execution_data
 			values[i] = new(sql.NullInt64)
 		default:
@@ -90,21 +83,6 @@ func (wed *WorkflowExecutionData) assignValues(columns []string, values []any) e
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			wed.ID = int(value.Int64)
-		case workflowexecutiondata.FieldCheckpoints:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field checkpoints", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wed.Checkpoints); err != nil {
-					return fmt.Errorf("unmarshal field checkpoints: %w", err)
-				}
-			}
-		case workflowexecutiondata.FieldCheckpointTime:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field checkpoint_time", values[i])
-			} else if value.Valid {
-				wed.CheckpointTime = new(time.Time)
-				*wed.CheckpointTime = value.Time
-			}
 		case workflowexecutiondata.FieldError:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error", values[i])
@@ -167,14 +145,6 @@ func (wed *WorkflowExecutionData) String() string {
 	var builder strings.Builder
 	builder.WriteString("WorkflowExecutionData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", wed.ID))
-	builder.WriteString("checkpoints=")
-	builder.WriteString(fmt.Sprintf("%v", wed.Checkpoints))
-	builder.WriteString(", ")
-	if v := wed.CheckpointTime; v != nil {
-		builder.WriteString("checkpoint_time=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
 	builder.WriteString("error=")
 	builder.WriteString(wed.Error)
 	builder.WriteString(", ")

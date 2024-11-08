@@ -11,7 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/tempolite/internal/engine"
-	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
+	"github.com/davidroman0O/tempolite/internal/engine/info"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/types"
@@ -247,6 +247,6 @@ func (tp *Tempolite) Shutdown() error {
 	return tp.engine.Shutdown()
 }
 
-func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) *tempoliteContext.WorkflowInfo {
+func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) *info.WorkflowInfo {
 	return tp.engine.Workflow(workflowFunc, opts, params...)
 }

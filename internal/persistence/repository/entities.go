@@ -38,6 +38,7 @@ type EntityInfo struct {
 	ID          int           `json:"id"`
 	HandlerName string        `json:"handler_name"`
 	Type        ComponentType `json:"type"`
+	Status      string        `json:"status"`
 	StepID      string        `json:"step_id"`
 	RunID       int           `json:"run_id"`
 	CreatedAt   time.Time     `json:"created_at"`
@@ -156,6 +157,7 @@ func (r *entityRepository) Get(tx *ent.Tx, id int) (*EntityInfo, error) {
 		Type:        ComponentType(entObj.Type),
 		StepID:      entObj.StepID,
 		RunID:       runID,
+		Status:      string(entObj.Status),
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
 		QueueID:     queueID,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
+	"github.com/davidroman0O/tempolite/internal/engine/info"
 	"github.com/davidroman0O/tempolite/internal/engine/io"
 	"github.com/davidroman0O/tempolite/internal/engine/queues"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
@@ -24,6 +24,7 @@ type Engine struct {
 	workerQueues map[string]*queues.Queue
 	db           repository.Repository
 	scheduler    *schedulers.Scheduler
+	info         *info.InfoClock
 }
 
 func New(
@@ -53,6 +54,8 @@ func New(
 	); err != nil {
 		return nil, err
 	}
+
+	e.info = info.New(ctx)
 
 	if err := e.AddQueue("default"); err != nil {
 		return nil, err
@@ -90,6 +93,12 @@ func (e *Engine) Shutdown() error {
 		return nil
 	})
 
+	shutdown.Go(func() error {
+		fmt.Println("Shutting down info")
+		e.info.Stop()
+		return nil
+	})
+
 	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
 			fmt.Println("Shutting down queue", n)
@@ -109,13 +118,13 @@ func (e *Engine) Scale(queue string, targets map[string]int) error {
 }
 
 // Create a new run workflow
-func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOptions, params ...any) *tempoliteContext.WorkflowInfo {
+func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOptions, params ...any) *info.WorkflowInfo {
 	var id types.WorkflowID
 	var err error
 	if id, err = e.commandWorkflow(workflowFunc, options, params...); err != nil {
 		return e.queryNoWorkflow(err)
 	}
-	return e.queryWorfklow(id)
+	return e.queryWorfklow(workflowFunc, id)
 }
 
 func (e *Engine) commandWorkflow(workflowFunc interface{}, options types.WorkflowOptions, params ...any) (types.WorkflowID, error) {
@@ -224,10 +233,19 @@ func (e *Engine) commandWorkflow(workflowFunc interface{}, options types.Workflo
 	return types.WorkflowID(workflowInfo.ID), nil
 }
 
-func (e *Engine) queryWorfklow(id types.WorkflowID) *tempoliteContext.WorkflowInfo {
-	return tempoliteContext.NewWorkflowInfo(id, e.db)
+func (e *Engine) queryWorfklow(workflowFunc interface{}, id types.WorkflowID) *info.WorkflowInfo {
+	var err error
+	var identity types.HandlerIdentity
+	if identity, err = e.registry.WorkflowIdentity(workflowFunc); err != nil {
+		return e.queryNoWorkflow(err)
+	}
+	var workflow types.Workflow
+	if workflow, err = e.registry.GetWorkflow(identity); err != nil {
+		return e.queryNoWorkflow(err)
+	}
+	return info.NewWorkflowInfo(id, types.HandlerInfo(workflow), e.db, e.info)
 }
 
-func (e *Engine) queryNoWorkflow(err error) *tempoliteContext.WorkflowInfo {
-	return tempoliteContext.NewWorkflowInfoWithError(err)
+func (e *Engine) queryNoWorkflow(err error) *info.WorkflowInfo {
+	return info.NewWorkflowInfoWithError(err)
 }

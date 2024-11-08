@@ -351,7 +351,6 @@ var (
 		{Name: "duration", Type: field.TypeString, Nullable: true},
 		{Name: "paused", Type: field.TypeBool, Default: false},
 		{Name: "resumable", Type: field.TypeBool, Default: false},
-		{Name: "errors", Type: field.TypeString, Nullable: true},
 		{Name: "retry_state", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
@@ -365,7 +364,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[8]},
+				Columns:    []*schema.Column{WorkflowDataColumns[7]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -393,8 +392,6 @@ var (
 	// WorkflowExecutionDataColumns holds the columns for the "workflow_execution_data" table.
 	WorkflowExecutionDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "checkpoints", Type: field.TypeJSON, Nullable: true},
-		{Name: "checkpoint_time", Type: field.TypeTime, Nullable: true},
 		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "workflow_execution_execution_data", Type: field.TypeInt, Unique: true},
@@ -407,7 +404,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_execution_data_workflow_executions_execution_data",
-				Columns:    []*schema.Column{WorkflowExecutionDataColumns[5]},
+				Columns:    []*schema.Column{WorkflowExecutionDataColumns[3]},
 				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

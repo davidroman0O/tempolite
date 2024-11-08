@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 
 	"github.com/davidroman0O/retrypool"
@@ -57,7 +56,7 @@ func (w PoolWorkflows) OnSuccess(controller retrypool.WorkerController[*retrypoo
 		}
 		return
 	}
-	fmt.Println("Success", task.Data().Request.WorkflowInfo.ID)
+
 	tx, err := w.db.Tx()
 	if err != nil {
 		return
@@ -208,21 +207,22 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 	// Error or output
 
 	if errRes != nil {
-		tx, err := w.db.Tx()
-		if err != nil {
-			return err
-		}
+		{
+			tx, err := w.db.Tx()
+			if err != nil {
+				return err
+			}
 
-		fmt.Println(data.Request.WorkflowInfo.Execution.ID, errRes.Error())
-		if err := w.db.Workflows().UpdateExecutionDataError(tx, data.Request.WorkflowInfo.Execution.ID, errRes.Error()); err != nil {
-			tx.Rollback()
-			return err
-		}
+			if err := w.db.Workflows().UpdateExecutionDataError(tx, data.Request.WorkflowInfo.Execution.ID, errRes.Error()); err != nil {
+				tx.Rollback()
+				return err
+			}
 
-		if err := tx.Commit(); err != nil {
-			return err
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			return errRes
 		}
-		return errRes
 	}
 
 	output, err := io.ConvertOutputsForSerialization(res)
@@ -230,22 +230,21 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		return err
 	}
 
-	tx, err := w.db.Tx()
-	if err != nil {
-		return err
-	}
+	{
+		tx, err := w.db.Tx()
+		if err != nil {
+			return err
+		}
 
-	fmt.Println(data.Request.WorkflowInfo.Execution.ID, output)
-	if err := w.db.Workflows().UpdateExecutionDataOuput(tx, data.Request.WorkflowInfo.Execution.ID, output); err != nil {
-		tx.Rollback()
-		return err
-	}
+		if err := w.db.Workflows().UpdateExecutionDataOuput(tx, data.Request.WorkflowInfo.Execution.ID, output); err != nil {
+			tx.Rollback()
+			return err
+		}
 
-	if err := tx.Commit(); err != nil {
-		return err
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
-
-	fmt.Println("Workflow", data.Request.WorkflowInfo.Execution.ID, "executed successfully")
 
 	return nil
 }

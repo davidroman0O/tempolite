@@ -6,13 +6,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/davidroman0O/tempolite/internal/clock"
 	"github.com/davidroman0O/tempolite/internal/engine/queues"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 )
 
 type Scheduler struct {
-	clock    *Clock
+	clock    *clock.Clock
 	cerr     chan error
 	db       repository.Repository
 	getQueue func(queue string) *queues.Queue
@@ -30,7 +31,7 @@ func New(
 		cerr:     make(chan error),
 		getQueue: getQueue,
 		registry: registry,
-		clock: NewClock(
+		clock: clock.NewClock(
 			ctx,
 			time.Nanosecond,
 			func(err error) {
@@ -51,8 +52,8 @@ func (s *Scheduler) Stop() {
 	defer fmt.Println("Scheduler stopped")
 }
 
-func (s *Scheduler) addScheduler(ticker Ticker) {
-	s.clock.Add(ticker, BestEffort)
+func (s *Scheduler) addScheduler(ticker clock.Ticker) {
+	s.clock.Add(ticker, clock.BestEffort)
 }
 
 func (s *Scheduler) AddQueue(queue string) {

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -19,26 +18,6 @@ type WorkflowExecutionDataCreate struct {
 	config
 	mutation *WorkflowExecutionDataMutation
 	hooks    []Hook
-}
-
-// SetCheckpoints sets the "checkpoints" field.
-func (wedc *WorkflowExecutionDataCreate) SetCheckpoints(u [][]uint8) *WorkflowExecutionDataCreate {
-	wedc.mutation.SetCheckpoints(u)
-	return wedc
-}
-
-// SetCheckpointTime sets the "checkpoint_time" field.
-func (wedc *WorkflowExecutionDataCreate) SetCheckpointTime(t time.Time) *WorkflowExecutionDataCreate {
-	wedc.mutation.SetCheckpointTime(t)
-	return wedc
-}
-
-// SetNillableCheckpointTime sets the "checkpoint_time" field if the given value is not nil.
-func (wedc *WorkflowExecutionDataCreate) SetNillableCheckpointTime(t *time.Time) *WorkflowExecutionDataCreate {
-	if t != nil {
-		wedc.SetCheckpointTime(*t)
-	}
-	return wedc
 }
 
 // SetError sets the "error" field.
@@ -135,14 +114,6 @@ func (wedc *WorkflowExecutionDataCreate) createSpec() (*WorkflowExecutionData, *
 		_node = &WorkflowExecutionData{config: wedc.config}
 		_spec = sqlgraph.NewCreateSpec(workflowexecutiondata.Table, sqlgraph.NewFieldSpec(workflowexecutiondata.FieldID, field.TypeInt))
 	)
-	if value, ok := wedc.mutation.Checkpoints(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpoints, field.TypeJSON, value)
-		_node.Checkpoints = value
-	}
-	if value, ok := wedc.mutation.CheckpointTime(); ok {
-		_spec.SetField(workflowexecutiondata.FieldCheckpointTime, field.TypeTime, value)
-		_node.CheckpointTime = &value
-	}
 	if value, ok := wedc.mutation.Error(); ok {
 		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)
 		_node.Error = value

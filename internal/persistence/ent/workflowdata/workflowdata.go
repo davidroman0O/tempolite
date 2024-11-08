@@ -19,8 +19,6 @@ const (
 	FieldPaused = "paused"
 	// FieldResumable holds the string denoting the resumable field in the database.
 	FieldResumable = "resumable"
-	// FieldErrors holds the string denoting the errors field in the database.
-	FieldErrors = "errors"
 	// FieldRetryState holds the string denoting the retry_state field in the database.
 	FieldRetryState = "retry_state"
 	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
@@ -46,7 +44,6 @@ var Columns = []string{
 	FieldDuration,
 	FieldPaused,
 	FieldResumable,
-	FieldErrors,
 	FieldRetryState,
 	FieldRetryPolicy,
 	FieldInput,
@@ -105,11 +102,6 @@ func ByPaused(opts ...sql.OrderTermOption) OrderOption {
 // ByResumable orders the results by the resumable field.
 func ByResumable(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResumable, opts...).ToFunc()
-}
-
-// ByErrors orders the results by the errors field.
-func ByErrors(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldErrors, opts...).ToFunc()
 }
 
 // ByEntityField orders the results by entity field.

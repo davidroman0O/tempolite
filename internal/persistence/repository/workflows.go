@@ -29,9 +29,15 @@ type WorkflowDataInfo struct {
 	Input       [][]byte           `json:"input,omitempty"`
 }
 
+type WorkflowExecutionData struct {
+	ExecutionDataID int      `json:"execution_data_id"`
+	ErrMsg          string   `json:"error,omitempty"`
+	Output          [][]byte `json:"output,omitempty"`
+}
+
 type WorkflowExecutionInfo struct {
 	ExecutionInfo
-	Outputs [][]byte `json:"outputs,omitempty"`
+	WorkflowExecutionData
 }
 
 type CreateWorkflowInput struct {
@@ -179,7 +185,7 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
 	}
 
-	_, err = tx.WorkflowExecutionData.Create().
+	workflowExecData, err := tx.WorkflowExecutionData.Create().
 		SetWorkflowExecution(workflowExec).
 		Save(r.ctx)
 	if err != nil {
@@ -222,6 +228,11 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 				CompletedAt: execObj.CompletedAt,
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
+			},
+			WorkflowExecutionData: WorkflowExecutionData{
+				ExecutionDataID: workflowExecData.ID,
+				ErrMsg:          workflowExecData.Error,
+				Output:          workflowExecData.Output,
 			},
 		},
 	}, nil
@@ -291,7 +302,11 @@ func (r *workflowRepository) GetFromExecution(tx *ent.Tx, executionID int) (*Wor
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
 			},
-			Outputs: workflowExecData.Output,
+			WorkflowExecutionData: WorkflowExecutionData{
+				ExecutionDataID: workflowExecData.ID,
+				ErrMsg:          workflowExecData.Error,
+				Output:          workflowExecData.Output,
+			},
 		},
 	}, nil
 }
@@ -351,6 +366,7 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 			HandlerName: entObj.HandlerName,
 			Type:        ComponentType(entObj.Type),
 			StepID:      entObj.StepID,
+			Status:      string(entObj.Status),
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
@@ -373,7 +389,11 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 				CreatedAt:   execObj.CreatedAt,
 				UpdatedAt:   execObj.UpdatedAt,
 			},
-			Outputs: workflowExecData.Output,
+			WorkflowExecutionData: WorkflowExecutionData{
+				ExecutionDataID: workflowExecData.ID,
+				ErrMsg:          workflowExecData.Error,
+				Output:          workflowExecData.Output,
+			},
 		},
 	}, nil
 }

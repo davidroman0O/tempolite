@@ -119,11 +119,6 @@ func TestComplexWorkflowScenario(t *testing.T) {
 
 	_, err = client.WorkflowExecutionData.Create().
 		SetWorkflowExecution(rootWorkflowExec).
-		SetCheckpoints([][]byte{
-			[]byte(`{"step": "start", "timestamp": "2024-11-06T10:00:00Z"}`),
-			[]byte(`{"step": "validation-complete", "timestamp": "2024-11-06T10:01:00Z"}`),
-		}).
-		SetCheckpointTime(time.Now()).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating workflow execution data: %v", err)
@@ -311,8 +306,6 @@ func createSubWorkflow(t *testing.T, ctx context.Context, client *ent.Client, ru
 
 	_, err = client.WorkflowExecutionData.Create().
 		SetWorkflowExecution(workflowExec). // Set the required edge
-		SetCheckpoints([][]byte{[]byte(`{"step": "start"}`)}).
-		SetCheckpointTime(time.Now()).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed creating workflow execution data: %v", err)

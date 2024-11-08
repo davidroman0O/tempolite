@@ -251,8 +251,6 @@ func (WorkflowData) Fields() []ent.Field {
 			Default(false),
 		field.Bool("resumable").
 			Default(false),
-		field.String("errors").
-			Optional(),
 		field.JSON("retry_state", &RetryState{}).
 			Default(&RetryState{Attempts: 0}),
 		field.JSON("retry_policy", &RetryPolicy{}).
@@ -454,11 +452,6 @@ type WorkflowExecutionData struct {
 
 func (WorkflowExecutionData) Fields() []ent.Field {
 	return []ent.Field{
-		field.JSON("checkpoints", [][]byte{}).
-			Optional(),
-		field.Time("checkpoint_time").
-			Optional().
-			Nillable(),
 		field.String("error").
 			Optional(),
 		field.JSON("output", [][]byte{}).

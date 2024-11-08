@@ -12,10 +12,6 @@ const (
 	Label = "workflow_execution_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldCheckpoints holds the string denoting the checkpoints field in the database.
-	FieldCheckpoints = "checkpoints"
-	// FieldCheckpointTime holds the string denoting the checkpoint_time field in the database.
-	FieldCheckpointTime = "checkpoint_time"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
 	// FieldOutput holds the string denoting the output field in the database.
@@ -36,8 +32,6 @@ const (
 // Columns holds all SQL columns for workflowexecutiondata fields.
 var Columns = []string{
 	FieldID,
-	FieldCheckpoints,
-	FieldCheckpointTime,
 	FieldError,
 	FieldOutput,
 }
@@ -69,11 +63,6 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByCheckpointTime orders the results by the checkpoint_time field.
-func ByCheckpointTime(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCheckpointTime, opts...).ToFunc()
 }
 
 // ByError orders the results by the error field.

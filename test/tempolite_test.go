@@ -42,7 +42,11 @@ func TestBasic(t *testing.T) {
 
 	info := tp.Workflow(wrk, nil)
 
-	fmt.Println("Info", info.Get())
+	var realValue int
+
+	fmt.Println("Info", info.Get(&realValue))
+
+	fmt.Println("Real value", realValue)
 
 	// fmt.Println("scale up")
 	// tp.Scale("default", map[string]int{
