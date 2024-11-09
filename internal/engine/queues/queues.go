@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/internal/engine/cq/commands"
+	"github.com/davidroman0O/tempolite/internal/engine/cq/queries"
 	"github.com/davidroman0O/tempolite/internal/engine/execution"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
@@ -21,6 +23,9 @@ type Queue struct {
 	sideEffectsWorker *execution.WorkerPool[execution.SideEffectRequest, execution.SideEffectReponse]
 	sagasWorker       *execution.WorkerPool[execution.SagaRequest, execution.SagaReponse]
 	scaleMu           sync.Mutex
+
+	commands *commands.Commands
+	queries  *queries.Queries
 }
 
 func New(
@@ -28,6 +33,8 @@ func New(
 	queue string,
 	registry *registry.Registry,
 	db repository.Repository,
+	commands *commands.Commands,
+	queries *queries.Queries,
 ) (*Queue, error) {
 
 	tx, err := db.Tx()
@@ -53,7 +60,9 @@ func New(
 	}
 
 	q := &Queue{
-		ctx: ctx,
+		ctx:      ctx,
+		commands: commands,
+		queries:  queries,
 	}
 
 	q.workflowsWorker = execution.NewWorkerPool(
@@ -66,6 +75,8 @@ func New(
 				queue,
 				registry,
 				db,
+				commands,
+				queries,
 			)
 		},
 	)

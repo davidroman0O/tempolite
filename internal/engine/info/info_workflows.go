@@ -1,7 +1,6 @@
 package info
 
 import (
-	// tempoliteExecution "github.com/davidroman0O/tempolite/internal/engine/execution"
 	"fmt"
 	"reflect"
 
@@ -34,10 +33,10 @@ func NewWorkflowInfo(id types.WorkflowID, handler types.HandlerInfo, db reposito
 		responseChn: make(chan workflowGetResponse, 1),
 	}
 
-	info.AddInfo(wi)
+	info.AddInfo(wi.entityID.ID(), wi)
 
 	wi.done = func() {
-		info.clock.Remove(wi)
+		<-info.Remove(wi.entityID.ID())
 		close(wi.responseChn)
 	}
 
@@ -57,8 +56,6 @@ func NewWorkflowInfoWithError(err error) *WorkflowInfo {
 
 func (w *WorkflowInfo) Tick() error {
 
-	fmt.Println("Ticking workflow info")
-
 	tx, err := w.db.Tx()
 	if err != nil {
 		return err
@@ -69,6 +66,10 @@ func (w *WorkflowInfo) Tick() error {
 		if ent.IsNotFound(err) {
 			return err
 		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 
@@ -129,8 +130,6 @@ func (w *WorkflowInfo) Get(output ...any) error {
 
 		outVal.Set(outputVal)
 	}
-
-	fmt.Println("output", realOutputs)
 
 	return nil
 }

@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -239,6 +240,7 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 }
 
 func (tp *Tempolite) Shutdown() error {
+	fmt.Println("Shutting down Tempolite")
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 

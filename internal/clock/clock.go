@@ -2,6 +2,7 @@ package clock
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -10,7 +11,14 @@ type Ticker interface {
 	Tick() error
 }
 
+type TickerID interface{}
+
 type ExecutionMode int
+
+type removeTask struct {
+	id   TickerID
+	done chan struct{}
+}
 
 const (
 	NonBlocking ExecutionMode = iota
@@ -19,6 +27,7 @@ const (
 )
 
 type TickerSubscriber struct {
+	ID              TickerID
 	Ticker          Ticker
 	Mode            ExecutionMode
 	LastExecTime    time.Time
@@ -66,7 +75,8 @@ type Clock struct {
 	ticker   *time.Ticker
 	stopCh   chan struct{}
 	subs     []TickerSubscriber
-	mu       sync.Mutex
+	removeCh chan removeTask
+	mu       sync.RWMutex
 	ctx      context.Context
 	cancel   context.CancelFunc
 	onError  func(error)
@@ -74,22 +84,27 @@ type Clock struct {
 
 func NewClock(ctx context.Context, interval time.Duration, onError func(error)) *Clock {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Clock{
+
+	c := &Clock{
 		interval: interval,
 		ticker:   time.NewTicker(interval),
 		stopCh:   make(chan struct{}),
 		subs:     []TickerSubscriber{},
+		removeCh: make(chan removeTask, 100),
 		ctx:      ctx,
 		cancel:   cancel,
 		onError:  onError,
 	}
+	go c.handleRemovals()
+	return c
 }
 
-func (c *Clock) Add(ticker Ticker, mode ExecutionMode, opts ...TickerSubscriberOption) {
+func (c *Clock) Add(id TickerID, ticker Ticker, mode ExecutionMode, opts ...TickerSubscriberOption) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	sub := TickerSubscriber{
+		ID:     id,
 		Ticker: ticker,
 		Mode:   mode,
 	}
@@ -101,16 +116,44 @@ func (c *Clock) Add(ticker Ticker, mode ExecutionMode, opts ...TickerSubscriberO
 	c.subs = append(c.subs, sub)
 }
 
-func (c *Clock) Remove(ticker Ticker) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for i, sub := range c.subs {
-		if sub.Ticker == ticker {
-			c.subs = append(c.subs[:i], c.subs[i+1:]...)
-			break
+func (c *Clock) handleRemovals() {
+	for {
+		select {
+		case task := <-c.removeCh:
+			c.mu.Lock()
+			for i, sub := range c.subs {
+				if sub.ID == task.id {
+					c.subs = append(c.subs[:i], c.subs[i+1:]...)
+					break
+				}
+			}
+			close(task.done)
+			c.mu.Unlock()
+		case <-c.ctx.Done():
+			return
+		default:
+			runtime.Gosched()
 		}
 	}
+}
+
+func (c *Clock) Remove(id TickerID) chan struct{} {
+	done := make(chan struct{})
+	select {
+	case c.removeCh <- removeTask{id: id, done: done}:
+	case <-c.ctx.Done():
+	default:
+		// Fallback to synchronous removal
+		c.mu.Lock()
+		for i, sub := range c.subs {
+			if sub.ID == id {
+				c.subs = append(c.subs[:i], c.subs[i+1:]...)
+				break
+			}
+		}
+		c.mu.Unlock()
+	}
+	return done
 }
 
 func (c *Clock) Start() {
@@ -138,8 +181,10 @@ func (c *Clock) dispatchTicks() {
 
 func (c *Clock) tick() {
 	now := time.Now()
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	snapshot := make([]TickerSubscriber, len(c.subs))
+	copy(snapshot, c.subs)
+	c.mu.RUnlock()
 
 	for i := range c.subs {
 		sub := &c.subs[i]

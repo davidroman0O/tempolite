@@ -13,12 +13,14 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowexecution"
+	"github.com/davidroman0O/tempolite/internal/types"
 )
 
 type WorkflowInfo struct {
 	EntityInfo
 	Data      *WorkflowDataInfo      `json:"data,omitempty"`
 	Execution *WorkflowExecutionInfo `json:"execution,omitempty"`
+	Hierarchy *HierarchyInfo         `json:"hierarchy,omitempty"`
 }
 
 type WorkflowDataInfo struct {
@@ -50,6 +52,18 @@ type CreateWorkflowInput struct {
 	Duration    string
 }
 
+type CreateSubWorkflowInput struct {
+	ParentID          int
+	ParentExecutionID int
+	RunID             int
+	HandlerName       string
+	StepID            string
+	QueueID           int
+	RetryPolicy       *schema.RetryPolicy
+	Input             [][]byte
+	Duration          string
+}
+
 type UpdateWorkflowDataInput struct {
 	RetryPolicy *schema.RetryPolicy
 	Input       [][]byte
@@ -63,7 +77,12 @@ type WorkflowRepository interface {
 
 	CreateRetry(tx *ent.Tx, id int) (*WorkflowExecutionInfo, error)
 
+	CreateSub(tx *ent.Tx, input CreateSubWorkflowInput) (*WorkflowInfo, error)
+
 	Get(tx *ent.Tx, id int) (*WorkflowInfo, error)
+
+	GetWithExecution(tx *ent.Tx, id types.WorkflowID, execID types.WorkflowExecutionID) (*WorkflowInfo, error)
+
 	GetByStepID(tx *ent.Tx, stepID string) (*WorkflowInfo, error)
 	List(tx *ent.Tx, runID int) ([]*WorkflowInfo, error)
 
@@ -238,6 +257,182 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 	}, nil
 }
 
+func (r *workflowRepository) CreateSub(tx *ent.Tx, input CreateSubWorkflowInput) (*WorkflowInfo, error) {
+	parentEntityObj, err := tx.Entity.Get(r.ctx, input.ParentID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(err, fmt.Errorf("parent entity %d not found", input.ParentID))
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting parent entity"))
+	}
+
+	// parentExecObj, err := tx.Execution.Get(r.ctx, input.ParentExecutionID)
+	// if err != nil {
+	// 	if ent.IsNotFound(err) {
+	// 		return nil, errors.Join(err, fmt.Errorf("parent execution %d not found", input.ParentExecutionID))
+	// 	}
+	// 	return nil, errors.Join(err, fmt.Errorf("getting parent execution"))
+	// }
+
+	runObj, err := tx.Run.Get(r.ctx, input.RunID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(err, fmt.Errorf("run %d not found", input.RunID))
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting run"))
+	}
+
+	exists, err := tx.Entity.Query().
+		Where(entity.StepIDEQ(input.StepID)).
+		Exist(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("checking step ID existence"))
+	}
+	if exists {
+		return nil, ErrAlreadyExists
+	}
+
+	realType := entity.Type(ComponentWorkflow)
+
+	builder := tx.Entity.Create().
+		SetHandlerName(input.HandlerName).
+		SetType(realType).
+		SetStepID(input.StepID).
+		SetStatus(entity.StatusPending).
+		SetRun(runObj)
+
+	if input.QueueID == 0 {
+		return nil, errors.Join(err, fmt.Errorf("queue ID is required"))
+	}
+
+	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting queue"))
+	}
+
+	builder.SetQueue(queueObj)
+
+	entObj, err := builder.Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating workflow entity"))
+	}
+
+	retryPolicy := defaultRetryPolicy()
+	if input.RetryPolicy != nil {
+		retryPolicy = *input.RetryPolicy
+	}
+
+	builderWorkflow := tx.WorkflowData.Create().
+		SetEntity(entObj).
+		SetRetryPolicy(&retryPolicy).
+		SetInput(input.Input)
+
+	if input.Duration != "" {
+		builderWorkflow.SetDuration(input.Duration)
+	}
+
+	workflowData, err := builderWorkflow.
+		Save(r.ctx)
+	if err != nil {
+		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow data"))
+	}
+
+	execObj, err := tx.Execution.Create().
+		SetEntity(entObj).
+		SetStatus(execution.StatusPending).
+		Save(r.ctx)
+	if err != nil {
+		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
+		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
+	}
+
+	// Create hierarchy
+
+	hierarchyObj, err := tx.Hierarchy.Create().
+		SetRunID(runObj.ID).
+		SetParentEntityID(input.ParentID).
+		SetChildEntityID(entObj.ID).
+		SetParentStepID(parentEntityObj.StepID).
+		SetChildStepID(entObj.StepID).
+		SetParentExecutionID(input.ParentExecutionID).
+		SetChildExecutionID(execObj.ID).
+		Save(r.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating hierarchy: %w", err)
+	}
+
+	workflowExec, err := tx.WorkflowExecution.Create().
+		SetExecution(execObj).
+		Save(r.ctx)
+	if err != nil {
+		_ = tx.Execution.DeleteOne(execObj).Exec(r.ctx)
+		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
+		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
+	}
+
+	workflowExecData, err := tx.WorkflowExecutionData.Create().
+		SetWorkflowExecution(workflowExec).
+		Save(r.ctx)
+	if err != nil {
+		_ = tx.WorkflowExecution.DeleteOne(workflowExec).Exec(r.ctx)
+		_ = tx.Execution.DeleteOne(execObj).Exec(r.ctx)
+		_ = tx.WorkflowData.DeleteOne(workflowData).Exec(r.ctx)
+		_ = tx.Entity.DeleteOne(entObj).Exec(r.ctx)
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution data"))
+	}
+
+	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
+
+	return &WorkflowInfo{
+		EntityInfo: EntityInfo{
+			ID:          entObj.ID,
+			HandlerName: entObj.HandlerName,
+			Type:        ComponentType(entObj.Type),
+			StepID:      entObj.StepID,
+			RunID:       input.RunID,
+			CreatedAt:   entObj.CreatedAt,
+			UpdatedAt:   entObj.UpdatedAt,
+			QueueID:     queueID,
+		},
+		Data: &WorkflowDataInfo{
+			ID:          workflowData.ID,
+			Paused:      workflowData.Paused,
+			Resumable:   workflowData.Resumable,
+			RetryPolicy: retryPolicy,
+			Input:       workflowData.Input,
+		},
+		Execution: &WorkflowExecutionInfo{
+			ExecutionInfo: ExecutionInfo{
+				ID:          execObj.ID,
+				EntityID:    entObj.ID,
+				Status:      Status(execObj.Status),
+				StartedAt:   execObj.StartedAt,
+				CompletedAt: execObj.CompletedAt,
+				CreatedAt:   execObj.CreatedAt,
+				UpdatedAt:   execObj.UpdatedAt,
+			},
+			WorkflowExecutionData: WorkflowExecutionData{
+				ExecutionDataID: workflowExecData.ID,
+				ErrMsg:          workflowExecData.Error,
+				Output:          workflowExecData.Output,
+			},
+		},
+		Hierarchy: &HierarchyInfo{
+			ID:                hierarchyObj.ID,
+			RunID:             hierarchyObj.RunID,
+			ParentEntityID:    hierarchyObj.ParentEntityID,
+			ChildEntityID:     hierarchyObj.ChildEntityID,
+			ParentStepID:      hierarchyObj.ParentStepID,
+			ChildStepID:       hierarchyObj.ChildStepID,
+			ParentExecutionID: hierarchyObj.ParentExecutionID,
+			ChildExecutionID:  hierarchyObj.ChildExecutionID,
+		},
+	}, nil
+}
+
 func (r *workflowRepository) GetFromExecution(tx *ent.Tx, executionID int) (*WorkflowInfo, error) {
 	execObj, err := tx.Execution.Get(r.ctx, executionID)
 	if err != nil {
@@ -343,6 +538,91 @@ func (r *workflowRepository) Get(tx *ent.Tx, id int) (*WorkflowInfo, error) {
 		Where(execution.HasEntityWith(entity.IDEQ(entObj.ID))).
 		Order(ent.Desc(execution.FieldCreatedAt)).
 		First(r.ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	workflowExec, err := execObj.QueryWorkflowExecution().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow execution"))
+	}
+
+	workflowExecData, err := workflowExec.QueryExecutionData().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow execution data"))
+	}
+
+	return &WorkflowInfo{
+		EntityInfo: EntityInfo{
+			ID:          entObj.ID,
+			HandlerName: entObj.HandlerName,
+			Type:        ComponentType(entObj.Type),
+			StepID:      entObj.StepID,
+			Status:      string(entObj.Status),
+			RunID:       runID,
+			CreatedAt:   entObj.CreatedAt,
+			UpdatedAt:   entObj.UpdatedAt,
+			QueueID:     assignedQueueIDs,
+		},
+		Data: &WorkflowDataInfo{
+			ID:          workflowData.ID,
+			Paused:      workflowData.Paused,
+			Resumable:   workflowData.Resumable,
+			RetryPolicy: *workflowData.RetryPolicy,
+			Input:       workflowData.Input,
+		},
+		Execution: &WorkflowExecutionInfo{
+			ExecutionInfo: ExecutionInfo{
+				ID:          execObj.ID,
+				EntityID:    entObj.ID,
+				Status:      Status(execObj.Status),
+				StartedAt:   execObj.StartedAt,
+				CompletedAt: execObj.CompletedAt,
+				CreatedAt:   execObj.CreatedAt,
+				UpdatedAt:   execObj.UpdatedAt,
+			},
+			WorkflowExecutionData: WorkflowExecutionData{
+				ExecutionDataID: workflowExecData.ID,
+				ErrMsg:          workflowExecData.Error,
+				Output:          workflowExecData.Output,
+			},
+		},
+	}, nil
+}
+
+func (r *workflowRepository) GetWithExecution(tx *ent.Tx, id types.WorkflowID, execID types.WorkflowExecutionID) (*WorkflowInfo, error) {
+
+	entObj, err := tx.Entity.Get(r.ctx, id.ID())
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting entity"))
+	}
+
+	if entObj.Type != entity.Type(ComponentWorkflow) {
+		return nil, ErrInvalidOperation
+	}
+
+	runID, err := entObj.QueryRun().OnlyID(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting run ID"))
+	}
+
+	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting queue IDs"))
+	}
+
+	workflowData, err := entObj.QueryWorkflowData().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting workflow data"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, execID.ID())
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ErrNotFound

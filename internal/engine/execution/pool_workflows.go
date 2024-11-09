@@ -7,6 +7,8 @@ import (
 
 	"github.com/davidroman0O/retrypool"
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
+	"github.com/davidroman0O/tempolite/internal/engine/cq/commands"
+	"github.com/davidroman0O/tempolite/internal/engine/cq/queries"
 	"github.com/davidroman0O/tempolite/internal/engine/io"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
@@ -140,14 +142,26 @@ type WorkerWorkflows struct {
 	queue    string
 	registry *registry.Registry
 	db       repository.Repository
+
+	commands *commands.Commands
+	queries  *queries.Queries
 }
 
-func NewWorkflowsWorker(ctx context.Context, queue string, registry *registry.Registry, db repository.Repository) WorkerWorkflows {
+func NewWorkflowsWorker(
+	ctx context.Context,
+	queue string,
+	registry *registry.Registry,
+	db repository.Repository,
+	commands *commands.Commands,
+	queries *queries.Queries,
+) WorkerWorkflows {
 	w := WorkerWorkflows{
 		ctx:      ctx,
 		queue:    queue,
 		registry: registry,
 		db:       db,
+		commands: commands,
+		queries:  queries,
 	}
 	return w
 }
@@ -170,6 +184,13 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		data.Request.WorkflowInfo.StepID,
 		w.queue,
 		identity,
+		struct {
+			*commands.Commands
+			*queries.Queries
+		}{
+			w.commands,
+			w.queries,
+		},
 	)
 
 	params, err := io.ConvertInputsFromSerialization(types.HandlerInfo(workflow), data.Request.WorkflowInfo.Data.Input)
@@ -184,6 +205,8 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 	}
 
 	returnedValues := reflect.ValueOf(workflow.Handler).Call(values)
+
+	// fmt.Println("Returned values", returnedValues, "from", workflow.HandlerName)
 
 	var res []interface{}
 	var errRes error

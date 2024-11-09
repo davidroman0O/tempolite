@@ -92,9 +92,7 @@ func (e *WorkerPool[Request, Response]) RemoveWorker() error {
 		return fmt.Errorf("no workers to remove")
 	}
 
-	fmt.Println("Removing worker total:", len(e.workers))
 	index := rand.Intn(len(e.workers))
-	fmt.Println("Removing worker index:", index)
 	id := e.workers[index]
 
 	// Remove the worker ID from the slice

@@ -18,6 +18,7 @@ type Scheduler struct {
 	db       repository.Repository
 	getQueue func(queue string) *queues.Queue
 	registry *registry.Registry
+	incID    int
 }
 
 func New(
@@ -52,12 +53,14 @@ func (s *Scheduler) Stop() {
 	defer fmt.Println("Scheduler stopped")
 }
 
-func (s *Scheduler) addScheduler(ticker clock.Ticker) {
-	s.clock.Add(ticker, clock.BestEffort)
+func (s *Scheduler) addScheduler(tickerID clock.TickerID, ticker clock.Ticker) {
+	s.clock.Add(tickerID, ticker, clock.BestEffort)
 }
 
 func (s *Scheduler) AddQueue(queue string) {
+	s.incID++
 	s.addScheduler(
+		s.incID,
 		SchedulerWorkflowsPending{
 			Scheduler: s,
 		})

@@ -29,9 +29,12 @@ func New(ctx context.Context) *InfoClock {
 func (i *InfoClock) Stop() {
 	fmt.Println("Stopping info clock")
 	i.clock.Stop()
-	defer fmt.Println("Info clock stopped")
 }
 
-func (i *InfoClock) AddInfo(ticker clock.Ticker) {
-	i.clock.Add(ticker, clock.BestEffort)
+func (i *InfoClock) AddInfo(id clock.TickerID, ticker clock.Ticker) {
+	i.clock.Add(id, ticker, clock.BestEffort)
+}
+
+func (i *InfoClock) Remove(id clock.TickerID) chan struct{} {
+	return i.clock.Remove(id)
 }

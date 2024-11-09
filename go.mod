@@ -2,7 +2,13 @@ module github.com/davidroman0O/tempolite
 
 go 1.23.0
 
-require github.com/google/uuid v1.6.0 // indirect
+require (
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/k0kubun/pp/v3 v3.3.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
+	golang.org/x/sys v0.23.0 // indirect
+)
 
 require (
 	entgo.io/ent v0.14.1

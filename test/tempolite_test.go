@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/davidroman0O/tempolite"
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
@@ -15,11 +14,21 @@ func TestBasic(t *testing.T) {
 
 	failure := true
 
+	subwrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		fmt.Println("subworkflow executed")
+		return 69, nil
+	}
+
 	wrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
 		if failure {
 			failure = false
 			return 0, fmt.Errorf("error on purpose")
 		}
+
+		if err := ctx.Workflow("subworkflow", subwrk, nil).Get(); err != nil {
+			return 0, err
+		}
+
 		fmt.Println("workflow executed")
 		return 420, nil
 	}
@@ -30,6 +39,7 @@ func TestBasic(t *testing.T) {
 		ctx,
 		registry.
 			New().
+			Workflow(subwrk).
 			Workflow(wrk).
 			Build(),
 		tempolite.WithPath("tempolite-test.db"),
@@ -40,6 +50,13 @@ func TestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tp.Scale("default", map[string]int{
+		"workflows":   2,
+		"activities":  2,
+		"sideEffects": 2,
+		"sagas":       2,
+	})
+
 	info := tp.Workflow(wrk, nil)
 
 	var realValue int
@@ -49,12 +66,6 @@ func TestBasic(t *testing.T) {
 	fmt.Println("Real value", realValue)
 
 	// fmt.Println("scale up")
-	// tp.Scale("default", map[string]int{
-	// 	"workflows":   4,
-	// 	"activities":  2,
-	// 	"sideEffects": 2,
-	// 	"sagas":       2,
-	// })
 
 	// <-time.After(1 * time.Second)
 
@@ -76,7 +87,7 @@ func TestBasic(t *testing.T) {
 	// 	"sagas":       2,
 	// })
 
-	<-time.After(1 * time.Second)
+	// <-time.After(1 * time.Second)
 
 	if err = tp.Shutdown(); err != nil {
 		if err != context.Canceled {
