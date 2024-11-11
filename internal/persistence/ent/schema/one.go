@@ -88,8 +88,7 @@ func (Entity) Fields() []ent.Field {
 		field.Enum("status").
 			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
 			Default("Pending"),
-		field.String("step_id").
-			Unique(),
+		field.String("step_id"),
 	}
 }
 

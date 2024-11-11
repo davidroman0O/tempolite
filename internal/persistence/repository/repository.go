@@ -44,6 +44,7 @@ type Repository interface {
 
 // repository implements Repository
 type repository struct {
+	ctx         context.Context
 	client      *ent.Client
 	queues      QueueRepository
 	runs        RunRepository
@@ -62,6 +63,7 @@ func NewRepository(
 	client *ent.Client,
 ) Repository {
 	r := &repository{
+		ctx:    ctx,
 		client: client,
 	}
 
@@ -116,5 +118,5 @@ func (r *repository) SideEffects() SideEffectRepository {
 }
 
 func (r *repository) Tx() (*ent.Tx, error) {
-	return r.client.Tx(context.Background())
+	return r.client.Tx(r.ctx)
 }

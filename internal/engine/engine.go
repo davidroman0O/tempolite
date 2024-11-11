@@ -107,21 +107,21 @@ func (e *Engine) Shutdown() error {
 	shutdown := errgroup.Group{}
 	logs.Debug(e.ctx, "Shutting down engine")
 
-	shutdown.Go(func() error {
-		logs.Debug(e.ctx, "Shutting down scheduler")
-		e.scheduler.Stop()
-		return nil
-	})
+	logs.Debug(e.ctx, "Shutting down scheduler")
+	e.scheduler.Stop()
+	logs.Debug(e.ctx, "Scheduler shutdown complete")
 
 	shutdown.Go(func() error {
 		logs.Debug(e.ctx, "Shutting down queries")
 		e.queries.Stop()
+		logs.Debug(e.ctx, "Queries shutdown complete")
 		return nil
 	})
 
 	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
 			logs.Debug(e.ctx, "Shutting down queue", "queue", n)
+			defer logs.Debug(e.ctx, "Queue shutdown complete", "queue", n)
 			return q.Shutdown()
 		})
 	}
@@ -142,6 +142,26 @@ func (e *Engine) Scale(queue string, targets map[string]int) error {
 }
 
 // Create a new run workflow
+//
+// # Pseudo code
+//
+// ```
+// => Workflow
+// -     - create workflow entity
+// -     - create workflow execution
+// -
+// -     if fail
+// -     if max attempt < attemps => retry
+// -         - create workflow execution
+// -
+// - 		if fail
+// - 		if max attempt < attemps => retry
+// - 			- create workflow execution
+// - 		else
+// - 			- workflow failed
+// - else
+// - 	- workflow failed
+// ```
 func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOptions, params ...any) *info.WorkflowInfo {
 	var id types.WorkflowID
 	var err error
@@ -152,4 +172,10 @@ func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOption
 	}
 	logs.Debug(e.ctx, "Workflow created", "id", id)
 	return e.queries.QueryWorfklow(workflowFunc, id)
+}
+
+// IF you cancelled a Tempolite instance, you need to a new WorkflowInfo instance
+func (e *Engine) GetWorkflow(id types.WorkflowID) *info.WorkflowInfo {
+	logs.Debug(e.ctx, "Engine Getting workflow", id)
+	return e.queries.GetWorkflowInfo(id)
 }

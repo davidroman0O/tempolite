@@ -86,7 +86,7 @@ var (
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
-		{Name: "step_id", Type: field.TypeString, Unique: true},
+		{Name: "step_id", Type: field.TypeString},
 		{Name: "queue_entities", Type: field.TypeInt, Nullable: true},
 		{Name: "run_entities", Type: field.TypeInt},
 	}

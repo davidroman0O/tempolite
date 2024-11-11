@@ -15,6 +15,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowexecution"
 	"github.com/davidroman0O/tempolite/internal/types"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 type WorkflowInfo struct {
@@ -126,36 +127,47 @@ func NewWorkflowRepository(ctx context.Context, client *ent.Client) WorkflowRepo
 }
 
 func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*WorkflowInfo, error) {
+
+	logs.Debug(r.ctx, "Creating workflow",
+		"RunID", input.RunID,
+		"HandlerName", input.HandlerName,
+		"StepID", input.StepID,
+		"QueueID", input.QueueID)
+
 	runObj, err := tx.Run.Get(r.ctx, input.RunID)
 	if err != nil {
 		if ent.IsNotFound(err) {
+			logs.Error(r.ctx, "Run not found", "error", err, "RunID", input.RunID, "HandlerName", input.HandlerName, "StepID", input.StepID, "QueueID", input.QueueID)
 			return nil, errors.Join(err, fmt.Errorf("run %d not found", input.RunID))
 		}
+		logs.Error(r.ctx, "Error getting run", "error", err, "RunID", input.RunID, "HandlerName", input.HandlerName, "StepID", input.StepID, "QueueID", input.QueueID)
 		return nil, errors.Join(err, fmt.Errorf("getting run"))
 	}
 
-	realType := entity.Type(ComponentWorkflow)
-
 	builder := tx.Entity.Create().
 		SetHandlerName(input.HandlerName).
-		SetType(realType).
+		SetType(entity.TypeWorkflow).
 		SetStepID(input.StepID).
 		SetStatus(entity.StatusPending).
 		SetRun(runObj)
 
 	if input.QueueID == 0 {
+		logs.Error(r.ctx, "Queue ID is required", "RunID", input.RunID, "HandlerName", input.HandlerName, "StepID", input.StepID, "QueueID", input.QueueID)
 		return nil, errors.Join(err, fmt.Errorf("queue ID is required"))
 	}
 
 	queueObj, err := tx.Queue.Get(r.ctx, input.QueueID)
 	if err != nil {
+		logs.Error(r.ctx, "Error getting queue", "error", err, "RunID", input.RunID, "HandlerName", input.HandlerName, "StepID", input.StepID, "QueueID", input.QueueID)
 		return nil, errors.Join(err, fmt.Errorf("getting queue"))
 	}
 
+	logs.Debug(r.ctx, "Create workflow Queue found", "QueueID", queueObj.ID)
 	builder.SetQueue(queueObj)
 
 	entObj, err := builder.Save(r.ctx)
 	if err != nil {
+		logs.Error(r.ctx, "Error creating workflow entity", "error", err, "RunID", input.RunID, "HandlerName", input.HandlerName, "StepID", input.StepID, "QueueID", input.QueueID)
 		return nil, errors.Join(err, fmt.Errorf("creating workflow entity"))
 	}
 
@@ -508,7 +520,10 @@ func (r *workflowRepository) GetFromExecution(tx *ent.Tx, executionID int) (*Wor
 		return nil, errors.Join(err, fmt.Errorf("getting queue"))
 	}
 
-	runID := entityObj.QueryRun().OnlyX(r.ctx)
+	runID, err := entityObj.QueryRun().Only(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting run ID"))
+	}
 
 	return &WorkflowInfo{
 		EntityInfo: EntityInfo{
@@ -997,6 +1012,7 @@ func (r *workflowRepository) UpdateExecutionPaused(tx *ent.Tx, executionID int) 
 
 // When successful then everything is updated
 func (r *workflowRepository) UpdateExecutionSuccess(tx *ent.Tx, executionID int) error {
+
 	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusCompleted).Exec(r.ctx); err != nil {
 		if ent.IsNotFound(err) {
 			return ErrNotFound

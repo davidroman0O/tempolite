@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/davidroman0O/tempolite"
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
+	"github.com/davidroman0O/tempolite/internal/types"
 	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
@@ -242,6 +244,85 @@ func TestSubWorkflowWithParentFailureAfterSubWorkflow(t *testing.T) {
 		t.Fatal("Real value should be 420")
 	}
 
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+}
+
+// We need to create multiple workflows with ONE worker with ZERO sub-workflows, quit tempolite and restart it
+func TestWorkflowRestart(t *testing.T) {
+
+	wrk1 := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		// <-time.After(1 * time.Second)
+		return 1, nil
+	}
+
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(wrk1).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-restart.db"),
+		tempolite.WithDestructive(),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	infos := []types.WorkflowID{}
+
+	for i := 0; i < 100; i++ {
+		info := tp.Workflow(wrk1, nil)
+		infos = append(infos, info.WorkflowID())
+	}
+
+	// we stop immediately tempolite
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+
+	// in theory, we have at least ONE of the 3 workflows that should be restarted
+	<-time.After(1 * time.Second)
+	fmt.Println("Restarting Tempolite")
+
+	ctx = context.Background()
+	tp, err = tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(wrk1).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-restart.db"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("Tempolite restarted")
+
+	var realValue int
+
+	for i := 0; i < len(infos); i++ {
+		fmt.Println("Info", i, infos[i])
+		info := tp.GetWorkflow(infos[i])
+		if err = info.Get(&realValue); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println("Info", i, realValue)
+		if realValue != 1 {
+			t.Fatal("Real value should be 1")
+		}
+	}
+
+	fmt.Println("Ready to relaly shutdown")
 	if err = tp.Shutdown(); err != nil {
 		if err != context.Canceled {
 			t.Fatal(err)

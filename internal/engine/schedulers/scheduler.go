@@ -34,7 +34,7 @@ func New(
 		getQueue: getQueue,
 		registry: registry,
 		clock: clock.NewClock(
-			ctx,
+			context.Background(),
 			time.Nanosecond,
 			func(err error) {
 				// TODO: i don't know what to do with the errors
@@ -49,14 +49,23 @@ func New(
 }
 
 func (s *Scheduler) Stop() {
-	logs.Debug(s.ctx, "Stopping scheduler")
+	// TODO: could be nice to have a status of the things that aren't closed
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				logs.Debug(s.ctx, "Scheduler", "total", s.clock.TotalSubscribers())
+			}
+		}
+	}()
 	s.clock.Stop()
-	logs.Debug(s.ctx, "Scheduler stopped")
+	ticker.Stop()
 }
 
-func (s *Scheduler) addScheduler(tickerID clock.TickerID, ticker clock.Ticker) {
+func (s *Scheduler) addScheduler(tickerID clock.TickerID, ticker clock.Ticker, opts ...clock.TickerSubscriberOption) {
 	logs.Debug(s.ctx, "Adding scheduler", "tickerID", tickerID)
-	s.clock.Add(tickerID, ticker, clock.BestEffort)
+	s.clock.Add(tickerID, ticker, clock.BestEffort, opts...)
 }
 
 func (s *Scheduler) AddQueue(queue string) {
@@ -66,5 +75,6 @@ func (s *Scheduler) AddQueue(queue string) {
 		s.incID,
 		SchedulerWorkflowsPending{
 			Scheduler: s,
-		})
+		},
+		clock.WithName("SchedulerWorkflowsPending"))
 }

@@ -52,15 +52,6 @@ func NewRunRepository(ctx context.Context, client *ent.Client) RunRepository {
 }
 
 func (r *runRepository) Create(tx *ent.Tx) (*RunInfo, error) {
-	exists, err := tx.Run.Query().
-		Exist(r.ctx)
-	if err != nil {
-		return nil, fmt.Errorf("checking run existence: %w", err)
-	}
-	if exists {
-		return nil, ErrAlreadyExists
-	}
-
 	runObj, err := tx.Run.Create().
 		SetStatus(run.StatusPending).
 		Save(r.ctx)

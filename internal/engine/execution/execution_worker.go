@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 // TODO: I still don't have a deadtask mechanism
@@ -72,7 +73,8 @@ func (e *WorkerPool[Request, Response]) Shutdown() error {
 
 func (e *WorkerPool[Request, Response]) Wait() error {
 	return e.pool.WaitWithCallback(e.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
+		logs.Debug(e.ctx, "Queue size", "queue", e.queue, queueSize, "Processing count", processingCount, "Dead task count", deadTaskCount)
+		return queueSize > 0 || processingCount > 0
 	}, time.Second)
 }
 

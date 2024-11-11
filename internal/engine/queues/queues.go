@@ -217,21 +217,25 @@ func (q *Queue) Shutdown() error {
 
 	shutdownErrGroup.Go(func() error {
 		logs.Debug(q.ctx, "Shutting down queue workflow worker", "queue", q.queueName)
+		defer logs.Debug(q.ctx, "Queue workflow worker shutdown complete")
 		return q.workflowsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
 		logs.Debug(q.ctx, "Shutting down queue activities worker", "queue", q.queueName)
+		defer logs.Debug(q.ctx, "Queue activities worker shutdown complete")
 		return q.activitiesWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
 		logs.Debug(q.ctx, "Shutting down queue side effects worker", "queue", q.queueName)
+		defer logs.Debug(q.ctx, "Queue side effects worker shutdown complete")
 		return q.sideEffectsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
 		logs.Debug(q.ctx, "Shutting down queue sagas worker", "queue", q.queueName)
+		defer logs.Debug(q.ctx, "Queue sagas worker shutdown complete")
 		return q.sagasWorker.Shutdown()
 	})
 

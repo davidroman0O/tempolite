@@ -30,6 +30,35 @@ func (e *Queries) Stop() {
 	e.info.Stop()
 }
 
+func (e *Queries) GetWorkflowInfo(id types.WorkflowID) *info.WorkflowInfo {
+	var err error
+	tx, err := e.db.Tx()
+	if err != nil {
+		logs.Error(e.ctx, "GetWorkflowInfo error getting tx", "error", err)
+		return e.QueryNoWorkflow(err)
+	}
+
+	// Before getting the workflow handler form the registry, we need to get the workflow info
+	var wInfo *repository.WorkflowInfo
+	if wInfo, err = e.db.Workflows().Get(tx, id.ID()); err != nil {
+		logs.Error(e.ctx, "GetWorkflowInfo error getting workflow", "error", err, "id", id)
+		return e.QueryNoWorkflow(err)
+	}
+
+	// so then we can use the handler name
+	var workflow types.Workflow
+	if workflow, err = e.registry.GetWorkflow(types.HandlerIdentity(wInfo.HandlerName)); err != nil {
+		logs.Error(e.ctx, "Query Workflow error getting workflow", "error", err, "id", id)
+		return e.QueryNoWorkflow(err)
+	}
+	if err = tx.Commit(); err != nil {
+		logs.Error(e.ctx, "GetWorkflowInfo error committing tx", "error", err)
+		return e.QueryNoWorkflow(err)
+	}
+
+	return info.NewWorkflowInfo(e.ctx, id, types.HandlerInfo(workflow), e.db, e.info)
+}
+
 func (e *Queries) QueryWorfklow(workflowFunc interface{}, id types.WorkflowID) *info.WorkflowInfo {
 	var err error
 	var identity types.HandlerIdentity

@@ -233,6 +233,7 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 		comfylite3.WithForeignKeys(),
 	)
 
+	tp.comfy = comfy
 	tp.client = ent.NewClient(ent.Driver(sql.OpenDB(dialect.SQLite, db)))
 
 	if firstTime || (cfg.destructive && cfg.path != nil) {
@@ -251,12 +252,36 @@ func (tp *Tempolite) Shutdown() error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 
+	defer logs.Debug(tp.ctx, "Tempolite shutdown complete")
+
+	if err := tp.engine.Shutdown(); err != nil {
+		if err != context.Canceled {
+			logs.Error(tp.ctx, "Error shutting down engine", "error", err)
+			return err
+		}
+	}
+
 	tp.cancel()
 
-	return tp.engine.Shutdown()
+	if err := tp.client.Close(); err != nil {
+		logs.Error(tp.ctx, "Error closing client", "error", err)
+		return err
+	}
+
+	if err := tp.comfy.Close(); err != nil {
+		logs.Error(tp.ctx, "Error closing comfy", "error", err)
+		return err
+	}
+
+	return nil
 }
 
 func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) *info.WorkflowInfo {
 	logs.Debug(tp.ctx, "Creating workflow")
 	return tp.engine.Workflow(workflowFunc, opts, params...)
+}
+
+func (tp *Tempolite) GetWorkflow(id types.WorkflowID) *info.WorkflowInfo {
+	logs.Debug(tp.ctx, "Getting workflow", id)
+	return tp.engine.GetWorkflow(id)
 }

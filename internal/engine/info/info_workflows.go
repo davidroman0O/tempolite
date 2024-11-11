@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/davidroman0O/tempolite/internal/engine/io"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
@@ -62,6 +63,10 @@ func NewWorkflowInfoWithError(ctx context.Context, err error) *WorkflowInfo {
 	return wi
 }
 
+func (w *WorkflowInfo) WorkflowID() types.WorkflowID {
+	return w.entityID
+}
+
 func (w *WorkflowInfo) Tick() error {
 
 	tx, err := w.db.Tx()
@@ -70,7 +75,8 @@ func (w *WorkflowInfo) Tick() error {
 		return err
 	}
 
-	entityObj, err := w.db.Workflows().Get(tx, int(w.entityID))
+	logs.Debug(w.ctx, "WorkflowInfo Tick getting workflow", "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+	entityObj, err := w.db.Workflows().Get(tx, w.entityID.ID())
 	if err != nil {
 		if ent.IsNotFound(err) {
 			logs.Error(w.ctx, "WorkflowInfo Tick workflow not found", "workflowID", w.entityID, "error", err, "handlerName", w.handler.HandlerName)
@@ -124,18 +130,38 @@ func (w *WorkflowInfo) Tick() error {
 
 func (w *WorkflowInfo) Get(output ...any) error {
 
-	logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
-	response := <-w.responseChn
-	logs.Debug(w.ctx, "WorkflowInfo Get received response", "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+	logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-w.ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+			}
+		}
+	}()
+	var response workflowGetResponse
+
+	select {
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	case response = <-w.responseChn:
+		ticker.Stop()
+	}
+
+	logs.Debug(w.ctx, "WorkflowInfo Get received response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
 
 	if response.err != nil {
-		logs.Error(w.ctx, "WorkflowInfo Get error getting response", "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "error", response.err)
+		logs.Error(w.ctx, "WorkflowInfo Get error getting response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "error", response.err)
 		return response.err
 	}
 
 	realOutputs, err := io.ConvertOutputsFromSerialization(w.handler, response.outputs)
 	if err != nil {
-		logs.Error(w.ctx, "WorkflowInfo Get error converting outputs", "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "error", err)
+		logs.Error(w.ctx, "WorkflowInfo Get error converting outputs", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "error", err)
 		return err
 	}
 
@@ -151,7 +177,7 @@ func (w *WorkflowInfo) Get(output ...any) error {
 		outVal.Set(outputVal)
 	}
 
-	logs.Debug(w.ctx, "WorkflowInfo Get outputs set", "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+	logs.Debug(w.ctx, "WorkflowInfo Get outputs set", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
 
 	return nil
 }

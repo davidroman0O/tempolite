@@ -14,4 +14,5 @@ type CommandsQueries interface {
 	GetHierarchy(ctx types.SharedContext, stepID string) (*repository.HierarchyInfo, error)
 	GetWorkflow(ctx types.SharedContext, id types.WorkflowID) (*repository.WorkflowInfo, error)
 	CommandSubWorkflowExecution(workflowEntityID types.WorkflowID) (types.WorkflowID, error)
+	GetWorkflowInfo(id types.WorkflowID) *info.WorkflowInfo
 }

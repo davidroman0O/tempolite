@@ -32,7 +32,18 @@ func New(ctx context.Context) *InfoClock {
 
 func (i *InfoClock) Stop() {
 	logs.Debug(i.ctx, "Stopping info clock")
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				logs.Debug(i.ctx, "Scheduler ", "total", i.clock.TotalSubscribers())
+			}
+		}
+	}()
 	i.clock.Stop()
+	ticker.Stop()
+	logs.Debug(i.ctx, "Info clock stopped")
 }
 
 func (i *InfoClock) AddInfo(id clock.TickerID, ticker clock.Ticker) {

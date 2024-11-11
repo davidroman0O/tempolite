@@ -25,6 +25,21 @@ func (s SchedulerWorkflowsPending) Tick() error {
 		return err
 	}
 
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback() // Rollback in case of panic
+			panic(p)      // Re-throw panic after rollback
+		} else if err != nil {
+			tx.Rollback() // Rollback on error
+		} else {
+			err = tx.Commit() // Commit on success
+			if err != nil {
+				logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
+				return
+			}
+		}
+	}()
+
 	if queues, err = s.db.Queues().List(tx); err != nil {
 		if err := tx.Rollback(); err != nil {
 			logs.Error(s.ctx, "Schduler Workflows Pending error rolling back transaction", "error", err)
@@ -53,6 +68,8 @@ func (s SchedulerWorkflowsPending) Tick() error {
 			}
 			return err
 		}
+
+		pendingWorkflows := []chan struct{}{}
 
 		for _, w := range workflows {
 			var processed chan struct{}
@@ -115,14 +132,13 @@ func (s SchedulerWorkflowsPending) Tick() error {
 
 			// We have to wait for the workflow to be ackowledged before do the next one
 			// TODO: we might want to batch many workflows and wait for all of them to be ackowledged
-			<-processed
-			logs.Debug(s.ctx, "Schduler Workflows Pending updating execution being ackowledged", "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+			pendingWorkflows = append(pendingWorkflows, processed)
+			logs.Debug(s.ctx, "Schduler Workflows Pending updating added for listening", "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
-		logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
-		return err
+		for _, v := range pendingWorkflows {
+			<-v
+		}
 	}
 
 	return nil

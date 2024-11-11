@@ -80,21 +80,26 @@ type Clock struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	onError  func(error)
+
+	removalWg    sync.WaitGroup
+	confirmClose chan struct{}
 }
 
 func NewClock(ctx context.Context, interval time.Duration, onError func(error)) *Clock {
 	ctx, cancel := context.WithCancel(ctx)
 
 	c := &Clock{
-		interval: interval,
-		ticker:   time.NewTicker(interval),
-		stopCh:   make(chan struct{}),
-		subs:     []TickerSubscriber{},
-		removeCh: make(chan removeTask, 100),
-		ctx:      ctx,
-		cancel:   cancel,
-		onError:  onError,
+		interval:     interval,
+		ticker:       time.NewTicker(interval),
+		stopCh:       make(chan struct{}),
+		subs:         []TickerSubscriber{},
+		removeCh:     make(chan removeTask, 100),
+		confirmClose: make(chan struct{}),
+		ctx:          ctx,
+		cancel:       cancel,
+		onError:      onError,
 	}
+	c.removalWg.Add(1)
 	go c.handleRemovals()
 	return c
 }
@@ -117,6 +122,7 @@ func (c *Clock) Add(id TickerID, ticker Ticker, mode ExecutionMode, opts ...Tick
 }
 
 func (c *Clock) handleRemovals() {
+	defer c.removalWg.Done()
 	for {
 		select {
 		case task := <-c.removeCh:
@@ -164,9 +170,18 @@ func (c *Clock) Stop() {
 	c.cancel()
 	c.ticker.Stop()
 	close(c.stopCh)
+	<-c.confirmClose
+	c.removalWg.Wait()
+}
+
+func (c *Clock) TotalSubscribers() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.subs)
 }
 
 func (c *Clock) dispatchTicks() {
+	defer close(c.confirmClose)
 	for {
 		select {
 		case <-c.ticker.C:
@@ -186,8 +201,8 @@ func (c *Clock) tick() {
 	copy(snapshot, c.subs)
 	c.mu.RUnlock()
 
-	for i := range c.subs {
-		sub := &c.subs[i]
+	for i := range snapshot {
+		sub := &snapshot[i]
 
 		interval := c.interval
 		if sub.Interval > 0 {

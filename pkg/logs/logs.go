@@ -77,6 +77,9 @@ func Initialize(level Level) {
 		slogLevel = slog.LevelError
 	}
 
+	if Log != nil {
+		return
+	}
 	Log = NewDefaultLogger(slogLevel)
 }
 

@@ -29,6 +29,7 @@ func New(ctx context.Context, db repository.Repository, registry *registry.Regis
 
 // We create a new execution for a sub-workflow because every data already exists and we might just be restarting therefore we need executions
 func (e *Commands) CommandSubWorkflowExecution(workflowEntityID types.WorkflowID) (types.WorkflowID, error) {
+
 	if workflowEntityID.IsNoID() {
 		logs.Error(e.ctx, "CommandSubWorkflowExecution workflowEntityID is required", "workflowEntityID", workflowEntityID)
 		return types.NoWorkflowID, fmt.Errorf("workflowEntityID is required")
@@ -225,9 +226,9 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 
 	var runInfo *repository.RunInfo
 	if runInfo, err = e.db.Runs().Create(tx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			logs.Error(e.ctx, "CommandWorkflow error creating run", "error", err)
-			return types.NoWorkflowID, err
+		if errRollback := tx.Rollback(); errRollback != nil {
+			logs.Error(e.ctx, "CommandWorkflow error creating run", "error", errRollback)
+			return types.NoWorkflowID, errRollback
 		}
 		logs.Error(e.ctx, "CommandWorkflow error creating run", "error", err)
 		return types.NoWorkflowID, err
