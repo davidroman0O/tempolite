@@ -65,6 +65,10 @@ type CreateSubWorkflowInput struct {
 	Duration          string
 }
 
+type CreateSubWorkflowExecutionInput struct {
+	ParentID int
+}
+
 type UpdateWorkflowDataInput struct {
 	RetryPolicy *schema.RetryPolicy
 	Input       [][]byte
@@ -78,7 +82,8 @@ type WorkflowRepository interface {
 
 	CreateRetry(tx *ent.Tx, id int) (*WorkflowExecutionInfo, error)
 
-	CreateSub(tx *ent.Tx, input CreateSubWorkflowInput) (*WorkflowInfo, error)
+	CreateSub(tx *ent.Tx, input CreateSubWorkflowInput) (*WorkflowInfo, error)                   // create a whole new entity + execution
+	CreateSubExecution(tx *ent.Tx, input CreateSubWorkflowExecutionInput) (*WorkflowInfo, error) // create a new execution since it existed before
 
 	Get(tx *ent.Tx, id int) (*WorkflowInfo, error)
 
@@ -243,6 +248,67 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 				ExecutionDataID: workflowExecData.ID,
 				ErrMsg:          workflowExecData.Error,
 				Output:          workflowExecData.Output,
+			},
+		},
+	}, nil
+}
+
+// Create a new execution for a workflow based on it's workflow entity id
+func (r *workflowRepository) CreateSubExecution(tx *ent.Tx, input CreateSubWorkflowExecutionInput) (*WorkflowInfo, error) {
+	entityObj, err := tx.Entity.Get(r.ctx, input.ParentID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(err, ErrNotFound, fmt.Errorf("getting entity:%v", input.ParentID))
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting entity: %v", input.ParentID))
+	}
+
+	runID, err := entityObj.QueryRun().OnlyID(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("getting run ID"))
+	}
+
+	execObj, err := tx.Execution.Create().
+		SetEntity(entityObj).
+		SetStatus(execution.StatusPending).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating execution"))
+	}
+
+	workflowExec, err := tx.WorkflowExecution.Create().
+		SetExecution(execObj).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution"))
+	}
+
+	_, err = tx.WorkflowExecutionData.Create().
+		SetWorkflowExecution(workflowExec).
+		Save(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("creating workflow execution data"))
+	}
+
+	return &WorkflowInfo{
+		EntityInfo: EntityInfo{
+			ID:          entityObj.ID,
+			HandlerName: entityObj.HandlerName,
+			Type:        ComponentType(entityObj.Type),
+			StepID:      entityObj.StepID,
+			RunID:       runID,
+			CreatedAt:   entityObj.CreatedAt,
+			UpdatedAt:   entityObj.UpdatedAt,
+		},
+		Execution: &WorkflowExecutionInfo{
+			ExecutionInfo: ExecutionInfo{
+				ID:          execObj.ID,
+				EntityID:    entityObj.ID,
+				Status:      Status(execObj.Status),
+				StartedAt:   execObj.StartedAt,
+				CompletedAt: execObj.CompletedAt,
+				CreatedAt:   execObj.CreatedAt,
+				UpdatedAt:   execObj.UpdatedAt,
 			},
 		},
 	}, nil

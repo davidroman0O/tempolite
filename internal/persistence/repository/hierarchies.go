@@ -22,6 +22,8 @@ type HierarchyInfo struct {
 	ChildType         string `json:"child_type"`
 }
 
+// TODO: make a pre-check that RunID + ParentID + StepID has to be unique, we need to be super strict about it
+
 type HierarchyRepository interface {
 	Create(tx *ent.Tx, runID int, parentEntityID int, childEntityID int,
 		parentStepID string, childStepID string, parentExecID int, childExecID int, childType hierarchy.ChildType, parentType hierarchy.ParentType) (*HierarchyInfo, error)
@@ -31,7 +33,8 @@ type HierarchyRepository interface {
 	Delete(tx *ent.Tx, id int) error
 	DeleteByChild(tx *ent.Tx, childEntityID int) error
 
-	GetExisting(tx *ent.Tx, runID int, parentEntityID int, parentStepID string, childStepID string, childType hierarchy.ChildType) (*HierarchyInfo, error)
+	HasHierarchy(tx *ent.Tx, runID int, parentEntityID int, childStepID string) (bool, error)
+	GetExisting(tx *ent.Tx, runID int, parentEntityID int, childStepID string) (*HierarchyInfo, error)
 }
 
 type hierarchyRepository struct {
@@ -46,13 +49,29 @@ func NewHierarchyRepository(ctx context.Context, client *ent.Client) HierarchyRe
 	}
 }
 
-func (r *hierarchyRepository) GetExisting(tx *ent.Tx, runID int, parentEntityID int, parentStepID string, childStepID string, childType hierarchy.ChildType) (*HierarchyInfo, error) {
+func (r *hierarchyRepository) HasHierarchy(tx *ent.Tx, runID int, parentEntityID int, childStepID string) (bool, error) {
+	exists, err := tx.Hierarchy.Query().
+		Where(
+			hierarchy.RunIDEQ(runID),
+			hierarchy.ParentEntityIDEQ(parentEntityID),
+			hierarchy.ChildStepIDEQ(childStepID),
+		).
+		Exist(r.ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking hierarchy existence: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *hierarchyRepository) GetExisting(tx *ent.Tx, runID int, parentEntityID int, childStepID string) (*HierarchyInfo, error) {
 	hierarchyObj, err := tx.Hierarchy.Query().
 		Where(
 			hierarchy.RunIDEQ(runID),
 			hierarchy.ParentEntityIDEQ(parentEntityID),
-			hierarchy.ParentStepIDEQ(parentStepID),
-			hierarchy.ChildTypeEQ(childType),
+			hierarchy.ChildStepIDEQ(childStepID),
 		).
 		Only(r.ctx)
 	if err != nil {

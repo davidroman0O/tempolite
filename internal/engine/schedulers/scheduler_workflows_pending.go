@@ -120,7 +120,6 @@ func (s SchedulerWorkflowsPending) Tick() error {
 		}
 	}
 
-	logs.Debug(s.ctx, "Schduler Workflows Pending committing transaction")
 	if err := tx.Commit(); err != nil {
 		logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
 		return err

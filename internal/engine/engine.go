@@ -76,7 +76,6 @@ func New(
 func (e *Engine) GetQueue(queue string) *queues.Queue {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	logs.Debug(e.ctx, "Getting queue", "queue", queue)
 	return e.workerQueues[queue]
 }
 

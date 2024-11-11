@@ -27,6 +27,36 @@ func New(ctx context.Context, db repository.Repository, registry *registry.Regis
 	}
 }
 
+// We create a new execution for a sub-workflow because every data already exists and we might just be restarting therefore we need executions
+func (e *Commands) CommandSubWorkflowExecution(workflowEntityID types.WorkflowID) (types.WorkflowID, error) {
+	if workflowEntityID.IsNoID() {
+		logs.Error(e.ctx, "CommandSubWorkflowExecution workflowEntityID is required", "workflowEntityID", workflowEntityID)
+		return types.NoWorkflowID, fmt.Errorf("workflowEntityID is required")
+	}
+	var err error
+
+	var tx *ent.Tx
+	if tx, err = e.db.Tx(); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflowExecution creating transaction error", "error", err)
+		return types.NoWorkflowID, err
+	}
+
+	var workflowInfo *repository.WorkflowInfo
+	if workflowInfo, err = e.db.Workflows().CreateSubExecution(tx, repository.CreateSubWorkflowExecutionInput{
+		ParentID: workflowEntityID.ID(),
+	}); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflowExecution error creating sub workflow execution", "error", err)
+		return types.NoWorkflowID, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflowExecution error committing transaction", "error", err)
+		return types.NoWorkflowID, err
+	}
+
+	return types.WorkflowID(workflowInfo.ID), nil
+}
+
 func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflowExecutionID types.WorkflowExecutionID, stepID string, workflowFunc interface{}, options types.WorkflowOptions, params ...any) (types.WorkflowID, error) {
 
 	if workflowEntityID.IsNoID() {
@@ -151,6 +181,11 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 			return types.NoWorkflowID, err
 		}
 		logs.Error(e.ctx, "CommandSubWorkflow error creating sub workflow", "error", err)
+		return types.NoWorkflowID, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow error committing transaction", "error", err)
 		return types.NoWorkflowID, err
 	}
 

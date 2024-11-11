@@ -360,10 +360,10 @@ func (q *Queue) Scale(targets map[string]int) error {
 	wg.Wait()
 
 	logs.Debug(q.ctx, "Queue scaled", "queue", q.queueName)
-	logs.Debug(q.ctx, "Available workflows workers:", q.AvailableWorkflowWorkers())
-	logs.Debug(q.ctx, "Available activities workers:", q.AvailableActivityWorkers())
-	logs.Debug(q.ctx, "Available side effects workers:", q.AvailableSideEffectWorkers())
-	logs.Debug(q.ctx, "Available sagas workers:", q.AvailableSagaWorkers())
+	logs.Debug(q.ctx, "Available workflows workers", "available workflow workers", q.AvailableWorkflowWorkers())
+	logs.Debug(q.ctx, "Available activities workers:", "available activities workers", q.AvailableActivityWorkers())
+	logs.Debug(q.ctx, "Available side effects workers:", "available side effects workers", q.AvailableSideEffectWorkers())
+	logs.Debug(q.ctx, "Available sagas workers:", "available sagas workers", q.AvailableSagaWorkers())
 
 	return nil
 }

@@ -141,7 +141,7 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 	}
 	var err error
 
-	if cfg.logger == nil {
+	if cfg.logger != nil {
 		logs.NewLogger(cfg.logger)
 	} else {
 		logs.Initialize(cfg.defaultLogLevel)
