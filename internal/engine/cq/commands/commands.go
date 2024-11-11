@@ -10,6 +10,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 type Commands struct {
@@ -29,25 +30,30 @@ func New(ctx context.Context, db repository.Repository, registry *registry.Regis
 func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflowExecutionID types.WorkflowExecutionID, stepID string, workflowFunc interface{}, options types.WorkflowOptions, params ...any) (types.WorkflowID, error) {
 
 	if workflowEntityID.IsNoID() {
+		logs.Error(e.ctx, "CommandSubWorkflow workflowEntityID is required", "workflowEntityID", workflowEntityID, "workflowExecutionID", workflowExecutionID, "stepID", stepID)
 		return types.NoWorkflowID, fmt.Errorf("workflowEntityID is required")
 	}
 
 	if workflowExecutionID.IsNoID() {
+		logs.Error(e.ctx, "CommandSubWorkflow workflowExecutionID is required", "workflowEntityID", workflowEntityID, "workflowExecutionID", workflowExecutionID, "stepID", stepID)
 		return types.NoWorkflowID, fmt.Errorf("workflowExecutionID is required")
 	}
 
 	var err error
 	var identity types.HandlerIdentity
 	if identity, err = e.registry.WorkflowIdentity(workflowFunc); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow workflow identity not found", "error", err)
 		return types.NoWorkflowID, err
 	}
 
 	var workflow types.Workflow
 	if workflow, err = e.registry.GetWorkflow(identity); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow workflow registry not found", "error", err)
 		return types.NoWorkflowID, err
 	}
 
 	if err = e.registry.VerifyParamsMatching(types.HandlerInfo(workflow), params...); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow params not matching", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -55,6 +61,7 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 
 	var tx *ent.Tx
 	if tx, err = e.db.Tx(); err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow creating transaction error", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -63,8 +70,10 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 	// Get the exact pair
 	if parentWorkflowInfo, err = e.db.Workflows().GetWithExecution(tx, workflowEntityID, workflowExecutionID); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandSubWorkflow error getting parent workflow", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandSubWorkflow error getting parent workflow", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -78,8 +87,10 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 
 	if queueInfo, err = e.db.Queues().Get(tx, parentWorkflowInfo.QueueID); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -115,6 +126,7 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 	// Extremely important conversion
 	serializableParams, err := io.ConvertInputsForSerialization(params)
 	if err != nil {
+		logs.Error(e.ctx, "CommandSubWorkflow error converting params", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -135,11 +147,14 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 				Duration:          duration, // if empty it won't be set
 			}); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandSubWorkflow error creating sub workflow", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandSubWorkflow error creating sub workflow", "error", err)
 		return types.NoWorkflowID, err
 	}
 
+	logs.Debug(e.ctx, "CommandSubWorkflow created sub workflow", "workflowInfo", workflowInfo)
 	return types.WorkflowID(workflowInfo.ID), nil
 }
 
@@ -147,20 +162,27 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 	var err error
 	var identity types.HandlerIdentity
 	if identity, err = e.registry.WorkflowIdentity(workflowFunc); err != nil {
+		logs.Error(e.ctx, "CommandWorkflow workflow identity not found", "error", err)
 		return types.NoWorkflowID, err
 	}
+	logs.Debug(e.ctx, "CommandWorkflow checking", "identity", identity)
 
+	logs.Debug(e.ctx, "CommandWorkflow getting workflow registry using identity", "identity", identity)
 	var workflow types.Workflow
 	if workflow, err = e.registry.GetWorkflow(identity); err != nil {
+		logs.Error(e.ctx, "CommandWorkflow workflow registry not found using identity", "error", err, "identity", identity)
 		return types.NoWorkflowID, err
 	}
 
+	logs.Debug(e.ctx, "CommandWorkflow verifying params matching", "workflow", types.HandlerInfo(workflow))
 	if err = e.registry.VerifyParamsMatching(types.HandlerInfo(workflow), params...); err != nil {
+		logs.Error(e.ctx, "CommandWorkflow params not matching", "error", err, "identity", identity, "workflow", workflow.HandlerName)
 		return types.NoWorkflowID, err
 	}
 
 	var tx *ent.Tx
 	if tx, err = e.db.Tx(); err != nil {
+		logs.Error(e.ctx, "CommandWorkflow creating transaction error", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -169,8 +191,10 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 	var runInfo *repository.RunInfo
 	if runInfo, err = e.db.Runs().Create(tx); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandWorkflow error creating run", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandWorkflow error creating run", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -183,8 +207,10 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 
 	if queueInfo, err = e.db.Queues().GetByName(tx, queueName); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandWorkflow error getting queue", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandWorkflow error getting queue", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -220,6 +246,7 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 	// Extremely important conversion
 	serializableParams, err := io.ConvertInputsForSerialization(params)
 	if err != nil {
+		logs.Error(e.ctx, "CommandWorkflow error converting params", "error", err)
 		return types.NoWorkflowID, err
 	}
 
@@ -237,12 +264,15 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 				Duration:    duration, // if empty it won't be set
 			}); err != nil {
 		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandWorkflow error creating workflow", "error", err)
 			return types.NoWorkflowID, err
 		}
+		logs.Error(e.ctx, "CommandWorkflow error creating workflow", "error", err)
 		return types.NoWorkflowID, err
 	}
 
 	if err = tx.Commit(); err != nil {
+		logs.Error(e.ctx, "CommandWorkflow error committing transaction", "error", err)
 		return types.NoWorkflowID, err
 	}
 

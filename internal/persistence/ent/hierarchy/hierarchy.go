@@ -3,6 +3,8 @@
 package hierarchy
 
 import (
+	"fmt"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -26,6 +28,10 @@ const (
 	FieldParentStepID = "parent_step_id"
 	// FieldChildStepID holds the string denoting the child_step_id field in the database.
 	FieldChildStepID = "child_step_id"
+	// FieldChildType holds the string denoting the childtype field in the database.
+	FieldChildType = "child_type"
+	// FieldParentType holds the string denoting the parenttype field in the database.
+	FieldParentType = "parent_type"
 	// EdgeRun holds the string denoting the run edge name in mutations.
 	EdgeRun = "run"
 	// EdgeParentEntity holds the string denoting the parent_entity edge name in mutations.
@@ -67,6 +73,8 @@ var Columns = []string{
 	FieldChildExecutionID,
 	FieldParentStepID,
 	FieldChildStepID,
+	FieldChildType,
+	FieldParentType,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -77,6 +85,56 @@ func ValidColumn(column string) bool {
 		}
 	}
 	return false
+}
+
+// ChildType defines the type for the "childType" enum field.
+type ChildType string
+
+// ChildType values.
+const (
+	ChildTypeWorkflow   ChildType = "Workflow"
+	ChildTypeActivity   ChildType = "Activity"
+	ChildTypeSaga       ChildType = "Saga"
+	ChildTypeSideEffect ChildType = "SideEffect"
+)
+
+func (ct ChildType) String() string {
+	return string(ct)
+}
+
+// ChildTypeValidator is a validator for the "childType" field enum values. It is called by the builders before save.
+func ChildTypeValidator(ct ChildType) error {
+	switch ct {
+	case ChildTypeWorkflow, ChildTypeActivity, ChildTypeSaga, ChildTypeSideEffect:
+		return nil
+	default:
+		return fmt.Errorf("hierarchy: invalid enum value for childType field: %q", ct)
+	}
+}
+
+// ParentType defines the type for the "parentType" enum field.
+type ParentType string
+
+// ParentType values.
+const (
+	ParentTypeWorkflow   ParentType = "Workflow"
+	ParentTypeActivity   ParentType = "Activity"
+	ParentTypeSaga       ParentType = "Saga"
+	ParentTypeSideEffect ParentType = "SideEffect"
+)
+
+func (pt ParentType) String() string {
+	return string(pt)
+}
+
+// ParentTypeValidator is a validator for the "parentType" field enum values. It is called by the builders before save.
+func ParentTypeValidator(pt ParentType) error {
+	switch pt {
+	case ParentTypeWorkflow, ParentTypeActivity, ParentTypeSaga, ParentTypeSideEffect:
+		return nil
+	default:
+		return fmt.Errorf("hierarchy: invalid enum value for parentType field: %q", pt)
+	}
 }
 
 // OrderOption defines the ordering options for the Hierarchy queries.
@@ -120,6 +178,16 @@ func ByParentStepID(opts ...sql.OrderTermOption) OrderOption {
 // ByChildStepID orders the results by the child_step_id field.
 func ByChildStepID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldChildStepID, opts...).ToFunc()
+}
+
+// ByChildType orders the results by the childType field.
+func ByChildType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldChildType, opts...).ToFunc()
+}
+
+// ByParentType orders the results by the parentType field.
+func ByParentType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentType, opts...).ToFunc()
 }
 
 // ByRunField orders the results by run field.

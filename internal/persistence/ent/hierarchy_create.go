@@ -63,6 +63,18 @@ func (hc *HierarchyCreate) SetChildStepID(s string) *HierarchyCreate {
 	return hc
 }
 
+// SetChildType sets the "childType" field.
+func (hc *HierarchyCreate) SetChildType(ht hierarchy.ChildType) *HierarchyCreate {
+	hc.mutation.SetChildType(ht)
+	return hc
+}
+
+// SetParentType sets the "parentType" field.
+func (hc *HierarchyCreate) SetParentType(ht hierarchy.ParentType) *HierarchyCreate {
+	hc.mutation.SetParentType(ht)
+	return hc
+}
+
 // SetRun sets the "run" edge to the Run entity.
 func (hc *HierarchyCreate) SetRun(r *Run) *HierarchyCreate {
 	return hc.SetRunID(r.ID)
@@ -133,6 +145,22 @@ func (hc *HierarchyCreate) check() error {
 	if _, ok := hc.mutation.ChildStepID(); !ok {
 		return &ValidationError{Name: "child_step_id", err: errors.New(`ent: missing required field "Hierarchy.child_step_id"`)}
 	}
+	if _, ok := hc.mutation.ChildType(); !ok {
+		return &ValidationError{Name: "childType", err: errors.New(`ent: missing required field "Hierarchy.childType"`)}
+	}
+	if v, ok := hc.mutation.ChildType(); ok {
+		if err := hierarchy.ChildTypeValidator(v); err != nil {
+			return &ValidationError{Name: "childType", err: fmt.Errorf(`ent: validator failed for field "Hierarchy.childType": %w`, err)}
+		}
+	}
+	if _, ok := hc.mutation.ParentType(); !ok {
+		return &ValidationError{Name: "parentType", err: errors.New(`ent: missing required field "Hierarchy.parentType"`)}
+	}
+	if v, ok := hc.mutation.ParentType(); ok {
+		if err := hierarchy.ParentTypeValidator(v); err != nil {
+			return &ValidationError{Name: "parentType", err: fmt.Errorf(`ent: validator failed for field "Hierarchy.parentType": %w`, err)}
+		}
+	}
 	if len(hc.mutation.RunIDs()) == 0 {
 		return &ValidationError{Name: "run", err: errors.New(`ent: missing required edge "Hierarchy.run"`)}
 	}
@@ -183,6 +211,14 @@ func (hc *HierarchyCreate) createSpec() (*Hierarchy, *sqlgraph.CreateSpec) {
 	if value, ok := hc.mutation.ChildStepID(); ok {
 		_spec.SetField(hierarchy.FieldChildStepID, field.TypeString, value)
 		_node.ChildStepID = value
+	}
+	if value, ok := hc.mutation.ChildType(); ok {
+		_spec.SetField(hierarchy.FieldChildType, field.TypeEnum, value)
+		_node.ChildType = value
+	}
+	if value, ok := hc.mutation.ParentType(); ok {
+		_spec.SetField(hierarchy.FieldParentType, field.TypeEnum, value)
+		_node.ParentType = value
 	}
 	if nodes := hc.mutation.RunIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

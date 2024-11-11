@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/davidroman0O/tempolite/internal/engine/cq/commands"
@@ -14,6 +13,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -34,25 +34,31 @@ func New(
 	client *ent.Client,
 ) (*Engine, error) {
 	var err error
+	logs.Debug(ctx, "Creating engine")
 	e := &Engine{
 		ctx:          ctx,
 		workerQueues: make(map[string]*queues.Queue),
 	}
 
+	logs.Debug(ctx, "Creating registry")
 	if e.registry, err = builder(); err != nil {
+		logs.Error(ctx, "Error creating registry", "error", err)
 		return nil, err
 	}
 
+	logs.Debug(ctx, "Creating repository")
 	e.db = repository.NewRepository(
 		ctx,
 		client)
 
+	logs.Debug(ctx, "Creating scheduler")
 	if e.scheduler, err = schedulers.New(
 		ctx,
 		e.db,
 		e.registry,
 		e.GetQueue,
 	); err != nil {
+		logs.Error(ctx, "Error creating scheduler", "error", err)
 		return nil, err
 	}
 
@@ -60,6 +66,7 @@ func New(
 	e.queries = queries.New(e.ctx, e.db, e.registry)
 
 	if err := e.AddQueue("default"); err != nil {
+		logs.Error(ctx, "Error creating default queue", "error", err)
 		return nil, err
 	}
 
@@ -69,12 +76,14 @@ func New(
 func (e *Engine) GetQueue(queue string) *queues.Queue {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	logs.Debug(e.ctx, "Getting queue", "queue", queue)
 	return e.workerQueues[queue]
 }
 
 func (e *Engine) AddQueue(queue string) error {
 	var err error
 	var defaultQueue *queues.Queue
+	logs.Debug(e.ctx, "Adding queue", "queue", queue)
 	// TODO: add options for initial workers
 	if defaultQueue, err = queues.New(
 		e.ctx,
@@ -84,45 +93,52 @@ func (e *Engine) AddQueue(queue string) error {
 		e.commands,
 		e.queries,
 	); err != nil {
+		logs.Error(e.ctx, "Error creating queue", "queue", queue, "error", err)
 		return err
 	}
 	e.scheduler.AddQueue(queue)
 	e.mu.Lock()
 	e.workerQueues[queue] = defaultQueue
 	e.mu.Unlock()
+	logs.Debug(e.ctx, "Queue added", "queue", queue)
 	return nil
 }
 
 func (e *Engine) Shutdown() error {
 	shutdown := errgroup.Group{}
+	logs.Debug(e.ctx, "Shutting down engine")
 
 	shutdown.Go(func() error {
-		fmt.Println("Shutting down scheduler")
+		logs.Debug(e.ctx, "Shutting down scheduler")
 		e.scheduler.Stop()
 		return nil
 	})
 
 	shutdown.Go(func() error {
-		fmt.Println("Shutting down info")
+		logs.Debug(e.ctx, "Shutting down queries")
 		e.queries.Stop()
 		return nil
 	})
 
 	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
-			fmt.Println("Shutting down queue", n)
+			logs.Debug(e.ctx, "Shutting down queue", "queue", n)
 			return q.Shutdown()
 		})
 	}
 
-	defer fmt.Println("Engine shutdown complete")
+	defer logs.Debug(e.ctx, "Engine shutdown complete")
+
+	logs.Debug(e.ctx, "Waiting for shutdown")
 	return shutdown.Wait()
 }
 
 func (e *Engine) Scale(queue string, targets map[string]int) error {
+	logs.Debug(e.ctx, "Preparing to scale", "queue", queue, "targets", targets)
 	e.mu.Lock()
 	q := e.workerQueues[queue]
 	e.mu.Unlock()
+	logs.Debug(e.ctx, "Scaling queue", "queue", queue, "targets", targets)
 	return q.Scale(targets)
 }
 
@@ -130,8 +146,11 @@ func (e *Engine) Scale(queue string, targets map[string]int) error {
 func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOptions, params ...any) *info.WorkflowInfo {
 	var id types.WorkflowID
 	var err error
+	logs.Debug(e.ctx, "Creating workflow")
 	if id, err = e.commands.CommandWorkflow(workflowFunc, options, params...); err != nil {
+		logs.Error(e.ctx, "Error creating workflow", "error", err)
 		return e.queries.QueryNoWorkflow(err)
 	}
+	logs.Debug(e.ctx, "Workflow created", "id", id)
 	return e.queries.QueryWorfklow(workflowFunc, id)
 }

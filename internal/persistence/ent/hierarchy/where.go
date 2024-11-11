@@ -358,6 +358,46 @@ func ChildStepIDContainsFold(v string) predicate.Hierarchy {
 	return predicate.Hierarchy(sql.FieldContainsFold(FieldChildStepID, v))
 }
 
+// ChildTypeEQ applies the EQ predicate on the "childType" field.
+func ChildTypeEQ(v ChildType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldEQ(FieldChildType, v))
+}
+
+// ChildTypeNEQ applies the NEQ predicate on the "childType" field.
+func ChildTypeNEQ(v ChildType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldNEQ(FieldChildType, v))
+}
+
+// ChildTypeIn applies the In predicate on the "childType" field.
+func ChildTypeIn(vs ...ChildType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldIn(FieldChildType, vs...))
+}
+
+// ChildTypeNotIn applies the NotIn predicate on the "childType" field.
+func ChildTypeNotIn(vs ...ChildType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldNotIn(FieldChildType, vs...))
+}
+
+// ParentTypeEQ applies the EQ predicate on the "parentType" field.
+func ParentTypeEQ(v ParentType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldEQ(FieldParentType, v))
+}
+
+// ParentTypeNEQ applies the NEQ predicate on the "parentType" field.
+func ParentTypeNEQ(v ParentType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldNEQ(FieldParentType, v))
+}
+
+// ParentTypeIn applies the In predicate on the "parentType" field.
+func ParentTypeIn(vs ...ParentType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldIn(FieldParentType, vs...))
+}
+
+// ParentTypeNotIn applies the NotIn predicate on the "parentType" field.
+func ParentTypeNotIn(vs ...ParentType) predicate.Hierarchy {
+	return predicate.Hierarchy(sql.FieldNotIn(FieldParentType, vs...))
+}
+
 // HasRun applies the HasEdge predicate on the "run" edge.
 func HasRun() predicate.Hierarchy {
 	return predicate.Hierarchy(func(s *sql.Selector) {

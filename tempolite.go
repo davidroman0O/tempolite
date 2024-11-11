@@ -2,8 +2,6 @@ package tempolite
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,13 +21,13 @@ type tempoliteConfig struct {
 	path            *string
 	destructive     bool
 	logger          logs.Logger
-	defaultLogLevel slog.Leveler
+	defaultLogLevel logs.Level
 	queues          []queueConfig
 }
 
 type tempoliteOption func(*tempoliteConfig)
 
-func WithDefaultLogLevel(level slog.Leveler) tempoliteOption {
+func WithDefaultLogLevel(level logs.Level) tempoliteOption {
 	return func(c *tempoliteConfig) {
 		c.defaultLogLevel = level
 	}
@@ -135,7 +133,7 @@ type Tempolite struct {
 
 func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempoliteOption) (*Tempolite, error) {
 	cfg := tempoliteConfig{
-		defaultLogLevel: slog.LevelError,
+		defaultLogLevel: logs.LevelError,
 	}
 
 	for _, opt := range opts {
@@ -144,25 +142,34 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 	var err error
 
 	if cfg.logger == nil {
-		cfg.logger = logs.NewDefaultLogger(cfg.defaultLogLevel)
+		logs.NewLogger(cfg.logger)
+	} else {
+		logs.Initialize(cfg.defaultLogLevel)
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	logs.Debug(ctx, "Creating Tempolite")
 	tp := &Tempolite{
 		ctx:    ctx,
 		cancel: cancel,
 	}
 
+	logs.Debug(ctx, "Creating db clients")
 	// create comfy and ent client
 	if err := tp.createClient(cfg); err != nil {
 		cancel()
+		logs.Error(ctx, "Error creating db clients", "error", err)
 		return nil, err
 	}
 
+	logs.Debug(ctx, "Creating engine")
 	if tp.engine, err = engine.New(ctx, builder, tp.client); err != nil {
+		logs.Error(ctx, "Error creating engine", "error", err)
 		return nil, err
 	}
+
+	defer logs.Debug(ctx, "Tempolite created")
 
 	return tp, nil
 }
@@ -170,7 +177,7 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 func (tp *Tempolite) Scale(queue string, targets map[string]int) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-
+	logs.Debug(tp.ctx, "Scaling Tempolite", "queue", queue, "targets", targets)
 	return tp.engine.Scale(queue, targets)
 }
 
@@ -180,40 +187,40 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 
 	var firstTime bool
 	if cfg.path != nil {
-		cfg.logger.Debug(tp.ctx, "Database got a path", "path", *cfg.path)
-		cfg.logger.Debug(tp.ctx, "Checking if first time or not", "path", *cfg.path)
+		logs.Debug(tp.ctx, "Database got a path", "path", *cfg.path)
+		logs.Debug(tp.ctx, "Checking if first time or not", "path", *cfg.path)
 		info, err := os.Stat(*cfg.path)
 		if err == nil && !info.IsDir() {
 			firstTime = false
 		} else {
 			firstTime = true
 		}
-		cfg.logger.Debug(tp.ctx, "Fist timer check", "firstTime", firstTime)
+		logs.Debug(tp.ctx, "Fist timer check", "firstTime", firstTime)
 		if cfg.destructive {
-			cfg.logger.Debug(tp.ctx, "Destructive option triggered", "firstTime", firstTime)
+			logs.Debug(tp.ctx, "Destructive option triggered", "firstTime", firstTime)
 			if err := os.Remove(*cfg.path); err != nil {
 				if !os.IsNotExist(err) {
-					cfg.logger.Error(tp.ctx, "Error removing file", "error", err)
+					logs.Error(tp.ctx, "Error removing file", "error", err)
 					return err
 				}
 			}
 		}
-		cfg.logger.Debug(tp.ctx, "Creating directory recursively if necessary", "path", *cfg.path)
+		logs.Debug(tp.ctx, "Creating directory recursively if necessary", "path", *cfg.path)
 		if err := os.MkdirAll(filepath.Dir(*cfg.path), os.ModePerm); err != nil {
-			cfg.logger.Error(tp.ctx, "Error creating directory", "error", err)
+			logs.Error(tp.ctx, "Error creating directory", "error", err)
 			return err
 		}
 		optsComfy = append(optsComfy, comfylite3.WithPath(*cfg.path))
 	} else {
-		cfg.logger.Debug(tp.ctx, "Memory database option")
+		logs.Debug(tp.ctx, "Memory database option")
 		optsComfy = append(optsComfy, comfylite3.WithMemory())
 		firstTime = true
 	}
 
-	cfg.logger.Debug(tp.ctx, "Opening/Creating database")
+	logs.Debug(tp.ctx, "Opening/Creating database")
 	comfy, err := comfylite3.New(optsComfy...)
 	if err != nil {
-		cfg.logger.Error(tp.ctx, "Error opening/creating database", "error", err)
+		logs.Error(tp.ctx, "Error opening/creating database", "error", err)
 		return err
 	}
 
@@ -229,9 +236,9 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 	tp.client = ent.NewClient(ent.Driver(sql.OpenDB(dialect.SQLite, db)))
 
 	if firstTime || (cfg.destructive && cfg.path != nil) {
-		cfg.logger.Debug(tp.ctx, "Creating schema")
+		logs.Debug(tp.ctx, "Creating schema")
 		if err = tp.client.Schema.Create(tp.ctx); err != nil {
-			cfg.logger.Error(tp.ctx, "Error creating schema", "error", err)
+			logs.Error(tp.ctx, "Error creating schema", "error", err)
 			return err
 		}
 	}
@@ -240,7 +247,7 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 }
 
 func (tp *Tempolite) Shutdown() error {
-	fmt.Println("Shutting down Tempolite")
+	logs.Debug(tp.ctx, "Shutting down Tempolite")
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 
@@ -250,5 +257,6 @@ func (tp *Tempolite) Shutdown() error {
 }
 
 func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) *info.WorkflowInfo {
+	logs.Debug(tp.ctx, "Creating workflow")
 	return tp.engine.Workflow(workflowFunc, opts, params...)
 }

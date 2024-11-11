@@ -4179,6 +4179,8 @@ type HierarchyMutation struct {
 	addchild_execution_id  *int
 	parent_step_id         *string
 	child_step_id          *string
+	childType              *hierarchy.ChildType
+	parentType             *hierarchy.ParentType
 	clearedFields          map[string]struct{}
 	run                    *int
 	clearedrun             bool
@@ -4581,6 +4583,78 @@ func (m *HierarchyMutation) ResetChildStepID() {
 	m.child_step_id = nil
 }
 
+// SetChildType sets the "childType" field.
+func (m *HierarchyMutation) SetChildType(ht hierarchy.ChildType) {
+	m.childType = &ht
+}
+
+// ChildType returns the value of the "childType" field in the mutation.
+func (m *HierarchyMutation) ChildType() (r hierarchy.ChildType, exists bool) {
+	v := m.childType
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChildType returns the old "childType" field's value of the Hierarchy entity.
+// If the Hierarchy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HierarchyMutation) OldChildType(ctx context.Context) (v hierarchy.ChildType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChildType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChildType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChildType: %w", err)
+	}
+	return oldValue.ChildType, nil
+}
+
+// ResetChildType resets all changes to the "childType" field.
+func (m *HierarchyMutation) ResetChildType() {
+	m.childType = nil
+}
+
+// SetParentType sets the "parentType" field.
+func (m *HierarchyMutation) SetParentType(ht hierarchy.ParentType) {
+	m.parentType = &ht
+}
+
+// ParentType returns the value of the "parentType" field in the mutation.
+func (m *HierarchyMutation) ParentType() (r hierarchy.ParentType, exists bool) {
+	v := m.parentType
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentType returns the old "parentType" field's value of the Hierarchy entity.
+// If the Hierarchy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HierarchyMutation) OldParentType(ctx context.Context) (v hierarchy.ParentType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentType: %w", err)
+	}
+	return oldValue.ParentType, nil
+}
+
+// ResetParentType resets all changes to the "parentType" field.
+func (m *HierarchyMutation) ResetParentType() {
+	m.parentType = nil
+}
+
 // ClearRun clears the "run" edge to the Run entity.
 func (m *HierarchyMutation) ClearRun() {
 	m.clearedrun = true
@@ -4696,7 +4770,7 @@ func (m *HierarchyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *HierarchyMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 9)
 	if m.run != nil {
 		fields = append(fields, hierarchy.FieldRunID)
 	}
@@ -4717,6 +4791,12 @@ func (m *HierarchyMutation) Fields() []string {
 	}
 	if m.child_step_id != nil {
 		fields = append(fields, hierarchy.FieldChildStepID)
+	}
+	if m.childType != nil {
+		fields = append(fields, hierarchy.FieldChildType)
+	}
+	if m.parentType != nil {
+		fields = append(fields, hierarchy.FieldParentType)
 	}
 	return fields
 }
@@ -4740,6 +4820,10 @@ func (m *HierarchyMutation) Field(name string) (ent.Value, bool) {
 		return m.ParentStepID()
 	case hierarchy.FieldChildStepID:
 		return m.ChildStepID()
+	case hierarchy.FieldChildType:
+		return m.ChildType()
+	case hierarchy.FieldParentType:
+		return m.ParentType()
 	}
 	return nil, false
 }
@@ -4763,6 +4847,10 @@ func (m *HierarchyMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldParentStepID(ctx)
 	case hierarchy.FieldChildStepID:
 		return m.OldChildStepID(ctx)
+	case hierarchy.FieldChildType:
+		return m.OldChildType(ctx)
+	case hierarchy.FieldParentType:
+		return m.OldParentType(ctx)
 	}
 	return nil, fmt.Errorf("unknown Hierarchy field %s", name)
 }
@@ -4820,6 +4908,20 @@ func (m *HierarchyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetChildStepID(v)
+		return nil
+	case hierarchy.FieldChildType:
+		v, ok := value.(hierarchy.ChildType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChildType(v)
+		return nil
+	case hierarchy.FieldParentType:
+		v, ok := value.(hierarchy.ParentType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentType(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Hierarchy field %s", name)
@@ -4917,6 +5019,12 @@ func (m *HierarchyMutation) ResetField(name string) error {
 		return nil
 	case hierarchy.FieldChildStepID:
 		m.ResetChildStepID()
+		return nil
+	case hierarchy.FieldChildType:
+		m.ResetChildType()
+		return nil
+	case hierarchy.FieldParentType:
+		m.ResetParentType()
 		return nil
 	}
 	return fmt.Errorf("unknown Hierarchy field %s", name)

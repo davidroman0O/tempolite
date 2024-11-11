@@ -14,6 +14,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 type WorkflowRequest struct {
@@ -31,6 +32,7 @@ type PoolWorkflows struct {
 }
 
 func NewWorkflowsExecutor(ctx context.Context, queue string, db repository.Repository) PoolWorkflows {
+	logs.Debug(ctx, "Create new workflow executor")
 	p := PoolWorkflows{
 		ctx:   ctx,
 		queue: queue,
@@ -40,50 +42,62 @@ func NewWorkflowsExecutor(ctx context.Context, queue string, db repository.Repos
 }
 
 func (w PoolWorkflows) OnRetry(attempt int, err error, task *retrypool.TaskWrapper[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]]) {
-
+	logs.Debug(w.ctx, "OnRetry workflow task", "attempt", attempt, "error", err)
 }
 
 func (w PoolWorkflows) OnSuccess(controller retrypool.WorkerController[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]], workerID int, worker retrypool.Worker[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]], task *retrypool.TaskWrapper[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]]) {
+	logs.Debug(w.ctx, "OnSuccess workflow task", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 	if task.Data().Request.PauseDetected {
 		tx, err := w.db.Tx()
 		if err != nil {
+			logs.Error(w.ctx, "OnSuccess workflow error on transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return
 		}
 		if err := w.db.Workflows().UpdateExecutionPaused(tx, task.Data().Request.WorkflowInfo.Execution.ID); err != nil {
 			tx.Rollback()
+			logs.Error(w.ctx, "OnSuccess workflow error on update execution paused", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return
 		}
 		if err := tx.Commit(); err != nil {
+			logs.Error(w.ctx, "OnSuccess workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return
 		}
+		logs.Debug(w.ctx, "OnSuccess workflow execution paused", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return
 	}
 
 	tx, err := w.db.Tx()
 	if err != nil {
+		logs.Error(w.ctx, "OnSuccess workflow error on transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return
 	}
 	if err := w.db.Workflows().UpdateExecutionSuccess(tx, task.Data().Request.WorkflowInfo.Execution.ID); err != nil {
 		tx.Rollback()
+		logs.Error(w.ctx, "OnSuccess workflow error on update execution success", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return
 	}
 	if err := tx.Commit(); err != nil {
+		logs.Error(w.ctx, "OnSuccess workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return
 	}
+	logs.Debug(w.ctx, "OnSuccess workflow execution success", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 }
 
 func (w PoolWorkflows) OnFailure(controller retrypool.WorkerController[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]], workerID int, worker retrypool.Worker[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]], task *retrypool.TaskWrapper[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]], err error) retrypool.DeadTaskAction {
 
+	logs.Debug(w.ctx, "OnFailure workflow task", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 	var state *schema.RetryState
 	var policy schema.RetryPolicy = task.Data().Request.WorkflowInfo.Data.RetryPolicy
 
 	tx, err := w.db.Tx()
 	if err != nil {
+		logs.Error(w.ctx, "OnFailure workflow error on transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
 	if state, err = w.db.Workflows().GetRetryState(tx, task.Data().Request.WorkflowInfo.ID); err != nil {
 		tx.Rollback()
+		logs.Error(w.ctx, "OnFailure workflow error on get retry state", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
@@ -91,50 +105,58 @@ func (w PoolWorkflows) OnFailure(controller retrypool.WorkerController[*retrypoo
 
 		if err = w.db.Workflows().IncrementRetryAttempt(tx, task.Data().Request.WorkflowInfo.ID); err != nil {
 			tx.Rollback()
+			logs.Error(w.ctx, "OnFailure workflow error on increment retry attempt", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		if err = w.db.Workflows().UpdateExecutionRetried(tx, task.Data().Request.WorkflowInfo.Execution.ID); err != nil {
 			tx.Rollback()
+			logs.Error(w.ctx, "OnFailure workflow error on update execution retried", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		// Trigger the attempt to retry
 		if err = task.Data().Request.Retry(); err != nil {
 			tx.Rollback()
+			logs.Error(w.ctx, "OnFailure workflow error on retry", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
 		if err = tx.Commit(); err != nil {
+			logs.Error(w.ctx, "OnFailure workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 			return retrypool.DeadTaskActionAddToDeadTasks
 		}
 
+		logs.Debug(w.ctx, "OnFailure workflow execution retried", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		// We literally do nothing, we already dispatched a new workflow execution
 		return retrypool.DeadTaskActionDoNothing
 	}
 
 	if err = w.db.Workflows().UpdateExecutionFailed(tx, task.Data().Request.WorkflowInfo.Execution.ID); err != nil {
 		tx.Rollback()
+		logs.Error(w.ctx, "OnFailure workflow error on update execution failed", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
 	if err = tx.Commit(); err != nil {
+		logs.Error(w.ctx, "OnFailure workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 		return retrypool.DeadTaskActionAddToDeadTasks
 	}
 
+	logs.Error(w.ctx, "OnFailure workflow execution failed", "queue", w.queue, "handlerName", task.Data().Request.WorkflowInfo.HandlerName, "workerID", workerID, "workflowID", task.Data().Request.WorkflowInfo.ID, "executionID", task.Data().Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data().Request.WorkflowInfo.StepID)
 	return retrypool.DeadTaskActionDoNothing
 }
 
 func (w PoolWorkflows) OnDeadTask(task *retrypool.DeadTask[*retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]]) {
-
+	logs.Debug(w.ctx, "OnDeadTask workflow task", "queue", w.queue, "handlerName", task.Data.Request.WorkflowInfo.HandlerName, "workflowID", task.Data.Request.WorkflowInfo.ID, "executionID", task.Data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Data.Request.WorkflowInfo.StepID)
 }
 
 func (w PoolWorkflows) OnPanic(task *retrypool.RequestResponse[WorkflowRequest, WorkflowReponse], v interface{}, stackTrace string) {
-
+	logs.Debug(w.ctx, "OnPanic workflow task", "queue", w.queue, "handlerName", task.Request.WorkflowInfo.HandlerName, "workflowID", task.Request.WorkflowInfo.ID, "executionID", task.Request.WorkflowInfo.Execution.ID, "stepID", "stepID", task.Request.WorkflowInfo.StepID)
 }
 
 func (w PoolWorkflows) OnExecutorPanic(worker int, recovery any, err error, stackTrace string) {
-
+	logs.Debug(w.ctx, "OnExecutorPanic workflow task", "queue", w.queue, "workerID", worker)
 }
 
 type WorkerWorkflows struct {
@@ -168,14 +190,18 @@ func NewWorkflowsWorker(
 
 func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestResponse[WorkflowRequest, WorkflowReponse]) error {
 
+	logs.Debug(w.ctx, "Run workflow task", "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID", data.Request.WorkflowInfo.StepID)
 	identity := types.HandlerIdentity(data.Request.WorkflowInfo.HandlerName)
 	var workflow types.Workflow
 	var err error
 
+	logs.Debug(w.ctx, "Run workflow task getting workflow identity", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 	if workflow, err = w.registry.GetWorkflow(identity); err != nil {
+		logs.Error(w.ctx, "Run workflow error on get workflow", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID", data.Request.WorkflowInfo.StepID)
 		return err
 	}
 
+	logs.Debug(w.ctx, "Run workflow task creating new workflow context", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 	contextWorkflow := tempoliteContext.NewWorkflowContext(
 		ctx,
 		data.Request.WorkflowInfo.ID,
@@ -193,8 +219,10 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		},
 	)
 
+	logs.Debug(w.ctx, "Run workflow task converting inputs from serialization", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 	params, err := io.ConvertInputsFromSerialization(types.HandlerInfo(workflow), data.Request.WorkflowInfo.Data.Input)
 	if err != nil {
+		logs.Error(w.ctx, "Run workflow error on convert inputs from serialization", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 		return err
 	}
 
@@ -204,6 +232,7 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		values = append(values, reflect.ValueOf(v))
 	}
 
+	logs.Debug(w.ctx, "Run workflow task calling handler", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 	returnedValues := reflect.ValueOf(workflow.Handler).Call(values)
 
 	// fmt.Println("Returned values", returnedValues, "from", workflow.HandlerName)
@@ -223,6 +252,7 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 	// If pause detected, there is nothing to update YET
 	if errors.Is(errRes, types.ErrWorkflowPaused) {
 		data.Request.PauseDetected = true
+		logs.Debug(w.ctx, "Run workflow task pause detected", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 		return nil
 	}
 
@@ -233,41 +263,52 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		{
 			tx, err := w.db.Tx()
 			if err != nil {
+				logs.Error(w.ctx, "Run workflow error on transaction", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 				return err
 			}
 
 			if err := w.db.Workflows().UpdateExecutionDataError(tx, data.Request.WorkflowInfo.Execution.ID, errRes.Error()); err != nil {
 				tx.Rollback()
+				logs.Error(w.ctx, "Run workflow error on update execution data error", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 				return err
 			}
 
 			if err := tx.Commit(); err != nil {
+				logs.Error(w.ctx, "Run workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 				return err
 			}
+
+			logs.Debug(w.ctx, "Run workflow execution error", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 			return errRes
 		}
 	}
 
 	output, err := io.ConvertOutputsForSerialization(res)
 	if err != nil {
+		logs.Error(w.ctx, "Run workflow error on convert outputs for serialization", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 		return err
 	}
 
 	{
 		tx, err := w.db.Tx()
 		if err != nil {
+			logs.Error(w.ctx, "Run workflow error on transaction", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 			return err
 		}
 
 		if err := w.db.Workflows().UpdateExecutionDataOuput(tx, data.Request.WorkflowInfo.Execution.ID, output); err != nil {
 			tx.Rollback()
+			logs.Error(w.ctx, "Run workflow error on update execution data output", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 			return err
 		}
 
 		if err := tx.Commit(); err != nil {
+			logs.Error(w.ctx, "Run workflow error on commit transaction", "error", err, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 			return err
 		}
 	}
+
+	logs.Debug(w.ctx, "Run workflow execution success", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", "stepID")
 
 	return nil
 }

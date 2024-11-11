@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -8,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/davidroman0O/tempolite/internal/types"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 /// The only contraint of a Registry is its static nature, it is not meant to be modified at runtime
@@ -130,12 +132,16 @@ func (b *RegistryBuilder) Build() RegistryBuildFn {
 	return func() (*Registry, error) {
 		r := newRegistry()
 		for _, w := range b.workflows {
+			logs.Debug(context.Background(), "Registering workflow", "workflow", w)
 			if err := r.registerWorkflow(w); err != nil {
+				logs.Error(context.Background(), "Error registering workflow", "error", err)
 				return nil, err
 			}
 		}
 		for _, a := range b.activities {
+			logs.Debug(context.Background(), "Registering activity", "activity", a)
 			if err := r.registerActivity(a); err != nil {
+				logs.Error(context.Background(), "Error registering activity", "error", err)
 				return nil, err
 			}
 		}

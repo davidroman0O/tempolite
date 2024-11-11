@@ -80,6 +80,10 @@ func Initialize(level Level) {
 	Log = NewDefaultLogger(slogLevel)
 }
 
+func NewLogger(logger Logger) {
+	Log = logger
+}
+
 var Log Logger
 
 func Debug(ctx context.Context, msg string, keysAndValues ...interface{}) {

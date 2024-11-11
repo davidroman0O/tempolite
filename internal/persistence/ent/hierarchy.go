@@ -32,6 +32,10 @@ type Hierarchy struct {
 	ParentStepID string `json:"parent_step_id,omitempty"`
 	// ChildStepID holds the value of the "child_step_id" field.
 	ChildStepID string `json:"child_step_id,omitempty"`
+	// ChildType holds the value of the "childType" field.
+	ChildType hierarchy.ChildType `json:"childType,omitempty"`
+	// ParentType holds the value of the "parentType" field.
+	ParentType hierarchy.ParentType `json:"parentType,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the HierarchyQuery when eager-loading is set.
 	Edges        HierarchyEdges `json:"edges"`
@@ -91,7 +95,7 @@ func (*Hierarchy) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case hierarchy.FieldID, hierarchy.FieldRunID, hierarchy.FieldParentEntityID, hierarchy.FieldChildEntityID, hierarchy.FieldParentExecutionID, hierarchy.FieldChildExecutionID:
 			values[i] = new(sql.NullInt64)
-		case hierarchy.FieldParentStepID, hierarchy.FieldChildStepID:
+		case hierarchy.FieldParentStepID, hierarchy.FieldChildStepID, hierarchy.FieldChildType, hierarchy.FieldParentType:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -155,6 +159,18 @@ func (h *Hierarchy) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field child_step_id", values[i])
 			} else if value.Valid {
 				h.ChildStepID = value.String
+			}
+		case hierarchy.FieldChildType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field childType", values[i])
+			} else if value.Valid {
+				h.ChildType = hierarchy.ChildType(value.String)
+			}
+		case hierarchy.FieldParentType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parentType", values[i])
+			} else if value.Valid {
+				h.ParentType = hierarchy.ParentType(value.String)
 			}
 		default:
 			h.selectValues.Set(columns[i], values[i])
@@ -227,6 +243,12 @@ func (h *Hierarchy) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("child_step_id=")
 	builder.WriteString(h.ChildStepID)
+	builder.WriteString(", ")
+	builder.WriteString("childType=")
+	builder.WriteString(fmt.Sprintf("%v", h.ChildType))
+	builder.WriteString(", ")
+	builder.WriteString("parentType=")
+	builder.WriteString(fmt.Sprintf("%v", h.ParentType))
 	builder.WriteByte(')')
 	return builder.String()
 }

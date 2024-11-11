@@ -141,6 +141,8 @@ var (
 		{Name: "child_execution_id", Type: field.TypeInt},
 		{Name: "parent_step_id", Type: field.TypeString},
 		{Name: "child_step_id", Type: field.TypeString},
+		{Name: "child_type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
+		{Name: "parent_type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
 		{Name: "parent_entity_id", Type: field.TypeInt},
 		{Name: "child_entity_id", Type: field.TypeInt},
 		{Name: "run_id", Type: field.TypeInt},
@@ -153,19 +155,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "hierarchies_entities_parent_entity",
-				Columns:    []*schema.Column{HierarchiesColumns[5]},
+				Columns:    []*schema.Column{HierarchiesColumns[7]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "hierarchies_entities_child_entity",
-				Columns:    []*schema.Column{HierarchiesColumns[6]},
+				Columns:    []*schema.Column{HierarchiesColumns[8]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "hierarchies_runs_hierarchies",
-				Columns:    []*schema.Column{HierarchiesColumns[7]},
+				Columns:    []*schema.Column{HierarchiesColumns[9]},
 				RefColumns: []*schema.Column{RunsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

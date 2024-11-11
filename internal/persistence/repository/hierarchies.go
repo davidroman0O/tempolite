@@ -18,16 +18,20 @@ type HierarchyInfo struct {
 	ChildStepID       string `json:"child_step_id"`
 	ParentExecutionID int    `json:"parent_execution_id"`
 	ChildExecutionID  int    `json:"child_execution_id"`
+	ParentType        string `json:"parent_type"`
+	ChildType         string `json:"child_type"`
 }
 
 type HierarchyRepository interface {
 	Create(tx *ent.Tx, runID int, parentEntityID int, childEntityID int,
-		parentStepID string, childStepID string, parentExecID int, childExecID int) (*HierarchyInfo, error)
+		parentStepID string, childStepID string, parentExecID int, childExecID int, childType hierarchy.ChildType, parentType hierarchy.ParentType) (*HierarchyInfo, error)
 	Get(tx *ent.Tx, id int) (*HierarchyInfo, error)
 	GetChildren(tx *ent.Tx, parentEntityID int) ([]*HierarchyInfo, error)
 	GetParent(tx *ent.Tx, childEntityID int) (*HierarchyInfo, error)
 	Delete(tx *ent.Tx, id int) error
 	DeleteByChild(tx *ent.Tx, childEntityID int) error
+
+	GetExisting(tx *ent.Tx, runID int, parentEntityID int, parentStepID string, childStepID string, childType hierarchy.ChildType) (*HierarchyInfo, error)
 }
 
 type hierarchyRepository struct {
@@ -42,8 +46,38 @@ func NewHierarchyRepository(ctx context.Context, client *ent.Client) HierarchyRe
 	}
 }
 
+func (r *hierarchyRepository) GetExisting(tx *ent.Tx, runID int, parentEntityID int, parentStepID string, childStepID string, childType hierarchy.ChildType) (*HierarchyInfo, error) {
+	hierarchyObj, err := tx.Hierarchy.Query().
+		Where(
+			hierarchy.RunIDEQ(runID),
+			hierarchy.ParentEntityIDEQ(parentEntityID),
+			hierarchy.ParentStepIDEQ(parentStepID),
+			hierarchy.ChildTypeEQ(childType),
+		).
+		Only(r.ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("getting hierarchy: %w", err)
+	}
+
+	return &HierarchyInfo{
+		ID:                hierarchyObj.ID,
+		RunID:             hierarchyObj.RunID,
+		ParentEntityID:    hierarchyObj.ParentEntityID,
+		ChildEntityID:     hierarchyObj.ChildEntityID,
+		ParentStepID:      hierarchyObj.ParentStepID,
+		ChildStepID:       hierarchyObj.ChildStepID,
+		ParentExecutionID: hierarchyObj.ParentExecutionID,
+		ChildExecutionID:  hierarchyObj.ChildExecutionID,
+		ParentType:        hierarchyObj.ParentType.String(),
+		ChildType:         hierarchyObj.ChildType.String(),
+	}, nil
+}
+
 func (r *hierarchyRepository) Create(tx *ent.Tx, runID int, parentEntityID int, childEntityID int,
-	parentStepID string, childStepID string, parentExecID int, childExecID int) (*HierarchyInfo, error) {
+	parentStepID string, childStepID string, parentExecID int, childExecID int, childType hierarchy.ChildType, parentType hierarchy.ParentType) (*HierarchyInfo, error) {
 
 	exists, err := tx.Run.Query().
 		Where(run.IDEQ(runID)).
@@ -87,6 +121,8 @@ func (r *hierarchyRepository) Create(tx *ent.Tx, runID int, parentEntityID int, 
 		ChildStepID:       hierarchyObj.ChildStepID,
 		ParentExecutionID: hierarchyObj.ParentExecutionID,
 		ChildExecutionID:  hierarchyObj.ChildExecutionID,
+		ParentType:        hierarchyObj.ParentType.String(),
+		ChildType:         hierarchyObj.ChildType.String(),
 	}, nil
 }
 
@@ -108,6 +144,8 @@ func (r *hierarchyRepository) Get(tx *ent.Tx, id int) (*HierarchyInfo, error) {
 		ChildStepID:       hierarchyObj.ChildStepID,
 		ParentExecutionID: hierarchyObj.ParentExecutionID,
 		ChildExecutionID:  hierarchyObj.ChildExecutionID,
+		ParentType:        hierarchyObj.ParentType.String(),
+		ChildType:         hierarchyObj.ChildType.String(),
 	}, nil
 }
 
@@ -130,6 +168,8 @@ func (r *hierarchyRepository) GetChildren(tx *ent.Tx, parentEntityID int) ([]*Hi
 			ChildStepID:       hierarchyObj.ChildStepID,
 			ParentExecutionID: hierarchyObj.ParentExecutionID,
 			ChildExecutionID:  hierarchyObj.ChildExecutionID,
+			ParentType:        hierarchyObj.ParentType.String(),
+			ChildType:         hierarchyObj.ChildType.String(),
 		}
 	}
 	return result, nil
@@ -155,6 +195,8 @@ func (r *hierarchyRepository) GetParent(tx *ent.Tx, childEntityID int) (*Hierarc
 		ChildStepID:       hierarchyObj.ChildStepID,
 		ParentExecutionID: hierarchyObj.ParentExecutionID,
 		ChildExecutionID:  hierarchyObj.ChildExecutionID,
+		ParentType:        hierarchyObj.ParentType.String(),
+		ChildType:         hierarchyObj.ChildType.String(),
 	}, nil
 }
 

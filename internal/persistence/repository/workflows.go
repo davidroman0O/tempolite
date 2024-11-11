@@ -8,6 +8,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
@@ -126,16 +127,6 @@ func (r *workflowRepository) Create(tx *ent.Tx, input CreateWorkflowInput) (*Wor
 			return nil, errors.Join(err, fmt.Errorf("run %d not found", input.RunID))
 		}
 		return nil, errors.Join(err, fmt.Errorf("getting run"))
-	}
-
-	exists, err := tx.Entity.Query().
-		Where(entity.StepIDEQ(input.StepID)).
-		Exist(r.ctx)
-	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("checking step ID existence"))
-	}
-	if exists {
-		return nil, ErrAlreadyExists
 	}
 
 	realType := entity.Type(ComponentWorkflow)
@@ -266,30 +257,12 @@ func (r *workflowRepository) CreateSub(tx *ent.Tx, input CreateSubWorkflowInput)
 		return nil, errors.Join(err, fmt.Errorf("getting parent entity"))
 	}
 
-	// parentExecObj, err := tx.Execution.Get(r.ctx, input.ParentExecutionID)
-	// if err != nil {
-	// 	if ent.IsNotFound(err) {
-	// 		return nil, errors.Join(err, fmt.Errorf("parent execution %d not found", input.ParentExecutionID))
-	// 	}
-	// 	return nil, errors.Join(err, fmt.Errorf("getting parent execution"))
-	// }
-
 	runObj, err := tx.Run.Get(r.ctx, input.RunID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, errors.Join(err, fmt.Errorf("run %d not found", input.RunID))
 		}
 		return nil, errors.Join(err, fmt.Errorf("getting run"))
-	}
-
-	exists, err := tx.Entity.Query().
-		Where(entity.StepIDEQ(input.StepID)).
-		Exist(r.ctx)
-	if err != nil {
-		return nil, errors.Join(err, fmt.Errorf("checking step ID existence"))
-	}
-	if exists {
-		return nil, ErrAlreadyExists
 	}
 
 	realType := entity.Type(ComponentWorkflow)
@@ -358,6 +331,8 @@ func (r *workflowRepository) CreateSub(tx *ent.Tx, input CreateSubWorkflowInput)
 		SetChildStepID(entObj.StepID).
 		SetParentExecutionID(input.ParentExecutionID).
 		SetChildExecutionID(execObj.ID).
+		SetParentType(hierarchy.ParentTypeWorkflow).
+		SetChildType(hierarchy.ChildTypeWorkflow).
 		Save(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating hierarchy: %w", err)

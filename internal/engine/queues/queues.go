@@ -13,6 +13,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/engine/execution"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -24,8 +25,9 @@ type Queue struct {
 	sagasWorker       *execution.WorkerPool[execution.SagaRequest, execution.SagaReponse]
 	scaleMu           sync.Mutex
 
-	commands *commands.Commands
-	queries  *queries.Queries
+	commands  *commands.Commands
+	queries   *queries.Queries
+	queueName string
 }
 
 func New(
@@ -37,8 +39,10 @@ func New(
 	queries *queries.Queries,
 ) (*Queue, error) {
 
+	logs.Debug(ctx, "Creating queue", "queue", queue)
 	tx, err := db.Tx()
 	if err != nil {
+		logs.Error(ctx, "New Queue error creating transaction", "error", err, "queue", queue)
 		return nil, err
 	}
 
@@ -47,8 +51,10 @@ func New(
 			fmt.Println("Creating default queue")
 			if _, errCreate := db.Queues().Create(tx, "default"); errCreate != nil {
 				if errRollback := tx.Rollback(); errRollback != nil {
+					logs.Error(ctx, "New Queue error rolling back transaction", "error", errRollback, "queue", queue)
 					return nil, errRollback
 				}
+				logs.Error(ctx, "New Queue error creating default queue", "error", errCreate, "queue", queue)
 				return nil, errCreate
 			}
 		}
@@ -56,15 +62,19 @@ func New(
 	}
 
 	if err := tx.Commit(); err != nil {
+		logs.Error(ctx, "New Queue error committing transaction", "error", err, "queue", queue)
 		return nil, err
 	}
 
+	logs.Debug(ctx, "New Queue creating queue", "queue", queue)
 	q := &Queue{
-		ctx:      ctx,
-		commands: commands,
-		queries:  queries,
+		ctx:       ctx,
+		commands:  commands,
+		queries:   queries,
+		queueName: queue,
 	}
 
+	logs.Debug(ctx, "New Queue creating workflow worker", "queue", queue)
 	q.workflowsWorker = execution.NewWorkerPool(
 		ctx,
 		queue,
@@ -81,6 +91,7 @@ func New(
 		},
 	)
 
+	logs.Debug(ctx, "New Queue creating activities worker", "queue", queue)
 	q.activitiesWorker = execution.NewWorkerPool(
 		ctx,
 		queue,
@@ -90,6 +101,7 @@ func New(
 		},
 	)
 
+	logs.Debug(ctx, "New Queue creating side effects worker", "queue", queue)
 	q.sideEffectsWorker = execution.NewWorkerPool(
 		ctx,
 		queue,
@@ -99,6 +111,7 @@ func New(
 		},
 	)
 
+	logs.Debug(ctx, "New Queue creating sagas worker", "queue", queue)
 	q.sagasWorker = execution.NewWorkerPool(
 		ctx,
 		queue,
@@ -115,7 +128,9 @@ func New(
 }
 
 func (q *Queue) submitRetryWorkflow(data *retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]) error {
+	logs.Debug(q.ctx, "Queue submit retry workflow", "queue", q.queueName)
 	if err := q.workflowsWorker.Submit(data); err != nil {
+		logs.Error(q.ctx, "Queue submit retry workflow error", "error", err, "queue", q.queueName)
 		return err
 	}
 	return nil
@@ -125,10 +140,12 @@ func (q *Queue) SubmitWorkflow(task *retrypool.RequestResponse[execution.Workflo
 
 	processed := retrypool.NewProcessedNotification()
 
+	logs.Debug(q.ctx, "Queue submit workflow", "queue", q.queueName)
 	if err := q.workflowsWorker.Submit(
 		task,
 		retrypool.WithBeingProcessed[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](processed),
 	); err != nil {
+		logs.Error(q.ctx, "Queue submit workflow error", "error", err, "queue", q.queueName)
 		return nil, err
 	}
 
@@ -136,18 +153,21 @@ func (q *Queue) SubmitWorkflow(task *retrypool.RequestResponse[execution.Workflo
 }
 
 func (q *Queue) SubmitActivity(request *repository.ActivityInfo) error {
+	logs.Debug(q.ctx, "Queue submit activity", "queue", q.queueName)
 	return q.activitiesWorker.Submit(
 		&retrypool.RequestResponse[execution.ActivityRequest, execution.ActivityReponse]{Request: execution.ActivityRequest{}},
 	)
 }
 
 func (q *Queue) SubmitSideEffect(request *repository.SideEffectInfo) error {
+	logs.Debug(q.ctx, "Queue submit side effect", "queue", q.queueName)
 	return q.sideEffectsWorker.Submit(
 		&retrypool.RequestResponse[execution.SideEffectRequest, execution.SideEffectReponse]{Request: execution.SideEffectRequest{}},
 	)
 }
 
 func (q *Queue) SubmitSaga(request *repository.SagaInfo) error {
+	logs.Debug(q.ctx, "Queue submit saga", "queue", q.queueName)
 	return q.sagasWorker.Submit(
 		&retrypool.RequestResponse[execution.SagaRequest, execution.SagaReponse]{Request: execution.SagaRequest{}},
 	)
@@ -196,30 +216,31 @@ func (q *Queue) Shutdown() error {
 	shutdownErrGroup := errgroup.Group{}
 
 	shutdownErrGroup.Go(func() error {
-		fmt.Println("\t Shutting down workflows worker")
+		logs.Debug(q.ctx, "Shutting down queue workflow worker", "queue", q.queueName)
 		return q.workflowsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
-		fmt.Println("\t Shutting down activities worker")
+		logs.Debug(q.ctx, "Shutting down queue activities worker", "queue", q.queueName)
 		return q.activitiesWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
-		fmt.Println("\t Shutting down side effects worker")
+		logs.Debug(q.ctx, "Shutting down queue side effects worker", "queue", q.queueName)
 		return q.sideEffectsWorker.Shutdown()
 	})
 
 	shutdownErrGroup.Go(func() error {
-		fmt.Println("\t Shutting down sagas worker")
+		logs.Debug(q.ctx, "Shutting down queue sagas worker", "queue", q.queueName)
 		return q.sagasWorker.Shutdown()
 	})
 
-	defer fmt.Println("Queue shutdown complete")
+	defer logs.Debug(q.ctx, "Queue shutdown complete")
 	return shutdownErrGroup.Wait()
 }
 
 func (q *Queue) AddWorker() {
+	logs.Debug(q.ctx, "Adding workers to queue", "queue", q.queueName)
 	q.workflowsWorker.AddWorker()
 	q.activitiesWorker.AddWorker()
 	q.sideEffectsWorker.AddWorker()
@@ -228,6 +249,7 @@ func (q *Queue) AddWorker() {
 
 func (q *Queue) RemoveWorker() error {
 	errG := errgroup.Group{}
+	logs.Debug(q.ctx, "Removing workers from queue", "queue", q.queueName)
 
 	errG.Go(func() error {
 		return q.workflowsWorker.RemoveWorker()
@@ -301,15 +323,15 @@ func (q *Queue) Scale(targets map[string]int) error {
 			defer wg.Done()
 			for {
 				current := p.available()
-				fmt.Println("Current workers for", p.name, ":", current)
+				// fmt.Println("Current workers for", p.name, ":", current)
 				if current == target {
-					fmt.Println("Already at target workers for", p.name)
+					// fmt.Println("Already at target workers for", p.name)
 					break
 				} else if current < target {
-					fmt.Println("Adding worker to", p.name, "pool")
+					// fmt.Println("Adding worker to", p.name, "pool")
 					p.add()
 				} else if current > target {
-					fmt.Println("Removing worker from", p.name, "pool")
+					// fmt.Println("Removing worker from", p.name, "pool")
 					err := p.remove()
 					if err != nil {
 						if errors.Is(err, retrypool.ErrAlreadyRemovingWorker) {
@@ -322,10 +344,10 @@ func (q *Queue) Scale(targets map[string]int) error {
 								}
 							}
 						} else if err.Error() == "no workers to remove" {
-							fmt.Println("No workers to remove from", p.name)
+							// fmt.Println("No workers to remove from", p.name)
 							break
 						} else {
-							fmt.Printf("Error removing worker from %s pool: %v\n", p.name, err)
+							logs.Error(q.ctx, "Error removing worker from pool", "error", err, "pool", p.name)
 							break
 						}
 					}
@@ -337,10 +359,11 @@ func (q *Queue) Scale(targets map[string]int) error {
 
 	wg.Wait()
 
-	fmt.Println("Available workflows workers:", q.AvailableWorkflowWorkers())
-	fmt.Println("Available activities workers:", q.AvailableActivityWorkers())
-	fmt.Println("Available side effects workers:", q.AvailableSideEffectWorkers())
-	fmt.Println("Available sagas workers:", q.AvailableSagaWorkers())
+	logs.Debug(q.ctx, "Queue scaled", "queue", q.queueName)
+	logs.Debug(q.ctx, "Available workflows workers:", q.AvailableWorkflowWorkers())
+	logs.Debug(q.ctx, "Available activities workers:", q.AvailableActivityWorkers())
+	logs.Debug(q.ctx, "Available side effects workers:", q.AvailableSideEffectWorkers())
+	logs.Debug(q.ctx, "Available sagas workers:", q.AvailableSagaWorkers())
 
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
@@ -150,7 +151,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 				_, err = repo.Hierarchies().Create(tx, run.ID,
 					subWorkflow.EntityInfo.ID, activity.EntityInfo.ID,
 					subWorkflow.EntityInfo.StepID, activity.EntityInfo.StepID,
-					subWorkflow.Execution.ID, activity.Execution.ID)
+					subWorkflow.Execution.ID, activity.Execution.ID, hierarchy.ChildTypeActivity, hierarchy.ParentTypeWorkflow)
 				if err != nil {
 					t.Fatalf("failed creating hierarchy for activity %s: %v", actType, err)
 				}
@@ -176,7 +177,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 			_, err = repo.Hierarchies().Create(tx, run.ID,
 				rootWorkflow.EntityInfo.ID, effect.EntityInfo.ID,
 				rootWorkflow.EntityInfo.StepID, effect.EntityInfo.StepID,
-				rootWorkflow.Execution.ID, effect.Execution.ID)
+				rootWorkflow.Execution.ID, effect.Execution.ID, hierarchy.ChildTypeSideEffect, hierarchy.ParentTypeWorkflow)
 			if err != nil {
 				t.Fatalf("failed creating hierarchy for side effect %s: %v", effectType, err)
 			}
@@ -187,7 +188,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 			_, err = repo.Hierarchies().Create(tx, run.ID,
 				rootWorkflow.EntityInfo.ID, subWorkflow.EntityInfo.ID,
 				rootWorkflow.EntityInfo.StepID, subWorkflow.EntityInfo.StepID,
-				rootWorkflow.Execution.ID, subWorkflow.Execution.ID)
+				rootWorkflow.Execution.ID, subWorkflow.Execution.ID, hierarchy.ChildTypeWorkflow, hierarchy.ParentTypeWorkflow)
 			if err != nil {
 				t.Fatalf("failed creating hierarchy for sub-workflow in %s: %v", runName, err)
 			}
@@ -197,7 +198,7 @@ func TestComplexWorkflowScenario(t *testing.T) {
 		_, err = repo.Hierarchies().Create(tx, run.ID,
 			rootWorkflow.EntityInfo.ID, saga.EntityInfo.ID,
 			rootWorkflow.EntityInfo.StepID, saga.EntityInfo.StepID,
-			rootWorkflow.Execution.ID, saga.Execution.ID)
+			rootWorkflow.Execution.ID, saga.Execution.ID, hierarchy.ChildTypeSaga, hierarchy.ParentTypeWorkflow)
 		if err != nil {
 			t.Fatalf("failed creating hierarchy for saga in %s: %v", runName, err)
 		}

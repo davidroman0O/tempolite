@@ -216,6 +216,12 @@ func (Hierarchy) Fields() []ent.Field {
 		field.Int("child_execution_id"),
 		field.String("parent_step_id"),
 		field.String("child_step_id"),
+		field.Enum("childType").
+			Values("Workflow", "Activity", "Saga", "SideEffect").
+			Immutable(),
+		field.Enum("parentType").
+			Values("Workflow", "Activity", "Saga", "SideEffect").
+			Immutable(),
 	}
 }
 

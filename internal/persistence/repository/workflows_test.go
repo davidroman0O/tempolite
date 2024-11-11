@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -132,7 +133,7 @@ func TestWorkflowLifecycle(t *testing.T) {
 				parentWorkflow.EntityInfo.StepID,
 				subWorkflow.EntityInfo.StepID,
 				parentWorkflow.Execution.ID,
-				subWorkflow.Execution.ID)
+				subWorkflow.Execution.ID, hierarchy.ChildTypeWorkflow, hierarchy.ParentTypeWorkflow)
 			require.NoError(t, err)
 
 			subWorkflows[i] = subWorkflow

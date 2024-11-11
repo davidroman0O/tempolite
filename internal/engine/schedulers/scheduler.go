@@ -2,17 +2,17 @@ package schedulers
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/davidroman0O/tempolite/internal/clock"
 	"github.com/davidroman0O/tempolite/internal/engine/queues"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
+	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
 type Scheduler struct {
+	ctx      context.Context
 	clock    *clock.Clock
 	cerr     chan error
 	db       repository.Repository
@@ -28,6 +28,7 @@ func New(
 	getQueue func(queue string) *queues.Queue,
 ) (*Scheduler, error) {
 	s := &Scheduler{
+		ctx:      ctx,
 		db:       db,
 		cerr:     make(chan error),
 		getQueue: getQueue,
@@ -37,7 +38,7 @@ func New(
 			time.Nanosecond,
 			func(err error) {
 				// TODO: i don't know what to do with the errors
-				log.Println(err)
+				logs.Error(ctx, "Error in scheduler", "error", err)
 			},
 		),
 	}
@@ -48,17 +49,19 @@ func New(
 }
 
 func (s *Scheduler) Stop() {
-	fmt.Println("Stopping scheduler")
+	logs.Debug(s.ctx, "Stopping scheduler")
 	s.clock.Stop()
-	defer fmt.Println("Scheduler stopped")
+	logs.Debug(s.ctx, "Scheduler stopped")
 }
 
 func (s *Scheduler) addScheduler(tickerID clock.TickerID, ticker clock.Ticker) {
+	logs.Debug(s.ctx, "Adding scheduler", "tickerID", tickerID)
 	s.clock.Add(tickerID, ticker, clock.BestEffort)
 }
 
 func (s *Scheduler) AddQueue(queue string) {
 	s.incID++
+	logs.Debug(s.ctx, "Adding queue schedulers", "queue", queue)
 	s.addScheduler(
 		s.incID,
 		SchedulerWorkflowsPending{
