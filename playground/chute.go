@@ -1,4 +1,3 @@
-// Package chute provides high-performance lock-free multicast queues
 package chute
 
 import (
@@ -12,174 +11,254 @@ import (
 const (
 	blockSize     = 4096
 	cacheLineSize = 64
-	maxRetries    = 100 // For spinning operations
 )
 
-// CacheAligned helps prevent false sharing
-type CacheAligned[T any] struct {
-	value T
-	_     [cacheLineSize - unsafe.Sizeof(atomic.Uint64{}) - (unsafe.Sizeof(atomic.Uint64{}) % cacheLineSize)]byte
+type alignedCounter struct {
+	value atomic.Uint64
+	_     [cacheLineSize - unsafe.Sizeof(atomic.Uint64{})]byte
 }
 
-// block represents a single block in the queue
+type alignedPtr[T any] struct {
+	value atomic.Pointer[T]
+	_     [cacheLineSize - unsafe.Sizeof(atomic.Pointer[struct{}]{})]byte
+}
+
 type block[T any] struct {
-	len       CacheAligned[atomic.Uint64] // Number of elements in block
-	useCount  CacheAligned[atomic.Uint64] // Reference count
-	next      CacheAligned[atomic.Pointer[block[T]]]
-	bitBlocks [blockSize / 64]atomic.Uint64 // Bitmap for MPMC
-	mem       [blockSize]T                  // Actual data storage
+	len       alignedCounter
+	useCount  alignedCounter
+	next      alignedPtr[block[T]]
+	pool      *sync.Pool
+	bitBlocks [blockSize / 64]atomic.Uint64
+	mem       [blockSize]T
+}
+
+func (b *block[T]) incRef() uint64 {
+	return b.useCount.value.Add(1)
+}
+
+func (b *block[T]) decRef() {
+	prev := b.useCount.value.Add(^uint64(0))
+	if prev == 1 {
+		if next := b.next.value.Load(); next != nil {
+			next.decRef()
+		}
+		if b.pool != nil {
+			b.len.value.Store(0)
+			b.useCount.value.Store(0)
+			b.next.value.Store(nil)
+			for i := range b.bitBlocks {
+				b.bitBlocks[i].Store(0)
+			}
+			b.pool.Put(b)
+		}
+	}
+}
+
+type SPMCQueue[T any] struct {
+	lastBlock alignedPtr[block[T]]
 	pool      *sync.Pool
 }
 
-// blockPool manages a pool of blocks
-type blockPool[T any] struct {
-	pool sync.Pool
-}
-
-func newBlockPool[T any]() *blockPool[T] {
-	bp := &blockPool[T]{}
-	bp.pool.New = func() interface{} {
-		return &block[T]{}
+func NewSPMCQueue[T any]() *SPMCQueue[T] {
+	q := &SPMCQueue[T]{
+		pool: &sync.Pool{
+			New: func() interface{} {
+				return &block[T]{}
+			},
+		},
 	}
-	return bp
-}
-
-func (bp *blockPool[T]) get(counter uint64) *block[T] {
-	b := bp.pool.Get().(*block[T])
-	b.len.value.Store(0)
-	b.useCount.value.Store(counter)
-	b.next.value.Store(nil)
-	// Clear only the first bitBlock as we'll start writing there
-	b.bitBlocks[0].Store(0)
-	b.pool = &bp.pool
-	return b
-}
-
-type Queue[T any] struct {
-	lastBlock CacheAligned[atomic.Pointer[block[T]]]
-	pool      *blockPool[T]
-}
-
-func NewQueue[T any]() *Queue[T] {
-	q := &Queue[T]{
-		pool: newBlockPool[T](),
-	}
-	firstBlock := q.pool.get(1)
+	firstBlock := q.newBlock(1)
 	q.lastBlock.value.Store(firstBlock)
 	return q
 }
 
-// tryLockLastBlock attempts to atomically swap the last block pointer
-func (q *Queue[T]) tryLockLastBlock() *block[T] {
-	return q.lastBlock.value.Swap(nil)
+func (q *SPMCQueue[T]) newBlock(refCount uint64) *block[T] {
+	b := q.pool.Get().(*block[T])
+	b.len.value.Store(0)
+	b.useCount.value.Store(refCount)
+	b.next.value.Store(nil)
+	b.pool = q.pool
+	return b
 }
 
-// lockLastBlock spins until it can acquire the last block
-func (q *Queue[T]) lockLastBlock() *block[T] {
-	for i := 0; ; i++ {
-		if b := q.tryLockLastBlock(); b != nil {
-			return b
-		}
-		if i < maxRetries {
+func (q *SPMCQueue[T]) Push(value T) {
+	b := q.lastBlock.value.Load()
+	idx := b.len.value.Load()
+
+	if idx >= blockSize {
+		newB := q.newBlock(2)
+		b.next.value.Store(newB)
+		q.lastBlock.value.Store(newB)
+		b.decRef()
+		b = newB
+		idx = 0
+	}
+
+	b.mem[idx] = value
+	b.len.value.Store(idx + 1)
+}
+
+type MPMCQueue[T any] struct {
+	lastBlock alignedPtr[block[T]]
+	pool      *sync.Pool
+}
+
+func NewMPMCQueue[T any]() *MPMCQueue[T] {
+	q := &MPMCQueue[T]{
+		pool: &sync.Pool{
+			New: func() interface{} {
+				return &block[T]{}
+			},
+		},
+	}
+	firstBlock := q.newBlock(1)
+	q.lastBlock.value.Store(firstBlock)
+	return q
+}
+
+func (q *MPMCQueue[T]) newBlock(refCount uint64) *block[T] {
+	b := q.pool.Get().(*block[T])
+	b.len.value.Store(0)
+	b.useCount.value.Store(refCount)
+	b.next.value.Store(nil)
+	for i := range b.bitBlocks {
+		b.bitBlocks[i].Store(0)
+	}
+	b.pool = q.pool
+	return b
+}
+
+func (q *MPMCQueue[T]) Push(value T) {
+	for {
+		b := q.tryLockLastBlock()
+		if b == nil {
 			runtime.Gosched()
-		} else {
-			runtime.Gosched()
-			i = 0
+			continue
 		}
+
+		idx := b.len.value.Add(1) - 1
+		if idx >= blockSize {
+			b.len.value.Add(^uint64(0))
+			newB := q.newBlock(3)
+			b.next.value.Store(newB)
+			q.lastBlock.value.Store(newB)
+			b.decRef()
+			q.unlockLastBlock(newB)
+			continue
+		}
+
+		b.mem[idx] = value
+		blockIdx := idx / 64
+		bitIdx := idx % 64
+		b.bitBlocks[blockIdx].Or(1 << bitIdx)
+		q.unlockLastBlock(b)
+		return
 	}
 }
 
-func (q *Queue[T]) unlockLastBlock(b *block[T]) {
+func (q *MPMCQueue[T]) tryLockLastBlock() *block[T] {
+	for i := uint(0); i < 32; i++ {
+		if b := q.lastBlock.value.Swap(nil); b != nil {
+			return b
+		}
+		if i > 10 {
+			runtime.Gosched()
+		} else {
+			for j := uint(0); j < (1 << i); j++ {
+				runtime.Gosched()
+			}
+		}
+	}
+	return nil
+}
+
+func (q *MPMCQueue[T]) unlockLastBlock(b *block[T]) {
 	q.lastBlock.value.Store(b)
 }
 
-func (b *block[T]) recycleBlock() {
-	if next := b.next.value.Load(); next != nil {
-		next.decUseCount()
+// SPMC Reader implementation
+type SPMCReader[T any] struct {
+	block *block[T]
+	index uint64
+	len   uint64
+}
+
+func (q *SPMCQueue[T]) NewReader() *SPMCReader[T] {
+	b := q.lastBlock.value.Load()
+	if b == nil {
+		return nil
 	}
-	if b.pool != nil {
-		b.pool.Put(b)
+	b.incRef()
+	len := b.len.value.Load()
+	return &SPMCReader[T]{
+		block: b,
+		index: len,
+		len:   len,
 	}
 }
 
-func (b *block[T]) incUseCount() {
-	b.useCount.value.Add(1)
-}
-
-func (b *block[T]) decUseCount() {
-	if b.useCount.value.Add(^uint64(0)) == 0 {
-		b.recycleBlock()
+func (r *SPMCReader[T]) Next() (T, bool) {
+	var zero T
+	if r.block == nil {
+		return zero, false
 	}
-}
 
-// Push adds an item to the queue with optimized retry logic
-func (q *Queue[T]) Push(value T) {
-	for i := 0; ; i++ {
-		b := q.lockLastBlock()
-
-		if q.tryPush(b, value) {
-			q.unlockLastBlock(b)
-			return
-		}
-
-		// Current block is full, try to add new block
-		newB := q.pool.get(3)
-		b.next.value.Store(newB)
-		b.decUseCount()
-
-		if q.tryPush(newB, value) {
-			q.unlockLastBlock(newB)
-			return
-		}
-
-		if i < maxRetries {
-			runtime.Gosched()
+	if r.index >= r.len {
+		if r.len == blockSize {
+			next := r.block.next.value.Load()
+			if next == nil {
+				return zero, false
+			}
+			next.incRef()
+			oldBlock := r.block
+			r.block = next
+			oldBlock.decRef()
+			r.index = 0
+			r.len = next.len.value.Load()
+			if r.len == 0 {
+				return zero, false
+			}
 		} else {
-			runtime.Gosched()
-			i = 0
+			newLen := r.block.len.value.Load()
+			if r.len == newLen {
+				return zero, false
+			}
+			r.len = newLen
 		}
 	}
-}
 
-// tryPush optimized for better memory access patterns
-func (q *Queue[T]) tryPush(b *block[T], value T) bool {
-	idx := b.len.value.Load()
-	if idx >= blockSize {
-		return false
+	if r.index >= blockSize {
+		return zero, false
 	}
 
-	// Store value before updating metadata
-	b.mem[idx] = value
-
-	// Update bitmap using a single atomic operation
-	blockIdx := idx / 64
-	bitIdx := idx % 64
-	mask := uint64(1) << bitIdx
-	b.bitBlocks[blockIdx].Or(mask)
-
-	// Update length last
-	b.len.value.Store(idx + 1)
-	return true
+	value := r.block.mem[r.index]
+	r.index++
+	return value, true
 }
 
-type Reader[T any] struct {
+func (r *SPMCReader[T]) Close() {
+	if r.block != nil {
+		r.block.decRef()
+		r.block = nil
+	}
+}
+
+// MPMC Reader implementation
+type MPMCReader[T any] struct {
 	block         *block[T]
 	index         uint64
 	len           uint64
 	bitBlockIndex uint64
 }
 
-// NewReader creates a new reader with proper synchronization
-func (q *Queue[T]) NewReader() *Reader[T] {
-	b := q.lockLastBlock()
+func (q *MPMCQueue[T]) NewReader() *MPMCReader[T] {
+	b := q.lastBlock.value.Load()
 	if b == nil {
-		b = q.pool.get(1)
+		return nil
 	}
-	b.incUseCount() // Increment before creating reader
+	b.incRef()
 	len := b.len.value.Load()
-	q.unlockLastBlock(b)
-
-	return &Reader[T]{
+	return &MPMCReader[T]{
 		block:         b,
 		index:         len,
 		len:           len,
@@ -187,50 +266,40 @@ func (q *Queue[T]) NewReader() *Reader[T] {
 	}
 }
 
-// Optimized bit operations
-func getTrailingOnes(value uint64) uint64 {
-	return uint64(bits.TrailingZeros64(^value))
-}
-
-// Next returns the next item with optimized block transitions
-func (r *Reader[T]) Next() (T, bool) {
+func (r *MPMCReader[T]) Next() (T, bool) {
 	var zero T
-
 	if r.block == nil {
 		return zero, false
 	}
 
-	if r.index == r.len {
+	if r.index >= r.len {
 		if r.len == blockSize {
-			// Move to next block
-			if next := r.block.next.value.Load(); next != nil {
-				next.incUseCount()
-				r.block.decUseCount()
-				r.block = next
-				r.index = 0
+			next := r.block.next.value.Load()
+			if next == nil {
+				return zero, false
+			}
+			next.incRef()
+			oldBlock := r.block
+			r.block = next
+			oldBlock.decRef()
+			r.index = 0
 
-				bits := next.bitBlocks[0].Load()
-				r.len = getTrailingOnes(bits)
-				r.bitBlockIndex = 0
-
-				if bits == ^uint64(0) {
-					r.bitBlockIndex = 1
-				}
-
-				if r.len == 0 {
-					return zero, false
-				}
-			} else {
+			bits := next.bitBlocks[0].Load()
+			r.len = uint64(trailingOnes(bits))
+			r.bitBlockIndex = 0
+			if bits == ^uint64(0) {
+				r.bitBlockIndex = 1
+			}
+			if r.len == 0 {
 				return zero, false
 			}
 		} else {
-			// Check current block for new items
 			if r.bitBlockIndex >= blockSize/64 {
 				return zero, false
 			}
 
 			bits := r.block.bitBlocks[r.bitBlockIndex].Load()
-			newLen := r.bitBlockIndex*64 + getTrailingOnes(bits)
+			newLen := r.bitBlockIndex*64 + uint64(trailingOnes(bits))
 
 			if r.len == newLen {
 				return zero, false
@@ -253,22 +322,13 @@ func (r *Reader[T]) Next() (T, bool) {
 	return value, true
 }
 
-func (r *Reader[T]) Clone() *Reader[T] {
-	if r.block == nil {
-		return nil
-	}
-	r.block.incUseCount()
-	return &Reader[T]{
-		block:         r.block,
-		index:         r.index,
-		len:           r.len,
-		bitBlockIndex: r.bitBlockIndex,
+func (r *MPMCReader[T]) Close() {
+	if r.block != nil {
+		r.block.decRef()
+		r.block = nil
 	}
 }
 
-func (r *Reader[T]) Close() {
-	if r.block != nil {
-		r.block.decUseCount()
-		r.block = nil
-	}
+func trailingOnes(x uint64) int {
+	return bits.TrailingZeros64(^x)
 }

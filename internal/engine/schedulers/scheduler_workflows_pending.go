@@ -144,24 +144,24 @@ func (s *SchedulerWorkflowsPending) Tick(ctx context.Context) error {
 			}
 
 			s.mu.Lock()
-			s.currentNotifications[w.ID] = notification
+			s.currentNotifications[w.Execution.ID] = notification
 
-			go func(workflowID int, nono chan struct{}) {
+			go func(workflowID int, executionID int, nono chan struct{}) {
 				select {
 				case <-nono:
-					logs.Debug(s.ctx, "Scheduler Workflows Pending workflow finished", "queue", s.queueName, "workflowID", workflowID)
+					logs.Debug(s.ctx, "Scheduler Workflows Pending workflow finished", "queue", s.queueName, "workflowID", workflowID, "executionID", executionID)
 					s.mu.Lock()
-					delete(s.currentNotifications, workflowID)
+					delete(s.currentNotifications, w.Execution.ID)
 					s.mu.Unlock()
 					return
 				case <-ctx.Done():
-					logs.Debug(s.ctx, "Scheduler Workflows Pending workflow context canceled", "error", ctx.Err(), "queue", s.queueName, "workflowID", workflowID)
+					logs.Debug(s.ctx, "Scheduler Workflows Pending workflow context canceled", "error", ctx.Err(), "queue", s.queueName, "workflowID", workflowID, "executionID", executionID)
 					s.mu.Lock()
-					delete(s.currentNotifications, workflowID)
+					delete(s.currentNotifications, w.Execution.ID)
 					s.mu.Unlock()
 					return
 				}
-			}(w.ID, notification)
+			}(w.ID, w.Execution.ID, notification)
 
 			s.mu.Unlock()
 

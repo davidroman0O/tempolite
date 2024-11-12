@@ -175,6 +175,13 @@ func (c *Clock) Start() {
 	}()
 }
 
+func (c *Clock) HasTickerID(id TickerID) bool {
+	c.mu.RLock()
+	_, ok := c.tickers[id]
+	c.mu.RUnlock()
+	return ok
+}
+
 // Stop halts the ticking process and cleans up resources.
 func (c *Clock) Stop() {
 	c.closing.Store(true)

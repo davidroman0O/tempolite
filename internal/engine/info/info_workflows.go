@@ -39,21 +39,28 @@ func NewWorkflowInfo(ctx context.Context, id types.WorkflowID, handler types.Han
 		c:              c,
 		requestReponse: retrypool.NewRequestResponse[struct{}, [][]byte](struct{}{}),
 	}
-
 	wi.ctx, wi.cancel = context.WithCancel(ctx)
-
 	wi.tickerID = fmt.Sprintf("workflow-%v", wi.entityID.ID())
 
-	wi.done = func() {
-		logs.Debug(ctx, "Removing workflow info", "handlerName", handler.HandlerName, "workflowID", id)
-		wi.cancel()
-		c.RemoveTicker(wi.tickerID) // should trigger the clean up
-		logs.Debug(ctx, "Removed workflow info", "handlerName", handler.HandlerName, "workflowID", id)
+	if !wi.c.HasTickerID(wi.tickerID) {
+		wi.prepareClock()
 	}
 
-	logs.Debug(ctx, "Adding workflow info", "handlerName", handler.HandlerName, "workflowID", id)
+	return wi
+}
 
-	c.AddTicker(
+func (wi *WorkflowInfo) prepareClock() {
+
+	wi.done = func() {
+		logs.Debug(wi.ctx, "Removing workflow info", "handlerName", wi.handler.HandlerName, "workflowID", wi.entityID)
+		wi.cancel()
+		wi.c.RemoveTicker(wi.tickerID) // should trigger the clean up
+		logs.Debug(wi.ctx, "Removed workflow info", "handlerName", wi.handler.HandlerName, "workflowID", wi.entityID)
+	}
+
+	logs.Debug(wi.ctx, "Adding workflow info", "handlerName", wi.handler.HandlerName, "workflowID", wi.entityID)
+
+	wi.c.AddTicker(
 		wi.tickerID,
 		wi,
 		clock.WithCleanup(func() {
@@ -63,8 +70,6 @@ func NewWorkflowInfo(ctx context.Context, id types.WorkflowID, handler types.Han
 			wi.cancel()
 		}),
 	)
-
-	return wi
 }
 
 func NewWorkflowInfoWithError(ctx context.Context, err error) *WorkflowInfo {
