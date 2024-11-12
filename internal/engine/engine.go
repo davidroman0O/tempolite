@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -21,7 +23,8 @@ import (
 
 type Engine struct {
 	ctx          context.Context
-	mu           sync.Mutex
+	cancel       context.CancelFunc
+	mu           sync.RWMutex
 	registry     *registry.Registry
 	workerQueues map[string]*queues.Queue
 	db           repository.Repository
@@ -29,6 +32,8 @@ type Engine struct {
 	commands *commands.Commands
 	queries  *queries.Queries
 	clock    *clock.Clock
+
+	schedulerWorkflowPending clock.TickerID
 }
 
 func New(
@@ -38,17 +43,21 @@ func New(
 ) (*Engine, error) {
 	var err error
 	logs.Debug(ctx, "Creating engine")
+
+	ctx, cancel := context.WithCancel(ctx)
+
 	e := &Engine{
 		ctx:          ctx,
+		cancel:       cancel,
 		workerQueues: make(map[string]*queues.Queue),
 		clock: clock.NewClock(
-			ctx,
-			time.Nanosecond,
+			// ctx,
+			time.Millisecond*10,
 			func(err error) {
 				logs.Error(ctx, err.Error())
 			},
-			clock.WithName("engine"),
 		),
+		schedulerWorkflowPending: "scheduler_workflow_pending",
 	}
 
 	logs.Debug(ctx, "Creating registry")
@@ -62,16 +71,10 @@ func New(
 		ctx,
 		client)
 
-	logs.Debug(ctx, "Creating scheduler")
-	// if e.scheduler, err = schedulers.New(
-	// 	ctx,
-	// 	e.db,
-	// 	e.registry,
-	// 	e.GetQueue,
-	// ); err != nil {
-	// 	logs.Error(ctx, "Error creating scheduler", "error", err)
-	// 	return nil, err
-	// }
+	if err := e.ReconciliateWorkflows(); err != nil {
+		logs.Error(ctx, "Error reconciliating workflows", "error", err)
+		return nil, err
+	}
 
 	e.clock.Start()
 
@@ -83,7 +86,31 @@ func New(
 		return nil, err
 	}
 
+	go e.monitoringStatus()
+
+	logs.Debug(e.ctx, "Adding queue workflow pending to clock")
+	e.clock.AddTicker(
+		e.schedulerWorkflowPending,
+		schedulers.NewSchedulerWorkflowPending(
+			e.ctx,
+			e.db,
+			e.GetQueues,
+			e.GetQueue),
+		clock.WithCleanup(func() {
+			// it will be removed on close
+		}))
+
 	return e, nil
+}
+
+func (e *Engine) GetQueues() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var queues []string
+	for k := range e.workerQueues {
+		queues = append(queues, k)
+	}
+	return queues
 }
 
 func (e *Engine) GetQueue(queue string) *queues.Queue {
@@ -92,13 +119,113 @@ func (e *Engine) GetQueue(queue string) *queues.Queue {
 	return e.workerQueues[queue]
 }
 
+// When we restart, we need to check the state of the workflows
+// - Entity Running / Execution Running => Reconciliate: Execution to Cancelled, no inc retry, new Execution Pending
+func (e *Engine) ReconciliateWorkflows() error {
+
+	tx, err := e.db.Tx()
+	if err != nil {
+		logs.Error(e.ctx, "ReconciliateWorkflows error getting tx", "error", err)
+		return err
+	}
+
+	if err = e.db.Workflows().ReconciliateRunningRunning(tx); err != nil {
+		logs.Error(e.ctx, "ReconciliateWorkflows error reconciliating running running", "error", err)
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		logs.Error(e.ctx, "ReconciliateWorkflows error committing tx", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (e *Engine) monitoringStatus() {
+	ticker := time.NewTicker(time.Second / 2)
+
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+
+			// Create a concise error message
+			panic(fmt.Errorf("Panic in triggerTickers: %v \n %v", r, stackTrace))
+		}
+	}()
+
+	for {
+		select {
+		case <-e.ctx.Done():
+			logs.Debug(e.ctx, "Monitoring status context canceled")
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			logs.Debug(e.ctx, "Monitoring status")
+			e.mu.RLock()
+			queues := e.workerQueues
+			e.mu.RUnlock()
+
+			megaLog := ""
+			for _, q := range queues {
+				megaLog += fmt.Sprintf("Current Queue %v\n", q.GetName())
+
+				{
+					tasks := q.GetCurrentWorkflowTasks()
+					for _, v := range tasks {
+						megaLog += fmt.Sprintf("\tWORKFLOW TASK workerID:%v taskStatus:%v workflowID:%v executionID:%v stepID:%v queueID:%v runID:%v  \n", v.WorkerID, v.Status, v.Data.WorkflowInfo.ID, v.Data.WorkflowInfo.Execution.ID, v.Data.WorkflowInfo.StepID, v.Data.WorkflowInfo.QueueID, v.Data.WorkflowInfo.RunID)
+					}
+					slots := q.AvailableWorkflowWorkers()
+					megaLog += fmt.Sprintf("\tWORKFLOW SLOTS %v\n", slots)
+				}
+
+				// TODO: add them but the data is empty for now
+				// {
+				// 	tasks := q.GetCurrentActivityTasks()
+				// 	for _, v := range tasks {
+				// 		megaLog += fmt.Sprintf("\tACTIVITY TASK workerID:%v taskStatus:%v workflowID:%v stepID:%v queueID:%v runID:%v  \n", v.WorkerID, v.Status, v.Data.WorkflowInfo.ID, v.Data.WorkflowInfo.StepID, v.Data.WorkflowInfo.QueueID, v.Data.WorkflowInfo.RunID)
+				// 	}
+				// }
+
+				// {
+				// 	tasks := q.GetCurrentSideEffectTasks()
+				// 	for _, v := range tasks {
+				// 		megaLog += fmt.Sprintf("\tSIDE EFFECT TASK workerID:%v taskStatus:%v workflowID:%v stepID:%v queueID:%v runID:%v  \n", v.WorkerID, v.Status, v.Data.WorkflowInfo.ID, v.Data.WorkflowInfo.StepID, v.Data.WorkflowInfo.QueueID, v.Data.WorkflowInfo.RunID)
+				// 	}
+				// }
+
+				// {
+				// 	tasks := q.GetCurrentSagaTasks()
+				// 	for _, v := range tasks {
+				// 		megaLog += fmt.Sprintf("\tSAGA TASK workerID:%v taskStatus:%v workflowID:%v stepID:%v queueID:%v runID:%v  \n", v.WorkerID, v.Status, v.Data.WorkflowInfo.ID, v.Data.WorkflowInfo.StepID, v.Data.WorkflowInfo.QueueID, v.Data.WorkflowInfo.RunID)
+				// 	}
+				// }
+
+			}
+
+			e.mu.RLock()
+			tickers := e.clock.GetMapTickers()
+			e.mu.RUnlock()
+
+			megaLog += fmt.Sprintf("Current Tickers %v\n", len(tickers))
+			for id, t := range tickers {
+				megaLog += fmt.Sprintf("\tTICKER ID:%v - Running: %v\n", id, t)
+			}
+			fmt.Println("NEGALOG", megaLog)
+
+		}
+	}
+}
+
 func (e *Engine) AddQueue(queue string) error {
 	var err error
-	var defaultQueue *queues.Queue
+	var newQueue *queues.Queue
 	logs.Debug(e.ctx, "Adding queue", "queue", queue)
 
 	// TODO: add options for initial workers
-	if defaultQueue, err = queues.New(
+	if newQueue, err = queues.New(
 		e.ctx,
 		queue,
 		e.registry,
@@ -110,15 +237,8 @@ func (e *Engine) AddQueue(queue string) error {
 		return err
 	}
 
-	e.clock.AddTicker(
-		"scheduler-workflow-pending-"+queue,
-		schedulers.NewSchedulerWorkflowPending(e.ctx, e.db, e.GetQueue),
-		clock.WithCleanupCallback(func() {
-			// ???
-		}))
-
 	e.mu.Lock()
-	e.workerQueues[queue] = defaultQueue
+	e.workerQueues[queue] = newQueue
 	e.mu.Unlock()
 	logs.Debug(e.ctx, "Queue added", "queue", queue)
 	return nil
@@ -132,9 +252,7 @@ func (e *Engine) Shutdown() error {
 	// e.scheduler.Stop()
 	// logs.Debug(e.ctx, "Scheduler shutdown complete")
 
-	logs.Debug(e.ctx, "Shutting down clock")
-	e.clock.Stop()
-	logs.Debug(e.ctx, "Clock shutdown complete")
+	e.cancel()
 
 	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
@@ -143,24 +261,31 @@ func (e *Engine) Shutdown() error {
 			return q.Shutdown()
 		})
 	}
+	shutdown.Wait()
+
+	logs.Debug(e.ctx, "Shutting down clock")
+	e.clock.Stop()
+	logs.Debug(e.ctx, "Clock shutdown complete")
 
 	defer logs.Debug(e.ctx, "Engine shutdown complete")
 
 	logs.Debug(e.ctx, "Waiting for shutdown")
-	return shutdown.Wait()
+	return nil
 }
 
 func (e *Engine) Scale(queue string, targets map[string]int) error {
 	logs.Debug(e.ctx, "Preparing to scale", "queue", queue, "targets", targets)
 	e.mu.Lock()
 	q, ok := e.workerQueues[queue]
+	e.mu.Unlock()
 	if !ok {
 		if err := e.AddQueue(queue); err != nil {
-			e.mu.Unlock()
 			return err
 		}
+		e.mu.Lock()
+		q = e.workerQueues[queue]
+		e.mu.Unlock()
 	}
-	e.mu.Unlock()
 	logs.Debug(e.ctx, "Scaling queue", "queue", queue, "targets", targets)
 	return q.Scale(targets)
 }

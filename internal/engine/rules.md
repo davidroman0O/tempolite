@@ -28,3 +28,13 @@
     else
         - workflow failed
 
+
+
+If restart
+    - Entity: Running
+    - Execution: Running
+    then  
+        Execution Running to Cancelled
+        DO NOT INCREASE RETRY
+        New Execution to Pending
+

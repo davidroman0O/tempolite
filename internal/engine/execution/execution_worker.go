@@ -115,3 +115,26 @@ func (e *WorkerPool[Request, Response]) AvailableWorkers() int {
 	defer e.mu.Unlock()
 	return len(e.workers)
 }
+
+type CurrentTask[Request any, Response any] struct {
+	WorkerID int
+	Status   retrypool.TaskStatus
+	Data     Request
+}
+
+func (e *WorkerPool[Request, Response]) CurrentTasks() []CurrentTask[Request, Response] {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	requests := []CurrentTask[Request, Response]{}
+	e.pool.RangeTasks(func(data *retrypool.TaskWrapper[*retrypool.RequestResponse[Request, Response]], workerID int, status retrypool.TaskStatus) bool {
+		requests = append(requests, CurrentTask[Request, Response]{
+			WorkerID: workerID,
+			Status:   status,
+			Data:     data.Data().Request,
+		})
+		return true
+	})
+
+	return requests
+}

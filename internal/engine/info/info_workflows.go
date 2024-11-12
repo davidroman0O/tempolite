@@ -2,6 +2,7 @@ package info
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -26,35 +27,39 @@ type WorkflowInfo struct {
 	requestReponse *retrypool.RequestResponse[struct{}, [][]byte]
 	done           func()
 
-	c *clock.Clock // todo: remove
+	c        *clock.Clock // todo: remove
+	tickerID interface{}
 }
 
 func NewWorkflowInfo(ctx context.Context, id types.WorkflowID, handler types.HandlerInfo, db repository.Repository, c *clock.Clock) *WorkflowInfo {
 	wi := &WorkflowInfo{
-		db:       db,
-		handler:  handler,
-		entityID: id,
-		c:        c,
-		// responseChn: make(chan workflowGetResponse, 1),
+		db:             db,
+		handler:        handler,
+		entityID:       id,
+		c:              c,
 		requestReponse: retrypool.NewRequestResponse[struct{}, [][]byte](struct{}{}),
 	}
 
 	wi.ctx, wi.cancel = context.WithCancel(ctx)
 
+	wi.tickerID = fmt.Sprintf("workflow-%v", wi.entityID.ID())
+
 	wi.done = func() {
 		logs.Debug(ctx, "Removing workflow info", "handlerName", handler.HandlerName, "workflowID", id)
-		// wi.cancel()
-		c.RemoveTicker(wi.entityID.ID()) // should trigger the clean up
+		wi.cancel()
+		c.RemoveTicker(wi.tickerID) // should trigger the clean up
 		logs.Debug(ctx, "Removed workflow info", "handlerName", handler.HandlerName, "workflowID", id)
 	}
 
 	logs.Debug(ctx, "Adding workflow info", "handlerName", handler.HandlerName, "workflowID", id)
 
 	c.AddTicker(
-		wi.entityID.ID(),
+		wi.tickerID,
 		wi,
-		clock.WithCleanupCallback(func() {
-			fmt.Println("REMOVE WORKFLOW INFO", wi.entityID.ID())
+		clock.WithCleanup(func() {
+			// Rule: we might be a sub-workflow, during a shutdown, our parent was cancelled but we are still running trying to find the answer too because we were triggered
+			// it's time for us to sleep.
+			// fmt.Println("REMOVE WORKFLOW INFO", wi.entityID.ID())
 			wi.cancel()
 		}),
 	)
@@ -80,13 +85,24 @@ func (w *WorkflowInfo) Tick(ctx context.Context) error {
 
 	tx, err := w.db.Tx()
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		logs.Error(w.ctx, "WorkflowInfo Tick error creating transaction", "error", err, "handlerName", w.handler.HandlerName)
 		return err
+	}
+
+	if ctx.Err() != nil {
+		logs.Debug(w.ctx, "WorkflowInfo Tick context canceled", "error", ctx.Err(), "handlerName", w.handler.HandlerName)
+		return ctx.Err()
 	}
 
 	// logs.Debug(w.ctx, "WorkflowInfo Tick getting workflow", "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
 	entityObj, err := w.db.Workflows().Get(tx, w.entityID.ID())
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		if ent.IsNotFound(err) {
 			logs.Error(w.ctx, "WorkflowInfo Tick workflow not found", "workflowID", w.entityID, "error", err, "handlerName", w.handler.HandlerName)
 			return err
@@ -95,10 +111,21 @@ func (w *WorkflowInfo) Tick(ctx context.Context) error {
 		return err
 	}
 
+	if ctx.Err() != nil {
+		logs.Debug(w.ctx, "WorkflowInfo Tick context canceled", "error", ctx.Err(), "handlerName", w.handler.HandlerName)
+		tx.Rollback()
+		return ctx.Err()
+	}
+
 	if err := tx.Commit(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		logs.Error(w.ctx, "WorkflowInfo Tick error committing transaction", "error", err, "handlerName", w.handler.HandlerName)
 		return err
 	}
+
+	logs.Debug(w.ctx, "WorkflowInfo Tick workflow found", "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "executionID", entityObj.Execution.ID, "status", entityObj.Status, "executionStatus", entityObj.Execution.Status)
 
 	switch entity.Status(entityObj.Status) {
 	case entity.StatusCompleted, entity.StatusFailed, entity.StatusCancelled:
@@ -132,7 +159,7 @@ func (w *WorkflowInfo) Tick(ctx context.Context) error {
 
 func (w *WorkflowInfo) Get(output ...any) error {
 
-	// logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
+	logs.Debug(w.ctx, "WorkflowInfo Get asked to listen to", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID)
 
 	ticker := time.NewTicker(1 * time.Second)
 	go func() {
@@ -142,7 +169,11 @@ func (w *WorkflowInfo) Get(output ...any) error {
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "total", w.c.TotalSubscribers())
+				logs.Debug(w.ctx, "WorkflowInfo Get waiting for response", "workflowID", w.entityID.ID(), "handlerName", w.handler.HandlerName, "workflowID", w.entityID, "ctx", w.ctx.Err())
+				// tickers := w.c.ListSubscribers()
+				// for idx, v := range tickers {
+				// 	logs.Debug(w.ctx, "WorkflowInfo List Tickers ", "idx", idx, "TickerID", v)
+				// }
 			}
 		}
 	}()

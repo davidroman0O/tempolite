@@ -8,6 +8,7 @@ import (
 
 	"github.com/davidroman0O/tempolite"
 	tempoliteContext "github.com/davidroman0O/tempolite/internal/engine/context"
+	"github.com/davidroman0O/tempolite/internal/engine/info"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/types"
 	"github.com/davidroman0O/tempolite/pkg/logs"
@@ -146,6 +147,113 @@ func TestSubWorkflowSuccess(t *testing.T) {
 
 	if realValue != 420 {
 		t.Fatal("Real value should be 420")
+	}
+
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSubWorkflowSubQueueSuccess(t *testing.T) {
+	subwrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		return 69, nil
+	}
+
+	wrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		var result int
+		// Feature tested: we should be able to have a sub-workflow
+		if err := ctx.Workflow("subworkflow", subwrk, types.NewWorkflowConfig(types.WithWorkflowQueue("sub"))).Get(&result); err != nil {
+			return 0, err
+		}
+
+		return 420, nil
+	}
+
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(subwrk).
+			Workflow(wrk).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-subworkflow-success.db"),
+		tempolite.WithDestructive(),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+		tempolite.WithQueueConfig(tempolite.NewQueue("sub", tempolite.WithWorkflowWorkers(2))),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info := tp.Workflow(wrk, nil)
+
+	var realValue int
+
+	fmt.Println("Info", info.Get(&realValue))
+
+	if realValue != 420 {
+		t.Fatal("Real value should be 420")
+	}
+
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestManySubWorkflowSubQueueSuccess(t *testing.T) {
+
+	subwrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		return 69, nil
+	}
+
+	wrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		var result int
+		// Feature tested: we should be able to have a sub-workflow
+		if err := ctx.Workflow("subworkflow", subwrk, types.NewWorkflowConfig(types.WithWorkflowQueue("sub"))).Get(&result); err != nil {
+			return 0, err
+		}
+
+		return 420, nil
+	}
+
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(subwrk).
+			Workflow(wrk).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-many-subworkflow-success.db"),
+		tempolite.WithDestructive(),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+		tempolite.WithQueueConfig(tempolite.NewQueue("sub", tempolite.WithWorkflowWorkers(2))),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	infos := []*info.WorkflowInfo{}
+
+	for i := 0; i < 10; i++ {
+		infos = append(infos, tp.Workflow(wrk, nil))
+	}
+
+	for _, info := range infos {
+		var realValue int
+		fmt.Println("Info", info.Get(&realValue))
+		if realValue != 420 {
+			t.Fatal("Real value should be 420")
+		}
 	}
 
 	if err = tp.Shutdown(); err != nil {
@@ -406,6 +514,7 @@ func TestSubWorkflowRestart(t *testing.T) {
 		tempolite.WithPath("./dbs/tempolite-subworkflow-restart.db"),
 		tempolite.WithDestructive(),
 		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+		tempolite.WithQueueConfig(tempolite.NewQueue("sub", tempolite.WithWorkflowWorkers(2))),
 	)
 
 	if err != nil {
@@ -428,11 +537,13 @@ func TestSubWorkflowRestart(t *testing.T) {
 
 	infos := []types.WorkflowID{}
 
+	fmt.Println("Creating workflows")
 	for i := 0; i < 100; i++ {
 		info := tp.Workflow(wrk, nil)
 		infos = append(infos, info.WorkflowID())
 	}
 
+	fmt.Println("Trying to shutdown")
 	// we stop immediately tempolite
 	if err = tp.Shutdown(); err != nil {
 		if err != context.Canceled {
@@ -453,6 +564,7 @@ func TestSubWorkflowRestart(t *testing.T) {
 			Workflow(wrk).
 			Build(),
 		tempolite.WithPath("./dbs/tempolite-subworkflow-restart.db"),
+		tempolite.WithQueueConfig(tempolite.NewQueue("sub", tempolite.WithWorkflowWorkers(2))),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -465,12 +577,20 @@ func TestSubWorkflowRestart(t *testing.T) {
 		"sagas":       2,
 	})
 
+	tp.Scale("sub", map[string]int{
+		"workflows":   2,
+		"activities":  2,
+		"sideEffects": 2,
+		"sagas":       2,
+	})
+
+	<-time.After(1 * time.Second)
 	fmt.Println("Tempolite restarted")
 
 	var realValue int
 
 	for i := 0; i < len(infos); i++ {
-		fmt.Println("Info", i, infos[i])
+		fmt.Println("\tInfo", i, infos[i])
 		info := tp.GetWorkflow(infos[i])
 		if err = info.Get(&realValue); err != nil {
 			t.Fatal(err)

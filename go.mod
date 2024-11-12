@@ -16,7 +16,7 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/davidroman0O/retrypool v0.0.0-20241111214821-4cbfba842c21
+	github.com/davidroman0O/retrypool v0.0.0-20241112210841-4c7a28392cbd
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.13.0 // indirect

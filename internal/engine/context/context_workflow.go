@@ -87,10 +87,9 @@ func NewWorkflowContext(
 // - 	- return workflow info (and wait)
 // ```
 func (w WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options types.WorkflowOptions, params ...any) *info.WorkflowInfo {
+	var err error
 	var id types.WorkflowID
 	var hasHierarchy bool
-	// var wID types.WorkflowID
-	var err error
 
 	logs.Debug(w.Context, "Creating sub workflow", "workflowID", w.EntityID(), "executionID", w.ExecutionID(), "stepID", stepID)
 

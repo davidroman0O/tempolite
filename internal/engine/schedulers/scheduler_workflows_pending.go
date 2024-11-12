@@ -13,174 +13,173 @@ import (
 )
 
 type SchedulerWorkflowsPending struct {
-	// *Scheduler
-	db       repository.Repository
-	ctx      context.Context
-	getQueue func(queue string) *queues.Queue
+	db        repository.Repository
+	ctx       context.Context
+	getQueues func() []string
+	getQueue  func(queue string) *queues.Queue
 }
 
-func NewSchedulerWorkflowPending(ctx context.Context, db repository.Repository, getQueue func(queue string) *queues.Queue) *SchedulerWorkflowsPending {
+func NewSchedulerWorkflowPending(ctx context.Context, db repository.Repository,
+	getQueues func() []string,
+	getQueue func(queue string) *queues.Queue,
+) *SchedulerWorkflowsPending {
 	return &SchedulerWorkflowsPending{
-		db:       db,
-		ctx:      ctx,
-		getQueue: getQueue,
+		db:        db,
+		ctx:       ctx,
+		getQueues: getQueues,
+		getQueue:  getQueue,
 	}
 }
 
 func (s SchedulerWorkflowsPending) Tick(ctx context.Context) error {
-	var tx *ent.Tx
+
 	var err error
-	var queues []*repository.QueueInfo
 
-	if tx, err = s.db.Tx(); err != nil {
-		logs.Error(s.ctx, "Schduler Workflows Pending error creating transaction", "error", err)
-		return err
-	}
+	select {
+	case <-ctx.Done():
+		logs.Debug(s.ctx, "Scheduler Workflows Pending context canceled", "error", ctx.Err())
+		return ctx.Err()
+	default:
+		queues := s.getQueues()
 
-	// defer func() {
-	// 	if p := recover(); p != nil {
-	// 		tx.Rollback() // Rollback in case of panic
-	// 		panic(p)      // Re-throw panic after rollback
-	// 	} else if err != nil {
-	// 		tx.Rollback() // Rollback on error
-	// 	} else {
-	// 		err = tx.Commit() // Commit on success
-	// 		if err != nil {
-	// 			logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
-	// 			return
-	// 		}
-	// 	}
-	// }()
+		for _, queueName := range queues {
 
-	if queues, err = s.db.Queues().List(tx); err != nil {
-		if err := tx.Rollback(); err != nil {
-			logs.Error(s.ctx, "Schduler Workflows Pending error rolling back transaction", "error", err)
-			return err
-		}
-		logs.Error(s.ctx, "Schduler Workflows Pending error listing queues", "error", err)
-		return err
-	}
+			var txQueueGetList *ent.Tx
+			if txQueueGetList, err = s.db.Tx(); err != nil {
+				logs.Error(s.ctx, "Scheduler Workflows Pending error creating transaction", "error", err)
+				return err
+			}
 
-	if err := tx.Commit(); err != nil {
-		logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
-		return err
-	}
+			logs.Debug(s.ctx, "Scheduler Workflows Pending checking queue", "queue", queueName)
+			queue := s.getQueue(queueName)
 
-	for _, q := range queues {
-		var txQueue *ent.Tx
-		if txQueue, err = s.db.Tx(); err != nil {
-			logs.Error(s.ctx, "Schduler Workflows Pending error creating transaction", "error", err)
-			return err
-		}
-		queue := s.getQueue(q.Name)
-
-		if queue.AvailableWorkflowWorkers() <= 0 {
-			continue
-		}
-
-		workflows, err := s.db.Workflows().ListExecutionsPending(txQueue, q.Name)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				logs.Debug(s.ctx, "Schduler Workflows Pending list execution pending context canceled", "error", err)
+			slots := queue.AvailableWorkflowWorkers()
+			if slots <= 0 {
 				return nil
 			}
-			if err := txQueue.Rollback(); err != nil {
-				logs.Error(s.ctx, "Schduler Workflows Pending error rolling back transaction", "error", err)
+
+			workflows, err := s.db.Workflows().ListExecutionsPending(txQueueGetList, queueName, slots)
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					logs.Debug(s.ctx, "Scheduler Workflows Pending list execution pending context canceled", "error", err, "queue", queueName)
+					return nil
+				}
+				if err := txQueueGetList.Rollback(); err != nil {
+					logs.Error(s.ctx, "Scheduler Workflows Pending error rolling back transaction", "error", err, "queue", queueName)
+					return err
+				}
 				return err
 			}
-			return err
-		}
 
-		if err := txQueue.Commit(); err != nil {
-			logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
-			return err
-		}
+			logs.Debug(s.ctx, "Scheduler Workflows Pending found workflows", "queue", queueName, "workflows", len(workflows), "workers", slots)
 
-		// pendingWorkflows := []chan struct{}{}
+			if ctx.Err() != nil {
+				logs.Debug(s.ctx, "Scheduler Workflows Pending context canceled", "error", ctx.Err())
+				txQueueGetList.Rollback()
+				return ctx.Err()
+			}
 
-		for _, w := range workflows {
-			var processed chan struct{}
+			if err := txQueueGetList.Commit(); err != nil {
+				logs.Error(s.ctx, "Scheduler Workflows Pending error committing transaction", "error", err)
+				return err
+			}
 
-			logs.Debug(s.ctx, "Schduler Workflows Pending processing workflow", "queue", q.Name, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+			waitQueued := []chan struct{}{}
 
-			task := retrypool.
-				NewRequestResponse[execution.WorkflowRequest, execution.WorkflowReponse](
-				execution.WorkflowRequest{
-					WorkflowInfo: w,
-					Retry: func() error {
-						var rtx *ent.Tx
-						if rtx, err = s.db.Tx(); err != nil {
-							logs.Error(s.ctx, "Schduler Workflows Pending error creating retry transaction", "error", err)
-							return err
-						}
-						_, err := s.db.Workflows().CreateRetry(rtx, w.ID)
-						if err != nil {
-							if err := rtx.Rollback(); err != nil {
-								logs.Error(s.ctx, "Schduler Workflows Pending error rolling back retry transaction", "error", err)
+			for _, w := range workflows {
+				var queued chan struct{}
+
+				logs.Debug(s.ctx, "Scheduler Workflows Pending processing workflow", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+
+				task := retrypool.
+					NewRequestResponse[execution.WorkflowRequest, execution.WorkflowReponse](
+					execution.WorkflowRequest{
+						WorkflowInfo: w,
+						Retry: func() error {
+							var rtx *ent.Tx
+							if rtx, err = s.db.Tx(); err != nil {
+								logs.Error(s.ctx, "Scheduler Workflows Pending error creating retry transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 								return err
 							}
-							logs.Error(s.ctx, "Schduler Workflows Pending error creating retry", "error", err)
-							return err
-						}
-						if err := rtx.Commit(); err != nil {
-							logs.Error(s.ctx, "Schduler Workflows Pending error committing retry transaction", "error", err)
-							return err
-						}
+							_, err := s.db.Workflows().CreateRetry(rtx, w.ID)
+							if err != nil {
+								if err := rtx.Rollback(); err != nil {
+									logs.Error(s.ctx, "Scheduler Workflows Pending error rolling back retry transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+									return err
+								}
+								logs.Error(s.ctx, "Scheduler Workflows Pending error creating retry", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+								return err
+							}
+							if err := rtx.Commit(); err != nil {
+								logs.Error(s.ctx, "Scheduler Workflows Pending error committing retry transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+								return err
+							}
+							return nil
+						},
+					})
+
+				logs.Debug(s.ctx, "Scheduler Workflows Pending submitting workflow", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// TODO: if we fail, then we should retry while updating the workflow somehow cause we need to fail
+				if queued, err = queue.SubmitWorkflow(task); err != nil {
+					if errors.Is(err, context.Canceled) {
+						logs.Debug(s.ctx, "Scheduler Workflows Pending submit workflow context canceled", "error", err)
 						return nil
-					},
-				})
-
-			logs.Debug(s.ctx, "Schduler Workflows Pending submitting workflow", "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-			// TODO: if we fail, then we should retry while updating the workflow somehow cause we need to fail
-			if processed, err = queue.SubmitWorkflow(task); err != nil {
-				if errors.Is(err, context.Canceled) {
-					logs.Debug(s.ctx, "Schduler Workflows Pending submit workflow context canceled", "error", err)
-					return nil
-				}
-				if err := tx.Rollback(); err != nil {
-					logs.Error(s.ctx, "Schduler Workflows Pending error rolling back transaction", "error", err)
+					}
+					logs.Error(s.ctx, "Scheduler Workflows Pending error submitting workflow", "error", err)
 					return err
 				}
+
+				waitQueued = append(waitQueued, queued)
+
+				// var txQueueUpdate *ent.Tx
+				// logs.Debug(s.ctx, "Scheduler Workflows Pending updating execution pending to running", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// if txQueueUpdate, err = s.db.Tx(); err != nil {
+				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error creating transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 	return err
+				// }
+				// if err := s.db.Workflows().UpdateExecutionPendingToRunning(txQueueUpdate, w.Execution.ID); err != nil {
+				// 	if errors.Is(err, context.Canceled) {
+				// 		logs.Debug(s.ctx, "Scheduler Workflows Pending update execution pending to running context canceled", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 		return nil
+				// 	}
+				// 	if err := txQueueUpdate.Rollback(); err != nil {
+				// 		logs.Error(s.ctx, "Scheduler Workflows Pending error rolling back transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 		return err
+				// 	}
+				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error updating execution pending to running", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 	return err
+				// }
+
+				// if ctx.Err() != nil {
+				// 	logs.Debug(s.ctx, "Scheduler Workflows Pending context canceled", "error", ctx.Err(), "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 	txQueueUpdate.Rollback()
+				// 	return ctx.Err()
+				// }
+
+				// if err := txQueueUpdate.Commit(); err != nil {
+				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error committing transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
+				// 	return err
+				// }
+
+				logs.Debug(s.ctx, "Scheduler Workflows Pending updating added for listening", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 			}
 
-			// We have to wait for the workflow to be ackowledged before do the next one
-			// TODO: we might want to batch many workflows and wait for all of them to be ackowledged
-			// pendingWorkflows = append(pendingWorkflows, processed)
-			<-processed
-
-			logs.Debug(s.ctx, "Schduler Workflows Pending updating execution pending to running", "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-			if txQueue, err = s.db.Tx(); err != nil {
-				logs.Error(s.ctx, "Schduler Workflows Pending error creating transaction", "error", err)
-				return err
-			}
-			if err := s.db.Workflows().UpdateExecutionPendingToRunning(txQueue, w.Execution.ID); err != nil {
-				if errors.Is(err, context.Canceled) {
-					logs.Debug(s.ctx, "Schduler Workflows Pending update execution pending to running context canceled", "error", err)
-					return nil
+			// Now we look at the queued workflows
+			for _, queued := range waitQueued {
+				// We have to wait for the workflow to be ackowledged before do the next one
+				// TODO: we might want to batch many workflows and wait for all of them to be ackowledged
+				// pendingWorkflows = append(pendingWorkflows, queued)
+				// VERY IMPORTANT to check the context
+				select {
+				case <-queued:
+				case <-ctx.Done():
+					logs.Debug(s.ctx, "Scheduler Workflows Pending context canceled", "error", ctx.Err())
+					return ctx.Err()
 				}
-				if err := tx.Rollback(); err != nil {
-					logs.Error(s.ctx, "Schduler Workflows Pending error rolling back transaction", "error", err)
-					return err
-				}
-				logs.Error(s.ctx, "Schduler Workflows Pending error updating execution pending to running", "error", err)
-				return err
-			}
-			if err := txQueue.Commit(); err != nil {
-				logs.Error(s.ctx, "Schduler Workflows Pending error committing transaction", "error", err)
-				return err
 			}
 
-			logs.Debug(s.ctx, "Schduler Workflows Pending updating added for listening", "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 		}
 
-		// for _, v := range pendingWorkflows {
-		// 	select {
-		// 	case <-ctx.Done():
-		// 		logs.Debug(s.ctx, "Schduler Workflows Pending context canceled", "error", ctx.Err())
-		// 		return nil
-		// 	case <-v:
-		// 	}
-		// }
 	}
 
 	return nil

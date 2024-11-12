@@ -116,15 +116,6 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 	queueName := "default"
 	var queueInfo *repository.QueueInfo
 
-	if queueInfo, err = e.db.Queues().Get(tx, parentWorkflowInfo.QueueID); err != nil {
-		if err := tx.Rollback(); err != nil {
-			logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
-			return types.NoWorkflowID, err
-		}
-		logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
-		return types.NoWorkflowID, err
-	}
-
 	duration := ""
 
 	if options != nil {
@@ -151,7 +142,16 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 		if config.Duration != "" {
 			duration = config.Duration
 		}
+	}
 
+	// depending of the queue name, we get the queue info
+	if queueInfo, err = e.db.Queues().GetByName(tx, queueName); err != nil {
+		if err := tx.Rollback(); err != nil {
+			logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
+			return types.NoWorkflowID, err
+		}
+		logs.Error(e.ctx, "CommandSubWorkflow error getting queue", "error", err)
+		return types.NoWorkflowID, err
 	}
 
 	// Extremely important conversion

@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/davidroman0O/retrypool"
@@ -11,6 +12,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/engine/cq/queries"
 	"github.com/davidroman0O/tempolite/internal/engine/io"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
@@ -232,10 +234,41 @@ func (w WorkerWorkflows) Run(ctx context.Context, data *retrypool.RequestRespons
 		values = append(values, reflect.ValueOf(v))
 	}
 
+	var txQueueUpdate *ent.Tx
+	logs.Debug(w.ctx, "Worker Workflow Pending updating execution pending to running", "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+	if txQueueUpdate, err = w.db.Tx(); err != nil {
+		logs.Error(w.ctx, "Worker Workflow Pending error creating transaction", "error", err, "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+		return err
+	}
+	if err := w.db.Workflows().UpdateExecutionPendingToRunning(txQueueUpdate, data.Request.WorkflowInfo.Execution.ID); err != nil {
+		if errors.Is(err, context.Canceled) {
+			logs.Debug(w.ctx, "Worker Workflow Pending update execution pending to running context canceled", "error", err, "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+			return nil
+		}
+		if err := txQueueUpdate.Rollback(); err != nil {
+			logs.Error(w.ctx, "Worker Workflow Pending error rolling back transaction", "error", err, "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+			return err
+		}
+		logs.Error(w.ctx, "Worker Workflow Pending error updating execution pending to running", "error", err, "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+		return err
+	}
+
+	if ctx.Err() != nil {
+		logs.Debug(w.ctx, "Worker Workflow Pending context canceled", "error", ctx.Err(), "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+		txQueueUpdate.Rollback()
+		return ctx.Err()
+	}
+
+	if err := txQueueUpdate.Commit(); err != nil {
+		logs.Error(w.ctx, "Worker Workflow Pending error committing transaction", "error", err, "queue", w.queue, "workflowID", data.Request.WorkflowInfo.ID, "stepID", data.Request.WorkflowInfo.StepID, "queueID", data.Request.WorkflowInfo.QueueID, "runID", data.Request.WorkflowInfo.RunID)
+		return err
+	}
+
 	logs.Debug(w.ctx, "Run workflow task calling handler", "identity", identity, "queue", w.queue, "handlerName", data.Request.WorkflowInfo.HandlerName, "workflowID", data.Request.WorkflowInfo.ID, "executionID", data.Request.WorkflowInfo.Execution.ID, "stepID", data.Request.WorkflowInfo.StepID)
+	fmt.Println("\t Calling handler", workflow.HandlerName, "with values", values)
 	returnedValues := reflect.ValueOf(workflow.Handler).Call(values)
 
-	// fmt.Println("Returned values", returnedValues, "from", workflow.HandlerName)
+	fmt.Println("\t Returned values", returnedValues, "from", workflow.HandlerName)
 
 	var res []interface{}
 	var errRes error

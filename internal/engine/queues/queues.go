@@ -3,11 +3,11 @@ package queues
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/davidroman0O/retrypool"
+	"github.com/davidroman0O/tempolite/internal/clock"
 	"github.com/davidroman0O/tempolite/internal/engine/cq/commands"
 	"github.com/davidroman0O/tempolite/internal/engine/cq/queries"
 	"github.com/davidroman0O/tempolite/internal/engine/execution"
@@ -28,6 +28,12 @@ type Queue struct {
 	commands  *commands.Commands
 	queries   *queries.Queries
 	queueName string
+
+	tickerIDWorkflowPending clock.TickerID
+}
+
+func (q *Queue) GetTickerIDWorkflowPending() clock.TickerID {
+	return q.tickerIDWorkflowPending
 }
 
 func New(
@@ -46,15 +52,15 @@ func New(
 		return nil, err
 	}
 
-	if _, err = db.Queues().GetByName(tx, "default"); err != nil {
+	if _, err = db.Queues().GetByName(tx, queue); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			fmt.Println("Creating default queue")
-			if _, errCreate := db.Queues().Create(tx, "default"); errCreate != nil {
+			logs.Debug(ctx, "Queue does not exist, creating queue", "queue", queue)
+			if _, errCreate := db.Queues().Create(tx, queue); errCreate != nil {
 				if errRollback := tx.Rollback(); errRollback != nil {
 					logs.Error(ctx, "New Queue error rolling back transaction", "error", errRollback, "queue", queue)
 					return nil, errRollback
 				}
-				logs.Error(ctx, "New Queue error creating default queue", "error", errCreate, "queue", queue)
+				logs.Error(ctx, "New Queue error creating queue", "error", errCreate, "queue", queue)
 				return nil, errCreate
 			}
 		}
@@ -124,6 +130,14 @@ func New(
 	// TODO: change with option of initial workers configs
 	q.AddWorker()
 
+	logs.Debug(q.ctx, "Queue created", "queue", q.queueName)
+	logs.Debug(q.ctx, "Available workflows workers", "available workflow workers", q.AvailableWorkflowWorkers())
+	logs.Debug(q.ctx, "Available activities workers:", "available activities workers", q.AvailableActivityWorkers())
+	logs.Debug(q.ctx, "Available side effects workers:", "available side effects workers", q.AvailableSideEffectWorkers())
+	logs.Debug(q.ctx, "Available sagas workers:", "available sagas workers", q.AvailableSagaWorkers())
+
+	q.tickerIDWorkflowPending = "scheduler-workflow-pending-" + queue
+
 	return q, nil
 }
 
@@ -138,18 +152,22 @@ func (q *Queue) submitRetryWorkflow(data *retrypool.RequestResponse[execution.Wo
 
 func (q *Queue) SubmitWorkflow(task *retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]) (chan struct{}, error) {
 
-	processed := retrypool.NewProcessedNotification()
+	queued := retrypool.NewQueuedNotification()
 
-	logs.Debug(q.ctx, "Queue submit workflow", "queue", q.queueName)
+	logs.Debug(q.ctx, "Queue submit workflow", "queue", q.queueName, "workflow", task.Request.WorkflowInfo.ID, "queueWorkflow", task.Request.WorkflowInfo.QueueID, "runID", task.Request.WorkflowInfo.RunID)
 	if err := q.workflowsWorker.Submit(
 		task,
-		retrypool.WithBeingProcessed[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](processed),
+		retrypool.WithQueued[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](queued),
 	); err != nil {
 		logs.Error(q.ctx, "Queue submit workflow error", "error", err, "queue", q.queueName)
 		return nil, err
 	}
 
-	return processed, nil
+	return queued, nil
+}
+
+func (q *Queue) GetName() string {
+	return q.queueName
 }
 
 func (q *Queue) SubmitActivity(request *repository.ActivityInfo) error {
@@ -187,6 +205,22 @@ func (q *Queue) AvailableSideEffectWorkers() int {
 
 func (q *Queue) AvailableSagaWorkers() int {
 	return q.sagasWorker.AvailableWorkers()
+}
+
+func (q *Queue) GetCurrentWorkflowTasks() []execution.CurrentTask[execution.WorkflowRequest, execution.WorkflowReponse] {
+	return q.workflowsWorker.CurrentTasks()
+}
+
+func (q *Queue) GetCurrentActivityTasks() []execution.CurrentTask[execution.ActivityRequest, execution.ActivityReponse] {
+	return q.activitiesWorker.CurrentTasks()
+}
+
+func (q *Queue) GetCurrentSideEffectTasks() []execution.CurrentTask[execution.SideEffectRequest, execution.SideEffectReponse] {
+	return q.sideEffectsWorker.CurrentTasks()
+}
+
+func (q *Queue) GetCurrentSagaTasks() []execution.CurrentTask[execution.SagaRequest, execution.SagaReponse] {
+	return q.sagasWorker.CurrentTasks()
 }
 
 func (q *Queue) Wait() error {
@@ -249,6 +283,7 @@ func (q *Queue) AddWorker() {
 	q.activitiesWorker.AddWorker()
 	q.sideEffectsWorker.AddWorker()
 	q.sagasWorker.AddWorker()
+	logs.Debug(q.ctx, "Workers added to queue", "queue", q.queueName)
 }
 
 func (q *Queue) RemoveWorker() error {

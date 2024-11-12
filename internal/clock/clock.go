@@ -2,187 +2,221 @@ package clock
 
 import (
 	"context"
-	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+// TickerID is a unique identifier for a ticker.
 type TickerID interface{}
 
+// Ticker defines the interface that tickers must implement.
 type Ticker interface {
 	Tick(ctx context.Context) error
 }
 
+// TickerOption is a function that configures a tickerEntry.
 type TickerOption func(*tickerEntry)
 
-func WithCleanupCallback(cleanup func()) TickerOption {
-	return func(te *tickerEntry) {
-		te.cleanup = cleanup
+// WithCleanup sets a cleanup function for the tickerEntry.
+func WithCleanup(cleanup func()) TickerOption {
+	return func(entry *tickerEntry) {
+		entry.cleanup = cleanup
 	}
 }
 
+// tickerEntry holds a ticker and its optional cleanup function.
 type tickerEntry struct {
 	id      TickerID
 	ticker  Ticker
 	cleanup func()
 }
 
+// Clock is the main struct that manages tickers and timing.
 type Clock struct {
-	ctx              context.Context
-	cancel           context.CancelFunc
-	name             string
-	interval         time.Duration
-	onError          func(error)
-	totalSubscribers int64
-	done             chan struct{}
+	mu       sync.RWMutex
+	tickers  map[TickerID]*tickerEntry
+	status   sync.Map // map[TickerID]bool
+	interval time.Duration
+	onError  func(error)
+	done     chan struct{}
+	wg       sync.WaitGroup
+	inc      atomic.Int32
 
-	activeTickers sync.Map // map[TickerID]*tickerEntry
+	ctx    context.Context
+	cancel context.CancelFunc
 
-	tickerAdd    chan *tickerEntry
-	tickerRemove chan TickerID
+	closing atomic.Bool
 }
 
-type ClockOption func(*Clock)
-
-func WithName(name string) ClockOption {
-	return func(c *Clock) {
-		c.name = name
+// NewClock creates a new Clock with the specified interval and error handler.
+func NewClock(interval time.Duration, onError func(error)) *Clock {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Clock{
+		ctx:      ctx,
+		cancel:   cancel,
+		tickers:  make(map[TickerID]*tickerEntry),
+		interval: interval,
+		onError:  onError,
+		done:     make(chan struct{}),
+		status:   sync.Map{},
 	}
 }
 
-func NewClock(ctx context.Context, interval time.Duration, onError func(error), opts ...ClockOption) *Clock {
-	if interval <= 0 {
-		interval = time.Second
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	c := &Clock{
-		ctx:          ctx,
-		cancel:       cancel,
-		name:         "clock",
-		interval:     interval,
-		onError:      onError,
-		done:         make(chan struct{}),
-		tickerAdd:    make(chan *tickerEntry, 1000), // Increased buffer size
-		tickerRemove: make(chan TickerID, 1000),     // Increased buffer size
-	}
-
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	fmt.Println("Clock created", "name", c.name, "interval", interval)
-	return c
-}
-
-func (c *Clock) AddTicker(id TickerID, ticker Ticker, opts ...TickerOption) {
-	if ticker == nil {
-		fmt.Println("Ticker cannot be nil", "name", c.name)
+// AddTicker adds a ticker to the Clock with the given TickerID and options.
+func (c *Clock) AddTicker(id TickerID, ticker Ticker, options ...TickerOption) {
+	if c.closing.Load() {
 		return
 	}
-
-	te := &tickerEntry{
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := &tickerEntry{
 		id:     id,
 		ticker: ticker,
 	}
-	for _, opt := range opts {
-		opt(te)
+	for _, opt := range options {
+		opt(entry)
 	}
-
-	// Non-blocking add
-	select {
-	case c.tickerAdd <- te:
-	default:
-		go func() { c.tickerAdd <- te }()
-	}
+	c.status.Store(id, false)
+	c.tickers[id] = entry
 }
 
+// RemoveTicker removes a ticker from the Clock using its TickerID.
 func (c *Clock) RemoveTicker(id TickerID) {
-	// Non-blocking remove
-	select {
-	case c.tickerRemove <- id:
-	default:
-		go func() { c.tickerRemove <- id }()
+	if c.closing.Load() {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if entry, ok := c.tickers[id]; ok {
+		if entry.cleanup != nil {
+			entry.cleanup()
+		}
+		delete(c.tickers, id)
 	}
 }
 
-func (c *Clock) TotalSubscribers() int {
-	var count int
-	c.activeTickers.Range(func(_, _ interface{}) bool {
-		count++
-		return true
-	})
-	return count
+func (c *Clock) GetTickers() []TickerID {
+	cp := []TickerID{}
+	c.mu.RLock()
+	tickers := make([]*tickerEntry, 0, len(c.tickers))
+	for _, entry := range c.tickers {
+		tickers = append(tickers, entry)
+	}
+	c.mu.RUnlock()
+	for k, _ := range tickers {
+		cp = append(cp, k)
+	}
+	return cp
 }
 
+func (c *Clock) GetMapTickers() map[TickerID]bool {
+	cp := map[TickerID]bool{}
+	c.mu.RLock()
+	tickers := make([]*tickerEntry, 0, len(c.tickers))
+	for _, entry := range c.tickers {
+		tickers = append(tickers, entry)
+	}
+	c.mu.RUnlock()
+	for k, t := range tickers {
+		c.mu.RLock()
+		running, ok := c.status.Load(t.id)
+		c.mu.RUnlock()
+		if ok {
+			cp[k] = running.(bool)
+		}
+	}
+	return cp
+}
+
+// Start begins the ticking process of the Clock.
 func (c *Clock) Start() {
-	go c.run()
-}
-
-func (c *Clock) run() {
-	defer close(c.done)
-
-	nextTick := time.Now()
-
-	for {
-		now := time.Now()
-		if !now.Before(nextTick) {
-			// Execute Tick on all active tickers
-			c.activeTickers.Range(func(_, value interface{}) bool {
-				te, ok := value.(*tickerEntry)
-				if !ok {
-					return true
+	if c.closing.Load() {
+		return
+	}
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		defer c.cancel()
+		nextTick := time.Now()
+		for {
+			select {
+			case <-c.ctx.Done():
+				// fmt.Println("\tCLOCK DONE")
+				c.cleanupTickers()
+				return
+			case <-c.done:
+				// fmt.Println("\tCLOCK STOPPED")
+				c.cleanupTickers()
+				return
+			default:
+				now := time.Now()
+				if !now.Before(nextTick) {
+					c.triggerTickers(c.ctx)
+					nextTick = nextTick.Add(c.interval)
+					if nextTick.Before(now) {
+						nextTick = now.Add(c.interval)
+					}
 				}
-				if err := te.ticker.Tick(c.ctx); err != nil && c.onError != nil {
-					c.onError(err)
+				sleepDuration := nextTick.Sub(time.Now())
+				if sleepDuration > 0 {
+					select {
+					case <-time.After(sleepDuration):
+					case <-c.done:
+						c.cleanupTickers()
+						return
+					}
+				} else {
+					runtime.Gosched()
 				}
-				return true
-			})
-			nextTick = nextTick.Add(c.interval)
-			// Adjust nextTick if we've fallen behind
-			if nextTick.Before(now) {
-				nextTick = now.Add(c.interval)
 			}
 		}
+	}()
+}
 
-		// Non-blocking read from tickerAdd and tickerRemove channels
-		select {
-		case te := <-c.tickerAdd:
-			if existing, ok := c.activeTickers.Load(te.id); ok {
-				if existingTe, ok := existing.(*tickerEntry); ok && existingTe.cleanup != nil {
-					existingTe.cleanup()
-				}
-			} else {
-				atomic.AddInt64(&c.totalSubscribers, 1)
-			}
-			c.activeTickers.Store(te.id, te)
-		case id := <-c.tickerRemove:
-			if value, ok := c.activeTickers.Load(id); ok {
-				if te, ok := value.(*tickerEntry); ok && te.cleanup != nil {
-					te.cleanup()
-				}
-				c.activeTickers.Delete(id)
-				atomic.AddInt64(&c.totalSubscribers, -1)
-			}
-		case <-c.ctx.Done():
-			c.activeTickers.Range(func(key, value interface{}) bool {
-				if te, ok := value.(*tickerEntry); ok && te.cleanup != nil {
-					te.cleanup()
-				}
-				c.activeTickers.Delete(key)
-				return true
-			})
-			return
-		default:
-			// Sleep very briefly to yield processor
-			time.Sleep(time.Nanosecond)
+// Stop halts the ticking process and cleans up resources.
+func (c *Clock) Stop() {
+	c.closing.Store(true)
+	close(c.done)
+	c.cancel()
+	c.wg.Wait()
+}
+
+// triggerTickers invokes the Tick method on all registered tickers.
+func (c *Clock) triggerTickers(ctx context.Context) {
+	c.mu.RLock()
+	tickers := make([]*tickerEntry, 0, len(c.tickers))
+	for _, entry := range c.tickers {
+		tickers = append(tickers, entry)
+	}
+	c.mu.RUnlock()
+
+	for _, entry := range tickers {
+
+		if _, ok := c.status.Load(entry.id); ok {
+			c.status.Store(entry.id, true)
+		}
+
+		if err := entry.ticker.Tick(ctx); err != nil && c.onError != nil {
+			c.onError(err)
+		}
+
+		if _, ok := c.status.Load(entry.id); ok {
+			c.status.Store(entry.id, false)
+		}
+
+	}
+
+}
+
+// cleanupTickers calls the cleanup function for all registered tickers.
+func (c *Clock) cleanupTickers() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, entry := range c.tickers {
+		if entry.cleanup != nil {
+			entry.cleanup()
 		}
 	}
-}
-
-func (c *Clock) Stop() {
-	c.cancel()
-	<-c.done
-	fmt.Println("Clock has stopped")
 }

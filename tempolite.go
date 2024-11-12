@@ -169,6 +169,22 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 		return nil, err
 	}
 
+	for _, v := range cfg.queues {
+		if err := tp.engine.AddQueue(v.Name); err != nil {
+			logs.Error(ctx, "Error adding queue", "queue", v.Name, "error", err)
+			return nil, err
+		}
+		if err := tp.engine.Scale(v.Name, map[string]int{
+			"workflow":    v.WorkflowWorkers,
+			"activity":    v.ActivityWorkers,
+			"side_effect": v.SideEffectWorkers,
+			"transaction": v.TransactionWorkers,
+		}); err != nil {
+			logs.Error(ctx, "Error scaling queue", "queue", v.Name, "error", err)
+			return nil, err
+		}
+	}
+
 	defer logs.Debug(ctx, "Tempolite created")
 
 	return tp, nil
