@@ -3,7 +3,9 @@ package engine
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/davidroman0O/tempolite/internal/clock"
 	"github.com/davidroman0O/tempolite/internal/engine/cq/commands"
 	"github.com/davidroman0O/tempolite/internal/engine/cq/queries"
 	"github.com/davidroman0O/tempolite/internal/engine/info"
@@ -23,9 +25,10 @@ type Engine struct {
 	registry     *registry.Registry
 	workerQueues map[string]*queues.Queue
 	db           repository.Repository
-	scheduler    *schedulers.Scheduler
-	commands     *commands.Commands
-	queries      *queries.Queries
+	// scheduler    *schedulers.Scheduler
+	commands *commands.Commands
+	queries  *queries.Queries
+	clock    *clock.Clock
 }
 
 func New(
@@ -38,6 +41,14 @@ func New(
 	e := &Engine{
 		ctx:          ctx,
 		workerQueues: make(map[string]*queues.Queue),
+		clock: clock.NewClock(
+			ctx,
+			time.Nanosecond,
+			func(err error) {
+				logs.Error(ctx, err.Error())
+			},
+			clock.WithName("engine"),
+		),
 	}
 
 	logs.Debug(ctx, "Creating registry")
@@ -52,18 +63,20 @@ func New(
 		client)
 
 	logs.Debug(ctx, "Creating scheduler")
-	if e.scheduler, err = schedulers.New(
-		ctx,
-		e.db,
-		e.registry,
-		e.GetQueue,
-	); err != nil {
-		logs.Error(ctx, "Error creating scheduler", "error", err)
-		return nil, err
-	}
+	// if e.scheduler, err = schedulers.New(
+	// 	ctx,
+	// 	e.db,
+	// 	e.registry,
+	// 	e.GetQueue,
+	// ); err != nil {
+	// 	logs.Error(ctx, "Error creating scheduler", "error", err)
+	// 	return nil, err
+	// }
+
+	e.clock.Start()
 
 	e.commands = commands.New(e.ctx, e.db, e.registry)
-	e.queries = queries.New(e.ctx, e.db, e.registry)
+	e.queries = queries.New(e.ctx, e.db, e.registry, e.clock)
 
 	if err := e.AddQueue("default"); err != nil {
 		logs.Error(ctx, "Error creating default queue", "error", err)
@@ -83,6 +96,7 @@ func (e *Engine) AddQueue(queue string) error {
 	var err error
 	var defaultQueue *queues.Queue
 	logs.Debug(e.ctx, "Adding queue", "queue", queue)
+
 	// TODO: add options for initial workers
 	if defaultQueue, err = queues.New(
 		e.ctx,
@@ -95,7 +109,14 @@ func (e *Engine) AddQueue(queue string) error {
 		logs.Error(e.ctx, "Error creating queue", "queue", queue, "error", err)
 		return err
 	}
-	e.scheduler.AddQueue(queue)
+
+	e.clock.AddTicker(
+		"scheduler-workflow-pending-"+queue,
+		schedulers.NewSchedulerWorkflowPending(e.ctx, e.db, e.GetQueue),
+		clock.WithCleanupCallback(func() {
+			// ???
+		}))
+
 	e.mu.Lock()
 	e.workerQueues[queue] = defaultQueue
 	e.mu.Unlock()
@@ -107,16 +128,13 @@ func (e *Engine) Shutdown() error {
 	shutdown := errgroup.Group{}
 	logs.Debug(e.ctx, "Shutting down engine")
 
-	logs.Debug(e.ctx, "Shutting down scheduler")
-	e.scheduler.Stop()
-	logs.Debug(e.ctx, "Scheduler shutdown complete")
+	// logs.Debug(e.ctx, "Shutting down scheduler")
+	// e.scheduler.Stop()
+	// logs.Debug(e.ctx, "Scheduler shutdown complete")
 
-	shutdown.Go(func() error {
-		logs.Debug(e.ctx, "Shutting down queries")
-		e.queries.Stop()
-		logs.Debug(e.ctx, "Queries shutdown complete")
-		return nil
-	})
+	logs.Debug(e.ctx, "Shutting down clock")
+	e.clock.Stop()
+	logs.Debug(e.ctx, "Clock shutdown complete")
 
 	for n, q := range e.workerQueues {
 		shutdown.Go(func() error {
@@ -135,7 +153,13 @@ func (e *Engine) Shutdown() error {
 func (e *Engine) Scale(queue string, targets map[string]int) error {
 	logs.Debug(e.ctx, "Preparing to scale", "queue", queue, "targets", targets)
 	e.mu.Lock()
-	q := e.workerQueues[queue]
+	q, ok := e.workerQueues[queue]
+	if !ok {
+		if err := e.AddQueue(queue); err != nil {
+			e.mu.Unlock()
+			return err
+		}
+	}
 	e.mu.Unlock()
 	logs.Debug(e.ctx, "Scaling queue", "queue", queue, "targets", targets)
 	return q.Scale(targets)
@@ -176,6 +200,6 @@ func (e *Engine) Workflow(workflowFunc interface{}, options types.WorkflowOption
 
 // IF you cancelled a Tempolite instance, you need to a new WorkflowInfo instance
 func (e *Engine) GetWorkflow(id types.WorkflowID) *info.WorkflowInfo {
-	logs.Debug(e.ctx, "Engine Getting workflow", id)
+	logs.Debug(e.ctx, "Engine Getting workflow", "id", id)
 	return e.queries.GetWorkflowInfo(id)
 }

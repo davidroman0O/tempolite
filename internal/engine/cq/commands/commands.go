@@ -113,7 +113,7 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 	}
 
 	// TODO: options should have the queue name
-	// queueName := "default"
+	queueName := "default"
 	var queueInfo *repository.QueueInfo
 
 	if queueInfo, err = e.db.Queues().Get(tx, parentWorkflowInfo.QueueID); err != nil {
@@ -133,7 +133,7 @@ func (e *Commands) CommandSubWorkflow(workflowEntityID types.WorkflowID, workflo
 			opt(&config)
 		}
 		if config.QueueName != "" {
-			// queueName = config.QueueName
+			queueName = config.QueueName // TODO: make support for queues
 		}
 		if config.RetryMaximumAttempts >= 0 {
 			retryPolicyConfig.MaxAttempts = config.RetryMaximumAttempts
@@ -313,4 +313,9 @@ func (e *Commands) CommandWorkflow(workflowFunc interface{}, options types.Workf
 	}
 
 	return types.WorkflowID(workflowInfo.ID), nil
+}
+
+// when restarting, if Entity is Running and Execution is Running, we clearly had a problem right before starting the workflow
+func (e *Commands) CommandOnRestarWorkflowExecutions() error {
+	return nil
 }

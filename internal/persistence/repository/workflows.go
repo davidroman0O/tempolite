@@ -95,6 +95,7 @@ type WorkflowRepository interface {
 
 	ListPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 	ListExecutionsPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
+	ListExecutionsRunning(tx *ent.Tx, queueName string) ([]*WorkflowInfo, error)
 
 	UpdateExecutionPendingToRunning(tx *ent.Tx, id int) error
 	UpdateExecutionDataError(tx *ent.Tx, id int, errormsg string) error
@@ -885,6 +886,40 @@ func (r *workflowRepository) ListExecutionsPending(tx *ent.Tx, queueName string)
 	execObjs, err := tx.Execution.Query().
 		Where(
 			execution.StatusEQ(execution.StatusPending), // Using StatusPending from the Status type
+			execution.HasEntityWith(
+				entity.And(
+					entity.TypeEQ(entity.Type(ComponentWorkflow)),
+					entity.HasQueueWith(queue.NameEQ(queueName)),
+				),
+			),
+		).
+		Order(ent.Asc(execution.FieldCreatedAt)).
+		All(r.ctx)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("querying pending executions"))
+	}
+
+	// For each execution, get the full workflow info
+	result := make([]*WorkflowInfo, 0, len(execObjs))
+	for _, execObj := range execObjs {
+
+		// Get the full workflow info using the existing Get method
+		workflowInfo, err := r.GetFromExecution(tx, execObj.ID)
+		if err != nil {
+			return nil, errors.Join(err, fmt.Errorf("getting workflow info for entity %d", execObj.ID))
+		}
+
+		result = append(result, workflowInfo)
+	}
+
+	return result, nil
+}
+
+func (r *workflowRepository) ListExecutionsRunning(tx *ent.Tx, queueName string) ([]*WorkflowInfo, error) {
+	// First get all pending executions for workflows in the specified queue
+	execObjs, err := tx.Execution.Query().
+		Where(
+			execution.StatusEQ(execution.StatusRunning), // Using StatusRunning from the Status type
 			execution.HasEntityWith(
 				entity.And(
 					entity.TypeEQ(entity.Type(ComponentWorkflow)),

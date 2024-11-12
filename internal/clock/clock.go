@@ -2,262 +2,187 @@ package clock
 
 import (
 	"context"
-	"runtime"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-type Ticker interface {
-	Tick() error
-}
-
 type TickerID interface{}
 
-type ExecutionMode int
-
-type removeTask struct {
-	id   TickerID
-	done chan struct{}
+type Ticker interface {
+	Tick(ctx context.Context) error
 }
 
-const (
-	NonBlocking ExecutionMode = iota
-	ManagedTimeline
-	BestEffort
-)
+type TickerOption func(*tickerEntry)
 
-type TickerSubscriber struct {
-	ID              TickerID
-	Ticker          Ticker
-	Mode            ExecutionMode
-	LastExecTime    time.Time
-	Priority        int
-	DynamicInterval func(elapsedTime time.Duration) time.Duration
-	Interval        time.Duration
-	Name            string
-	OnError         func(error)
-}
-
-type TickerSubscriberOption func(*TickerSubscriber)
-
-func WithPriority(priority int) TickerSubscriberOption {
-	return func(ts *TickerSubscriber) {
-		ts.Priority = priority
+func WithCleanupCallback(cleanup func()) TickerOption {
+	return func(te *tickerEntry) {
+		te.cleanup = cleanup
 	}
 }
 
-func WithDynamicInterval(dynamicInterval func(elapsedTime time.Duration) time.Duration) TickerSubscriberOption {
-	return func(ts *TickerSubscriber) {
-		ts.DynamicInterval = dynamicInterval
-	}
-}
-
-func WithInterval(interval time.Duration) TickerSubscriberOption {
-	return func(ts *TickerSubscriber) {
-		ts.Interval = interval
-	}
-}
-
-func WithName(name string) TickerSubscriberOption {
-	return func(ts *TickerSubscriber) {
-		ts.Name = name
-	}
-}
-
-func WithOnError(onError func(error)) TickerSubscriberOption {
-	return func(ts *TickerSubscriber) {
-		ts.OnError = onError
-	}
+type tickerEntry struct {
+	id      TickerID
+	ticker  Ticker
+	cleanup func()
 }
 
 type Clock struct {
-	interval time.Duration
-	ticker   *time.Ticker
-	stopCh   chan struct{}
-	subs     []TickerSubscriber
-	removeCh chan removeTask
-	mu       sync.RWMutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	onError  func(error)
+	ctx              context.Context
+	cancel           context.CancelFunc
+	name             string
+	interval         time.Duration
+	onError          func(error)
+	totalSubscribers int64
+	done             chan struct{}
 
-	removalWg    sync.WaitGroup
-	confirmClose chan struct{}
+	activeTickers sync.Map // map[TickerID]*tickerEntry
+
+	tickerAdd    chan *tickerEntry
+	tickerRemove chan TickerID
 }
 
-func NewClock(ctx context.Context, interval time.Duration, onError func(error)) *Clock {
-	ctx, cancel := context.WithCancel(ctx)
+type ClockOption func(*Clock)
 
+func WithName(name string) ClockOption {
+	return func(c *Clock) {
+		c.name = name
+	}
+}
+
+func NewClock(ctx context.Context, interval time.Duration, onError func(error), opts ...ClockOption) *Clock {
+	if interval <= 0 {
+		interval = time.Second
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
 	c := &Clock{
-		interval:     interval,
-		ticker:       time.NewTicker(interval),
-		stopCh:       make(chan struct{}),
-		subs:         []TickerSubscriber{},
-		removeCh:     make(chan removeTask, 100),
-		confirmClose: make(chan struct{}),
 		ctx:          ctx,
 		cancel:       cancel,
+		name:         "clock",
+		interval:     interval,
 		onError:      onError,
-	}
-	c.removalWg.Add(1)
-	go c.handleRemovals()
-	return c
-}
-
-func (c *Clock) Add(id TickerID, ticker Ticker, mode ExecutionMode, opts ...TickerSubscriberOption) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	sub := TickerSubscriber{
-		ID:     id,
-		Ticker: ticker,
-		Mode:   mode,
+		done:         make(chan struct{}),
+		tickerAdd:    make(chan *tickerEntry, 1000), // Increased buffer size
+		tickerRemove: make(chan TickerID, 1000),     // Increased buffer size
 	}
 
 	for _, opt := range opts {
-		opt(&sub)
+		opt(c)
 	}
 
-	c.subs = append(c.subs, sub)
+	fmt.Println("Clock created", "name", c.name, "interval", interval)
+	return c
 }
 
-func (c *Clock) handleRemovals() {
-	defer c.removalWg.Done()
-	for {
-		select {
-		case task := <-c.removeCh:
-			c.mu.Lock()
-			for i, sub := range c.subs {
-				if sub.ID == task.id {
-					c.subs = append(c.subs[:i], c.subs[i+1:]...)
-					break
-				}
-			}
-			close(task.done)
-			c.mu.Unlock()
-		case <-c.ctx.Done():
-			return
-		default:
-			runtime.Gosched()
-		}
+func (c *Clock) AddTicker(id TickerID, ticker Ticker, opts ...TickerOption) {
+	if ticker == nil {
+		fmt.Println("Ticker cannot be nil", "name", c.name)
+		return
 	}
-}
 
-func (c *Clock) Remove(id TickerID) chan struct{} {
-	done := make(chan struct{})
+	te := &tickerEntry{
+		id:     id,
+		ticker: ticker,
+	}
+	for _, opt := range opts {
+		opt(te)
+	}
+
+	// Non-blocking add
 	select {
-	case c.removeCh <- removeTask{id: id, done: done}:
-	case <-c.ctx.Done():
+	case c.tickerAdd <- te:
 	default:
-		// Fallback to synchronous removal
-		c.mu.Lock()
-		for i, sub := range c.subs {
-			if sub.ID == id {
-				c.subs = append(c.subs[:i], c.subs[i+1:]...)
-				break
-			}
-		}
-		c.mu.Unlock()
+		go func() { c.tickerAdd <- te }()
 	}
-	return done
+}
+
+func (c *Clock) RemoveTicker(id TickerID) {
+	// Non-blocking remove
+	select {
+	case c.tickerRemove <- id:
+	default:
+		go func() { c.tickerRemove <- id }()
+	}
+}
+
+func (c *Clock) TotalSubscribers() int {
+	var count int
+	c.activeTickers.Range(func(_, _ interface{}) bool {
+		count++
+		return true
+	})
+	return count
 }
 
 func (c *Clock) Start() {
-	go c.dispatchTicks()
+	go c.run()
+}
+
+func (c *Clock) run() {
+	defer close(c.done)
+
+	nextTick := time.Now()
+
+	for {
+		now := time.Now()
+		if !now.Before(nextTick) {
+			// Execute Tick on all active tickers
+			c.activeTickers.Range(func(_, value interface{}) bool {
+				te, ok := value.(*tickerEntry)
+				if !ok {
+					return true
+				}
+				if err := te.ticker.Tick(c.ctx); err != nil && c.onError != nil {
+					c.onError(err)
+				}
+				return true
+			})
+			nextTick = nextTick.Add(c.interval)
+			// Adjust nextTick if we've fallen behind
+			if nextTick.Before(now) {
+				nextTick = now.Add(c.interval)
+			}
+		}
+
+		// Non-blocking read from tickerAdd and tickerRemove channels
+		select {
+		case te := <-c.tickerAdd:
+			if existing, ok := c.activeTickers.Load(te.id); ok {
+				if existingTe, ok := existing.(*tickerEntry); ok && existingTe.cleanup != nil {
+					existingTe.cleanup()
+				}
+			} else {
+				atomic.AddInt64(&c.totalSubscribers, 1)
+			}
+			c.activeTickers.Store(te.id, te)
+		case id := <-c.tickerRemove:
+			if value, ok := c.activeTickers.Load(id); ok {
+				if te, ok := value.(*tickerEntry); ok && te.cleanup != nil {
+					te.cleanup()
+				}
+				c.activeTickers.Delete(id)
+				atomic.AddInt64(&c.totalSubscribers, -1)
+			}
+		case <-c.ctx.Done():
+			c.activeTickers.Range(func(key, value interface{}) bool {
+				if te, ok := value.(*tickerEntry); ok && te.cleanup != nil {
+					te.cleanup()
+				}
+				c.activeTickers.Delete(key)
+				return true
+			})
+			return
+		default:
+			// Sleep very briefly to yield processor
+			time.Sleep(time.Nanosecond)
+		}
+	}
 }
 
 func (c *Clock) Stop() {
 	c.cancel()
-	c.ticker.Stop()
-	close(c.stopCh)
-	<-c.confirmClose
-	c.removalWg.Wait()
-}
-
-func (c *Clock) TotalSubscribers() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return len(c.subs)
-}
-
-func (c *Clock) dispatchTicks() {
-	defer close(c.confirmClose)
-	for {
-		select {
-		case <-c.ticker.C:
-			c.tick()
-		case <-c.stopCh:
-			return
-		case <-c.ctx.Done():
-			return
-		}
-	}
-}
-
-func (c *Clock) tick() {
-	now := time.Now()
-	c.mu.RLock()
-	snapshot := make([]TickerSubscriber, len(c.subs))
-	copy(snapshot, c.subs)
-	c.mu.RUnlock()
-
-	for i := range snapshot {
-		sub := &snapshot[i]
-
-		interval := c.interval
-		if sub.Interval > 0 {
-			interval = sub.Interval
-		}
-		if sub.DynamicInterval != nil {
-			elapsedTime := now.Sub(sub.LastExecTime)
-			interval = sub.DynamicInterval(elapsedTime)
-		}
-
-		switch sub.Mode {
-		case NonBlocking:
-			go func(sub *TickerSubscriber) {
-				if err := sub.Ticker.Tick(); err != nil {
-					if sub.OnError != nil {
-						sub.OnError(err)
-					} else if c.onError != nil {
-						c.onError(err)
-					}
-				}
-			}(sub)
-		case ManagedTimeline:
-			if now.Sub(sub.LastExecTime) >= interval {
-				if err := sub.Ticker.Tick(); err != nil {
-					if sub.OnError != nil {
-						sub.OnError(err)
-					} else if c.onError != nil {
-						c.onError(err)
-					}
-				}
-				sub.LastExecTime = now
-			} else {
-				go func(sub *TickerSubscriber) {
-					time.Sleep(interval - now.Sub(sub.LastExecTime))
-					if err := sub.Ticker.Tick(); err != nil {
-						if sub.OnError != nil {
-							sub.OnError(err)
-						} else if c.onError != nil {
-							c.onError(err)
-						}
-					}
-					sub.LastExecTime = time.Now()
-				}(sub)
-			}
-		case BestEffort:
-			if now.Sub(sub.LastExecTime) >= interval {
-				if err := sub.Ticker.Tick(); err != nil {
-					if sub.OnError != nil {
-						sub.OnError(err)
-					} else if c.onError != nil {
-						c.onError(err)
-					}
-				}
-				sub.LastExecTime = now
-			}
-		}
-	}
+	<-c.done
+	fmt.Println("Clock has stopped")
 }

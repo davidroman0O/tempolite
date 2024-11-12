@@ -13,6 +13,47 @@ import (
 	"github.com/davidroman0O/tempolite/pkg/logs"
 )
 
+func TestStartStop(t *testing.T) {
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		registry.New().Build(),
+		tempolite.WithPath("./dbs/tempolite-start-stop.db"),
+		tempolite.WithDestructive(),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+
+	ctx = context.Background()
+
+	tp, err = tempolite.New(
+		ctx,
+		registry.New().Build(),
+		tempolite.WithPath("./dbs/tempolite-start-stop.db"),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TODO: test content of the DB
 func TestOneWorkflow(t *testing.T) {
 
@@ -252,10 +293,10 @@ func TestSubWorkflowWithParentFailureAfterSubWorkflow(t *testing.T) {
 }
 
 // We need to create multiple workflows with ONE worker with ZERO sub-workflows, quit tempolite and restart it
+// This is only for simple workflows which don't have nested workflows which might increase complexity
 func TestWorkflowRestart(t *testing.T) {
 
 	wrk1 := func(ctx tempoliteContext.WorkflowContext) (int, error) {
-		// <-time.After(1 * time.Second)
 		return 1, nil
 	}
 
@@ -319,6 +360,124 @@ func TestWorkflowRestart(t *testing.T) {
 		fmt.Println("Info", i, realValue)
 		if realValue != 1 {
 			t.Fatal("Real value should be 1")
+		}
+	}
+
+	fmt.Println("Ready to relaly shutdown")
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TODO: But to do that, you need another queue
+// Testing a sub workflow, we need another queue to execute the sub workflow since multiple main workflows can take the spots and prevent new sub workflows to be executed
+func TestSubWorkflowRestart(t *testing.T) {
+
+	subwrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		return 69, nil
+	}
+
+	wrk := func(ctx tempoliteContext.WorkflowContext) (int, error) {
+		var result int
+		if err := ctx.Workflow(
+			"subworkflow",
+			subwrk,
+			types.NewWorkflowConfig(
+				types.WithWorkflowQueue("sub"),
+			)).
+			Get(&result); err != nil {
+			return 0, err
+		}
+
+		return 420, nil
+	}
+
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(subwrk).
+			Workflow(wrk).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-subworkflow-restart.db"),
+		tempolite.WithDestructive(),
+		tempolite.WithDefaultLogLevel(logs.LevelDebug),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tp.Scale("default", map[string]int{
+		"workflows":   2,
+		"activities":  2,
+		"sideEffects": 2,
+		"sagas":       2,
+	})
+
+	tp.Scale("sub", map[string]int{
+		"workflows":   2,
+		"activities":  2,
+		"sideEffects": 2,
+		"sagas":       2,
+	})
+
+	infos := []types.WorkflowID{}
+
+	for i := 0; i < 100; i++ {
+		info := tp.Workflow(wrk, nil)
+		infos = append(infos, info.WorkflowID())
+	}
+
+	// we stop immediately tempolite
+	if err = tp.Shutdown(); err != nil {
+		if err != context.Canceled {
+			t.Fatal(err)
+		}
+	}
+
+	// in theory, we have at least ONE of the 3 workflows that should be restarted
+	<-time.After(1 * time.Second)
+	fmt.Println("Restarting Tempolite")
+
+	ctx = context.Background()
+	tp, err = tempolite.New(
+		ctx,
+		registry.
+			New().
+			Workflow(subwrk).
+			Workflow(wrk).
+			Build(),
+		tempolite.WithPath("./dbs/tempolite-subworkflow-restart.db"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tp.Scale("default", map[string]int{
+		"workflows":   2,
+		"activities":  2,
+		"sideEffects": 2,
+		"sagas":       2,
+	})
+
+	fmt.Println("Tempolite restarted")
+
+	var realValue int
+
+	for i := 0; i < len(infos); i++ {
+		fmt.Println("Info", i, infos[i])
+		info := tp.GetWorkflow(infos[i])
+		if err = info.Get(&realValue); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println("Info", i, realValue)
+		if realValue != 420 {
+			t.Fatal("Real value should be 420")
 		}
 	}
 

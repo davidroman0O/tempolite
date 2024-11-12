@@ -282,6 +282,6 @@ func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptio
 }
 
 func (tp *Tempolite) GetWorkflow(id types.WorkflowID) *info.WorkflowInfo {
-	logs.Debug(tp.ctx, "Getting workflow", id)
+	logs.Debug(tp.ctx, "Getting workflow", "id", id)
 	return tp.engine.GetWorkflow(id)
 }
