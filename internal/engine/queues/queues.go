@@ -152,18 +152,18 @@ func (q *Queue) submitRetryWorkflow(data *retrypool.RequestResponse[execution.Wo
 
 func (q *Queue) SubmitWorkflow(task *retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]) (chan struct{}, error) {
 
-	queued := retrypool.NewQueuedNotification()
+	notification := retrypool.NewProcessedNotification()
 
 	logs.Debug(q.ctx, "Queue submit workflow", "queue", q.queueName, "workflow", task.Request.WorkflowInfo.ID, "queueWorkflow", task.Request.WorkflowInfo.QueueID, "runID", task.Request.WorkflowInfo.RunID)
 	if err := q.workflowsWorker.Submit(
 		task,
-		retrypool.WithQueued[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](queued),
+		retrypool.WithBeingProcessed[*retrypool.RequestResponse[execution.WorkflowRequest, execution.WorkflowReponse]](notification),
 	); err != nil {
 		logs.Error(q.ctx, "Queue submit workflow error", "error", err, "queue", q.queueName)
 		return nil, err
 	}
 
-	return queued, nil
+	return notification, nil
 }
 
 func (q *Queue) GetName() string {

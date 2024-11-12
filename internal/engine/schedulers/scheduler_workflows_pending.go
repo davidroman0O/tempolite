@@ -84,10 +84,10 @@ func (s SchedulerWorkflowsPending) Tick(ctx context.Context) error {
 				return err
 			}
 
-			waitQueued := []chan struct{}{}
+			waitNotifications := []chan struct{}{}
 
 			for _, w := range workflows {
-				var queued chan struct{}
+				var notification chan struct{}
 
 				logs.Debug(s.ctx, "Scheduler Workflows Pending processing workflow", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 
@@ -120,7 +120,7 @@ func (s SchedulerWorkflowsPending) Tick(ctx context.Context) error {
 
 				logs.Debug(s.ctx, "Scheduler Workflows Pending submitting workflow", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 				// TODO: if we fail, then we should retry while updating the workflow somehow cause we need to fail
-				if queued, err = queue.SubmitWorkflow(task); err != nil {
+				if notification, err = queue.SubmitWorkflow(task); err != nil {
 					if errors.Is(err, context.Canceled) {
 						logs.Debug(s.ctx, "Scheduler Workflows Pending submit workflow context canceled", "error", err)
 						return nil
@@ -129,43 +129,13 @@ func (s SchedulerWorkflowsPending) Tick(ctx context.Context) error {
 					return err
 				}
 
-				waitQueued = append(waitQueued, queued)
-
-				// var txQueueUpdate *ent.Tx
-				// logs.Debug(s.ctx, "Scheduler Workflows Pending updating execution pending to running", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// if txQueueUpdate, err = s.db.Tx(); err != nil {
-				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error creating transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 	return err
-				// }
-				// if err := s.db.Workflows().UpdateExecutionPendingToRunning(txQueueUpdate, w.Execution.ID); err != nil {
-				// 	if errors.Is(err, context.Canceled) {
-				// 		logs.Debug(s.ctx, "Scheduler Workflows Pending update execution pending to running context canceled", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 		return nil
-				// 	}
-				// 	if err := txQueueUpdate.Rollback(); err != nil {
-				// 		logs.Error(s.ctx, "Scheduler Workflows Pending error rolling back transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 		return err
-				// 	}
-				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error updating execution pending to running", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 	return err
-				// }
-
-				// if ctx.Err() != nil {
-				// 	logs.Debug(s.ctx, "Scheduler Workflows Pending context canceled", "error", ctx.Err(), "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 	txQueueUpdate.Rollback()
-				// 	return ctx.Err()
-				// }
-
-				// if err := txQueueUpdate.Commit(); err != nil {
-				// 	logs.Error(s.ctx, "Scheduler Workflows Pending error committing transaction", "error", err, "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
-				// 	return err
-				// }
+				waitNotifications = append(waitNotifications, notification)
 
 				logs.Debug(s.ctx, "Scheduler Workflows Pending updating added for listening", "queue", queueName, "workflowID", w.ID, "stepID", w.StepID, "queueID", w.QueueID, "runID", w.RunID)
 			}
 
 			// Now we look at the queued workflows
-			for _, queued := range waitQueued {
+			for _, queued := range waitNotifications {
 				// We have to wait for the workflow to be ackowledged before do the next one
 				// TODO: we might want to batch many workflows and wait for all of them to be ackowledged
 				// pendingWorkflows = append(pendingWorkflows, queued)
