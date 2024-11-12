@@ -119,12 +119,12 @@ func (c *Clock) GetMapTickers() map[TickerID]bool {
 		tickers = append(tickers, entry)
 	}
 	c.mu.RUnlock()
-	for k, t := range tickers {
+	for _, t := range tickers {
 		c.mu.RLock()
 		running, ok := c.status.Load(t.id)
 		c.mu.RUnlock()
 		if ok {
-			cp[k] = running.(bool)
+			cp[t.id] = running.(bool)
 		}
 	}
 	return cp

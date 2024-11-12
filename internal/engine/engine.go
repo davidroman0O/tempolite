@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -87,18 +88,6 @@ func New(
 	}
 
 	go e.monitoringStatus()
-
-	logs.Debug(e.ctx, "Adding queue workflow pending to clock")
-	e.clock.AddTicker(
-		e.schedulerWorkflowPending,
-		schedulers.NewSchedulerWorkflowPending(
-			e.ctx,
-			e.db,
-			e.GetQueues,
-			e.GetQueue),
-		clock.WithCleanup(func() {
-			// it will be removed on close
-		}))
 
 	return e, nil
 }
@@ -210,10 +199,17 @@ func (e *Engine) monitoringStatus() {
 			e.mu.RUnlock()
 
 			megaLog += fmt.Sprintf("Current Tickers %v\n", len(tickers))
-			for id, t := range tickers {
-				megaLog += fmt.Sprintf("\tTICKER ID:%v - Running: %v\n", id, t)
+
+			var tickerIDs []string
+			for id := range tickers {
+				tickerIDs = append(tickerIDs, fmt.Sprintf("%v", id))
 			}
-			fmt.Println("NEGALOG", megaLog)
+			sort.Strings(tickerIDs)
+			for _, id := range tickerIDs {
+				t := tickers[id]
+				megaLog += fmt.Sprintf("\tTICKER ID: %v - Running: %v\n", id, t)
+			}
+			fmt.Println(megaLog)
 
 		}
 	}
@@ -236,6 +232,21 @@ func (e *Engine) AddQueue(queue string) error {
 		logs.Error(e.ctx, "Error creating queue", "queue", queue, "error", err)
 		return err
 	}
+
+	logs.Debug(e.ctx, "Adding queue workflow pending to clock", "id", newQueue.GetTickerIDWorkflowPending())
+	e.clock.AddTicker(
+		newQueue.GetTickerIDWorkflowPending(),
+		schedulers.NewSchedulerWorkflowPending(
+			e.ctx,
+			e.db,
+			newQueue.GetName(),
+			newQueue.AvailableWorkflowWorkers,
+			newQueue.SubmitWorkflow,
+		),
+		clock.WithCleanup(func() {
+			fmt.Println("Cleaning up ", newQueue.GetTickerIDWorkflowPending())
+			// it will be removed on close
+		}))
 
 	e.mu.Lock()
 	e.workerQueues[queue] = newQueue
