@@ -86,7 +86,7 @@ func (Entity) Fields() []ent.Field {
 			Values("Workflow", "Activity", "Saga", "SideEffect").
 			Immutable(),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			Values("Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
 			Default("Pending"),
 		field.String("step_id"),
 	}
@@ -133,7 +133,7 @@ func (Execution) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			Values("Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
 			Default("Pending"),
 	}
 }

@@ -3,7 +3,6 @@ package queries
 import (
 	"context"
 
-	"github.com/davidroman0O/tempolite/internal/clock"
 	"github.com/davidroman0O/tempolite/internal/engine/info"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/repository"
@@ -15,15 +14,13 @@ type Queries struct {
 	ctx      context.Context
 	db       repository.Repository
 	registry *registry.Registry
-	clock    *clock.Clock
 }
 
-func New(ctx context.Context, db repository.Repository, registry *registry.Registry, clock *clock.Clock) *Queries {
+func New(ctx context.Context, db repository.Repository, registry *registry.Registry) *Queries {
 	return &Queries{
 		ctx:      ctx,
 		db:       db,
 		registry: registry,
-		clock:    clock,
 	}
 }
 
@@ -53,7 +50,7 @@ func (e *Queries) GetWorkflowInfo(id types.WorkflowID) *info.WorkflowInfo {
 		return e.QueryNoWorkflow(err)
 	}
 
-	return info.NewWorkflowInfo(e.ctx, id, types.HandlerInfo(workflow), e.db, e.clock)
+	return info.NewWorkflowInfo(e.ctx, id, types.HandlerInfo(workflow), e.db)
 }
 
 func (e *Queries) QueryWorfklow(workflowFunc interface{}, id types.WorkflowID) *info.WorkflowInfo {
@@ -71,7 +68,7 @@ func (e *Queries) QueryWorfklow(workflowFunc interface{}, id types.WorkflowID) *
 		return e.QueryNoWorkflow(err)
 	}
 	logs.Debug(e.ctx, "Query Workflow", "id", id, "workflow", workflow)
-	return info.NewWorkflowInfo(e.ctx, id, types.HandlerInfo(workflow), e.db, e.clock)
+	return info.NewWorkflowInfo(e.ctx, id, types.HandlerInfo(workflow), e.db)
 }
 
 func (e *Queries) QueryNoWorkflow(err error) *info.WorkflowInfo {

@@ -44,6 +44,7 @@ type EntityInfo struct {
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 	QueueID     int           `json:"queue_id"`
+	QueueName   string        `json:"queue_name"`
 }
 
 type EntityRepository interface {
@@ -129,6 +130,7 @@ func (r *entityRepository) Create(tx *ent.Tx, runID int, handlerName string,
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
 		QueueID:     assignedQueueIDs,
+		QueueName:   queueObj.Name,
 	}, nil
 }
 
@@ -146,7 +148,7 @@ func (r *entityRepository) Get(tx *ent.Tx, id int) (*EntityInfo, error) {
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
+	queue, err := entObj.QueryQueue().Only(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
@@ -160,7 +162,8 @@ func (r *entityRepository) Get(tx *ent.Tx, id int) (*EntityInfo, error) {
 		Status:      string(entObj.Status),
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
-		QueueID:     queueID,
+		QueueID:     queue.ID,
+		QueueName:   queue.Name,
 	}, nil
 }
 
@@ -180,9 +183,9 @@ func (r *entityRepository) GetByStepID(tx *ent.Tx, stepID string) (*EntityInfo, 
 		return nil, fmt.Errorf("getting run ID: %w", err)
 	}
 
-	assignedQueueIDs, err := entObj.QueryQueue().OnlyID(r.ctx)
+	queue, err := entObj.QueryQueue().Only(r.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting queue IDs: %w", err)
+		return nil, fmt.Errorf("getting queue ID: %w", err)
 	}
 
 	return &EntityInfo{
@@ -193,7 +196,8 @@ func (r *entityRepository) GetByStepID(tx *ent.Tx, stepID string) (*EntityInfo, 
 		RunID:       runID,
 		CreatedAt:   entObj.CreatedAt,
 		UpdatedAt:   entObj.UpdatedAt,
-		QueueID:     assignedQueueIDs,
+		QueueID:     queue.ID,
+		QueueName:   queue.Name,
 	}, nil
 }
 
@@ -207,7 +211,8 @@ func (r *entityRepository) List(tx *ent.Tx, runID int) ([]*EntityInfo, error) {
 
 	result := make([]*EntityInfo, len(entObjs))
 	for i, entObj := range entObjs {
-		queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
+
+		queue, err := entObj.QueryQueue().Only(r.ctx)
 		if err != nil {
 			return nil, fmt.Errorf("getting queue ID: %w", err)
 		}
@@ -220,7 +225,8 @@ func (r *entityRepository) List(tx *ent.Tx, runID int) ([]*EntityInfo, error) {
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueID:     queueID,
+			QueueID:     queue.ID,
+			QueueName:   queue.Name,
 		}
 	}
 
@@ -242,7 +248,8 @@ func (r *entityRepository) ListByType(tx *ent.Tx, runID int, componentType Compo
 
 	result := make([]*EntityInfo, len(entObjs))
 	for i, entObj := range entObjs {
-		queueID, err := entObj.QueryQueue().OnlyID(r.ctx)
+
+		queue, err := entObj.QueryQueue().Only(r.ctx)
 		if err != nil {
 			return nil, fmt.Errorf("getting queue ID: %w", err)
 		}
@@ -255,7 +262,8 @@ func (r *entityRepository) ListByType(tx *ent.Tx, runID int, componentType Compo
 			RunID:       runID,
 			CreatedAt:   entObj.CreatedAt,
 			UpdatedAt:   entObj.UpdatedAt,
-			QueueID:     queueID,
+			QueueID:     queue.ID,
+			QueueName:   queue.Name,
 		}
 	}
 

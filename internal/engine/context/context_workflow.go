@@ -13,13 +13,13 @@ import (
 
 type WorkflowContext struct {
 	context.Context
-	workflowID      int
-	executionID     int
-	runID           int
-	stepID          string
-	handlerIdentity types.HandlerIdentity
-	queueName       string
-	cq              cq.CommandsQueries
+	workflowID  int
+	executionID int
+	runID       int
+	stepID      string
+	handler     types.HandlerInfo
+	queueName   string
+	cq          cq.CommandsQueries
 }
 
 func (w WorkflowContext) RunID() int {
@@ -46,6 +46,10 @@ func (w WorkflowContext) QueueName() string {
 	return w.queueName
 }
 
+func (w WorkflowContext) Handler() types.HandlerInfo {
+	return w.handler
+}
+
 func NewWorkflowContext(
 	ctx context.Context,
 	workflowID int,
@@ -53,18 +57,18 @@ func NewWorkflowContext(
 	runID int,
 	stepID string,
 	queueName string,
-	handlerIdentity types.HandlerIdentity,
+	handler types.HandlerInfo,
 	cq cq.CommandsQueries,
 ) WorkflowContext {
 	return WorkflowContext{
-		Context:         ctx,
-		workflowID:      workflowID,
-		executionID:     executionID,
-		runID:           runID,
-		stepID:          stepID,
-		handlerIdentity: handlerIdentity,
-		queueName:       queueName,
-		cq:              cq,
+		Context:     ctx,
+		workflowID:  workflowID,
+		executionID: executionID,
+		runID:       runID,
+		stepID:      stepID,
+		handler:     handler,
+		queueName:   queueName,
+		cq:          cq,
 	}
 }
 

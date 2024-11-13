@@ -85,7 +85,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "queue_entities", Type: field.TypeInt, Nullable: true},
 		{Name: "run_entities", Type: field.TypeInt},
@@ -117,7 +117,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
 		{Name: "entity_executions", Type: field.TypeInt},
 	}
 	// ExecutionsTable holds the schema information for the "executions" table.

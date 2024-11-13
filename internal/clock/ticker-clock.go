@@ -33,8 +33,8 @@ type tickerEntry struct {
 	cleanup func()
 }
 
-// Clock is the main struct that manages tickers and timing.
-type Clock struct {
+// TickerClock is the main struct that manages tickers and timing.
+type TickerClock struct {
 	mu       sync.RWMutex
 	tickers  map[TickerID]*tickerEntry
 	status   sync.Map // map[TickerID]bool
@@ -50,10 +50,10 @@ type Clock struct {
 	closing atomic.Bool
 }
 
-// NewClock creates a new Clock with the specified interval and error handler.
-func NewClock(interval time.Duration, onError func(error)) *Clock {
+// NewTickerClock creates a new Clock with the specified interval and error handler.
+func NewTickerClock(interval time.Duration, onError func(error)) *TickerClock {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Clock{
+	return &TickerClock{
 		ctx:      ctx,
 		cancel:   cancel,
 		tickers:  make(map[TickerID]*tickerEntry),
@@ -65,7 +65,7 @@ func NewClock(interval time.Duration, onError func(error)) *Clock {
 }
 
 // AddTicker adds a ticker to the Clock with the given TickerID and options.
-func (c *Clock) AddTicker(id TickerID, ticker Ticker, options ...TickerOption) {
+func (c *TickerClock) AddTicker(id TickerID, ticker Ticker, options ...TickerOption) {
 	if c.closing.Load() {
 		return
 	}
@@ -83,7 +83,7 @@ func (c *Clock) AddTicker(id TickerID, ticker Ticker, options ...TickerOption) {
 }
 
 // RemoveTicker removes a ticker from the Clock using its TickerID.
-func (c *Clock) RemoveTicker(id TickerID) {
+func (c *TickerClock) RemoveTicker(id TickerID) {
 	if c.closing.Load() {
 		return
 	}
@@ -97,7 +97,7 @@ func (c *Clock) RemoveTicker(id TickerID) {
 	}
 }
 
-func (c *Clock) GetTickers() []TickerID {
+func (c *TickerClock) GetTickers() []TickerID {
 	cp := []TickerID{}
 	c.mu.RLock()
 	tickers := make([]*tickerEntry, 0, len(c.tickers))
@@ -111,7 +111,7 @@ func (c *Clock) GetTickers() []TickerID {
 	return cp
 }
 
-func (c *Clock) GetMapTickers() map[TickerID]bool {
+func (c *TickerClock) GetMapTickers() map[TickerID]bool {
 	cp := map[TickerID]bool{}
 	c.mu.RLock()
 	tickers := make([]*tickerEntry, 0, len(c.tickers))
@@ -131,7 +131,7 @@ func (c *Clock) GetMapTickers() map[TickerID]bool {
 }
 
 // Start begins the ticking process of the Clock.
-func (c *Clock) Start() {
+func (c *TickerClock) Start() {
 	if c.closing.Load() {
 		return
 	}
@@ -175,7 +175,7 @@ func (c *Clock) Start() {
 	}()
 }
 
-func (c *Clock) HasTickerID(id TickerID) bool {
+func (c *TickerClock) HasTickerID(id TickerID) bool {
 	c.mu.RLock()
 	_, ok := c.tickers[id]
 	c.mu.RUnlock()
@@ -183,7 +183,7 @@ func (c *Clock) HasTickerID(id TickerID) bool {
 }
 
 // Stop halts the ticking process and cleans up resources.
-func (c *Clock) Stop() {
+func (c *TickerClock) Stop() {
 	c.closing.Store(true)
 	close(c.done)
 	c.cancel()
@@ -191,7 +191,7 @@ func (c *Clock) Stop() {
 }
 
 // triggerTickers invokes the Tick method on all registered tickers.
-func (c *Clock) triggerTickers(ctx context.Context) {
+func (c *TickerClock) triggerTickers(ctx context.Context) {
 	c.mu.RLock()
 	tickers := make([]*tickerEntry, 0, len(c.tickers))
 	for _, entry := range c.tickers {
@@ -218,7 +218,7 @@ func (c *Clock) triggerTickers(ctx context.Context) {
 }
 
 // cleanupTickers calls the cleanup function for all registered tickers.
-func (c *Clock) cleanupTickers() {
+func (c *TickerClock) cleanupTickers() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, entry := range c.tickers {

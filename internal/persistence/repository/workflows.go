@@ -83,6 +83,8 @@ type WorkflowRepository interface {
 	GetByStepID(tx *ent.Tx, stepID string) (*WorkflowInfo, error)
 	List(tx *ent.Tx, runID int) ([]*WorkflowInfo, error)
 
+	PullPending(tx *ent.Tx) (*WorkflowInfo, error)
+
 	ListPending(tx *ent.Tx, queue string) ([]*WorkflowInfo, error)
 	ListExecutionsPending(tx *ent.Tx, queueName string, slots int) ([]*WorkflowInfo, error)
 	ListExecutionsRunning(tx *ent.Tx, queueName string, slots int) ([]*WorkflowInfo, error)
@@ -91,6 +93,7 @@ type WorkflowRepository interface {
 	UpdateExecutionDataError(tx *ent.Tx, id int, errormsg string) error
 	UpdateExecutionDataOuput(tx *ent.Tx, id int, output [][]byte) error
 
+	UpdateExecutionRunning(tx *ent.Tx, executionID int) error
 	UpdateExecutionSuccess(tx *ent.Tx, id int) error
 	UpdateExecutionFailed(tx *ent.Tx, id int) error
 	UpdateExecutionPaused(tx *ent.Tx, id int) error
@@ -118,6 +121,41 @@ func NewWorkflowRepository(ctx context.Context, client *ent.Client) WorkflowRepo
 		ctx:    ctx,
 		client: client,
 	}
+}
+
+func (r *workflowRepository) PullPending(tx *ent.Tx) (*WorkflowInfo, error) {
+	entityObj, err := tx.Entity.Query().
+		Where(
+			entity.And(
+				entity.StatusEQ(entity.StatusPending),
+				entity.TypeEQ(entity.TypeWorkflow),
+			),
+		).
+		Order(ent.Asc(entity.FieldCreatedAt)).
+		First(r.ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(fmt.Errorf("finding pending workflow"), ErrNotFound)
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting entity"))
+	}
+
+	wi, err := r.Get(tx, entityObj.ID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(fmt.Errorf("getting workflow"), ErrNotFound)
+		}
+		return nil, errors.Join(err, fmt.Errorf("getting entity"))
+	}
+
+	if err = entityObj.Update().SetStatus(entity.StatusQueued).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return nil, errors.Join(fmt.Errorf("update status workflow"), ErrNotFound)
+		}
+		return nil, errors.Join(err, fmt.Errorf("updating entity status"))
+	}
+
+	return wi, nil
 }
 
 // When we restart, we might have some entities and executions that were running, we need to requeue them by
@@ -1023,6 +1061,35 @@ func (r *workflowRepository) UpdateExecutionPaused(tx *ent.Tx, executionID int) 
 			return ErrNotFound
 		}
 		return errors.Join(err, fmt.Errorf("updating workflow data"))
+	}
+
+	return nil
+}
+
+func (r *workflowRepository) UpdateExecutionRunning(tx *ent.Tx, executionID int) error {
+
+	if err := tx.Execution.UpdateOneID(executionID).SetStatus(execution.StatusRunning).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating execution status"))
+	}
+
+	execObj, err := tx.Execution.Get(r.ctx, executionID)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting execution"))
+	}
+
+	entityID, err := execObj.QueryEntity().OnlyID(r.ctx)
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("getting entity ID"))
+	}
+
+	if err := tx.Entity.UpdateOneID(entityID).SetStatus(entity.StatusRunning).Exec(r.ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrNotFound
+		}
+		return errors.Join(err, fmt.Errorf("updating entity status"))
 	}
 
 	return nil

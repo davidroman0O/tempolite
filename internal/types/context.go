@@ -7,4 +7,5 @@ type SharedContext interface {
 	EntityType() string // entity type
 	StepID() string     // current step
 	QueueName() string  // queue name
+	Handler() HandlerInfo
 }

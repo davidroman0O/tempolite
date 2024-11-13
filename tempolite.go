@@ -5,14 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
-	"github.com/davidroman0O/tempolite/internal/engine"
-	"github.com/davidroman0O/tempolite/internal/engine/info"
+	"github.com/davidroman0O/tempolite/internal/clock"
+	"github.com/davidroman0O/tempolite/internal/engine/orchestrator"
 	"github.com/davidroman0O/tempolite/internal/engine/registry"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent"
+	"github.com/davidroman0O/tempolite/internal/persistence/repository"
 	"github.com/davidroman0O/tempolite/internal/types"
 	"github.com/davidroman0O/tempolite/pkg/logs"
 )
@@ -125,10 +127,13 @@ type Tempolite struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	engine *engine.Engine
+	// technically, for now, just one orchestrator
+	orchestrator *orchestrator.Orchestrator
 
 	comfy  *comfylite3.ComfyDB
 	client *ent.Client
+
+	clock *clock.FuncClock
 }
 
 func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempoliteOption) (*Tempolite, error) {
@@ -163,38 +168,51 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 		return nil, err
 	}
 
-	logs.Debug(ctx, "Creating engine")
-	if tp.engine, err = engine.New(ctx, builder, tp.client); err != nil {
-		logs.Error(ctx, "Error creating engine", "error", err)
+	// logs.Debug(ctx, "Creating engine")
+	// if tp.engine, err = engine.New(ctx, builder, tp.client); err != nil {
+	// 	logs.Error(ctx, "Error creating engine", "error", err)
+	// 	return nil, err
+	// }
+
+	db := repository.NewRepository(ctx, tp.client)
+
+	tx, err := db.Tx()
+	if err != nil {
+		logs.Error(ctx, "Error creating transaction", "error", err)
 		return nil, err
 	}
 
-	for _, v := range cfg.queues {
-		if err := tp.engine.AddQueue(v.Name); err != nil {
-			logs.Error(ctx, "Error adding queue", "queue", v.Name, "error", err)
-			return nil, err
-		}
-		if err := tp.engine.Scale(v.Name, map[string]int{
-			"workflow":    v.WorkflowWorkers,
-			"activity":    v.ActivityWorkers,
-			"side_effect": v.SideEffectWorkers,
-			"transaction": v.TransactionWorkers,
-		}); err != nil {
-			logs.Error(ctx, "Error scaling queue", "queue", v.Name, "error", err)
+	if _, err = db.Queues().Create(tx, "default"); err != nil {
+		tx.Rollback()
+		logs.Error(ctx, "Error creating queue", "error", err)
+	} else {
+		if err = tx.Commit(); err != nil {
+			logs.Error(ctx, "Error committing transaction", "error", err)
 			return nil, err
 		}
 	}
+
+	reg, err := builder()
+	if err != nil {
+		logs.Error(ctx, "Error creating registry", "error", err)
+		return nil, err
+	}
+
+	if tp.orchestrator = orchestrator.New(ctx, db, reg); err != nil {
+		logs.Error(ctx, "Error creating orchestrator", "error", err)
+		return nil, err
+	}
+
+	tp.clock = clock.NewFuncClock(time.Microsecond*10, func(err error) {
+		logs.Error(ctx, "Error in clock", "error", err)
+	})
+
+	tp.clock.AddFunc("orchestrator", tp.orchestrator.Tick, clock.WithFuncCleanup(tp.orchestrator.Stop))
+	tp.clock.Start()
 
 	defer logs.Debug(ctx, "Tempolite created")
 
 	return tp, nil
-}
-
-func (tp *Tempolite) Scale(queue string, targets map[string]int) error {
-	tp.mu.Lock()
-	defer tp.mu.Unlock()
-	logs.Debug(tp.ctx, "Scaling Tempolite", "queue", queue, "targets", targets)
-	return tp.engine.Scale(queue, targets)
 }
 
 func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
@@ -264,18 +282,22 @@ func (tp *Tempolite) createClient(cfg tempoliteConfig) error {
 }
 
 func (tp *Tempolite) Shutdown() error {
+	<-time.After(time.Second)
+	tp.orchestrator.Wait()
 	logs.Debug(tp.ctx, "Shutting down Tempolite")
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 
 	defer logs.Debug(tp.ctx, "Tempolite shutdown complete")
 
-	if err := tp.engine.Shutdown(); err != nil {
-		if err != context.Canceled {
-			logs.Error(tp.ctx, "Error shutting down engine", "error", err)
-			return err
-		}
-	}
+	tp.clock.Stop()
+
+	// if err := tp.engine.Shutdown(); err != nil {
+	// 	if err != context.Canceled {
+	// 		logs.Error(tp.ctx, "Error shutting down engine", "error", err)
+	// 		return err
+	// 	}
+	// }
 
 	tp.cancel()
 
@@ -292,12 +314,7 @@ func (tp *Tempolite) Shutdown() error {
 	return nil
 }
 
-func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) *info.WorkflowInfo {
+func (tp *Tempolite) Workflow(workflowFunc interface{}, opts types.WorkflowOptions, params ...any) (types.WorkflowID, error) {
 	logs.Debug(tp.ctx, "Creating workflow")
-	return tp.engine.Workflow(workflowFunc, opts, params...)
-}
-
-func (tp *Tempolite) GetWorkflow(id types.WorkflowID) *info.WorkflowInfo {
-	logs.Debug(tp.ctx, "Getting workflow", "id", id)
-	return tp.engine.GetWorkflow(id)
+	return tp.orchestrator.Workflow(workflowFunc, opts, params...)
 }
