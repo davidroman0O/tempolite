@@ -19,21 +19,24 @@ import (
 
 // FSM states
 const (
-	StateIdle      = "Idle"
-	StateExecuting = "Executing"
-	StateCompleted = "Completed"
-	StateFailed    = "Failed"
-	StateRetried   = "Retried"
-	StatePaused    = "Paused"
+	StateIdle          = "Idle"
+	StateExecuting     = "Executing"
+	StateCompleted     = "Completed"
+	StateFailed        = "Failed"
+	StateRetried       = "Retried"
+	StatePaused        = "Paused"
+	StateTransactions  = "Transactions"
+	StateCompensations = "Compensations"
 )
 
 // FSM triggers
 const (
-	TriggerStart    = "Start"
-	TriggerComplete = "Complete"
-	TriggerFail     = "Fail"
-	TriggerPause    = "Pause"
-	TriggerResume   = "Resume"
+	TriggerStart         = "Start"
+	TriggerComplete      = "Complete"
+	TriggerFail          = "Fail"
+	TriggerPause         = "Pause"
+	TriggerResume        = "Resume"
+	TriggerCompensations = "Compensate"
 )
 
 // Serialization functions
@@ -579,6 +582,29 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	return future
 }
 
+// SagaContext provides context for saga execution.
+type SagaContext struct {
+	ctx          context.Context
+	orchestrator *Orchestrator
+	workflowID   int
+	stepID       string
+}
+
+func (ctx *WorkflowContext) Saga(stepID string, saga *SagaDefinition) *SagaInfo {
+	if err := ctx.checkPause(); err != nil {
+		log.Printf("WorkflowContext.Saga paused at stepID: %s", stepID)
+		sagaInfo := &SagaInfo{
+			err:  err,
+			done: make(chan struct{}),
+		}
+		close(sagaInfo.done)
+		return sagaInfo
+	}
+
+	// Execute the saga
+	return ctx.orchestrator.executeSaga(ctx, stepID, saga)
+}
+
 // ActivityContext provides context for activity execution.
 type ActivityContext struct {
 	ctx context.Context
@@ -608,6 +634,7 @@ const (
 	EntityTypeWorkflow   EntityType = "Workflow"
 	EntityTypeActivity   EntityType = "Activity"
 	EntityTypeSideEffect EntityType = "SideEffect"
+	EntityTypeSaga       EntityType = "Saga"
 )
 
 type EntityStatus string
@@ -643,6 +670,11 @@ type SideEffectExecutionData struct {
 	ExecutionContext []byte     `json:"execution_context,omitempty"`
 }
 
+type SagaExecutionData struct {
+	Error  string   `json:"error,omitempty"`
+	Output [][]byte `json:"output,omitempty"`
+}
+
 // Entity represents the base entity for workflows, activities, and side effects.
 type Entity struct {
 	ID             int
@@ -657,9 +689,10 @@ type Entity struct {
 	WorkflowData   *WorkflowData
 	ActivityData   *ActivityData
 	SideEffectData *SideEffectData
+	SagaData       *SagaData
 	Paused         bool
 	Resumable      bool
-	HandlerInfo    *HandlerInfo // Added to store HandlerInfo
+	HandlerInfo    *HandlerInfo
 }
 
 // Execution represents a single execution attempt of an entity.
@@ -676,6 +709,7 @@ type Execution struct {
 	WorkflowExecutionData   *WorkflowExecutionData
 	ActivityExecutionData   *ActivityExecutionData
 	SideEffectExecutionData *SideEffectExecutionData
+	SagaExecutionData       *SagaExecutionData
 }
 
 // Hierarchy tracks parent-child relationships between entities.
@@ -712,6 +746,13 @@ type ActivityData struct {
 type SideEffectData struct {
 	Input       [][]byte             `json:"input,omitempty"`
 	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
+}
+
+type SagaData struct {
+	Compensating     bool                 `json:"compensating"`
+	CompensationData [][]byte             `json:"compensation_data,omitempty"`
+	RetryState       *RetryState          `json:"retry_state"`
+	RetryPolicy      *retryPolicyInternal `json:"retry_policy"`
 }
 
 // WorkflowInstance represents an instance of a workflow execution.
@@ -1481,6 +1522,360 @@ func (sei *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) err
 	return nil
 }
 
+// Saga types and implementations
+
+type SagaStep interface {
+	Transaction(ctx TransactionContext) (interface{}, error)
+	Compensation(ctx CompensationContext) (interface{}, error)
+}
+
+type SagaDefinition struct {
+	Steps       []SagaStep
+	HandlerInfo *SagaHandlerInfo
+}
+
+type SagaDefinitionBuilder struct {
+	steps []SagaStep
+}
+
+type SagaHandlerInfo struct {
+	TransactionInfo  []HandlerInfo
+	CompensationInfo []HandlerInfo
+}
+
+// NewSaga creates a new builder instance.
+func NewSaga() *SagaDefinitionBuilder {
+	return &SagaDefinitionBuilder{
+		steps: make([]SagaStep, 0),
+	}
+}
+
+// AddStep adds a saga step to the builder.
+func (b *SagaDefinitionBuilder) AddStep(step SagaStep) *SagaDefinitionBuilder {
+	b.steps = append(b.steps, step)
+	return b
+}
+
+// Build creates a SagaDefinition with the HandlerInfo included.
+func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
+	sagaInfo := &SagaHandlerInfo{
+		TransactionInfo:  make([]HandlerInfo, len(b.steps)),
+		CompensationInfo: make([]HandlerInfo, len(b.steps)),
+	}
+
+	for i, step := range b.steps {
+		stepType := reflect.TypeOf(step)
+		originalType := stepType // Keep original type for handler name
+		isPtr := stepType.Kind() == reflect.Ptr
+
+		// Get the base type for method lookup
+		if isPtr {
+			stepType = stepType.Elem()
+		}
+
+		// Try to find methods on both pointer and value receivers
+		var transactionMethod, compensationMethod reflect.Method
+		var transactionOk, compensationOk bool
+
+		// First try the original type (whether pointer or value)
+		if transactionMethod, transactionOk = originalType.MethodByName("Transaction"); !transactionOk {
+			// If not found and original wasn't a pointer, try pointer
+			if !isPtr {
+				if ptrMethod, ok := reflect.PtrTo(stepType).MethodByName("Transaction"); ok {
+					transactionMethod = ptrMethod
+					transactionOk = true
+				}
+			}
+		}
+
+		if compensationMethod, compensationOk = originalType.MethodByName("Compensation"); !compensationOk {
+			// If not found and original wasn't a pointer, try pointer
+			if !isPtr {
+				if ptrMethod, ok := reflect.PtrTo(stepType).MethodByName("Compensation"); ok {
+					compensationMethod = ptrMethod
+					compensationOk = true
+				}
+			}
+		}
+
+		if !transactionOk {
+			return nil, fmt.Errorf("Transaction method not found for step %d", i)
+		}
+		if !compensationOk {
+			return nil, fmt.Errorf("Compensation method not found for step %d", i)
+		}
+
+		// Use the actual type name for the handler
+		typeName := stepType.Name()
+		if isPtr {
+			typeName = "*" + typeName
+		}
+
+		transactionInfo, err := analyzeMethod(transactionMethod, typeName)
+		if err != nil {
+			return nil, fmt.Errorf("error analyzing Transaction method for step %d: %w", i, err)
+		}
+
+		compensationInfo, err := analyzeMethod(compensationMethod, typeName)
+		if err != nil {
+			return nil, fmt.Errorf("error analyzing Compensation method for step %d: %w", i, err)
+		}
+
+		sagaInfo.TransactionInfo[i] = transactionInfo
+		sagaInfo.CompensationInfo[i] = compensationInfo
+	}
+
+	return &SagaDefinition{
+		Steps:       b.steps,
+		HandlerInfo: sagaInfo,
+	}, nil
+}
+
+func analyzeMethod(method reflect.Method, name string) (HandlerInfo, error) {
+	methodType := method.Type
+
+	if methodType.NumIn() < 2 {
+		return HandlerInfo{}, fmt.Errorf("method must have at least two parameters (receiver and context)")
+	}
+
+	paramTypes := make([]reflect.Type, methodType.NumIn()-2)
+	paramKinds := make([]reflect.Kind, methodType.NumIn()-2)
+	for i := 2; i < methodType.NumIn(); i++ {
+		paramTypes[i-2] = methodType.In(i)
+		paramKinds[i-2] = methodType.In(i).Kind()
+	}
+
+	returnTypes := make([]reflect.Type, methodType.NumOut()-1)
+	returnKinds := make([]reflect.Kind, methodType.NumOut()-1)
+	for i := 0; i < methodType.NumOut()-1; i++ {
+		returnTypes[i] = methodType.Out(i)
+		returnKinds[i] = methodType.Out(i).Kind()
+	}
+
+	handlerName := fmt.Sprintf("%s.%s", name, method.Name)
+
+	return HandlerInfo{
+		HandlerName:     handlerName,
+		HandlerLongName: HandlerIdentity(name),
+		Handler:         method.Func.Interface(),
+		ParamTypes:      paramTypes,
+		ParamsKinds:     paramKinds,
+		ReturnTypes:     returnTypes,
+		ReturnKinds:     returnKinds,
+		NumIn:           methodType.NumIn() - 2,  // Exclude receiver and context
+		NumOut:          methodType.NumOut() - 1, // Exclude error
+	}, nil
+}
+
+type SagaInfo struct {
+	err    error
+	result interface{}
+	done   chan struct{}
+}
+
+func (s *SagaInfo) Get() error {
+	<-s.done
+	return s.err
+}
+
+func (o *Orchestrator) executeSaga(ctx *WorkflowContext, stepID string, saga *SagaDefinition) *SagaInfo {
+	sagaInfo := &SagaInfo{
+		done: make(chan struct{}),
+	}
+
+	// Create a new Entity for the Saga
+	entity := &Entity{
+		StepID:    stepID,
+		Type:      string(EntityTypeSaga),
+		Status:    string(StatusPending),
+		RunID:     o.runID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		SagaData:  &SagaData{},
+	}
+
+	// Add the entity to the database
+	entity = o.db.AddEntity(entity)
+
+	// Record hierarchy relationship
+	hierarchy := &Hierarchy{
+		RunID:             o.runID,
+		ParentEntityID:    ctx.workflowID,
+		ChildEntityID:     entity.ID,
+		ParentExecutionID: 0,
+		ChildExecutionID:  0,
+		ParentStepID:      ctx.stepID,
+		ChildStepID:       stepID,
+		ParentType:        string(EntityTypeWorkflow),
+		ChildType:         string(EntityTypeSaga),
+	}
+	o.db.AddHierarchy(hierarchy)
+
+	// Create a SagaInstance and start it
+	sagaInstance := &SagaInstance{
+		saga:         saga,
+		ctx:          ctx.ctx,
+		orchestrator: o,
+		workflowID:   ctx.workflowID,
+		stepID:       stepID,
+		sagaInfo:     sagaInfo,
+		entity:       entity,
+	}
+
+	o.addSagaInstance(sagaInstance)
+	sagaInstance.Start()
+
+	return sagaInfo
+}
+
+type TransactionContext struct {
+	ctx context.Context
+}
+
+type CompensationContext struct {
+	ctx context.Context
+}
+
+type SagaInstance struct {
+	saga          *SagaDefinition
+	ctx           context.Context
+	orchestrator  *Orchestrator
+	workflowID    int
+	stepID        string
+	sagaInfo      *SagaInfo
+	entity        *Entity
+	fsm           *stateless.StateMachine
+	err           error
+	currentStep   int
+	compensations []int // Indices of steps to compensate
+	mu            sync.Mutex
+}
+
+// Start initializes and starts the Saga FSM.
+func (si *SagaInstance) Start() {
+	si.fsm = stateless.NewStateMachine(StateIdle)
+
+	// Configure FSM states and transitions
+	si.fsm.Configure(StateIdle).
+		Permit(TriggerStart, StateTransactions)
+
+	si.fsm.Configure(StateTransactions).
+		OnEntry(si.executeTransactions).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateCompensations)
+
+	si.fsm.Configure(StateCompensations).
+		OnEntry(si.executeCompensations).
+		Permit(TriggerCompensations, StateFailed)
+
+	si.fsm.Configure(StateCompleted).
+		OnEntry(si.onCompleted)
+
+	si.fsm.Configure(StateFailed).
+		OnEntry(si.onFailed)
+
+	// Start the FSM
+	_ = si.fsm.Fire(TriggerStart)
+}
+
+// executeTransactions executes the saga transactions sequentially.
+func (si *SagaInstance) executeTransactions(ctx context.Context, args ...interface{}) error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
+	for si.currentStep < len(si.saga.Steps) {
+		step := si.saga.Steps[si.currentStep]
+		_, err := step.Transaction(TransactionContext{
+			ctx: si.ctx,
+		})
+		if err != nil {
+			// Transaction failed
+			log.Printf("Transaction failed at step %d: %v", si.currentStep, err)
+			// Record the steps up to the last successful one
+			if si.currentStep > 0 {
+				si.compensations = si.compensations[:si.currentStep]
+			}
+			si.err = fmt.Errorf("transaction failed at step %d: %v", si.currentStep, err)
+			_ = si.fsm.Fire(TriggerFail)
+			return nil
+		}
+		// Record the successful transaction
+		si.compensations = append(si.compensations, si.currentStep)
+		si.currentStep++
+	}
+	// All transactions succeeded
+	_ = si.fsm.Fire(TriggerComplete)
+	return nil
+}
+
+// executeCompensations compensates executed transactions in reverse order.
+func (si *SagaInstance) executeCompensations(ctx context.Context, args ...interface{}) error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
+	// Compensate in reverse order
+	for i := len(si.compensations) - 1; i >= 0; i-- {
+		stepIndex := si.compensations[i]
+		step := si.saga.Steps[stepIndex]
+		_, err := step.Compensation(CompensationContext{
+			ctx: si.ctx,
+		})
+		if err != nil {
+			// Compensation failed
+			log.Printf("Compensation failed for step %d: %v", stepIndex, err)
+			si.err = fmt.Errorf("compensation failed at step %d: %v", stepIndex, err)
+			break // Exit after first compensation failure
+		}
+	}
+	// All compensations completed (successfully or not)
+	_ = si.fsm.Fire(TriggerCompensations)
+	return nil
+}
+
+// onCompleted handles the completion of the Saga.
+func (si *SagaInstance) onCompleted(ctx context.Context, args ...interface{}) error {
+	// Update entity status to Completed
+	si.entity.Status = string(StatusCompleted)
+	si.orchestrator.db.UpdateEntity(si.entity)
+
+	// Notify SagaInfo
+	si.sagaInfo.err = nil
+	close(si.sagaInfo.done)
+	log.Println("Saga completed successfully")
+	return nil
+}
+
+// onFailed handles the failure of the Saga.
+func (si *SagaInstance) onFailed(ctx context.Context, args ...interface{}) error {
+	// Update entity status to Failed
+	si.entity.Status = string(StatusFailed)
+	si.orchestrator.db.UpdateEntity(si.entity)
+
+	// Set the error in SagaInfo
+	if si.err != nil {
+		si.sagaInfo.err = si.err
+	} else {
+		si.sagaInfo.err = errors.New("saga execution failed")
+	}
+
+	// Mark parent Workflow as Failed
+	parentEntity := si.orchestrator.db.GetEntity(si.workflowID)
+	if parentEntity != nil {
+		parentEntity.Status = string(StatusFailed)
+		si.orchestrator.db.UpdateEntity(parentEntity)
+	}
+
+	close(si.sagaInfo.done)
+	log.Printf("Saga failed with error: %v", si.sagaInfo.err)
+	return nil
+}
+
+func (o *Orchestrator) addSagaInstance(si *SagaInstance) {
+	o.sagasMu.Lock()
+	o.sagas = append(o.sagas, si)
+	o.sagasMu.Unlock()
+}
+
 // Database interface defines methods for interacting with the data store.
 type Database interface {
 	// Entity methods
@@ -1626,9 +2021,11 @@ type Orchestrator struct {
 	instances     []*WorkflowInstance
 	activities    []*ActivityInstance
 	sideEffects   []*SideEffectInstance
+	sagas         []*SagaInstance
 	instancesMu   sync.Mutex
 	activitiesMu  sync.Mutex
 	sideEffectsMu sync.Mutex
+	sagasMu       sync.Mutex
 	registry      *Registry
 	err           error
 	runID         int
@@ -2029,6 +2426,58 @@ func getFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
+// Example Saga Steps
+type ReserveInventorySaga struct {
+	Data int
+}
+
+func (s ReserveInventorySaga) Transaction(ctx TransactionContext) (interface{}, error) {
+	log.Printf("ReserveInventorySaga Transaction called with Data: %d", s.Data)
+	// Simulate successful transaction
+	return nil, nil
+}
+
+func (s ReserveInventorySaga) Compensation(ctx CompensationContext) (interface{}, error) {
+	log.Printf("ReserveInventorySaga Compensation called")
+	// Simulate compensation
+	return nil, nil
+}
+
+type ProcessPaymentSaga struct {
+	Data int
+}
+
+func (s ProcessPaymentSaga) Transaction(ctx TransactionContext) (interface{}, error) {
+	log.Printf("ProcessPaymentSaga Transaction called with Data: %d", s.Data)
+	// Simulate failure in transaction
+	// if s.Data%2 == 0 {
+	// 	return nil, fmt.Errorf("Payment processing failed")
+	// }
+	return nil, nil
+}
+
+func (s ProcessPaymentSaga) Compensation(ctx CompensationContext) (interface{}, error) {
+	log.Printf("ProcessPaymentSaga Compensation called")
+	// Simulate compensation
+	return nil, nil
+}
+
+type UpdateLedgerSaga struct {
+	Data int
+}
+
+func (s UpdateLedgerSaga) Transaction(ctx TransactionContext) (interface{}, error) {
+	log.Printf("UpdateLedgerSaga Transaction called with Data: %d", s.Data)
+	// Simulate successful transaction
+	return nil, fmt.Errorf("failed transaction")
+}
+
+func (s UpdateLedgerSaga) Compensation(ctx CompensationContext) (interface{}, error) {
+	log.Printf("UpdateLedgerSaga Compensation called")
+	// Simulate compensation
+	return nil, nil
+}
+
 // Example Activity
 func SomeActivity(ctx ActivityContext, data int) (int, error) {
 	log.Printf("SomeActivity called with data: %d", data)
@@ -2167,6 +2616,23 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 		return -1, err
 	}
 	log.Printf("Workflow received value from sub-workflow: %d", value)
+
+	// Build and execute a saga
+	orderData := value
+	sagaBuilder := NewSaga()
+	sagaBuilder.AddStep(ReserveInventorySaga{Data: orderData})
+	sagaBuilder.AddStep(ProcessPaymentSaga{Data: orderData})
+	sagaBuilder.AddStep(UpdateLedgerSaga{Data: orderData})
+
+	saga, err := sagaBuilder.Build()
+	if err != nil {
+		return -1, fmt.Errorf("failed to build saga: %w", err)
+	}
+
+	err = ctx.Saga("process-order", saga).Get()
+	if err != nil {
+		return -1, fmt.Errorf("saga execution failed: %w", err)
+	}
 
 	result := value + data
 	if shouldDouble {
