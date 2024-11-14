@@ -1398,7 +1398,6 @@ func main() {
 	defer cancel()
 
 	orchestrator := NewOrchestrator(database, ctx)
-	orchestrator.RegisterWorkflow(Workflow)
 
 	subWorkflowFailed.Store(true)
 
