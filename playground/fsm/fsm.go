@@ -28,6 +28,7 @@ const (
 	TriggerFail     = "Fail"
 )
 
+// Future represents an asynchronous result.
 type Future struct {
 	result interface{}
 	err    error
@@ -66,33 +67,52 @@ func (f *Future) setError(err error) {
 	close(f.done)
 }
 
+// RetryPolicy defines retry behavior configuration for API usage.
 type RetryPolicy struct {
-	MaxAttempts     int
-	InitialInterval time.Duration
+	MaxAttempts        int
+	InitialInterval    time.Duration
+	BackoffCoefficient float64
+	MaxInterval        time.Duration
 }
 
+// RetryState tracks the state of retries.
+type RetryState struct {
+	Attempts int `json:"attempts"`
+}
+
+// Internal retry policy matching the database schema, using int64 for intervals.
+type retryPolicyInternal struct {
+	MaxAttempts        int     `json:"max_attempts"`
+	InitialInterval    int64   `json:"initial_interval"` // Stored in nanoseconds
+	BackoffCoefficient float64 `json:"backoff_coefficient"`
+	MaxInterval        int64   `json:"max_interval"` // Stored in nanoseconds
+}
+
+// WorkflowOptions provides options for workflows, including retry policies.
 type WorkflowOptions struct {
 	RetryPolicy *RetryPolicy
 }
 
+// ActivityOptions provides options for activities, including retry policies.
 type ActivityOptions struct {
 	RetryPolicy *RetryPolicy
 }
 
+// WorkflowContext provides context for workflow execution.
 type WorkflowContext struct {
 	orchestrator *Orchestrator
 	ctx          context.Context
-	workflowID   string
+	workflowID   int
+	stepID       string
 }
 
 func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
 	future := NewFuture()
 
-	// Check cache
-	cacheKey := ctx.workflowID + "." + stepID
-	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
-		log.Printf("Cache hit for stepID: %s", cacheKey)
+	// Check if result already exists in the database
+	if result, ok := ctx.orchestrator.db.GetResult(ctx.workflowID, stepID); ok {
+		log.Printf("Result found in database for workflowID: %d, stepID: %s", ctx.workflowID, stepID)
 		future.setResult(result)
 		return future
 	}
@@ -106,25 +126,60 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 		return future
 	}
 
-	// Create a new WorkflowEntity
-	entity := &WorkflowEntity{
-		ID:     cacheKey,
-		Status: StateIdle,
+	// Create a new Entity without ID (database assigns it)
+	entity := &Entity{
+		StepID:      stepID,
+		HandlerName: handler.HandlerName,
+		Type:        EntityTypeWorkflow,
+		Status:      StatusPending,
+		RunID:       ctx.orchestrator.runID,
 	}
 
-	// Add the entity to the database
-	ctx.orchestrator.db.AddWorkflowEntity(entity)
+	// Convert API RetryPolicy to internal retry policy
+	var internalRetryPolicy *retryPolicyInternal
+	if options.RetryPolicy != nil {
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        options.RetryPolicy.MaxAttempts,
+			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
+			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+		}
+	}
+
+	// Create WorkflowData
+	workflowData := &WorkflowData{
+		Input:       args,
+		RetryPolicy: internalRetryPolicy,
+		RetryState:  &RetryState{Attempts: 0},
+	}
+
+	entity.Data = workflowData
+
+	// Add the entity to the database, which assigns the ID
+	entity = ctx.orchestrator.db.AddEntity(entity)
+
+	// Record hierarchy relationship using parent stepID
+	hierarchy := &Hierarchy{
+		ParentEntityID: ctx.workflowID,
+		ChildEntityID:  entity.ID,
+		ParentStepID:   ctx.stepID,
+		ChildStepID:    stepID,
+		ParentType:     EntityTypeWorkflow,
+		ChildType:      EntityTypeWorkflow,
+	}
+	ctx.orchestrator.db.AddHierarchy(hierarchy)
 
 	subWorkflowInstance := &WorkflowInstance{
-		stepID:       cacheKey,
+		stepID:       stepID,
 		handler:      handler,
 		input:        args,
 		future:       future,
 		ctx:          ctx.ctx,
 		orchestrator: ctx.orchestrator,
-		workflowID:   cacheKey,
+		workflowID:   entity.ID,
 		options:      options,
 		entity:       entity,
+		entityID:     entity.ID, // Store entity ID
 	}
 
 	ctx.orchestrator.addWorkflowInstance(subWorkflowInstance)
@@ -137,10 +192,9 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	log.Printf("WorkflowContext.Activity called with stepID: %s, activityFunc: %v, args: %v", stepID, getFunctionName(activityFunc), args)
 	future := NewFuture()
 
-	// Check cache
-	cacheKey := ctx.workflowID + "." + stepID
-	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
-		log.Printf("Cache hit for stepID: %s", cacheKey)
+	// Check if result already exists in the database
+	if result, ok := ctx.orchestrator.db.GetResult(ctx.workflowID, stepID); ok {
+		log.Printf("Result found in database for workflowID: %d, stepID: %s", ctx.workflowID, stepID)
 		future.setResult(result)
 		return future
 	}
@@ -154,17 +208,50 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		return future
 	}
 
-	// Create a new ActivityEntity
-	entity := &ActivityEntity{
-		ID:     cacheKey,
-		Status: StateIdle,
+	// Create a new Entity without ID (database assigns it)
+	entity := &Entity{
+		StepID:      stepID,
+		HandlerName: handler.HandlerName,
+		Type:        EntityTypeActivity,
+		Status:      StatusPending,
+		RunID:       ctx.orchestrator.runID,
 	}
 
-	// Add the entity to the database
-	ctx.orchestrator.db.AddActivityEntity(entity)
+	// Convert API RetryPolicy to internal retry policy
+	var internalRetryPolicy *retryPolicyInternal
+	if options.RetryPolicy != nil {
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        options.RetryPolicy.MaxAttempts,
+			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
+			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+		}
+	}
+
+	// Create ActivityData
+	activityData := &ActivityData{
+		Input:       args,
+		RetryPolicy: internalRetryPolicy,
+	}
+
+	entity.Data = activityData
+
+	// Add the entity to the database, which assigns the ID
+	entity = ctx.orchestrator.db.AddEntity(entity)
+
+	// Record hierarchy relationship using parent stepID
+	hierarchy := &Hierarchy{
+		ParentEntityID: ctx.workflowID,
+		ChildEntityID:  entity.ID,
+		ParentStepID:   ctx.stepID,
+		ChildStepID:    stepID,
+		ParentType:     EntityTypeWorkflow,
+		ChildType:      EntityTypeActivity,
+	}
+	ctx.orchestrator.db.AddHierarchy(hierarchy)
 
 	activityInstance := &ActivityInstance{
-		stepID:       cacheKey,
+		stepID:       stepID,
 		handler:      handler,
 		input:        args,
 		future:       future,
@@ -173,6 +260,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		workflowID:   ctx.workflowID,
 		options:      options,
 		entity:       entity,
+		entityID:     entity.ID, // Store entity ID
 	}
 
 	go activityInstance.executeWithRetry()
@@ -184,10 +272,9 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	log.Printf("WorkflowContext.SideEffect called with stepID: %s", stepID)
 	future := NewFuture()
 
-	// Check cache
-	cacheKey := ctx.workflowID + "." + stepID
-	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
-		log.Printf("Cache hit for stepID: %s", cacheKey)
+	// Check if result already exists in the database
+	if result, ok := ctx.orchestrator.db.GetResult(ctx.workflowID, stepID); ok {
+		log.Printf("Result found in database for workflowID: %d, stepID: %s", ctx.workflowID, stepID)
 		future.setResult(result)
 		return future
 	}
@@ -198,30 +285,64 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		InitialInterval: 0,
 	}
 
-	// Create a new SideEffectEntity
-	entity := &SideEffectEntity{
-		ID:     cacheKey,
-		Status: StateIdle,
+	// Create a new Entity without ID (database assigns it)
+	entity := &Entity{
+		StepID:      stepID,
+		HandlerName: getFunctionName(sideEffectFunc),
+		Type:        EntityTypeSideEffect,
+		Status:      StatusPending,
+		RunID:       ctx.orchestrator.runID,
 	}
 
-	// Add the entity to the database
-	ctx.orchestrator.db.AddSideEffectEntity(entity)
+	// Create SideEffectData
+	sideEffectData := &SideEffectData{
+		Input: nil, // No input for side effects in this example
+	}
+
+	entity.Data = sideEffectData
+
+	// Add the entity to the database, which assigns the ID
+	entity = ctx.orchestrator.db.AddEntity(entity)
+
+	// Record hierarchy relationship using parent stepID
+	hierarchy := &Hierarchy{
+		ParentEntityID: ctx.workflowID,
+		ChildEntityID:  entity.ID,
+		ParentStepID:   ctx.stepID,
+		ChildStepID:    stepID,
+		ParentType:     EntityTypeWorkflow,
+		ChildType:      EntityTypeSideEffect,
+	}
+	ctx.orchestrator.db.AddHierarchy(hierarchy)
 
 	go func() {
 		var attempt int
 		for attempt = 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
-			execution := &SideEffectExecution{
-				Attempt: attempt,
-				Status:  StateExecuting,
+			// Create Execution without ID
+			execution := &Execution{
+				EntityID:  entity.ID,
+				Attempt:   attempt,
+				Status:    StatusRunning,
+				StartedAt: time.Now(),
 			}
+			// Add execution to database, which assigns the ID
+			execution = ctx.orchestrator.db.AddExecution(execution)
 			entity.Executions = append(entity.Executions, execution)
+			executionID := execution.ID
+
+			log.Printf("Executing side effect %s (Entity ID: %d, Execution ID: %d)", stepID, entity.ID, executionID)
 
 			defer func() {
 				if r := recover(); r != nil {
 					err := fmt.Errorf("panic in side effect: %v", r)
 					log.Printf("Panic in side effect: %v", err)
-					execution.Status = StateFailed
+					execution.Status = StatusFailed
+					completedAt := time.Now()
+					execution.CompletedAt = &completedAt
 					execution.Error = err
+					entity.Status = StatusFailed
+					ctx.orchestrator.db.UpdateExecution(execution)
+					ctx.orchestrator.db.UpdateEntity(entity)
 					future.setError(err)
 					ctx.orchestrator.stopWithError(err)
 				}
@@ -233,8 +354,13 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 			if numOut == 0 {
 				err := fmt.Errorf("side effect should return at least a value")
 				log.Printf("Error: %v", err)
-				execution.Status = StateFailed
+				execution.Status = StatusFailed
+				completedAt := time.Now()
+				execution.CompletedAt = &completedAt
 				execution.Error = err
+				entity.Status = StatusFailed
+				ctx.orchestrator.db.UpdateExecution(execution)
+				ctx.orchestrator.db.UpdateEntity(entity)
 				future.setError(err)
 				ctx.orchestrator.stopWithError(err)
 				return
@@ -243,21 +369,29 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 			result := results[0].Interface()
 			log.Printf("Side effect returned result: %v", result)
 			future.setResult(result)
-			// Cache the result
-			ctx.orchestrator.setCache(cacheKey, result)
-			execution.Status = StateCompleted
-			entity.Status = StateCompleted
+
+			// Store the result in the database
+			ctx.orchestrator.db.SetResult(entity.ID, result)
+
+			execution.Status = StatusCompleted
+			completedAt := time.Now()
+			execution.CompletedAt = &completedAt
+			entity.Status = StatusCompleted
 			entity.Result = result
+			ctx.orchestrator.db.UpdateExecution(execution)
+			ctx.orchestrator.db.UpdateEntity(entity)
 			return
 		}
 		// Max attempts reached
-		entity.Status = StateFailed
+		entity.Status = StatusFailed
+		ctx.orchestrator.db.UpdateEntity(entity)
 		future.setError(fmt.Errorf("side effect failed after %d attempts", retryPolicy.MaxAttempts))
 	}()
 
 	return future
 }
 
+// ActivityContext provides context for activity execution.
 type ActivityContext struct {
 	ctx context.Context
 }
@@ -280,19 +414,97 @@ type HandlerInfo struct {
 	NumOut          int
 }
 
-type WorkflowEntity struct {
-	ID         string
-	Status     string // e.g., "Completed", "Failed", etc.
-	Result     interface{}
-	Executions []*WorkflowExecution
+type EntityType string
+
+const (
+	EntityTypeWorkflow   EntityType = "Workflow"
+	EntityTypeActivity   EntityType = "Activity"
+	EntityTypeSideEffect EntityType = "SideEffect"
+)
+
+type EntityStatus string
+
+const (
+	StatusPending   EntityStatus = "Pending"
+	StatusRunning   EntityStatus = "Running"
+	StatusCompleted EntityStatus = "Completed"
+	StatusFailed    EntityStatus = "Failed"
+	StatusRetried   EntityStatus = "Retried"
+)
+
+// Entity represents the base entity for workflows, activities, and side effects.
+type Entity struct {
+	ID          int
+	StepID      string
+	HandlerName string
+	Type        EntityType
+	Status      EntityStatus
+	RunID       int
+	Result      interface{}
+	Executions  []*Execution
+	Data        interface{} // Could be WorkflowData, ActivityData, etc.
 }
 
-type WorkflowExecution struct {
-	Attempt int
-	Status  string // "Executing", "Completed", "Failed", "Retried"
-	Error   error
+// Execution represents a single execution attempt of an entity.
+type Execution struct {
+	ID            int
+	EntityID      int
+	Attempt       int
+	Status        EntityStatus
+	StartedAt     time.Time
+	CompletedAt   *time.Time
+	Error         error
+	ExecutionData interface{} // Could be WorkflowExecutionData, ActivityExecutionData, etc.
 }
 
+// Hierarchy tracks parent-child relationships between entities.
+type Hierarchy struct {
+	ParentEntityID int
+	ChildEntityID  int
+	ParentStepID   string
+	ChildStepID    string
+	ParentType     EntityType
+	ChildType      EntityType
+}
+
+// Data structures matching the ent schemas
+type WorkflowData struct {
+	Duration    string               `json:"duration,omitempty"`
+	Paused      bool                 `json:"paused"`
+	Resumable   bool                 `json:"resumable"`
+	RetryState  *RetryState          `json:"retry_state"`
+	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
+	Input       []interface{}        `json:"input,omitempty"`
+}
+
+type ActivityData struct {
+	Timeout      int64                `json:"timeout,omitempty"`
+	MaxAttempts  int                  `json:"max_attempts"`
+	ScheduledFor *time.Time           `json:"scheduled_for,omitempty"`
+	RetryPolicy  *retryPolicyInternal `json:"retry_policy"`
+	Input        []interface{}        `json:"input,omitempty"`
+	Output       []interface{}        `json:"output,omitempty"`
+}
+
+type SideEffectData struct {
+	Input  []interface{} `json:"input,omitempty"`
+	Output []interface{} `json:"output,omitempty"`
+}
+
+// ExecutionData structures
+type WorkflowExecutionData struct {
+	Error  string        `json:"error,omitempty"`
+	Output []interface{} `json:"output,omitempty"`
+}
+
+type ActivityExecutionData struct {
+	Heartbeats       []interface{} `json:"heartbeats,omitempty"`
+	LastHeartbeat    *time.Time    `json:"last_heartbeat,omitempty"`
+	Progress         interface{}   `json:"progress,omitempty"`
+	ExecutionDetails interface{}   `json:"execution_details,omitempty"`
+}
+
+// WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
 	stepID       string
 	handler      HandlerInfo
@@ -303,9 +515,11 @@ type WorkflowInstance struct {
 	future       *Future
 	ctx          context.Context
 	orchestrator *Orchestrator
-	workflowID   string
+	workflowID   int
 	options      WorkflowOptions
-	entity       *WorkflowEntity
+	entity       *Entity
+	entityID     int // Added entity ID for logging
+	executionID  int // Added execution ID for logging
 }
 
 func (wi *WorkflowInstance) Start() {
@@ -349,31 +563,48 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	}
 
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
-		execution := &WorkflowExecution{
-			Attempt: attempt,
-			Status:  StateExecuting,
+		// Create Execution without ID
+		execution := &Execution{
+			EntityID:  wi.entity.ID,
+			Attempt:   attempt,
+			Status:    StatusRunning,
+			StartedAt: time.Now(),
 		}
+		// Add execution to database, which assigns the ID
+		execution = wi.orchestrator.db.AddExecution(execution)
 		wi.entity.Executions = append(wi.entity.Executions, execution)
+		executionID := execution.ID
+		wi.executionID = executionID // Store execution ID
+
+		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entityID, executionID)
 
 		err := wi.runWorkflow(execution)
 		if err == nil {
 			// Success
-			execution.Status = StateCompleted
-			wi.entity.Status = StateCompleted
+			execution.Status = StatusCompleted
+			completedAt := time.Now()
+			execution.CompletedAt = &completedAt
+			wi.entity.Status = StatusCompleted
 			wi.entity.Result = wi.result
+			wi.orchestrator.db.UpdateExecution(execution)
+			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerComplete)
 			return
 		} else {
-			execution.Status = StateFailed
+			execution.Status = StatusFailed
+			completedAt := time.Now()
+			execution.CompletedAt = &completedAt
 			execution.Error = err
 			wi.err = err
+			wi.orchestrator.db.UpdateExecution(execution)
 			if attempt < maxAttempts {
-				execution.Status = StateRetried
-				log.Printf("Retrying workflow %s, attempt %d/%d after %v", wi.stepID, attempt+1, maxAttempts, initialInterval)
+				execution.Status = StatusRetried
+				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.entityID, executionID, attempt+1, maxAttempts, initialInterval)
 				time.Sleep(initialInterval)
 			} else {
 				// Max attempts reached
-				wi.entity.Status = StateFailed
+				wi.entity.Status = StatusFailed
+				wi.orchestrator.db.UpdateEntity(wi.entity)
 				wi.fsm.Fire(TriggerFail)
 				return
 			}
@@ -381,12 +612,12 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	}
 }
 
-func (wi *WorkflowInstance) runWorkflow(execution *WorkflowExecution) error {
-	log.Printf("WorkflowInstance %s runWorkflow attempt %d", wi.stepID, execution.Attempt)
+func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
+	log.Printf("WorkflowInstance %s (Entity ID: %d, Execution ID: %d) runWorkflow attempt %d", wi.stepID, wi.entityID, execution.ID, execution.Attempt)
 
-	// Check cache
-	if result, ok := wi.orchestrator.getCache(wi.stepID); ok {
-		log.Printf("Cache hit for stepID: %s", wi.stepID)
+	// Check if result already exists in the database
+	if result, ok := wi.orchestrator.db.GetResult(wi.entity.ID, wi.stepID); ok {
+		log.Printf("Result found in database for entity ID: %d", wi.entity.ID)
 		wi.result = result
 		return nil
 	}
@@ -403,7 +634,8 @@ func (wi *WorkflowInstance) runWorkflow(execution *WorkflowExecution) error {
 	ctxWorkflow := &WorkflowContext{
 		orchestrator: wi.orchestrator,
 		ctx:          wi.ctx,
-		workflowID:   wi.workflowID,
+		workflowID:   wi.entity.ID,
+		stepID:       wi.stepID,
 	}
 
 	argsValues := []reflect.Value{reflect.ValueOf(ctxWorkflow)}
@@ -450,14 +682,14 @@ func (wi *WorkflowInstance) runWorkflow(execution *WorkflowExecution) error {
 			log.Printf("Workflow returned result: %v", result)
 			wi.result = result
 		}
-		// Cache the result
-		wi.orchestrator.setCache(wi.stepID, wi.result)
+		// Store the result in the database
+		wi.orchestrator.db.SetResult(wi.entity.ID, wi.result)
 		return nil
 	}
 }
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s onCompleted called", wi.stepID)
+	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.entityID)
 	if wi.future != nil {
 		wi.future.setResult(wi.result)
 	}
@@ -465,26 +697,14 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 }
 
 func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s onFailed called", wi.stepID)
+	log.Printf("WorkflowInstance %s (Entity ID: %d) onFailed called", wi.stepID, wi.entityID)
 	if wi.future != nil {
 		wi.future.setError(wi.err)
 	}
 	return nil
 }
 
-type ActivityEntity struct {
-	ID         string
-	Status     string // e.g., "Completed", "Failed", etc.
-	Result     interface{}
-	Executions []*ActivityExecution
-}
-
-type ActivityExecution struct {
-	Attempt int
-	Status  string // "Executing", "Completed", "Failed", "Retried"
-	Error   error
-}
-
+// ActivityInstance represents an instance of an activity execution.
 type ActivityInstance struct {
 	stepID       string
 	handler      HandlerInfo
@@ -493,10 +713,12 @@ type ActivityInstance struct {
 	err          error
 	ctx          context.Context
 	orchestrator *Orchestrator
-	workflowID   string
+	workflowID   int
 	options      ActivityOptions
-	entity       *ActivityEntity
+	entity       *Entity
 	future       *Future
+	entityID     int // Added entity ID for logging
+	executionID  int // Added execution ID for logging
 }
 
 func (ai *ActivityInstance) executeWithRetry() {
@@ -514,31 +736,48 @@ func (ai *ActivityInstance) executeWithRetry() {
 	}
 
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
-		execution := &ActivityExecution{
-			Attempt: attempt,
-			Status:  StateExecuting,
+		// Create Execution without ID
+		execution := &Execution{
+			EntityID:  ai.entity.ID,
+			Attempt:   attempt,
+			Status:    StatusRunning,
+			StartedAt: time.Now(),
 		}
+		// Add execution to database, which assigns the ID
+		execution = ai.orchestrator.db.AddExecution(execution)
 		ai.entity.Executions = append(ai.entity.Executions, execution)
+		executionID := execution.ID
+		ai.executionID = executionID // Store execution ID
+
+		log.Printf("Executing activity %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.entityID, executionID)
 
 		err := ai.runActivity(execution)
 		if err == nil {
 			// Success
-			execution.Status = StateCompleted
-			ai.entity.Status = StateCompleted
+			execution.Status = StatusCompleted
+			completedAt := time.Now()
+			execution.CompletedAt = &completedAt
+			ai.entity.Status = StatusCompleted
 			ai.entity.Result = ai.result
+			ai.orchestrator.db.UpdateExecution(execution)
+			ai.orchestrator.db.UpdateEntity(ai.entity)
 			ai.future.setResult(ai.result)
 			return
 		} else {
-			execution.Status = StateFailed
+			execution.Status = StatusFailed
+			completedAt := time.Now()
+			execution.CompletedAt = &completedAt
 			execution.Error = err
 			ai.err = err
+			ai.orchestrator.db.UpdateExecution(execution)
 			if attempt < maxAttempts {
-				execution.Status = StateRetried
-				log.Printf("Retrying activity %s, attempt %d/%d after %v", ai.stepID, attempt+1, maxAttempts, initialInterval)
+				execution.Status = StatusRetried
+				log.Printf("Retrying activity %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", ai.stepID, ai.entityID, executionID, attempt+1, maxAttempts, initialInterval)
 				time.Sleep(initialInterval)
 			} else {
 				// Max attempts reached
-				ai.entity.Status = StateFailed
+				ai.entity.Status = StatusFailed
+				ai.orchestrator.db.UpdateEntity(ai.entity)
 				ai.future.setError(err)
 				return
 			}
@@ -546,12 +785,12 @@ func (ai *ActivityInstance) executeWithRetry() {
 	}
 }
 
-func (ai *ActivityInstance) runActivity(execution *ActivityExecution) error {
-	log.Printf("ActivityInstance %s runActivity attempt %d", ai.stepID, execution.Attempt)
+func (ai *ActivityInstance) runActivity(execution *Execution) error {
+	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d) runActivity attempt %d", ai.stepID, ai.entityID, execution.ID, execution.Attempt)
 
-	// Check cache
-	if result, ok := ai.orchestrator.getCache(ai.stepID); ok {
-		log.Printf("Cache hit for stepID: %s", ai.stepID)
+	// Check if result already exists in the database
+	if result, ok := ai.orchestrator.db.GetResult(ai.entity.ID, ai.stepID); ok {
+		log.Printf("Result found in database for entity ID: %d", ai.entity.ID)
 		ai.result = result
 		return nil
 	}
@@ -593,114 +832,128 @@ func (ai *ActivityInstance) runActivity(execution *ActivityExecution) error {
 			log.Printf("Activity returned result: %v", result)
 		}
 		ai.result = result
-		// Cache the result
-		ai.orchestrator.setCache(ai.stepID, result)
+		// Store the result in the database
+		ai.orchestrator.db.SetResult(ai.entity.ID, result)
 		return nil
 	}
 }
 
-type SideEffectEntity struct {
-	ID         string
-	Status     string // e.g., "Completed", "Failed", etc.
-	Result     interface{}
-	Executions []*SideEffectExecution
-}
-
-type SideEffectExecution struct {
-	Attempt int
-	Status  string // "Executing", "Completed", "Failed", "Retried"
-	Error   error
-}
-
-type Cache interface {
-	Get(key string) (interface{}, bool)
-	Set(key string, value interface{})
-}
-
-type MapCache struct {
-	cache   map[string]interface{}
-	cacheMu sync.Mutex
-}
-
-func NewMapCache() *MapCache {
-	return &MapCache{
-		cache: make(map[string]interface{}),
-	}
-}
-
-func (c *MapCache) Get(key string) (interface{}, bool) {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-	value, ok := c.cache[key]
-	return value, ok
-}
-
-func (c *MapCache) Set(key string, value interface{}) {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-	c.cache[key] = value
-}
-
+// Database interface defines methods for interacting with the data store.
 type Database interface {
-	AddWorkflowEntity(entity *WorkflowEntity)
-	GetWorkflowEntity(id string) *WorkflowEntity
-	AddActivityEntity(entity *ActivityEntity)
-	GetActivityEntity(id string) *ActivityEntity
-	AddSideEffectEntity(entity *SideEffectEntity)
-	GetSideEffectEntity(id string) *SideEffectEntity
+	// Entity methods
+	AddEntity(entity *Entity) *Entity
+	GetEntity(id int) *Entity
+	UpdateEntity(entity *Entity)
+
+	// Execution methods
+	AddExecution(execution *Execution) *Execution
+	GetExecution(id int) *Execution
+	UpdateExecution(execution *Execution)
+
+	// Hierarchy methods
+	AddHierarchy(hierarchy *Hierarchy)
+	GetHierarchy(parentID, childID int) *Hierarchy
+
+	// Methods to store and retrieve results
+	GetResult(entityID int, stepID string) (interface{}, bool)
+	SetResult(entityID int, result interface{})
 }
 
+// DefaultDatabase is an in-memory implementation of Database.
 type DefaultDatabase struct {
-	workflows   map[string]*WorkflowEntity
-	activities  map[string]*ActivityEntity
-	sideEffects map[string]*SideEffectEntity
+	entities    map[int]*Entity
+	executions  map[int]*Execution
+	hierarchies []*Hierarchy
+	results     map[int]interface{} // Map entityID to result
 	mu          sync.Mutex
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
 	return &DefaultDatabase{
-		workflows:   make(map[string]*WorkflowEntity),
-		activities:  make(map[string]*ActivityEntity),
-		sideEffects: make(map[string]*SideEffectEntity),
+		entities:   make(map[int]*Entity),
+		executions: make(map[int]*Execution),
+		results:    make(map[int]interface{}),
 	}
 }
 
-func (db *DefaultDatabase) AddWorkflowEntity(entity *WorkflowEntity) {
+var (
+	entityIDCounter    int64
+	executionIDCounter int64
+)
+
+func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.workflows[entity.ID] = entity
+	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
+	entity.ID = entityID
+	db.entities[entity.ID] = entity
+	return entity
 }
 
-func (db *DefaultDatabase) GetWorkflowEntity(id string) *WorkflowEntity {
+func (db *DefaultDatabase) GetEntity(id int) *Entity {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.workflows[id]
+	return db.entities[id]
 }
 
-func (db *DefaultDatabase) AddActivityEntity(entity *ActivityEntity) {
+func (db *DefaultDatabase) UpdateEntity(entity *Entity) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.activities[entity.ID] = entity
+	db.entities[entity.ID] = entity
 }
 
-func (db *DefaultDatabase) GetActivityEntity(id string) *ActivityEntity {
+func (db *DefaultDatabase) AddExecution(execution *Execution) *Execution {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.activities[id]
+	executionID := int(atomic.AddInt64(&executionIDCounter, 1))
+	execution.ID = executionID
+	db.executions[execution.ID] = execution
+	return execution
 }
 
-func (db *DefaultDatabase) AddSideEffectEntity(entity *SideEffectEntity) {
+func (db *DefaultDatabase) GetExecution(id int) *Execution {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.sideEffects[entity.ID] = entity
+	return db.executions[id]
 }
 
-func (db *DefaultDatabase) GetSideEffectEntity(id string) *SideEffectEntity {
+func (db *DefaultDatabase) UpdateExecution(execution *Execution) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.sideEffects[id]
+	db.executions[execution.ID] = execution
 }
 
+func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.hierarchies = append(db.hierarchies, hierarchy)
+}
+
+func (db *DefaultDatabase) GetHierarchy(parentID, childID int) *Hierarchy {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, h := range db.hierarchies {
+		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
+			return h
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) GetResult(entityID int, stepID string) (interface{}, bool) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	result, ok := db.results[entityID]
+	return result, ok
+}
+
+func (db *DefaultDatabase) SetResult(entityID int, result interface{}) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.results[entityID] = result
+}
+
+// Orchestrator orchestrates the execution of workflows and activities.
 type Orchestrator struct {
 	db          Database
 	rootWf      *WorkflowInstance
@@ -708,19 +961,25 @@ type Orchestrator struct {
 	instances   []*WorkflowInstance
 	instancesMu sync.Mutex
 	registry    *Registry
-	cache       Cache
 	err         error
+	runID       int
 }
 
-func NewOrchestrator(db Database, cache Cache, ctx context.Context) *Orchestrator {
+func NewOrchestrator(db Database, ctx context.Context) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	o := &Orchestrator{
 		db:       db,
 		ctx:      ctx,
 		registry: newRegistry(),
-		cache:    cache,
+		runID:    generateRunID(),
 	}
 	return o
+}
+
+var runIDCounter int64
+
+func generateRunID() int {
+	return int(atomic.AddInt64(&runIDCounter, 1))
 }
 
 func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) error {
@@ -730,14 +989,37 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 		return err
 	}
 
-	// Create a new WorkflowEntity
-	entity := &WorkflowEntity{
-		ID:     "root", // For simplicity, use "root" as ID
-		Status: StateIdle,
+	// Create a new Entity without ID (database assigns it)
+	entity := &Entity{
+		StepID:      "root",
+		HandlerName: handler.HandlerName,
+		Type:        EntityTypeWorkflow,
+		Status:      StatusPending,
+		RunID:       o.runID,
 	}
 
-	// Add the entity to the database
-	o.db.AddWorkflowEntity(entity)
+	// Convert API RetryPolicy to internal retry policy
+	var internalRetryPolicy *retryPolicyInternal
+	if options.RetryPolicy != nil {
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        options.RetryPolicy.MaxAttempts,
+			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
+			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+		}
+	}
+
+	// Create WorkflowData
+	workflowData := &WorkflowData{
+		Input:       args,
+		RetryPolicy: internalRetryPolicy,
+		RetryState:  &RetryState{Attempts: 0},
+	}
+
+	entity.Data = workflowData
+
+	// Add the entity to the database, which assigns the ID
+	entity = o.db.AddEntity(entity)
 
 	// Create a new WorkflowInstance
 	instance := &WorkflowInstance{
@@ -746,9 +1028,10 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 		input:        args,
 		ctx:          o.ctx,
 		orchestrator: o,
-		workflowID:   "root",
+		workflowID:   entity.ID,
 		options:      options,
 		entity:       entity,
+		entityID:     entity.ID, // Store entity ID
 	}
 
 	// Store the root workflow instance
@@ -763,14 +1046,6 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 func (o *Orchestrator) RegisterWorkflow(workflowFunc interface{}) error {
 	_, err := o.registerWorkflow(workflowFunc)
 	return err
-}
-
-func (o *Orchestrator) getCache(key string) (interface{}, bool) {
-	return o.cache.Get(key)
-}
-
-func (o *Orchestrator) setCache(key string, value interface{}) {
-	o.cache.Set(key, value)
 }
 
 func (o *Orchestrator) stopWithError(err error) {
@@ -819,6 +1094,7 @@ func (o *Orchestrator) Wait() {
 	}
 }
 
+// Registry holds registered workflows and activities.
 type Registry struct {
 	workflows  map[string]HandlerInfo
 	activities map[string]HandlerInfo
@@ -991,7 +1267,12 @@ func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubSubWorkflow called with data: %d", data)
 	var result int
 	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        3,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, data).Get(&result); err != nil {
 		log.Printf("SubSubSubWorkflow encountered error from activity: %v", err)
 		return -1, err
@@ -1004,13 +1285,23 @@ func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubWorkflow called with data: %d", data)
 	var result int
 	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        3,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, data).Get(&result); err != nil {
 		log.Printf("SubSubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
 	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, WorkflowOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        2,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, result).Get(&result); err != nil {
 		log.Printf("SubSubWorkflow encountered error from sub-sub-workflow: %v", err)
 		return -1, err
@@ -1025,7 +1316,12 @@ func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubWorkflow called with data: %d", data)
 	var result int
 	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        3,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, data).Get(&result); err != nil {
 		log.Printf("SubWorkflow encountered error from activity: %v", err)
 		return -1, err
@@ -1037,7 +1333,12 @@ func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	}
 
 	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, WorkflowOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        2,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, result).Get(&result); err != nil {
 		log.Printf("SubWorkflow encountered error from sub-sub-workflow: %v", err)
 		return -1, err
@@ -1067,7 +1368,12 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	}
 
 	if err := ctx.Workflow("subworkflow-step", SubWorkflow, WorkflowOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        2,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, data).Get(&value); err != nil {
 		log.Printf("Workflow encountered error from sub-workflow: %v", err)
 		return -1, err
@@ -1087,18 +1393,22 @@ func main() {
 	log.Printf("main started")
 
 	database := NewDefaultDatabase()
-	cache := NewMapCache()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	orchestrator := NewOrchestrator(database, cache, ctx)
+	orchestrator := NewOrchestrator(database, ctx)
 	orchestrator.RegisterWorkflow(Workflow)
 
 	subWorkflowFailed.Store(true)
 
 	err := orchestrator.Workflow(Workflow, WorkflowOptions{
-		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:        2,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
+		},
 	}, 40)
 	if err != nil {
 		log.Fatalf("Error starting workflow: %v", err)
