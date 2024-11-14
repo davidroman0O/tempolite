@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"reflect"
 	"runtime"
 	"sync"
@@ -20,10 +21,9 @@ const (
 	StateFailed    = "Failed"
 
 	// FSM triggers
-	TriggerStart              = "Start"
-	TriggerExecuteSubWorkflow = "ExecuteSubWorkflow"
-	TriggerComplete           = "Complete"
-	TriggerFail               = "Fail"
+	TriggerStart    = "Start"
+	TriggerComplete = "Complete"
+	TriggerFail     = "Fail"
 )
 
 type Future struct {
@@ -65,27 +65,40 @@ func (f *Future) setError(err error) {
 type WorkflowContext struct {
 	orchestrator *Orchestrator
 	ctx          context.Context
+	workflowID   string
 }
 
-func (ctx *WorkflowContext) Workflow(workflowFunc interface{}, args ...interface{}) *Future {
-	log.Printf("WorkflowContext.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
+func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, args ...interface{}) *Future {
+	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
 	future := NewFuture()
 
-	handler, ok := ctx.orchestrator.registry.GetHandler(workflowFunc)
-	if !ok {
-		err := fmt.Errorf("function not found")
-		log.Printf("Error: %v", err)
-		future.setError(err)
+	// Check cache
+	cacheKey := ctx.workflowID + "." + stepID
+	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
+		log.Printf("Cache hit for stepID: %s", cacheKey)
+		future.setResult(result)
 		return future
 	}
 
+	// Register workflow on-the-fly
+	handler, err := ctx.orchestrator.registerWorkflow(workflowFunc)
+	if err != nil {
+		log.Printf("Error registering workflow: %v", err)
+		future.setError(err)
+		ctx.orchestrator.stopWithError(err)
+		return future
+	}
+
+	fmt.Println("Workflow handler", handler.Handler)
+
 	subWorkflowInstance := &WorkflowInstance{
-		stepID:       getFunctionName(workflowFunc),
+		stepID:       cacheKey,
 		handler:      handler,
 		input:        args,
 		future:       future,
 		ctx:          ctx.ctx,
 		orchestrator: ctx.orchestrator,
+		workflowID:   cacheKey,
 	}
 
 	ctx.orchestrator.addWorkflowInstance(subWorkflowInstance)
@@ -94,49 +107,117 @@ func (ctx *WorkflowContext) Workflow(workflowFunc interface{}, args ...interface
 	return future
 }
 
-type RegistryBuilder struct {
-	workflows  []interface{}
-	activities []interface{}
-}
+func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, args ...interface{}) *Future {
+	log.Printf("WorkflowContext.Activity called with stepID: %s, activityFunc: %v, args: %v", stepID, getFunctionName(activityFunc), args)
+	future := NewFuture()
 
-func NewRegistryBuilder() *RegistryBuilder {
-	return &RegistryBuilder{
-		workflows:  []interface{}{},
-		activities: []interface{}{},
+	// Check cache
+	cacheKey := ctx.workflowID + "." + stepID
+	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
+		log.Printf("Cache hit for stepID: %s", cacheKey)
+		future.setResult(result)
+		return future
 	}
-}
 
-func (r *RegistryBuilder) RegisterWorkflow(workflowFunc interface{}) *RegistryBuilder {
-	log.Printf("RegistryBuilder.Register called with workflowFunc: %v", getFunctionName(workflowFunc))
-	r.workflows = append(r.workflows, workflowFunc)
-	return r
-}
+	// Register activity on-the-fly
+	handler, err := ctx.orchestrator.registerActivity(activityFunc)
+	if err != nil {
+		log.Printf("Error registering activity: %v", err)
+		future.setError(err)
+		ctx.orchestrator.stopWithError(err)
+		return future
+	}
 
-func (r *RegistryBuilder) RegisterActivity(activityFunc interface{}) *RegistryBuilder {
-	log.Printf("RegistryBuilder.Register called with activityFunc: %v", getFunctionName(activityFunc))
-	r.activities = append(r.activities, activityFunc)
-	return r
-}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err := fmt.Errorf("panic in activity: %v", r)
+				log.Printf("Panic in activity: %v", err)
+				future.setError(err)
+				ctx.orchestrator.stopWithError(err)
+			}
+		}()
 
-func (r *RegistryBuilder) Build() (*Registry, error) {
-	log.Printf("RegistryBuilder.Build called")
-	registry := newRegistry()
-
-	for _, v := range r.workflows {
-		log.Printf("Registering workflow function: %v", getFunctionName(v))
-		if err := registry.registerWorkflow(v); err != nil {
-			return nil, err
+		argsValues := []reflect.Value{reflect.ValueOf(ActivityContext{ctx.ctx})}
+		for _, arg := range args {
+			argsValues = append(argsValues, reflect.ValueOf(arg))
 		}
-	}
 
-	for _, v := range r.activities {
-		log.Printf("Registering activities function: %v", getFunctionName(v))
-		if err := registry.registerActivity(v); err != nil {
-			return nil, err
+		results := reflect.ValueOf(handler.Handler).Call(argsValues)
+		numOut := len(results)
+		if numOut == 0 {
+			err := fmt.Errorf("activity %s should return at least an error", handler.HandlerName)
+			log.Printf("Error: %v", err)
+			future.setError(err)
+			ctx.orchestrator.stopWithError(err)
+			return
 		}
+
+		errInterface := results[numOut-1].Interface()
+		if errInterface != nil {
+			log.Printf("Activity returned error: %v", errInterface)
+			future.setError(errInterface.(error))
+			ctx.orchestrator.stopWithError(errInterface.(error))
+		} else {
+			var result interface{}
+			if numOut > 1 {
+				result = results[0].Interface()
+				log.Printf("Activity returned result: %v", result)
+			}
+			future.setResult(result)
+			// Cache the result
+			ctx.orchestrator.setCache(cacheKey, result)
+		}
+	}()
+
+	return future
+}
+
+func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) *Future {
+	log.Printf("WorkflowContext.SideEffect called with stepID: %s", stepID)
+	future := NewFuture()
+
+	// Check cache
+	cacheKey := ctx.workflowID + "." + stepID
+	if result, ok := ctx.orchestrator.getCache(cacheKey); ok {
+		log.Printf("Cache hit for stepID: %s", cacheKey)
+		future.setResult(result)
+		return future
 	}
 
-	return registry, nil
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err := fmt.Errorf("panic in side effect: %v", r)
+				log.Printf("Panic in side effect: %v", err)
+				future.setError(err)
+				ctx.orchestrator.stopWithError(err)
+			}
+		}()
+
+		argsValues := []reflect.Value{}
+		results := reflect.ValueOf(sideEffectFunc).Call(argsValues)
+		numOut := len(results)
+		if numOut == 0 {
+			err := fmt.Errorf("side effect should return at least a value")
+			log.Printf("Error: %v", err)
+			future.setError(err)
+			ctx.orchestrator.stopWithError(err)
+			return
+		}
+
+		result := results[0].Interface()
+		log.Printf("Side effect returned result: %v", result)
+		future.setResult(result)
+		// Cache the result
+		ctx.orchestrator.setCache(cacheKey, result)
+	}()
+
+	return future
+}
+
+type ActivityContext struct {
+	ctx context.Context
 }
 
 type HandlerIdentity string
@@ -157,177 +238,6 @@ type HandlerInfo struct {
 	NumOut          int
 }
 
-type Registry struct {
-	workflows  map[string]HandlerInfo
-	activities map[HandlerIdentity]HandlerInfo
-	mu         sync.Mutex
-}
-
-func newRegistry() *Registry {
-	return &Registry{
-		workflows:  make(map[string]HandlerInfo),
-		activities: make(map[HandlerIdentity]HandlerInfo),
-	}
-}
-
-func (r *Registry) registerActivity(activityFunc interface{}) error {
-	handlerType := reflect.TypeOf(activityFunc)
-
-	if handlerType.Kind() != reflect.Func {
-		return fmt.Errorf("activity must be a function")
-	}
-
-	if handlerType.NumIn() < 1 {
-		return fmt.Errorf("activity function must have at least one input parameter (ActivityContext)")
-	}
-
-	if handlerType.In(0) != reflect.TypeOf(ActivityContext{}) {
-		return fmt.Errorf("first parameter of activity function must be ActivityContext")
-	}
-
-	// Collect parameter types after the context parameter
-	paramTypes := []reflect.Type{}
-	paramsKinds := []reflect.Kind{}
-	for i := 1; i < handlerType.NumIn(); i++ {
-		paramTypes = append(paramTypes, handlerType.In(i))
-		paramsKinds = append(paramsKinds, handlerType.In(i).Kind())
-	}
-
-	// Collect return types excluding error
-	numOut := handlerType.NumOut()
-	if numOut == 0 {
-		return fmt.Errorf("activity function must return at least an error")
-	}
-
-	returnTypes := []reflect.Type{}
-	returnKinds := []reflect.Kind{}
-	for i := 0; i < numOut-1; i++ {
-		returnTypes = append(returnTypes, handlerType.Out(i))
-		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
-	}
-
-	// Verify that the last return type is error
-	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
-		return fmt.Errorf("last return value of activity function must be error")
-	}
-
-	// Generate a unique identifier for the activity function
-	funcName := runtime.FuncForPC(reflect.ValueOf(activityFunc).Pointer()).Name()
-	handlerIdentity := HandlerIdentity(funcName)
-
-	activity := &HandlerInfo{
-		HandlerName:     funcName,
-		HandlerLongName: handlerIdentity,
-		Handler:         activityFunc,
-		ParamTypes:      paramTypes,
-		ParamsKinds:     paramsKinds,
-		ReturnTypes:     returnTypes,
-		ReturnKinds:     returnKinds,
-		NumIn:           handlerType.NumIn() - 1, // Exclude context
-		NumOut:          numOut - 1,              // Exclude error
-	}
-
-	// log.Printf("Registering activity function %s with name %s", funcName, handlerIdentity)
-	r.mu.Lock()
-	r.activities[activity.HandlerLongName] = *activity
-	r.mu.Unlock()
-
-	return nil
-}
-
-func (r *Registry) registerWorkflow(workflowFunc interface{}) error {
-	log.Printf("Registry.registerWorkflow called with workflowFunc: %v", getFunctionName(workflowFunc))
-	handlerType := reflect.TypeOf(workflowFunc)
-
-	if handlerType.Kind() != reflect.Func {
-		err := fmt.Errorf("workflow must be a function")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	if handlerType.NumIn() < 1 {
-		err := fmt.Errorf("workflow function must have at least one input parameter (WorkflowContext)")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	expectedContextType := reflect.TypeOf(&WorkflowContext{})
-	if handlerType.In(0) != expectedContextType {
-		err := fmt.Errorf("first parameter of workflow function must be *WorkflowContext")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	paramsKinds := []reflect.Kind{}
-	paramTypes := []reflect.Type{}
-	for i := 1; i < handlerType.NumIn(); i++ {
-		paramTypes = append(paramTypes, handlerType.In(i))
-		paramsKinds = append(paramsKinds, handlerType.In(i).Kind())
-	}
-
-	numOut := handlerType.NumOut()
-	if numOut == 0 {
-		err := fmt.Errorf("workflow function must return at least an error")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	returnKinds := []reflect.Kind{}
-	returnTypes := []reflect.Type{}
-	for i := 0; i < numOut-1; i++ {
-		returnTypes = append(returnTypes, handlerType.Out(i))
-		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
-	}
-
-	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
-		err := fmt.Errorf("last return value of workflow function must be error")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	funcName := getFunctionName(workflowFunc)
-	handlerIdentity := HandlerIdentity(funcName)
-
-	workflow := &HandlerInfo{
-		HandlerName:     funcName,
-		HandlerLongName: handlerIdentity,
-		Handler:         workflowFunc,
-		ParamTypes:      paramTypes,
-		ParamsKinds:     paramsKinds,
-		ReturnTypes:     returnTypes,
-		ReturnKinds:     returnKinds,
-		NumIn:           handlerType.NumIn() - 1,
-		NumOut:          numOut - 1,
-	}
-
-	r.mu.Lock()
-	r.workflows[funcName] = *workflow
-	r.mu.Unlock()
-	log.Printf("Workflow function registered: %s", funcName)
-
-	return nil
-}
-
-func (r *Registry) GetHandler(workflowFunc interface{}) (HandlerInfo, bool) {
-	funcName := getFunctionName(workflowFunc)
-	log.Printf("Registry.GetHandler called with funcName: %s", funcName)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	v, ok := r.workflows[funcName]
-	if !ok {
-		log.Printf("Handler not found for funcName: %s", funcName)
-	} else {
-		log.Printf("Handler found for funcName: %s", funcName)
-	}
-	return v, ok
-}
-
-type Database struct {
-	workflows []*WorkflowInstance
-	mu        sync.Mutex
-	registry  *Registry
-}
-
 type WorkflowInstance struct {
 	stepID       string
 	handler      HandlerInfo
@@ -338,62 +248,55 @@ type WorkflowInstance struct {
 	future       *Future
 	ctx          context.Context
 	orchestrator *Orchestrator
-}
-
-func (db *Database) Workflow(workflowFunc interface{}, args ...interface{}) error {
-	log.Printf("Database.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	handler, ok := db.registry.GetHandler(workflowFunc)
-	if !ok {
-		err := fmt.Errorf("function not found")
-		log.Printf("Error: %v", err)
-		return err
-	}
-
-	instance := &WorkflowInstance{
-		stepID:  "root",
-		handler: handler,
-		input:   args,
-	}
-	db.workflows = append(db.workflows, instance)
-	log.Printf("Workflow instance added to database: %+v", instance)
-	return nil
-}
-
-func (db *Database) PullNextWorkflow() *WorkflowInstance {
-	log.Printf("Database.PullNextWorkflow called")
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if len(db.workflows) == 0 {
-		log.Printf("No workflows in database")
-		return nil
-	}
-	instance := db.workflows[0]
-	db.workflows = db.workflows[1:]
-	log.Printf("Pulled workflow instance from database: %+v", instance)
-	return instance
+	workflowID   string
 }
 
 type Orchestrator struct {
 	db          *Database
-	registry    *Registry
 	rootWf      *WorkflowInstance
 	ctx         context.Context
 	instances   []*WorkflowInstance
 	instancesMu sync.Mutex
+	registry    *Registry
+	cache       map[string]interface{}
+	cacheMu     sync.Mutex
+	err         error
 }
 
-func NewOrchestrator(db *Database, registry *Registry, ctx context.Context) *Orchestrator {
+func NewOrchestrator(db *Database, ctx context.Context) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	o := &Orchestrator{
 		db:       db,
-		registry: registry,
 		ctx:      ctx,
+		registry: newRegistry(),
+		cache:    make(map[string]interface{}),
 	}
-
 	return o
+}
+
+func (o *Orchestrator) RegistryWorkflow(workflowFunc interface{}) error {
+	_, err := o.registerWorkflow(workflowFunc)
+	return err
+}
+
+func (o *Orchestrator) getCache(key string) (interface{}, bool) {
+	o.cacheMu.Lock()
+	defer o.cacheMu.Unlock()
+	result, ok := o.cache[key]
+	return result, ok
+}
+
+func (o *Orchestrator) setCache(key string, value interface{}) {
+	o.cacheMu.Lock()
+	defer o.cacheMu.Unlock()
+	o.cache[key] = value
+}
+
+func (o *Orchestrator) stopWithError(err error) {
+	o.err = err
+	if o.rootWf != nil && o.rootWf.fsm != nil {
+		o.rootWf.fsm.Fire(TriggerFail)
+	}
 }
 
 func (o *Orchestrator) addWorkflowInstance(wi *WorkflowInstance) {
@@ -409,8 +312,10 @@ func (o *Orchestrator) Wait() {
 		log.Printf("No root workflow to execute")
 		return
 	}
+
 	o.rootWf.ctx = o.ctx
 	o.rootWf.orchestrator = o
+	o.rootWf.workflowID = "root"
 	o.rootWf.Start()
 
 	// Wait for root workflow to complete
@@ -446,7 +351,6 @@ func (wi *WorkflowInstance) Start() {
 
 	wi.fsm.Configure(StateExecuting).
 		OnEntry(wi.executeWorkflow).
-		PermitReentry(TriggerExecuteSubWorkflow).
 		Permit(TriggerComplete, StateCompleted).
 		Permit(TriggerFail, StateFailed)
 
@@ -463,12 +367,29 @@ func (wi *WorkflowInstance) Start() {
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s executeWorkflow called", wi.stepID)
 
-	handler := wi.handler
+	// Check cache
+	if result, ok := wi.orchestrator.getCache(wi.stepID); ok {
+		log.Printf("Cache hit for stepID: %s", wi.stepID)
+		wi.result = result
+		wi.fsm.Fire(TriggerComplete)
+		return nil
+	}
+
+	// Register workflow on-the-fly
+	handler, ok := wi.orchestrator.registry.workflows[wi.handler.HandlerName]
+	if !ok {
+		wi.err = fmt.Errorf("error getting handler for workflow: %s", wi.handler.HandlerName)
+		wi.fsm.Fire(TriggerFail)
+		return nil
+	}
+
 	f := handler.Handler
+	fmt.Println("handler", handler.Handler)
 
 	ctxWorkflow := &WorkflowContext{
 		orchestrator: wi.orchestrator,
 		ctx:          wi.ctx,
+		workflowID:   wi.workflowID,
 	}
 
 	argsValues := []reflect.Value{reflect.ValueOf(ctxWorkflow)}
@@ -518,6 +439,8 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{})
 			log.Printf("Workflow returned result: %v", result)
 			wi.result = result
 		}
+		// Cache the result
+		wi.orchestrator.setCache(wi.stepID, wi.result)
 		wi.fsm.Fire(TriggerComplete)
 	}
 
@@ -540,43 +463,215 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 	return nil
 }
 
-func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
-	log.Printf("SubSubWorkflow called with data: %d", data)
-	select {
-	case <-time.After(0):
-		// Simulate long processing
-	case <-ctx.ctx.Done():
-		log.Printf("SubSubWorkflow context cancelled")
-		return -1, ctx.ctx.Err()
-	}
-	result := data * 4
-	log.Printf("SubSubWorkflow returning result: %d", result)
-	return result, nil
+type Registry struct {
+	workflows  map[string]HandlerInfo
+	activities map[string]HandlerInfo
+	mu         sync.Mutex
 }
 
-func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
-	log.Printf("SubSubWorkflow called with data: %d", data)
+func newRegistry() *Registry {
+	return &Registry{
+		workflows:  make(map[string]HandlerInfo),
+		activities: make(map[string]HandlerInfo),
+	}
+}
+
+func (o *Orchestrator) registerWorkflow(workflowFunc interface{}) (HandlerInfo, error) {
+	funcName := getFunctionName(workflowFunc)
+	o.registry.mu.Lock()
+	defer o.registry.mu.Unlock()
+
+	// Check if already registered
+	if handler, ok := o.registry.workflows[funcName]; ok {
+		return handler, nil
+	}
+
+	handlerType := reflect.TypeOf(workflowFunc)
+	if handlerType.Kind() != reflect.Func {
+		err := fmt.Errorf("workflow must be a function")
+		return HandlerInfo{}, err
+	}
+
+	if handlerType.NumIn() < 1 {
+		err := fmt.Errorf("workflow function must have at least one input parameter (WorkflowContext)")
+		return HandlerInfo{}, err
+	}
+
+	expectedContextType := reflect.TypeOf(&WorkflowContext{})
+	if handlerType.In(0) != expectedContextType {
+		err := fmt.Errorf("first parameter of workflow function must be *WorkflowContext")
+		return HandlerInfo{}, err
+	}
+
+	paramsKinds := []reflect.Kind{}
+	paramTypes := []reflect.Type{}
+	for i := 1; i < handlerType.NumIn(); i++ {
+		paramTypes = append(paramTypes, handlerType.In(i))
+		paramsKinds = append(paramsKinds, handlerType.In(i).Kind())
+	}
+
+	numOut := handlerType.NumOut()
+	if numOut == 0 {
+		err := fmt.Errorf("workflow function must return at least an error")
+		return HandlerInfo{}, err
+	}
+
+	returnKinds := []reflect.Kind{}
+	returnTypes := []reflect.Type{}
+	for i := 0; i < numOut-1; i++ {
+		returnTypes = append(returnTypes, handlerType.Out(i))
+		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
+	}
+
+	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
+		err := fmt.Errorf("last return value of workflow function must be error")
+		return HandlerInfo{}, err
+	}
+
+	handler := HandlerInfo{
+		HandlerName:     funcName,
+		HandlerLongName: HandlerIdentity(funcName),
+		Handler:         workflowFunc,
+		ParamTypes:      paramTypes,
+		ParamsKinds:     paramsKinds,
+		ReturnTypes:     returnTypes,
+		ReturnKinds:     returnKinds,
+		NumIn:           handlerType.NumIn() - 1,
+		NumOut:          numOut - 1,
+	}
+
+	o.registry.workflows[funcName] = handler
+	return handler, nil
+}
+
+func (o *Orchestrator) registerActivity(activityFunc interface{}) (HandlerInfo, error) {
+	funcName := getFunctionName(activityFunc)
+	o.registry.mu.Lock()
+	defer o.registry.mu.Unlock()
+
+	// Check if already registered
+	if handler, ok := o.registry.activities[funcName]; ok {
+		return handler, nil
+	}
+
+	handlerType := reflect.TypeOf(activityFunc)
+	if handlerType.Kind() != reflect.Func {
+		err := fmt.Errorf("activity must be a function")
+		return HandlerInfo{}, err
+	}
+
+	if handlerType.NumIn() < 1 {
+		err := fmt.Errorf("activity function must have at least one input parameter (ActivityContext)")
+		return HandlerInfo{}, err
+	}
+
+	expectedContextType := reflect.TypeOf(ActivityContext{})
+	if handlerType.In(0) != expectedContextType {
+		err := fmt.Errorf("first parameter of activity function must be ActivityContext")
+		return HandlerInfo{}, err
+	}
+
+	paramsKinds := []reflect.Kind{}
+	paramTypes := []reflect.Type{}
+	for i := 1; i < handlerType.NumIn(); i++ {
+		paramTypes = append(paramTypes, handlerType.In(i))
+		paramsKinds = append(paramsKinds, handlerType.In(i).Kind())
+	}
+
+	numOut := handlerType.NumOut()
+	if numOut == 0 {
+		err := fmt.Errorf("activity function must return at least an error")
+		return HandlerInfo{}, err
+	}
+
+	returnKinds := []reflect.Kind{}
+	returnTypes := []reflect.Type{}
+	for i := 0; i < numOut-1; i++ {
+		returnTypes = append(returnTypes, handlerType.Out(i))
+		returnKinds = append(returnKinds, handlerType.Out(i).Kind())
+	}
+
+	if handlerType.Out(numOut-1) != reflect.TypeOf((*error)(nil)).Elem() {
+		err := fmt.Errorf("last return value of activity function must be error")
+		return HandlerInfo{}, err
+	}
+
+	handler := HandlerInfo{
+		HandlerName:     funcName,
+		HandlerLongName: HandlerIdentity(funcName),
+		Handler:         activityFunc,
+		ParamTypes:      paramTypes,
+		ParamsKinds:     paramsKinds,
+		ReturnTypes:     returnTypes,
+		ReturnKinds:     returnKinds,
+		NumIn:           handlerType.NumIn() - 1,
+		NumOut:          numOut - 1,
+	}
+
+	o.registry.activities[funcName] = handler
+	return handler, nil
+}
+
+type Database struct {
+	workflows []*WorkflowInstance
+	mu        sync.Mutex
+}
+
+func (db *Database) Workflow(workflowFunc interface{}, args ...interface{}) error {
+	log.Printf("Database.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
+	instance := &WorkflowInstance{
+		stepID: "root",
+		handler: HandlerInfo{
+			HandlerName:     getFunctionName(workflowFunc),
+			HandlerLongName: HandlerIdentity(getFunctionName(workflowFunc)),
+		}, // Will be set during execution
+		input: args,
+	}
+	db.mu.Lock()
+	db.workflows = append(db.workflows, instance)
+	db.mu.Unlock()
+	log.Printf("Workflow instance added to database: %+v", instance)
+	return nil
+}
+
+func (db *Database) PullNextWorkflow() *WorkflowInstance {
+	log.Printf("Database.PullNextWorkflow called")
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if len(db.workflows) == 0 {
+		log.Printf("No workflows in database")
+		return nil
+	}
+	instance := db.workflows[0]
+	db.workflows = db.workflows[1:]
+	log.Printf("Pulled workflow instance from database: %+v", instance)
+	return instance
+}
+
+func getFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+// Example Activity
+func SomeActivity(ctx ActivityContext, data int) (int, error) {
+	log.Printf("SomeActivity called with data: %d", data)
 	select {
-	case <-time.After(0):
-		// Simulate long processing
+	case <-time.After(1 * time.Second):
+		// Simulate processing
 	case <-ctx.ctx.Done():
-		log.Printf("SubSubWorkflow context cancelled")
+		log.Printf("SomeActivity context cancelled")
 		return -1, ctx.ctx.Err()
 	}
-	result := data * 4
-	if err := ctx.Workflow(SubSubSubWorkflow, data+1).Get(&result); err != nil {
-		log.Printf("SubSubSubWorkflow encountered error from sub-sub-workflow: %v", err)
-		return -1, err
-	}
-	log.Printf("SubSubWorkflow returning result: %d", result)
+	result := data * 3
+	log.Printf("SomeActivity returning result: %d", result)
 	return result, nil
 }
 
 func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Workflow(SubSubWorkflow, data*2).Get(&result); err != nil {
-		log.Printf("SubWorkflow encountered error from sub-sub-workflow: %v", err)
+	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+		log.Printf("SubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
 	log.Printf("SubWorkflow returning result: %d", result)
@@ -594,13 +689,25 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	default:
 	}
 
-	if err := ctx.Workflow(SubWorkflow, data).Get(&value); err != nil {
+	var shouldDouble bool
+	if err := ctx.SideEffect("side-effect-step", func() bool {
+		log.Printf("Side effect called")
+		return rand.Float32() < 0.5
+	}).Get(&shouldDouble); err != nil {
+		log.Printf("Workflow encountered error from side effect: %v", err)
+		return -1, err
+	}
+
+	if err := ctx.Workflow("subworkflow-step", SubWorkflow, data).Get(&value); err != nil {
 		log.Printf("Workflow encountered error from sub-workflow: %v", err)
 		return -1, err
 	}
 	log.Printf("Workflow received value from sub-workflow: %d", value)
 
 	result := value + data
+	if shouldDouble {
+		result *= 2
+	}
 	log.Printf("Workflow returning result: %d", result)
 	return result, nil
 }
@@ -608,21 +715,10 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.Printf("main started")
-	registry, err := NewRegistryBuilder().
-		RegisterWorkflow(Workflow).
-		RegisterWorkflow(SubWorkflow).
-		RegisterWorkflow(SubSubWorkflow).
-		RegisterWorkflow(SubSubSubWorkflow).
-		Build()
-	if err != nil {
-		log.Fatalf("Error building registry: %v", err)
-	}
 
-	database := &Database{
-		registry: registry,
-	}
+	database := &Database{}
 
-	err = database.Workflow(Workflow, 40)
+	err := database.Workflow(Workflow, 40)
 	if err != nil {
 		log.Fatalf("Error adding workflow to database: %v", err)
 	}
@@ -630,13 +726,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	orchestrator := NewOrchestrator(database, registry, ctx)
+	orchestrator := NewOrchestrator(database, ctx)
+	orchestrator.RegistryWorkflow(Workflow)
 
 	orchestrator.Wait()
 
 	log.Printf("main finished")
-}
-
-func getFunctionName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
