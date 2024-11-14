@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand/v2"
+	"math/rand"
 	"reflect"
 	"runtime"
 	"sync"
@@ -88,8 +88,6 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, ar
 		ctx.orchestrator.stopWithError(err)
 		return future
 	}
-
-	fmt.Println("Workflow handler", handler.Handler)
 
 	subWorkflowInstance := &WorkflowInstance{
 		stepID:       cacheKey,
@@ -251,45 +249,115 @@ type WorkflowInstance struct {
 	workflowID   string
 }
 
+type Cache interface {
+	Get(key string) (interface{}, bool)
+	Set(key string, value interface{})
+}
+
+type MapCache struct {
+	cache   map[string]interface{}
+	cacheMu sync.Mutex
+}
+
+func NewMapCache() *MapCache {
+	return &MapCache{
+		cache: make(map[string]interface{}),
+	}
+}
+
+func (c *MapCache) Get(key string) (interface{}, bool) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	value, ok := c.cache[key]
+	return value, ok
+}
+
+func (c *MapCache) Set(key string, value interface{}) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cache[key] = value
+}
+
+type Database interface {
+	Workflow(workflowFunc interface{}, args ...interface{}) error
+	PullNextWorkflow() *WorkflowInstance
+}
+
+type DefaultDatabase struct {
+	workflows []*WorkflowInstance
+	mu        sync.Mutex
+}
+
+func NewDefaultDatabase() *DefaultDatabase {
+	return &DefaultDatabase{
+		workflows: make([]*WorkflowInstance, 0),
+	}
+}
+
+func (db *DefaultDatabase) Workflow(workflowFunc interface{}, args ...interface{}) error {
+	log.Printf("DefaultDatabase.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
+	instance := &WorkflowInstance{
+		stepID: "root",
+		handler: HandlerInfo{
+			HandlerName:     getFunctionName(workflowFunc),
+			HandlerLongName: HandlerIdentity(getFunctionName(workflowFunc)),
+		}, // Will be set during execution
+		input: args,
+	}
+	db.mu.Lock()
+	db.workflows = append(db.workflows, instance)
+	db.mu.Unlock()
+	log.Printf("Workflow instance added to database: %+v", instance)
+	return nil
+}
+
+func (db *DefaultDatabase) PullNextWorkflow() *WorkflowInstance {
+	log.Printf("DefaultDatabase.PullNextWorkflow called")
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if len(db.workflows) == 0 {
+		log.Printf("No workflows in database")
+		return nil
+	}
+	instance := db.workflows[0]
+	db.workflows = db.workflows[1:]
+	log.Printf("Pulled workflow instance from database: %+v", instance)
+	return instance
+}
+
 type Orchestrator struct {
-	db          *Database
+	db          Database
 	rootWf      *WorkflowInstance
 	ctx         context.Context
 	instances   []*WorkflowInstance
 	instancesMu sync.Mutex
 	registry    *Registry
-	cache       map[string]interface{}
-	cacheMu     sync.Mutex
+	cache       Cache
 	err         error
 }
 
-func NewOrchestrator(db *Database, ctx context.Context) *Orchestrator {
+func NewOrchestrator(db Database, cache Cache, ctx context.Context) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	o := &Orchestrator{
 		db:       db,
 		ctx:      ctx,
 		registry: newRegistry(),
-		cache:    make(map[string]interface{}),
+		cache:    cache,
 	}
 	return o
 }
 
-func (o *Orchestrator) RegistryWorkflow(workflowFunc interface{}) error {
+func (o *Orchestrator) RegisterWorkflow(workflowFunc interface{}) error {
 	_, err := o.registerWorkflow(workflowFunc)
 	return err
 }
 
 func (o *Orchestrator) getCache(key string) (interface{}, bool) {
-	o.cacheMu.Lock()
-	defer o.cacheMu.Unlock()
-	result, ok := o.cache[key]
-	return result, ok
+	return o.cache.Get(key)
 }
 
 func (o *Orchestrator) setCache(key string, value interface{}) {
-	o.cacheMu.Lock()
-	defer o.cacheMu.Unlock()
-	o.cache[key] = value
+	o.cache.Set(key, value)
 }
 
 func (o *Orchestrator) stopWithError(err error) {
@@ -384,7 +452,6 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{})
 	}
 
 	f := handler.Handler
-	fmt.Println("handler", handler.Handler)
 
 	ctxWorkflow := &WorkflowContext{
 		orchestrator: wi.orchestrator,
@@ -612,42 +679,6 @@ func (o *Orchestrator) registerActivity(activityFunc interface{}) (HandlerInfo, 
 	return handler, nil
 }
 
-type Database struct {
-	workflows []*WorkflowInstance
-	mu        sync.Mutex
-}
-
-func (db *Database) Workflow(workflowFunc interface{}, args ...interface{}) error {
-	log.Printf("Database.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
-	instance := &WorkflowInstance{
-		stepID: "root",
-		handler: HandlerInfo{
-			HandlerName:     getFunctionName(workflowFunc),
-			HandlerLongName: HandlerIdentity(getFunctionName(workflowFunc)),
-		}, // Will be set during execution
-		input: args,
-	}
-	db.mu.Lock()
-	db.workflows = append(db.workflows, instance)
-	db.mu.Unlock()
-	log.Printf("Workflow instance added to database: %+v", instance)
-	return nil
-}
-
-func (db *Database) PullNextWorkflow() *WorkflowInstance {
-	log.Printf("Database.PullNextWorkflow called")
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if len(db.workflows) == 0 {
-		log.Printf("No workflows in database")
-		return nil
-	}
-	instance := db.workflows[0]
-	db.workflows = db.workflows[1:]
-	log.Printf("Pulled workflow instance from database: %+v", instance)
-	return instance
-}
-
 func getFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
@@ -746,7 +777,8 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.Printf("main started")
 
-	database := &Database{}
+	database := NewDefaultDatabase()
+	cache := NewMapCache()
 
 	err := database.Workflow(Workflow, 40)
 	if err != nil {
@@ -756,8 +788,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	orchestrator := NewOrchestrator(database, ctx)
-	orchestrator.RegistryWorkflow(Workflow)
+	orchestrator := NewOrchestrator(database, cache, ctx)
+	orchestrator.RegisterWorkflow(Workflow)
 
 	orchestrator.Wait()
 
