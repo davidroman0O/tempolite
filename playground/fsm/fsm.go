@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/qmuntal/stateless"
@@ -19,6 +20,7 @@ const (
 	StateExecuting = "Executing"
 	StateCompleted = "Completed"
 	StateFailed    = "Failed"
+	StateRetried   = "Retried"
 
 	// FSM triggers
 	TriggerStart    = "Start"
@@ -45,8 +47,10 @@ func (f *Future) Get(result interface{}) error {
 		log.Printf("Future.Get returning error: %v", f.err)
 		return f.err
 	}
-	reflect.ValueOf(result).Elem().Set(reflect.ValueOf(f.result))
-	log.Printf("Future.Get returning result: %v", f.result)
+	if result != nil && f.result != nil {
+		reflect.ValueOf(result).Elem().Set(reflect.ValueOf(f.result))
+		log.Printf("Future.Get returning result: %v", f.result)
+	}
 	return nil
 }
 
@@ -62,13 +66,26 @@ func (f *Future) setError(err error) {
 	close(f.done)
 }
 
+type RetryPolicy struct {
+	MaxAttempts     int
+	InitialInterval time.Duration
+}
+
+type WorkflowOptions struct {
+	RetryPolicy *RetryPolicy
+}
+
+type ActivityOptions struct {
+	RetryPolicy *RetryPolicy
+}
+
 type WorkflowContext struct {
 	orchestrator *Orchestrator
 	ctx          context.Context
 	workflowID   string
 }
 
-func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, args ...interface{}) *Future {
+func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
 	future := NewFuture()
 
@@ -89,6 +106,15 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, ar
 		return future
 	}
 
+	// Create a new WorkflowEntity
+	entity := &WorkflowEntity{
+		ID:     cacheKey,
+		Status: StateIdle,
+	}
+
+	// Add the entity to the database
+	ctx.orchestrator.db.AddWorkflowEntity(entity)
+
 	subWorkflowInstance := &WorkflowInstance{
 		stepID:       cacheKey,
 		handler:      handler,
@@ -97,6 +123,8 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, ar
 		ctx:          ctx.ctx,
 		orchestrator: ctx.orchestrator,
 		workflowID:   cacheKey,
+		options:      options,
+		entity:       entity,
 	}
 
 	ctx.orchestrator.addWorkflowInstance(subWorkflowInstance)
@@ -105,7 +133,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, ar
 	return future
 }
 
-func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, args ...interface{}) *Future {
+func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options ActivityOptions, args ...interface{}) *Future {
 	log.Printf("WorkflowContext.Activity called with stepID: %s, activityFunc: %v, args: %v", stepID, getFunctionName(activityFunc), args)
 	future := NewFuture()
 
@@ -126,47 +154,28 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, ar
 		return future
 	}
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err := fmt.Errorf("panic in activity: %v", r)
-				log.Printf("Panic in activity: %v", err)
-				future.setError(err)
-				ctx.orchestrator.stopWithError(err)
-			}
-		}()
+	// Create a new ActivityEntity
+	entity := &ActivityEntity{
+		ID:     cacheKey,
+		Status: StateIdle,
+	}
 
-		argsValues := []reflect.Value{reflect.ValueOf(ActivityContext{ctx.ctx})}
-		for _, arg := range args {
-			argsValues = append(argsValues, reflect.ValueOf(arg))
-		}
+	// Add the entity to the database
+	ctx.orchestrator.db.AddActivityEntity(entity)
 
-		results := reflect.ValueOf(handler.Handler).Call(argsValues)
-		numOut := len(results)
-		if numOut == 0 {
-			err := fmt.Errorf("activity %s should return at least an error", handler.HandlerName)
-			log.Printf("Error: %v", err)
-			future.setError(err)
-			ctx.orchestrator.stopWithError(err)
-			return
-		}
+	activityInstance := &ActivityInstance{
+		stepID:       cacheKey,
+		handler:      handler,
+		input:        args,
+		future:       future,
+		ctx:          ctx.ctx,
+		orchestrator: ctx.orchestrator,
+		workflowID:   ctx.workflowID,
+		options:      options,
+		entity:       entity,
+	}
 
-		errInterface := results[numOut-1].Interface()
-		if errInterface != nil {
-			log.Printf("Activity returned error: %v", errInterface)
-			future.setError(errInterface.(error))
-			ctx.orchestrator.stopWithError(errInterface.(error))
-		} else {
-			var result interface{}
-			if numOut > 1 {
-				result = results[0].Interface()
-				log.Printf("Activity returned result: %v", result)
-			}
-			future.setResult(result)
-			// Cache the result
-			ctx.orchestrator.setCache(cacheKey, result)
-		}
-	}()
+	go activityInstance.executeWithRetry()
 
 	return future
 }
@@ -183,32 +192,67 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		return future
 	}
 
+	// SideEffect has a default retry policy with MaxAttempts=1
+	retryPolicy := &RetryPolicy{
+		MaxAttempts:     1,
+		InitialInterval: 0,
+	}
+
+	// Create a new SideEffectEntity
+	entity := &SideEffectEntity{
+		ID:     cacheKey,
+		Status: StateIdle,
+	}
+
+	// Add the entity to the database
+	ctx.orchestrator.db.AddSideEffectEntity(entity)
+
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err := fmt.Errorf("panic in side effect: %v", r)
-				log.Printf("Panic in side effect: %v", err)
+		var attempt int
+		for attempt = 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
+			execution := &SideEffectExecution{
+				Attempt: attempt,
+				Status:  StateExecuting,
+			}
+			entity.Executions = append(entity.Executions, execution)
+
+			defer func() {
+				if r := recover(); r != nil {
+					err := fmt.Errorf("panic in side effect: %v", r)
+					log.Printf("Panic in side effect: %v", err)
+					execution.Status = StateFailed
+					execution.Error = err
+					future.setError(err)
+					ctx.orchestrator.stopWithError(err)
+				}
+			}()
+
+			argsValues := []reflect.Value{}
+			results := reflect.ValueOf(sideEffectFunc).Call(argsValues)
+			numOut := len(results)
+			if numOut == 0 {
+				err := fmt.Errorf("side effect should return at least a value")
+				log.Printf("Error: %v", err)
+				execution.Status = StateFailed
+				execution.Error = err
 				future.setError(err)
 				ctx.orchestrator.stopWithError(err)
+				return
 			}
-		}()
 
-		argsValues := []reflect.Value{}
-		results := reflect.ValueOf(sideEffectFunc).Call(argsValues)
-		numOut := len(results)
-		if numOut == 0 {
-			err := fmt.Errorf("side effect should return at least a value")
-			log.Printf("Error: %v", err)
-			future.setError(err)
-			ctx.orchestrator.stopWithError(err)
+			result := results[0].Interface()
+			log.Printf("Side effect returned result: %v", result)
+			future.setResult(result)
+			// Cache the result
+			ctx.orchestrator.setCache(cacheKey, result)
+			execution.Status = StateCompleted
+			entity.Status = StateCompleted
+			entity.Result = result
 			return
 		}
-
-		result := results[0].Interface()
-		log.Printf("Side effect returned result: %v", result)
-		future.setResult(result)
-		// Cache the result
-		ctx.orchestrator.setCache(cacheKey, result)
+		// Max attempts reached
+		entity.Status = StateFailed
+		future.setError(fmt.Errorf("side effect failed after %d attempts", retryPolicy.MaxAttempts))
 	}()
 
 	return future
@@ -236,6 +280,19 @@ type HandlerInfo struct {
 	NumOut          int
 }
 
+type WorkflowEntity struct {
+	ID         string
+	Status     string // e.g., "Completed", "Failed", etc.
+	Result     interface{}
+	Executions []*WorkflowExecution
+}
+
+type WorkflowExecution struct {
+	Attempt int
+	Status  string // "Executing", "Completed", "Failed", "Retried"
+	Error   error
+}
+
 type WorkflowInstance struct {
 	stepID       string
 	handler      HandlerInfo
@@ -247,6 +304,312 @@ type WorkflowInstance struct {
 	ctx          context.Context
 	orchestrator *Orchestrator
 	workflowID   string
+	options      WorkflowOptions
+	entity       *WorkflowEntity
+}
+
+func (wi *WorkflowInstance) Start() {
+	// Initialize the FSM
+	wi.fsm = stateless.NewStateMachine(StateIdle)
+	wi.fsm.Configure(StateIdle).
+		Permit(TriggerStart, StateExecuting)
+
+	wi.fsm.Configure(StateExecuting).
+		OnEntry(wi.executeWorkflow).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateFailed)
+
+	wi.fsm.Configure(StateCompleted).
+		OnEntry(wi.onCompleted)
+
+	wi.fsm.Configure(StateFailed).
+		OnEntry(wi.onFailed)
+
+	// Start the FSM
+	wi.fsm.Fire(TriggerStart)
+}
+
+func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
+	wi.executeWithRetry()
+	return nil
+}
+
+func (wi *WorkflowInstance) executeWithRetry() {
+	var attempt int
+	var maxAttempts int
+	var initialInterval time.Duration
+
+	if wi.options.RetryPolicy != nil {
+		maxAttempts = wi.options.RetryPolicy.MaxAttempts
+		initialInterval = wi.options.RetryPolicy.InitialInterval
+	} else {
+		// Default retry policy
+		maxAttempts = 1
+		initialInterval = 0
+	}
+
+	for attempt = 1; attempt <= maxAttempts; attempt++ {
+		execution := &WorkflowExecution{
+			Attempt: attempt,
+			Status:  StateExecuting,
+		}
+		wi.entity.Executions = append(wi.entity.Executions, execution)
+
+		err := wi.runWorkflow(execution)
+		if err == nil {
+			// Success
+			execution.Status = StateCompleted
+			wi.entity.Status = StateCompleted
+			wi.entity.Result = wi.result
+			wi.fsm.Fire(TriggerComplete)
+			return
+		} else {
+			execution.Status = StateFailed
+			execution.Error = err
+			wi.err = err
+			if attempt < maxAttempts {
+				execution.Status = StateRetried
+				log.Printf("Retrying workflow %s, attempt %d/%d after %v", wi.stepID, attempt+1, maxAttempts, initialInterval)
+				time.Sleep(initialInterval)
+			} else {
+				// Max attempts reached
+				wi.entity.Status = StateFailed
+				wi.fsm.Fire(TriggerFail)
+				return
+			}
+		}
+	}
+}
+
+func (wi *WorkflowInstance) runWorkflow(execution *WorkflowExecution) error {
+	log.Printf("WorkflowInstance %s runWorkflow attempt %d", wi.stepID, execution.Attempt)
+
+	// Check cache
+	if result, ok := wi.orchestrator.getCache(wi.stepID); ok {
+		log.Printf("Cache hit for stepID: %s", wi.stepID)
+		wi.result = result
+		return nil
+	}
+
+	// Register workflow on-the-fly
+	handler, ok := wi.orchestrator.registry.workflows[wi.handler.HandlerName]
+	if !ok {
+		err := fmt.Errorf("error getting handler for workflow: %s", wi.handler.HandlerName)
+		return err
+	}
+
+	f := handler.Handler
+
+	ctxWorkflow := &WorkflowContext{
+		orchestrator: wi.orchestrator,
+		ctx:          wi.ctx,
+		workflowID:   wi.workflowID,
+	}
+
+	argsValues := []reflect.Value{reflect.ValueOf(ctxWorkflow)}
+	for _, arg := range wi.input {
+		argsValues = append(argsValues, reflect.ValueOf(arg))
+	}
+
+	log.Printf("Executing workflow: %s with args: %v", handler.HandlerName, wi.input)
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in workflow: %v", r)
+			wi.err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+
+	select {
+	case <-wi.ctx.Done():
+		log.Printf("Context cancelled in workflow")
+		wi.err = wi.ctx.Err()
+		return wi.err
+	default:
+	}
+
+	results := reflect.ValueOf(f).Call(argsValues)
+
+	numOut := len(results)
+	if numOut == 0 {
+		err := fmt.Errorf("function %s should return at least an error", handler.HandlerName)
+		log.Printf("Error: %v", err)
+		wi.err = err
+		return err
+	}
+
+	errInterface := results[numOut-1].Interface()
+
+	if errInterface != nil {
+		log.Printf("Workflow returned error: %v", errInterface)
+		wi.err = errInterface.(error)
+		return wi.err
+	} else {
+		if numOut > 1 {
+			result := results[0].Interface()
+			log.Printf("Workflow returned result: %v", result)
+			wi.result = result
+		}
+		// Cache the result
+		wi.orchestrator.setCache(wi.stepID, wi.result)
+		return nil
+	}
+}
+
+func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
+	log.Printf("WorkflowInstance %s onCompleted called", wi.stepID)
+	if wi.future != nil {
+		wi.future.setResult(wi.result)
+	}
+	return nil
+}
+
+func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error {
+	log.Printf("WorkflowInstance %s onFailed called", wi.stepID)
+	if wi.future != nil {
+		wi.future.setError(wi.err)
+	}
+	return nil
+}
+
+type ActivityEntity struct {
+	ID         string
+	Status     string // e.g., "Completed", "Failed", etc.
+	Result     interface{}
+	Executions []*ActivityExecution
+}
+
+type ActivityExecution struct {
+	Attempt int
+	Status  string // "Executing", "Completed", "Failed", "Retried"
+	Error   error
+}
+
+type ActivityInstance struct {
+	stepID       string
+	handler      HandlerInfo
+	input        []interface{}
+	result       interface{}
+	err          error
+	ctx          context.Context
+	orchestrator *Orchestrator
+	workflowID   string
+	options      ActivityOptions
+	entity       *ActivityEntity
+	future       *Future
+}
+
+func (ai *ActivityInstance) executeWithRetry() {
+	var attempt int
+	var maxAttempts int
+	var initialInterval time.Duration
+
+	if ai.options.RetryPolicy != nil {
+		maxAttempts = ai.options.RetryPolicy.MaxAttempts
+		initialInterval = ai.options.RetryPolicy.InitialInterval
+	} else {
+		// Default retry policy
+		maxAttempts = 1
+		initialInterval = 0
+	}
+
+	for attempt = 1; attempt <= maxAttempts; attempt++ {
+		execution := &ActivityExecution{
+			Attempt: attempt,
+			Status:  StateExecuting,
+		}
+		ai.entity.Executions = append(ai.entity.Executions, execution)
+
+		err := ai.runActivity(execution)
+		if err == nil {
+			// Success
+			execution.Status = StateCompleted
+			ai.entity.Status = StateCompleted
+			ai.entity.Result = ai.result
+			ai.future.setResult(ai.result)
+			return
+		} else {
+			execution.Status = StateFailed
+			execution.Error = err
+			ai.err = err
+			if attempt < maxAttempts {
+				execution.Status = StateRetried
+				log.Printf("Retrying activity %s, attempt %d/%d after %v", ai.stepID, attempt+1, maxAttempts, initialInterval)
+				time.Sleep(initialInterval)
+			} else {
+				// Max attempts reached
+				ai.entity.Status = StateFailed
+				ai.future.setError(err)
+				return
+			}
+		}
+	}
+}
+
+func (ai *ActivityInstance) runActivity(execution *ActivityExecution) error {
+	log.Printf("ActivityInstance %s runActivity attempt %d", ai.stepID, execution.Attempt)
+
+	// Check cache
+	if result, ok := ai.orchestrator.getCache(ai.stepID); ok {
+		log.Printf("Cache hit for stepID: %s", ai.stepID)
+		ai.result = result
+		return nil
+	}
+
+	handler := ai.handler
+	f := handler.Handler
+
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("panic in activity: %v", r)
+			log.Printf("Panic in activity: %v", err)
+			ai.err = err
+		}
+	}()
+
+	argsValues := []reflect.Value{reflect.ValueOf(ActivityContext{ai.ctx})}
+	for _, arg := range ai.input {
+		argsValues = append(argsValues, reflect.ValueOf(arg))
+	}
+
+	results := reflect.ValueOf(f).Call(argsValues)
+	numOut := len(results)
+	if numOut == 0 {
+		err := fmt.Errorf("activity %s should return at least an error", handler.HandlerName)
+		log.Printf("Error: %v", err)
+		ai.err = err
+		return err
+	}
+
+	errInterface := results[numOut-1].Interface()
+	if errInterface != nil {
+		log.Printf("Activity returned error: %v", errInterface)
+		ai.err = errInterface.(error)
+		return ai.err
+	} else {
+		var result interface{}
+		if numOut > 1 {
+			result = results[0].Interface()
+			log.Printf("Activity returned result: %v", result)
+		}
+		ai.result = result
+		// Cache the result
+		ai.orchestrator.setCache(ai.stepID, result)
+		return nil
+	}
+}
+
+type SideEffectEntity struct {
+	ID         string
+	Status     string // e.g., "Completed", "Failed", etc.
+	Result     interface{}
+	Executions []*SideEffectExecution
+}
+
+type SideEffectExecution struct {
+	Attempt int
+	Status  string // "Executing", "Completed", "Failed", "Retried"
+	Error   error
 }
 
 type Cache interface {
@@ -279,50 +642,63 @@ func (c *MapCache) Set(key string, value interface{}) {
 }
 
 type Database interface {
-	Workflow(workflowFunc interface{}, args ...interface{}) error
-	PullNextWorkflow() *WorkflowInstance
+	AddWorkflowEntity(entity *WorkflowEntity)
+	GetWorkflowEntity(id string) *WorkflowEntity
+	AddActivityEntity(entity *ActivityEntity)
+	GetActivityEntity(id string) *ActivityEntity
+	AddSideEffectEntity(entity *SideEffectEntity)
+	GetSideEffectEntity(id string) *SideEffectEntity
 }
 
 type DefaultDatabase struct {
-	workflows []*WorkflowInstance
-	mu        sync.Mutex
+	workflows   map[string]*WorkflowEntity
+	activities  map[string]*ActivityEntity
+	sideEffects map[string]*SideEffectEntity
+	mu          sync.Mutex
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
 	return &DefaultDatabase{
-		workflows: make([]*WorkflowInstance, 0),
+		workflows:   make(map[string]*WorkflowEntity),
+		activities:  make(map[string]*ActivityEntity),
+		sideEffects: make(map[string]*SideEffectEntity),
 	}
 }
 
-func (db *DefaultDatabase) Workflow(workflowFunc interface{}, args ...interface{}) error {
-	log.Printf("DefaultDatabase.Workflow called with workflowFunc: %v, args: %v", getFunctionName(workflowFunc), args)
-	instance := &WorkflowInstance{
-		stepID: "root",
-		handler: HandlerInfo{
-			HandlerName:     getFunctionName(workflowFunc),
-			HandlerLongName: HandlerIdentity(getFunctionName(workflowFunc)),
-		}, // Will be set during execution
-		input: args,
-	}
-	db.mu.Lock()
-	db.workflows = append(db.workflows, instance)
-	db.mu.Unlock()
-	log.Printf("Workflow instance added to database: %+v", instance)
-	return nil
-}
-
-func (db *DefaultDatabase) PullNextWorkflow() *WorkflowInstance {
-	log.Printf("DefaultDatabase.PullNextWorkflow called")
+func (db *DefaultDatabase) AddWorkflowEntity(entity *WorkflowEntity) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if len(db.workflows) == 0 {
-		log.Printf("No workflows in database")
-		return nil
-	}
-	instance := db.workflows[0]
-	db.workflows = db.workflows[1:]
-	log.Printf("Pulled workflow instance from database: %+v", instance)
-	return instance
+	db.workflows[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetWorkflowEntity(id string) *WorkflowEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.workflows[id]
+}
+
+func (db *DefaultDatabase) AddActivityEntity(entity *ActivityEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.activities[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetActivityEntity(id string) *ActivityEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.activities[id]
+}
+
+func (db *DefaultDatabase) AddSideEffectEntity(entity *SideEffectEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.sideEffects[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetSideEffectEntity(id string) *SideEffectEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.sideEffects[id]
 }
 
 type Orchestrator struct {
@@ -345,6 +721,43 @@ func NewOrchestrator(db Database, cache Cache, ctx context.Context) *Orchestrato
 		cache:    cache,
 	}
 	return o
+}
+
+func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) error {
+	// Register the workflow if not already registered
+	handler, err := o.registerWorkflow(workflowFunc)
+	if err != nil {
+		return err
+	}
+
+	// Create a new WorkflowEntity
+	entity := &WorkflowEntity{
+		ID:     "root", // For simplicity, use "root" as ID
+		Status: StateIdle,
+	}
+
+	// Add the entity to the database
+	o.db.AddWorkflowEntity(entity)
+
+	// Create a new WorkflowInstance
+	instance := &WorkflowInstance{
+		stepID:       "root",
+		handler:      handler,
+		input:        args,
+		ctx:          o.ctx,
+		orchestrator: o,
+		workflowID:   "root",
+		options:      options,
+		entity:       entity,
+	}
+
+	// Store the root workflow instance
+	o.rootWf = instance
+
+	// Start the instance
+	instance.Start()
+
+	return nil
 }
 
 func (o *Orchestrator) RegisterWorkflow(workflowFunc interface{}) error {
@@ -375,16 +788,11 @@ func (o *Orchestrator) addWorkflowInstance(wi *WorkflowInstance) {
 
 func (o *Orchestrator) Wait() {
 	log.Printf("Orchestrator.Wait called")
-	o.rootWf = o.db.PullNextWorkflow()
+
 	if o.rootWf == nil {
 		log.Printf("No root workflow to execute")
 		return
 	}
-
-	o.rootWf.ctx = o.ctx
-	o.rootWf.orchestrator = o
-	o.rootWf.workflowID = "root"
-	o.rootWf.Start()
 
 	// Wait for root workflow to complete
 	for {
@@ -409,125 +817,6 @@ func (o *Orchestrator) Wait() {
 	} else {
 		fmt.Printf("Root workflow completed successfully with result: %v\n", o.rootWf.result)
 	}
-}
-
-func (wi *WorkflowInstance) Start() {
-	// Initialize the FSM
-	wi.fsm = stateless.NewStateMachine(StateIdle)
-	wi.fsm.Configure(StateIdle).
-		Permit(TriggerStart, StateExecuting)
-
-	wi.fsm.Configure(StateExecuting).
-		OnEntry(wi.executeWorkflow).
-		Permit(TriggerComplete, StateCompleted).
-		Permit(TriggerFail, StateFailed)
-
-	wi.fsm.Configure(StateCompleted).
-		OnEntry(wi.onCompleted)
-
-	wi.fsm.Configure(StateFailed).
-		OnEntry(wi.onFailed)
-
-	// Start the FSM
-	wi.fsm.Fire(TriggerStart)
-}
-
-func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s executeWorkflow called", wi.stepID)
-
-	// Check cache
-	if result, ok := wi.orchestrator.getCache(wi.stepID); ok {
-		log.Printf("Cache hit for stepID: %s", wi.stepID)
-		wi.result = result
-		wi.fsm.Fire(TriggerComplete)
-		return nil
-	}
-
-	// Register workflow on-the-fly
-	handler, ok := wi.orchestrator.registry.workflows[wi.handler.HandlerName]
-	if !ok {
-		wi.err = fmt.Errorf("error getting handler for workflow: %s", wi.handler.HandlerName)
-		wi.fsm.Fire(TriggerFail)
-		return nil
-	}
-
-	f := handler.Handler
-
-	ctxWorkflow := &WorkflowContext{
-		orchestrator: wi.orchestrator,
-		ctx:          wi.ctx,
-		workflowID:   wi.workflowID,
-	}
-
-	argsValues := []reflect.Value{reflect.ValueOf(ctxWorkflow)}
-	for _, arg := range wi.input {
-		argsValues = append(argsValues, reflect.ValueOf(arg))
-	}
-
-	log.Printf("Executing workflow: %s with args: %v", handler.HandlerName, wi.input)
-
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Panic in workflow: %v", r)
-			wi.err = fmt.Errorf("panic: %v", r)
-			wi.fsm.Fire(TriggerFail)
-		}
-	}()
-
-	select {
-	case <-wi.ctx.Done():
-		log.Printf("Context cancelled in workflow")
-		wi.err = wi.ctx.Err()
-		wi.fsm.Fire(TriggerFail)
-		return nil
-	default:
-	}
-
-	results := reflect.ValueOf(f).Call(argsValues)
-
-	numOut := len(results)
-	if numOut == 0 {
-		err := fmt.Errorf("function %s should return at least an error", handler.HandlerName)
-		log.Printf("Error: %v", err)
-		wi.err = err
-		wi.fsm.Fire(TriggerFail)
-		return nil
-	}
-
-	errInterface := results[numOut-1].Interface()
-
-	if errInterface != nil {
-		log.Printf("Workflow returned error: %v", errInterface)
-		wi.err = errInterface.(error)
-		wi.fsm.Fire(TriggerFail)
-	} else {
-		if numOut > 1 {
-			result := results[0].Interface()
-			log.Printf("Workflow returned result: %v", result)
-			wi.result = result
-		}
-		// Cache the result
-		wi.orchestrator.setCache(wi.stepID, wi.result)
-		wi.fsm.Fire(TriggerComplete)
-	}
-
-	return nil
-}
-
-func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s onCompleted called", wi.stepID)
-	if wi.future != nil {
-		wi.future.setResult(wi.result)
-	}
-	return nil
-}
-
-func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s onFailed called", wi.stepID)
-	if wi.future != nil {
-		wi.future.setError(wi.err)
-	}
-	return nil
 }
 
 type Registry struct {
@@ -701,7 +990,9 @@ func SomeActivity(ctx ActivityContext, data int) (int, error) {
 func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubSubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+	}, data).Get(&result); err != nil {
 		log.Printf("SubSubSubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
@@ -712,11 +1003,15 @@ func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+	}, data).Get(&result); err != nil {
 		log.Printf("SubSubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
-	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, result).Get(&result); err != nil {
+	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, WorkflowOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+	}, result).Get(&result); err != nil {
 		log.Printf("SubSubWorkflow encountered error from sub-sub-workflow: %v", err)
 		return -1, err
 	}
@@ -724,14 +1019,26 @@ func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	return result, nil
 }
 
+var subWorkflowFailed atomic.Bool
+
 func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 3, InitialInterval: time.Second},
+	}, data).Get(&result); err != nil {
 		log.Printf("SubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
-	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, result).Get(&result); err != nil {
+
+	if subWorkflowFailed.Load() {
+		subWorkflowFailed.Store(false)
+		return -1, fmt.Errorf("subworkflow failed on purpose")
+	}
+
+	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, WorkflowOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+	}, result).Get(&result); err != nil {
 		log.Printf("SubWorkflow encountered error from sub-sub-workflow: %v", err)
 		return -1, err
 	}
@@ -759,7 +1066,9 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 		return -1, err
 	}
 
-	if err := ctx.Workflow("subworkflow-step", SubWorkflow, data).Get(&value); err != nil {
+	if err := ctx.Workflow("subworkflow-step", SubWorkflow, WorkflowOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+	}, data).Get(&value); err != nil {
 		log.Printf("Workflow encountered error from sub-workflow: %v", err)
 		return -1, err
 	}
@@ -780,16 +1089,20 @@ func main() {
 	database := NewDefaultDatabase()
 	cache := NewMapCache()
 
-	err := database.Workflow(Workflow, 40)
-	if err != nil {
-		log.Fatalf("Error adding workflow to database: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	orchestrator := NewOrchestrator(database, cache, ctx)
 	orchestrator.RegisterWorkflow(Workflow)
+
+	subWorkflowFailed.Store(true)
+
+	err := orchestrator.Workflow(Workflow, WorkflowOptions{
+		RetryPolicy: &RetryPolicy{MaxAttempts: 2, InitialInterval: time.Second},
+	}, 40)
+	if err != nil {
+		log.Fatalf("Error starting workflow: %v", err)
+	}
 
 	orchestrator.Wait()
 
