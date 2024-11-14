@@ -198,7 +198,7 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 		return nil, err
 	}
 
-	if tp.orchestrator = orchestrator.New(ctx, db, reg); err != nil {
+	if tp.orchestrator, err = orchestrator.New(ctx, db, reg); err != nil {
 		logs.Error(ctx, "Error creating orchestrator", "error", err)
 		return nil, err
 	}
@@ -207,8 +207,8 @@ func New(ctx context.Context, builder registry.RegistryBuildFn, opts ...tempolit
 		logs.Error(ctx, "Error in clock", "error", err)
 	})
 
-	tp.clock.AddFunc("orchestrator", tp.orchestrator.Tick, clock.WithFuncCleanup(tp.orchestrator.Stop))
-	tp.clock.Start()
+	// tp.clock.AddFunc("orchestrator", tp.orchestrator.Tick, clock.WithFuncCleanup(tp.orchestrator.Stop))
+	// tp.clock.Start()
 
 	defer logs.Debug(ctx, "Tempolite created")
 
@@ -290,7 +290,7 @@ func (tp *Tempolite) Shutdown() error {
 
 	defer logs.Debug(tp.ctx, "Tempolite shutdown complete")
 
-	tp.clock.Stop()
+	// tp.clock.Stop()
 
 	// if err := tp.engine.Shutdown(); err != nil {
 	// 	if err != context.Canceled {
