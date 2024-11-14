@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -35,14 +36,14 @@ const (
 	TriggerResume   = "Resume"
 )
 
-// Serialization functions provided
+// Serialization functions
 func ConvertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
 	inputs := [][]byte{}
 
 	for _, input := range executionInputs {
 		buf := new(bytes.Buffer)
 
-		// just get the real one
+		// Get the real value
 		if reflect.TypeOf(input).Kind() == reflect.Ptr {
 			input = reflect.ValueOf(input).Elem().Interface()
 		}
@@ -62,7 +63,7 @@ func ConvertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, e
 	for _, output := range executionOutputs {
 		buf := new(bytes.Buffer)
 
-		// just get the real one
+		// Get the real value
 		if reflect.TypeOf(output).Kind() == reflect.Ptr {
 			output = reflect.ValueOf(output).Elem().Interface()
 		}
@@ -83,7 +84,7 @@ func ConvertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][
 		buf := bytes.NewBuffer(executionInputs[idx])
 
 		// Get the pointer of the type of the parameter that we target
-		decodedObj := reflect.New(inputType).Elem().Addr().Interface()
+		decodedObj := reflect.New(inputType).Interface()
 
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
@@ -102,54 +103,11 @@ func ConvertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [
 		buf := bytes.NewBuffer(executionOutputs[idx])
 
 		// Get the pointer of the type of the parameter that we target
-		decodedObj := reflect.New(outputType).Elem().Addr().Interface()
+		decodedObj := reflect.New(outputType).Interface()
 
 		if err := rtl.Decode(buf, decodedObj); err != nil {
 			return nil, err
 		}
-
-		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
-	}
-
-	return output, nil
-}
-
-func ConvertInputsForSerializationFromValues(regularValues []interface{}) ([][]byte, error) {
-	inputs := [][]byte{}
-
-	for _, inputPointer := range regularValues {
-		buf := new(bytes.Buffer)
-
-		decodedObj := reflect.ValueOf(inputPointer).Interface()
-
-		if err := rtl.Encode(decodedObj, buf); err != nil {
-			return nil, err
-		}
-		inputs = append(inputs, buf.Bytes())
-	}
-
-	return inputs, nil
-}
-
-func ConvertOutputsFromSerializationToPointer(pointerValues []interface{}, executionOutputs [][]byte) ([]interface{}, error) {
-	output := []interface{}{}
-
-	for idx, outputPointers := range pointerValues {
-		buf := bytes.NewBuffer(executionOutputs[idx])
-
-		if reflect.TypeOf(outputPointers).Kind() != reflect.Ptr {
-			return nil, fmt.Errorf("The output type is not a pointer")
-		}
-
-		// Get the pointer of the type of the parameter that we target
-		decodedObj := reflect.New(reflect.TypeOf(outputPointers).Elem()).Interface()
-
-		if err := rtl.Decode(buf, decodedObj); err != nil {
-			return nil, err
-		}
-
-		// assign the decoded value (like `bool`) to the pointer (like `*bool`)
-		reflect.ValueOf(outputPointers).Elem().Set(reflect.ValueOf(decodedObj).Elem())
 
 		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
 	}
@@ -237,10 +195,12 @@ type WorkflowContext struct {
 	stepID       string
 }
 
+var ErrPaused = errors.New("execution paused")
+
 func (ctx *WorkflowContext) checkPause() error {
 	if ctx.orchestrator.IsPaused() {
 		log.Printf("WorkflowContext detected orchestrator is paused")
-		return fmt.Errorf("orchestrator is paused")
+		return ErrPaused
 	}
 	return nil
 }
@@ -248,7 +208,9 @@ func (ctx *WorkflowContext) checkPause() error {
 func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
-		return NewFuture(0)
+		future := NewFuture(0)
+		future.setError(err)
+		return future
 	}
 
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
@@ -302,21 +264,14 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 
 	// Create a new Entity without ID (database assigns it)
 	entity := &Entity{
-		StepID:      stepID,
-		HandlerName: handler.HandlerName,
-		Type:        string(EntityTypeWorkflow),
-		Status:      string(StatusPending),
-		RunID:       ctx.orchestrator.runID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		WorkflowData: &WorkflowData{
-			Duration:    workflowData.Duration,
-			Paused:      workflowData.Paused,
-			Resumable:   workflowData.Resumable,
-			RetryState:  workflowData.RetryState,
-			RetryPolicy: workflowData.RetryPolicy,
-			Input:       workflowData.Input,
-		},
+		StepID:       stepID,
+		HandlerName:  handler.HandlerName,
+		Type:         string(EntityTypeWorkflow),
+		Status:       string(StatusPending),
+		RunID:        ctx.orchestrator.runID,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		WorkflowData: workflowData,
 	}
 
 	// Add the entity to the database, which assigns the ID
@@ -358,7 +313,9 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options ActivityOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
-		return NewFuture(0)
+		future := NewFuture(0)
+		future.setError(err)
+		return future
 	}
 
 	log.Printf("WorkflowContext.Activity called with stepID: %s, activityFunc: %v, args: %v", stepID, getFunctionName(activityFunc), args)
@@ -459,7 +416,9 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}, options WorkflowOptions) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
-		return NewFuture(0)
+		future := NewFuture(0)
+		future.setError(err)
+		return future
 	}
 
 	log.Printf("WorkflowContext.SideEffect called with stepID: %s", stepID)
@@ -605,6 +564,8 @@ type Entity struct {
 	WorkflowData   *WorkflowData
 	ActivityData   *ActivityData
 	SideEffectData *SideEffectData
+	Paused         bool
+	Resumable      bool
 }
 
 // Execution represents a single execution attempt of an entity.
@@ -656,25 +617,6 @@ type SideEffectData struct {
 	Input       [][]byte             `json:"input,omitempty"`
 	Output      [][]byte             `json:"output,omitempty"`
 	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
-}
-
-// ExecutionData structures
-type WorkflowExecutionData struct {
-	Error  string   `json:"error,omitempty"`
-	Output [][]byte `json:"output,omitempty"`
-}
-
-type ActivityExecutionData struct {
-	Heartbeats       [][]byte   `json:"heartbeats,omitempty"`
-	LastHeartbeat    *time.Time `json:"last_heartbeat,omitempty"`
-	Progress         []byte     `json:"progress,omitempty"`
-	ExecutionDetails []byte     `json:"execution_details,omitempty"`
-}
-
-type SideEffectExecutionData struct {
-	EffectTime       *time.Time `json:"effect_time,omitempty"`
-	EffectMetadata   []byte     `json:"effect_metadata,omitempty"`
-	ExecutionContext []byte     `json:"execution_context,omitempty"`
 }
 
 // WorkflowInstance represents an instance of a workflow execution.
@@ -744,6 +686,9 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
 		if wi.orchestrator.IsPaused() {
 			log.Printf("WorkflowInstance %s is paused", wi.stepID)
+			wi.entity.Status = string(StatusPaused)
+			wi.entity.Paused = true
+			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerPause)
 			return
 		}
@@ -766,6 +711,13 @@ func (wi *WorkflowInstance) executeWithRetry() {
 		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entityID, executionID)
 
 		err := wi.runWorkflow(execution)
+		if errors.Is(err, ErrPaused) {
+			wi.entity.Status = string(StatusPaused)
+			wi.entity.Paused = true
+			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.fsm.Fire(TriggerPause)
+			return
+		}
 		if err == nil {
 			// Success
 			execution.Status = string(StatusCompleted)
@@ -900,6 +852,9 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 
 func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onPaused called", wi.stepID, wi.entityID)
+	if wi.future != nil {
+		wi.future.setError(ErrPaused)
+	}
 	return nil
 }
 
@@ -970,6 +925,9 @@ func (ai *ActivityInstance) executeWithRetry() {
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
 		if ai.orchestrator.IsPaused() {
 			log.Printf("ActivityInstance %s is paused", ai.stepID)
+			ai.entity.Status = string(StatusPaused)
+			ai.entity.Paused = true
+			ai.orchestrator.db.UpdateEntity(ai.entity)
 			ai.fsm.Fire(TriggerPause)
 			return
 		}
@@ -992,6 +950,13 @@ func (ai *ActivityInstance) executeWithRetry() {
 		log.Printf("Executing activity %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.entityID, executionID)
 
 		err := ai.runActivity(execution)
+		if errors.Is(err, ErrPaused) {
+			ai.entity.Status = string(StatusPaused)
+			ai.entity.Paused = true
+			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.fsm.Fire(TriggerPause)
+			return
+		}
 		if err == nil {
 			// Success
 			execution.Status = string(StatusCompleted)
@@ -1058,6 +1023,14 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 		argsValues = append(argsValues, reflect.ValueOf(arg))
 	}
 
+	select {
+	case <-ai.ctx.Done():
+		log.Printf("Context cancelled in activity")
+		ai.err = ai.ctx.Err()
+		return ai.err
+	default:
+	}
+
 	results := reflect.ValueOf(f).Call(argsValues)
 	numOut := len(results)
 	if numOut == 0 {
@@ -1113,6 +1086,9 @@ func (ai *ActivityInstance) onFailed(_ context.Context, _ ...interface{}) error 
 
 func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d) onPaused called", ai.stepID, ai.entityID)
+	if ai.future != nil {
+		ai.future.setError(ErrPaused)
+	}
 	return nil
 }
 
@@ -1190,6 +1166,9 @@ func (sei *SideEffectInstance) executeWithRetry() {
 	for attempt = 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
 		if sei.orchestrator.IsPaused() {
 			log.Printf("SideEffectInstance %s is paused", sei.stepID)
+			sei.entity.Status = string(StatusPaused)
+			sei.entity.Paused = true
+			sei.orchestrator.db.UpdateEntity(sei.entity)
 			sei.fsm.Fire(TriggerPause)
 			return
 		}
@@ -1212,6 +1191,13 @@ func (sei *SideEffectInstance) executeWithRetry() {
 		log.Printf("Executing side effect %s (Entity ID: %d, Execution ID: %d)", sei.stepID, sei.entityID, executionID)
 
 		err := sei.runSideEffect(execution)
+		if errors.Is(err, ErrPaused) {
+			sei.entity.Status = string(StatusPaused)
+			sei.entity.Paused = true
+			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.fsm.Fire(TriggerPause)
+			return
+		}
 		if err == nil {
 			// Success
 			execution.Status = string(StatusCompleted)
@@ -1263,6 +1249,14 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 		}
 	}()
 
+	select {
+	case <-sei.ctx.Done():
+		log.Printf("Context cancelled in side effect")
+		sei.err = sei.ctx.Err()
+		return sei.err
+	default:
+	}
+
 	argsValues := []reflect.Value{}
 	results := reflect.ValueOf(sei.sideEffectFunc).Call(argsValues)
 	numOut := len(results)
@@ -1310,6 +1304,9 @@ func (sei *SideEffectInstance) onFailed(_ context.Context, _ ...interface{}) err
 
 func (sei *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
 	log.Printf("SideEffectInstance %s (Entity ID: %d) onPaused called", sei.stepID, sei.entityID)
+	if sei.future != nil {
+		sei.future.setError(ErrPaused)
+	}
 	return nil
 }
 
@@ -1570,6 +1567,11 @@ func (o *Orchestrator) Resume(id int) *Future {
 		log.Printf("No workflow found with ID: %d", id)
 		return NewFuture(0)
 	}
+
+	// Update the entity's paused state
+	entity.Paused = false
+	entity.Resumable = true
+	o.db.UpdateEntity(entity)
 
 	// Retrieve the handler
 	handler, ok := o.registry.workflows[entity.HandlerName]
@@ -1838,7 +1840,7 @@ func getFunctionName(i interface{}) string {
 func SomeActivity(ctx ActivityContext, data int) (int, error) {
 	log.Printf("SomeActivity called with data: %d", data)
 	select {
-	case <-time.After(0):
+	case <-time.After(time.Second * 2):
 		// Simulate processing
 	case <-ctx.ctx.Done():
 		log.Printf("SomeActivity context cancelled")
@@ -2009,16 +2011,15 @@ func main() {
 		orchestrator.Pause()
 	})
 
-	// Simulate resume after 5 seconds
-	time.AfterFunc(5*time.Second, func() {
-		log.Printf("Resuming orchestrator")
-		newOrchestrator := NewOrchestrator(database, context.Background())
-		newOrchestrator.registry = orchestrator.registry // Share registry
-		future = newOrchestrator.Resume(future.workflowID)
-		newOrchestrator.Wait()
-	})
+	// Wait for some time to simulate the orchestrator being paused
+	time.Sleep(3 * time.Second)
 
-	orchestrator.Wait()
+	log.Printf("Resuming orchestrator")
+	newOrchestrator := NewOrchestrator(database, context.Background())
+	newOrchestrator.registry = orchestrator.registry // Share registry
+	future = newOrchestrator.Resume(future.workflowID)
+
+	newOrchestrator.Wait()
 
 	log.Printf("main finished")
 }
