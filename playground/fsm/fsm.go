@@ -656,7 +656,7 @@ func getFunctionName(i interface{}) string {
 func SomeActivity(ctx ActivityContext, data int) (int, error) {
 	log.Printf("SomeActivity called with data: %d", data)
 	select {
-	case <-time.After(1 * time.Second):
+	case <-time.After(0):
 		// Simulate processing
 	case <-ctx.ctx.Done():
 		log.Printf("SomeActivity context cancelled")
@@ -667,11 +667,41 @@ func SomeActivity(ctx ActivityContext, data int) (int, error) {
 	return result, nil
 }
 
+func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
+	log.Printf("SubSubSubWorkflow called with data: %d", data)
+	var result int
+	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+		log.Printf("SubSubSubWorkflow encountered error from activity: %v", err)
+		return -1, err
+	}
+	log.Printf("SubSubSubWorkflow returning result: %d", result)
+	return result, nil
+}
+
+func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
+	log.Printf("SubSubWorkflow called with data: %d", data)
+	var result int
+	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
+		log.Printf("SubSubWorkflow encountered error from activity: %v", err)
+		return -1, err
+	}
+	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, result).Get(&result); err != nil {
+		log.Printf("SubSubWorkflow encountered error from sub-sub-workflow: %v", err)
+		return -1, err
+	}
+	log.Printf("SubSubWorkflow returning result: %d", result)
+	return result, nil
+}
+
 func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubWorkflow called with data: %d", data)
 	var result int
 	if err := ctx.Activity("activity-step", SomeActivity, data).Get(&result); err != nil {
 		log.Printf("SubWorkflow encountered error from activity: %v", err)
+		return -1, err
+	}
+	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, result).Get(&result); err != nil {
+		log.Printf("SubWorkflow encountered error from sub-sub-workflow: %v", err)
 		return -1, err
 	}
 	log.Printf("SubWorkflow returning result: %d", result)
