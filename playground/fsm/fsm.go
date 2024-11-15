@@ -2057,9 +2057,13 @@ func generateRunID() int {
 }
 
 func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
-	// Register the workflow if not already registered
-	handler, err := o.registerWorkflow(workflowFunc)
-	if err != nil {
+
+	handlerName := getFunctionName(workflowFunc)
+
+	// Retrieve the handler
+	handler, ok := o.registry.workflows[handlerName]
+	if !ok {
+		log.Printf("No handler registered for workflow: %s", handlerName)
 		return NewFuture(0)
 	}
 
@@ -2656,6 +2660,7 @@ func main() {
 	defer cancel()
 
 	orchestrator := NewOrchestrator(database, ctx)
+	orchestrator.RegisterWorkflow(Workflow) // orchestrator should be scopped to a specific amount of workflows
 
 	subWorkflowFailed.Store(true)
 
@@ -2679,7 +2684,8 @@ func main() {
 
 	log.Printf("Resuming orchestrator")
 	newOrchestrator := NewOrchestrator(database, context.Background())
-	newOrchestrator.registry = orchestrator.registry // Share registry
+	orchestrator.RegisterWorkflow(Workflow)
+
 	future = newOrchestrator.Resume(future.workflowID)
 
 	newOrchestrator.Wait()
