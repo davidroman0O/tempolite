@@ -17,26 +17,30 @@ import (
 	"github.com/stephenfire/go-rtl"
 )
 
+type state string
+
 // FSM states
 const (
-	StateIdle          = "Idle"
-	StateExecuting     = "Executing"
-	StateCompleted     = "Completed"
-	StateFailed        = "Failed"
-	StateRetried       = "Retried"
-	StatePaused        = "Paused"
-	StateTransactions  = "Transactions"
-	StateCompensations = "Compensations"
+	StateIdle          state = "Idle"
+	StateExecuting     state = "Executing"
+	StateCompleted     state = "Completed"
+	StateFailed        state = "Failed"
+	StateRetried       state = "Retried"
+	StatePaused        state = "Paused"
+	StateTransactions  state = "Transactions"
+	StateCompensations state = "Compensations"
 )
+
+type trigger string
 
 // FSM triggers
 const (
-	TriggerStart         = "Start"
-	TriggerComplete      = "Complete"
-	TriggerFail          = "Fail"
-	TriggerPause         = "Pause"
-	TriggerResume        = "Resume"
-	TriggerCompensations = "Compensate"
+	TriggerStart      trigger = "Start"
+	TriggerComplete   trigger = "Complete"
+	TriggerFail       trigger = "Fail"
+	TriggerPause      trigger = "Pause"
+	TriggerResume     trigger = "Resume"
+	TriggerCompensate trigger = "Compensate"
 )
 
 // Serialization functions
@@ -1766,7 +1770,7 @@ func (si *SagaInstance) Start() {
 
 	si.fsm.Configure(StateCompensations).
 		OnEntry(si.executeCompensations).
-		Permit(TriggerCompensations, StateFailed)
+		Permit(TriggerCompensate, StateFailed)
 
 	si.fsm.Configure(StateCompleted).
 		OnEntry(si.onCompleted)
@@ -1828,7 +1832,7 @@ func (si *SagaInstance) executeCompensations(ctx context.Context, args ...interf
 		}
 	}
 	// All compensations completed (successfully or not)
-	_ = si.fsm.Fire(TriggerCompensations)
+	_ = si.fsm.Fire(TriggerCompensate)
 	return nil
 }
 
