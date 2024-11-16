@@ -231,7 +231,7 @@ func (ctx *WorkflowContext) checkPause() error {
 	return nil
 }
 
-func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
+func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
 		future := NewFuture(0)
@@ -286,12 +286,36 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 
 	// Convert API RetryPolicy to internal retry policy
 	var internalRetryPolicy *retryPolicyInternal
-	if options.RetryPolicy != nil {
+
+	// Handle options and defaults
+	if options != nil && options.RetryPolicy != nil {
+		rp := options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
 		internalRetryPolicy = &retryPolicyInternal{
-			MaxAttempts:        options.RetryPolicy.MaxAttempts,
-			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
-			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    rp.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		}
+	} else {
+		// Default RetryPolicy
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        1,
+			InitialInterval:    time.Second.Nanoseconds(),
+			BackoffCoefficient: 2.0,
+			MaxInterval:        (5 * time.Minute).Nanoseconds(),
 		}
 	}
 
@@ -354,7 +378,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	return future
 }
 
-func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options ActivityOptions, args ...interface{}) *Future {
+func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
 		future := NewFuture(0)
@@ -409,12 +433,36 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 
 	// Convert API RetryPolicy to internal retry policy
 	var internalRetryPolicy *retryPolicyInternal
-	if options.RetryPolicy != nil {
+
+	// Handle options and defaults
+	if options != nil && options.RetryPolicy != nil {
+		rp := options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
 		internalRetryPolicy = &retryPolicyInternal{
-			MaxAttempts:        options.RetryPolicy.MaxAttempts,
-			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
-			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    rp.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		}
+	} else {
+		// Default RetryPolicy
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        1,
+			InitialInterval:    time.Second.Nanoseconds(),
+			BackoffCoefficient: 2.0,
+			MaxInterval:        (5 * time.Minute).Nanoseconds(),
 		}
 	}
 
@@ -475,7 +523,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	return future
 }
 
-func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}, options WorkflowOptions) *Future {
+func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}, options *WorkflowOptions) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
 		future := NewFuture(0)
@@ -529,25 +577,37 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 
 	// Use the retry policy from options or default
 	var retryPolicy *RetryPolicy
-	if options.RetryPolicy != nil {
+	if options != nil && options.RetryPolicy != nil {
 		retryPolicy = options.RetryPolicy
+		// Fill defaults where zero
+		if retryPolicy.MaxAttempts == 0 {
+			retryPolicy.MaxAttempts = 1
+		}
+		if retryPolicy.InitialInterval == 0 {
+			retryPolicy.InitialInterval = time.Second
+		}
+		if retryPolicy.BackoffCoefficient == 0 {
+			retryPolicy.BackoffCoefficient = 2.0
+		}
+		if retryPolicy.MaxInterval == 0 {
+			retryPolicy.MaxInterval = 5 * time.Minute
+		}
 	} else {
 		// Default retry policy with MaxAttempts=1
 		retryPolicy = &RetryPolicy{
-			MaxAttempts:     1,
-			InitialInterval: 0,
+			MaxAttempts:        1,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
 		}
 	}
 
 	// Convert API RetryPolicy to internal retry policy
-	var internalRetryPolicy *retryPolicyInternal
-	if retryPolicy != nil {
-		internalRetryPolicy = &retryPolicyInternal{
-			MaxAttempts:        retryPolicy.MaxAttempts,
-			InitialInterval:    retryPolicy.InitialInterval.Nanoseconds(),
-			BackoffCoefficient: retryPolicy.BackoffCoefficient,
-			MaxInterval:        retryPolicy.MaxInterval.Nanoseconds(),
-		}
+	internalRetryPolicy := &retryPolicyInternal{
+		MaxAttempts:        retryPolicy.MaxAttempts,
+		InitialInterval:    retryPolicy.InitialInterval.Nanoseconds(),
+		BackoffCoefficient: retryPolicy.BackoffCoefficient,
+		MaxInterval:        retryPolicy.MaxInterval.Nanoseconds(),
 	}
 
 	// Create SideEffectData
@@ -608,9 +668,10 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 }
 
 // ContinueAsNew allows a workflow to continue as new with the given function and arguments.
-func (ctx *WorkflowContext) ContinueAsNew(workflowFunc interface{}, args ...interface{}) error {
+func (ctx *WorkflowContext) ContinueAsNew(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) error {
 	return &ContinueAsNewError{
 		WorkflowFunc: workflowFunc,
+		Options:      options,
 		Args:         args,
 	}
 }
@@ -618,6 +679,7 @@ func (ctx *WorkflowContext) ContinueAsNew(workflowFunc interface{}, args ...inte
 // ContinueAsNewError indicates that the workflow should restart with new inputs.
 type ContinueAsNewError struct {
 	WorkflowFunc interface{}
+	Options      *WorkflowOptions
 	Args         []interface{}
 }
 
@@ -829,7 +891,7 @@ type WorkflowInstance struct {
 	ctx           context.Context
 	orchestrator  *Orchestrator
 	workflowID    int
-	options       WorkflowOptions
+	options       *WorkflowOptions
 	entity        *Entity
 	entityID      int
 	executionID   int
@@ -874,9 +936,23 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	var maxAttempts int
 	var initialInterval time.Duration
 
-	if wi.options.RetryPolicy != nil {
-		maxAttempts = wi.options.RetryPolicy.MaxAttempts
-		initialInterval = wi.options.RetryPolicy.InitialInterval
+	if wi.options != nil && wi.options.RetryPolicy != nil {
+		rp := wi.options.RetryPolicy
+		// Fill default values where zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
+		maxAttempts = rp.MaxAttempts
+		initialInterval = rp.InitialInterval
 	} else {
 		// Default retry policy
 		maxAttempts = 1
@@ -975,7 +1051,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 		ctx:          wi.ctx,
 		workflowID:   wi.entity.ID,
 		stepID:       wi.stepID,
-		options:      &wi.options,
+		options:      wi.options,
 	}
 
 	// Convert inputs from serialization
@@ -1101,15 +1177,51 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			}
 			return nil
 		}
+
+		// Convert API RetryPolicy to internal retry policy
+		var internalRetryPolicy *retryPolicyInternal
+
+		if wi.continueAsNew.Options != nil && wi.continueAsNew.Options.RetryPolicy != nil {
+			rp := wi.continueAsNew.Options.RetryPolicy
+			// Fill default values if zero
+			if rp.MaxAttempts == 0 {
+				rp.MaxAttempts = 1
+			}
+			if rp.InitialInterval == 0 {
+				rp.InitialInterval = time.Second
+			}
+			if rp.BackoffCoefficient == 0 {
+				rp.BackoffCoefficient = 2.0
+			}
+			if rp.MaxInterval == 0 {
+				rp.MaxInterval = 5 * time.Minute
+			}
+			internalRetryPolicy = &retryPolicyInternal{
+				MaxAttempts:        rp.MaxAttempts,
+				InitialInterval:    rp.InitialInterval.Nanoseconds(),
+				BackoffCoefficient: rp.BackoffCoefficient,
+				MaxInterval:        rp.MaxInterval.Nanoseconds(),
+			}
+		} else {
+			// Default RetryPolicy
+			internalRetryPolicy = &retryPolicyInternal{
+				MaxAttempts:        1,
+				InitialInterval:    time.Second.Nanoseconds(),
+				BackoffCoefficient: 2.0,
+				MaxInterval:        (5 * time.Minute).Nanoseconds(),
+			}
+		}
+
 		// Create WorkflowData
 		workflowData := &WorkflowData{
 			Duration:    "",
 			Paused:      false,
 			Resumable:   false,
 			RetryState:  &RetryState{Attempts: 0},
-			RetryPolicy: wi.entity.WorkflowData.RetryPolicy, // Reuse the existing retry policy
+			RetryPolicy: internalRetryPolicy,
 			Input:       inputBytes,
 		}
+
 		// Create a new Entity without ID (database assigns it)
 		newEntity := &Entity{
 			StepID:       wi.entity.StepID, // Use the same stepID
@@ -1133,7 +1245,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			ctx:          o.ctx,
 			orchestrator: o,
 			workflowID:   newEntity.ID,
-			options:      wi.options,
+			options:      wi.continueAsNew.Options,
 			entity:       newEntity,
 			entityID:     newEntity.ID,
 		}
@@ -1207,7 +1319,7 @@ type ActivityInstance struct {
 	ctx          context.Context
 	orchestrator *Orchestrator
 	workflowID   int
-	options      ActivityOptions
+	options      *ActivityOptions
 	entity       *Entity
 	entityID     int
 	executionID  int
@@ -1251,9 +1363,23 @@ func (ai *ActivityInstance) executeWithRetry() {
 	var maxAttempts int
 	var initialInterval time.Duration
 
-	if ai.options.RetryPolicy != nil {
-		maxAttempts = ai.options.RetryPolicy.MaxAttempts
-		initialInterval = ai.options.RetryPolicy.InitialInterval
+	if ai.options != nil && ai.options.RetryPolicy != nil {
+		rp := ai.options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
+		maxAttempts = rp.MaxAttempts
+		initialInterval = rp.InitialInterval
 	} else {
 		// Default retry policy
 		maxAttempts = 1
@@ -1472,7 +1598,7 @@ type SideEffectInstance struct {
 	entity         *Entity
 	entityID       int
 	executionID    int
-	options        WorkflowOptions
+	options        *WorkflowOptions
 	execution      *Execution // Current execution
 	returnTypes    []reflect.Type
 	handlerName    string
@@ -1528,9 +1654,25 @@ func (sei *SideEffectInstance) executeWithRetry() {
 	if retryPolicy == nil {
 		// Default retry policy with MaxAttempts=1
 		retryPolicy = &RetryPolicy{
-			MaxAttempts:     1,
-			InitialInterval: 0,
+			MaxAttempts:        1,
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaxInterval:        5 * time.Minute,
 		}
+	}
+
+	// Fill default values where zero
+	if retryPolicy.MaxAttempts == 0 {
+		retryPolicy.MaxAttempts = 1
+	}
+	if retryPolicy.InitialInterval == 0 {
+		retryPolicy.InitialInterval = time.Second
+	}
+	if retryPolicy.BackoffCoefficient == 0 {
+		retryPolicy.BackoffCoefficient = 2.0
+	}
+	if retryPolicy.MaxInterval == 0 {
+		retryPolicy.MaxInterval = 5 * time.Minute
 	}
 
 	for attempt = 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
@@ -2354,7 +2496,7 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, runID
 	return o
 }
 
-func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
+func (o *Orchestrator) Workflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	handler, err := o.registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
 		log.Printf("Error registering workflow: %v", err)
@@ -2389,12 +2531,36 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 
 	// Convert API RetryPolicy to internal retry policy
 	var internalRetryPolicy *retryPolicyInternal
-	if options.RetryPolicy != nil {
+
+	// Handle options and defaults
+	if options != nil && options.RetryPolicy != nil {
+		rp := options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
 		internalRetryPolicy = &retryPolicyInternal{
-			MaxAttempts:        options.RetryPolicy.MaxAttempts,
-			InitialInterval:    options.RetryPolicy.InitialInterval.Nanoseconds(),
-			BackoffCoefficient: options.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        options.RetryPolicy.MaxInterval.Nanoseconds(),
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    rp.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		}
+	} else {
+		// Default RetryPolicy
+		internalRetryPolicy = &retryPolicyInternal{
+			MaxAttempts:        1,
+			InitialInterval:    time.Second.Nanoseconds(),
+			BackoffCoefficient: 2.0,
+			MaxInterval:        (5 * time.Minute).Nanoseconds(),
 		}
 	}
 
@@ -2518,7 +2684,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 		ctx:          o.ctx,
 		orchestrator: o,
 		workflowID:   entity.ID,
-		options: WorkflowOptions{
+		options: &WorkflowOptions{
 			RetryPolicy: &RetryPolicy{
 				MaxAttempts:        int(entity.WorkflowData.RetryPolicy.MaxAttempts),
 				InitialInterval:    time.Duration(entity.WorkflowData.RetryPolicy.InitialInterval),
@@ -2830,7 +2996,7 @@ func SomeActivity(ctx ActivityContext, data int) (int, error) {
 func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubSubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+	if err := ctx.Activity("activity-step", SomeActivity, &ActivityOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        3,
 			InitialInterval:    time.Second,
@@ -2848,7 +3014,7 @@ func SubSubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubSubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+	if err := ctx.Activity("activity-step", SomeActivity, &ActivityOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        3,
 			InitialInterval:    time.Second,
@@ -2859,7 +3025,7 @@ func SubSubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 		log.Printf("SubSubWorkflow encountered error from activity: %v", err)
 		return -1, err
 	}
-	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, WorkflowOptions{
+	if err := ctx.Workflow("subsubsubworkflow-step", SubSubSubWorkflow, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        2,
 			InitialInterval:    time.Second,
@@ -2879,7 +3045,7 @@ var subWorkflowFailed atomic.Bool
 func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("SubWorkflow called with data: %d", data)
 	var result int
-	if err := ctx.Activity("activity-step", SomeActivity, ActivityOptions{
+	if err := ctx.Activity("activity-step", SomeActivity, &ActivityOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        3,
 			InitialInterval:    time.Second,
@@ -2896,7 +3062,7 @@ func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 		return -1, fmt.Errorf("subworkflow failed on purpose")
 	}
 
-	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, WorkflowOptions{
+	if err := ctx.Workflow("subsubworkflow-step", SubSubWorkflow, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        2,
 			InitialInterval:    time.Second,
@@ -2944,7 +3110,7 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	if err := ctx.SideEffect("side-effect-step", func() bool {
 		log.Printf("Side effect called")
 		return rand.Float32() < 0.5
-	}, WorkflowOptions{
+	}, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        1,
 			InitialInterval:    0,
@@ -2959,14 +3125,14 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	if !continueAsNewCalled.Load() {
 		continueAsNewCalled.Store(true)
 		log.Printf("Using ContinueAsNew to restart workflow")
-		err := ctx.ContinueAsNew(Workflow, data*2)
+		err := ctx.ContinueAsNew(Workflow, nil, data*2)
 		if err != nil {
 			return -1, err
 		}
 		return 0, nil // This line won't be executed
 	}
 
-	if err := ctx.Workflow("subworkflow-step", SubWorkflow, WorkflowOptions{
+	if err := ctx.Workflow("subworkflow-step", SubWorkflow, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        2,
 			InitialInterval:    time.Second,
@@ -3000,7 +3166,7 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 
 	var a int
 	var b int
-	if err := ctx.Workflow("a-b", SubManyWorkflow, WorkflowOptions{}).Get(&a, &b); err != nil {
+	if err := ctx.Workflow("a-b", SubManyWorkflow, nil).Get(&a, &b); err != nil {
 		log.Printf("Workflow encountered error from sub-many-workflow: %v", err)
 		return -1, err
 	}
@@ -3051,7 +3217,7 @@ func main() {
 	subWorkflowFailed.Store(true)
 	continueAsNewCalled.Store(false)
 
-	future := orchestrator.Workflow(Workflow, WorkflowOptions{
+	future := orchestrator.Workflow(Workflow, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        2,
 			InitialInterval:    time.Second,
