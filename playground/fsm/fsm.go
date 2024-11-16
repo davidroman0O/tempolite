@@ -17,9 +17,9 @@ import (
 	"github.com/stephenfire/go-rtl"
 )
 
+// State and Trigger definitions
 type state string
 
-// FSM states
 const (
 	StateIdle          state = "Idle"
 	StateExecuting     state = "Executing"
@@ -33,7 +33,6 @@ const (
 
 type trigger string
 
-// FSM triggers
 const (
 	TriggerStart      trigger = "Start"
 	TriggerComplete   trigger = "Complete"
@@ -42,6 +41,247 @@ const (
 	TriggerResume     trigger = "Resume"
 	TriggerCompensate trigger = "Compensate"
 )
+
+// Base struct for common fields
+type Base struct {
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// RetryPolicy defines retry behavior configuration
+type RetryPolicy struct {
+	MaxAttempts        int
+	InitialInterval    time.Duration
+	BackoffCoefficient float64
+	MaxInterval        time.Duration
+}
+
+// RetryState tracks the state of retries
+type RetryState struct {
+	Attempts int `json:"attempts"`
+}
+
+// retryPolicyInternal matches the database schema, using int64 for intervals
+type retryPolicyInternal struct {
+	MaxAttempts        int     `json:"max_attempts"`
+	InitialInterval    int64   `json:"initial_interval"`
+	BackoffCoefficient float64 `json:"backoff_coefficient"`
+	MaxInterval        int64   `json:"max_interval"`
+}
+
+// Version tracks entity versions
+type Version struct {
+	ID       int
+	EntityID int
+	ChangeID string
+	Version  int
+	Data     map[string]interface{} // Additional data if needed
+}
+
+// Hierarchy tracks parent-child relationships between entities
+type Hierarchy struct {
+	RunID             int
+	ParentEntityID    int
+	ChildEntityID     int
+	ParentExecutionID int
+	ChildExecutionID  int
+	ParentStepID      string
+	ChildStepID       string
+	ParentType        string
+	ChildType         string
+}
+
+// Data structs matching the ent schemas
+type WorkflowData struct {
+	Duration    string               `json:"duration,omitempty"`
+	Paused      bool                 `json:"paused"`
+	Resumable   bool                 `json:"resumable"`
+	RetryState  *RetryState          `json:"retry_state"`
+	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
+	Input       [][]byte             `json:"input,omitempty"`
+}
+
+type ActivityData struct {
+	Timeout      int64                `json:"timeout,omitempty"`
+	MaxAttempts  int                  `json:"max_attempts"`
+	ScheduledFor *time.Time           `json:"scheduled_for,omitempty"`
+	RetryPolicy  *retryPolicyInternal `json:"retry_policy"`
+	Input        [][]byte             `json:"input,omitempty"`
+	Output       [][]byte             `json:"output,omitempty"`
+}
+
+type SagaData struct {
+	Compensating     bool                 `json:"compensating"`
+	CompensationData [][]byte             `json:"compensation_data,omitempty"`
+	RetryState       *RetryState          `json:"retry_state"`
+	RetryPolicy      *retryPolicyInternal `json:"retry_policy"`
+}
+
+type SideEffectData struct {
+	Input       [][]byte             `json:"input,omitempty"`
+	Output      [][]byte             `json:"output,omitempty"`
+	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
+}
+
+// ExecutionData structs matching the ent schemas
+type WorkflowExecutionData struct {
+	Error  string   `json:"error,omitempty"`
+	Output [][]byte `json:"output,omitempty"`
+}
+
+type ActivityExecutionData struct {
+	Heartbeats       [][]byte   `json:"heartbeats,omitempty"`
+	LastHeartbeat    *time.Time `json:"last_heartbeat,omitempty"`
+	Progress         []byte     `json:"progress,omitempty"`
+	ExecutionDetails []byte     `json:"execution_details,omitempty"`
+	ErrMessage       string     `json:"err_message,omitempty"`
+	Output           [][]byte   `json:"output,omitempty"`
+}
+
+type SagaExecutionData struct {
+	Error  string   `json:"error,omitempty"`
+	Output [][]byte `json:"output,omitempty"`
+}
+
+type SideEffectExecutionData struct {
+	EffectTime       *time.Time `json:"effect_time,omitempty"`
+	EffectMetadata   []byte     `json:"effect_metadata,omitempty"`
+	ExecutionContext []byte     `json:"execution_context,omitempty"`
+	Result           []byte     `json:"result,omitempty"`
+	Output           [][]byte   `json:"output,omitempty"`
+}
+
+// Run represents a workflow execution group
+type Run struct {
+	ID          int
+	Status      string // "Pending", "Running", "Completed", etc.
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Entities    []interface{} // Can hold any entity type
+	Hierarchies []*Hierarchy
+}
+
+// WorkflowEntity represents a workflow
+type WorkflowEntity struct {
+	ID           int
+	HandlerName  string
+	StepID       string
+	Status       string // "Pending", "Running", etc.
+	RunID        int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Executions   []*WorkflowExecution
+	WorkflowData *WorkflowData
+	Paused       bool
+	Resumable    bool
+	HandlerInfo  *HandlerInfo
+}
+
+// ActivityEntity represents an activity
+type ActivityEntity struct {
+	ID           int
+	HandlerName  string
+	StepID       string
+	Status       string // "Pending", "Running", etc.
+	RunID        int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Executions   []*ActivityExecution
+	ActivityData *ActivityData
+	Paused       bool
+	Resumable    bool
+	HandlerInfo  *HandlerInfo
+}
+
+// SagaEntity represents a saga
+type SagaEntity struct {
+	ID          int
+	StepID      string
+	Status      string // "Pending", "Running", etc.
+	RunID       int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Executions  []*SagaExecution
+	SagaData    *SagaData
+	Paused      bool
+	Resumable   bool
+	HandlerInfo *SagaHandlerInfo
+}
+
+// SideEffectEntity represents a side effect
+type SideEffectEntity struct {
+	ID                int
+	HandlerName       string
+	StepID            string
+	Status            string // "Pending", "Running", etc.
+	RunID             int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Executions        []*SideEffectExecution
+	SideEffectData    *SideEffectData
+	Paused            bool
+	Resumable         bool
+	HandlerInfo       *HandlerInfo
+	ParentExecutionID int
+	ParentEntityID    int
+	ParentStepID      string
+}
+
+// WorkflowExecution represents an execution attempt of a workflow
+type WorkflowExecution struct {
+	ID                    int
+	EntityID              int
+	StartedAt             time.Time
+	CompletedAt           *time.Time
+	Status                string // "Pending", "Running", etc.
+	Attempt               int
+	Error                 string // Error message
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	WorkflowExecutionData *WorkflowExecutionData
+}
+
+// ActivityExecution represents an execution attempt of an activity
+type ActivityExecution struct {
+	ID                    int
+	EntityID              int
+	StartedAt             time.Time
+	CompletedAt           *time.Time
+	Status                string // "Pending", "Running", etc.
+	Attempt               int
+	Error                 string // Error message
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ActivityExecutionData *ActivityExecutionData
+}
+
+// SagaExecution represents an execution attempt of a saga
+type SagaExecution struct {
+	ID                int
+	EntityID          int
+	StartedAt         time.Time
+	CompletedAt       *time.Time
+	Status            string // "Pending", "Running", etc.
+	Attempt           int
+	Error             string // Error message
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	SagaExecutionData *SagaExecutionData
+}
+
+// SideEffectExecution represents an execution attempt of a side effect
+type SideEffectExecution struct {
+	ID                      int
+	EntityID                int
+	StartedAt               time.Time
+	CompletedAt             *time.Time
+	Status                  string // "Pending", "Running", etc.
+	Attempt                 int
+	Error                   string // Error message
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	SideEffectExecutionData *SideEffectExecutionData
+}
 
 // Serialization functions
 func convertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
@@ -184,27 +424,6 @@ func (f *Future) setError(err error) {
 	close(f.done)
 }
 
-// RetryPolicy defines retry behavior configuration for API usage.
-type RetryPolicy struct {
-	MaxAttempts        int
-	InitialInterval    time.Duration
-	BackoffCoefficient float64
-	MaxInterval        time.Duration
-}
-
-// RetryState tracks the state of retries.
-type RetryState struct {
-	Attempts int `json:"attempts"`
-}
-
-// Internal retry policy matching the database schema, using int64 for intervals.
-type retryPolicyInternal struct {
-	MaxAttempts        int     `json:"max_attempts"`
-	InitialInterval    int64   `json:"initial_interval"` // Stored in nanoseconds
-	BackoffCoefficient float64 `json:"backoff_coefficient"`
-	MaxInterval        int64   `json:"max_interval"` // Stored in nanoseconds
-}
-
 // WorkflowOptions provides options for workflows, including retry policies and version overrides.
 type WorkflowOptions struct {
 	RetryPolicy      *RetryPolicy
@@ -261,6 +480,7 @@ func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupport
 	return newVersion.Version
 }
 
+// Workflow creates a sub-workflow.
 func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
@@ -273,7 +493,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	future := NewFuture(0)
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
+	entity := ctx.orchestrator.db.GetChildWorkflowEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
 		handlerInfo := entity.HandlerInfo
 		if handlerInfo == nil {
@@ -282,7 +502,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 			future.setError(err)
 			return future
 		}
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
+		latestExecution := ctx.orchestrator.db.GetLatestWorkflowExecution(entity.ID)
 		if latestExecution != nil && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Output != nil {
 			// Deserialize output
 			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.WorkflowExecutionData.Output)
@@ -359,11 +579,10 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 		Input:       inputBytes,
 	}
 
-	// Create a new Entity without ID (database assigns it)
-	entity = &Entity{
+	// Create a new WorkflowEntity without ID (database assigns it)
+	entity = &WorkflowEntity{
 		StepID:       stepID,
 		HandlerName:  handler.HandlerName,
-		Type:         string(EntityTypeWorkflow),
 		Status:       string(StatusPending),
 		RunID:        ctx.orchestrator.runID,
 		CreatedAt:    time.Now(),
@@ -373,7 +592,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	entity.HandlerInfo = &handler
 
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
+	entity = ctx.orchestrator.db.AddWorkflowEntity(entity)
 	future.workflowID = entity.ID
 
 	// Prepare to create the sub-workflow instance
@@ -386,7 +605,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 		orchestrator:      ctx.orchestrator,
 		workflowID:        entity.ID,
 		options:           options,
-		entity:            entity,
+		workflowEntity:    entity,
 		entityID:          entity.ID,
 		parentExecutionID: ctx.executionID,
 		parentEntityID:    ctx.workflowID,
@@ -400,6 +619,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	return future
 }
 
+// Activity creates an activity.
 func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
@@ -412,7 +632,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	future := NewFuture(0)
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
+	entity := ctx.orchestrator.db.GetChildActivityEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
 		handlerInfo := entity.HandlerInfo
 		if handlerInfo == nil {
@@ -421,7 +641,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 			future.setError(err)
 			return future
 		}
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
+		latestExecution := ctx.orchestrator.db.GetLatestActivityExecution(entity.ID)
 		if latestExecution != nil && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Output != nil {
 			// Deserialize output
 			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Output)
@@ -496,11 +716,10 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		Input:       inputBytes,
 	}
 
-	// Create a new Entity without ID (database assigns it)
-	entity = &Entity{
+	// Create a new ActivityEntity without ID (database assigns it)
+	entity = &ActivityEntity{
 		StepID:       stepID,
 		HandlerName:  handler.HandlerName,
-		Type:         string(EntityTypeActivity),
 		Status:       string(StatusPending),
 		RunID:        ctx.orchestrator.runID,
 		CreatedAt:    time.Now(),
@@ -510,7 +729,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	entity.HandlerInfo = &handler
 
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
+	entity = ctx.orchestrator.db.AddActivityEntity(entity)
 	future.workflowID = entity.ID
 
 	// Prepare to create the activity instance
@@ -523,7 +742,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		orchestrator:      ctx.orchestrator,
 		workflowID:        ctx.workflowID,
 		options:           options,
-		entity:            entity,
+		activityEntity:    entity,
 		entityID:          entity.ID,
 		parentExecutionID: ctx.executionID,
 		parentEntityID:    ctx.workflowID,
@@ -537,6 +756,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	return future
 }
 
+// SideEffect executes a side effect function
 func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}, options *WorkflowOptions) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
@@ -563,9 +783,9 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	}
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
+	entity := ctx.orchestrator.db.GetChildSideEffectEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
+		latestExecution := ctx.orchestrator.db.GetLatestSideEffectExecution(entity.ID)
 		if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
 			// Deserialize result using the returnTypes
 			outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: returnTypes}, latestExecution.SideEffectExecutionData.Output)
@@ -592,20 +812,21 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	// Use the retry policy from options or default
 	var retryPolicy *RetryPolicy
 	if options != nil && options.RetryPolicy != nil {
-		retryPolicy = options.RetryPolicy
+		rp := options.RetryPolicy
 		// Fill defaults where zero
-		if retryPolicy.MaxAttempts == 0 {
-			retryPolicy.MaxAttempts = 1
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
 		}
-		if retryPolicy.InitialInterval == 0 {
-			retryPolicy.InitialInterval = time.Second
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
 		}
-		if retryPolicy.BackoffCoefficient == 0 {
-			retryPolicy.BackoffCoefficient = 2.0
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
 		}
-		if retryPolicy.MaxInterval == 0 {
-			retryPolicy.MaxInterval = 5 * time.Minute
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
 		}
+		retryPolicy = rp
 	} else {
 		// Default retry policy with MaxAttempts=1
 		retryPolicy = &RetryPolicy{
@@ -630,11 +851,10 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		RetryPolicy: internalRetryPolicy,
 	}
 
-	// Create a new Entity without ID (database assigns it)
-	entity = &Entity{
+	// Create a new SideEffectEntity without ID (database assigns it)
+	entity = &SideEffectEntity{
 		StepID:         stepID,
 		HandlerName:    handlerName,
-		Type:           string(EntityTypeSideEffect),
 		Status:         string(StatusPending),
 		RunID:          ctx.orchestrator.runID,
 		CreatedAt:      time.Now(),
@@ -644,7 +864,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	entity.HandlerInfo = &handler
 
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
+	entity = ctx.orchestrator.db.AddSideEffectEntity(entity)
 	future.workflowID = entity.ID
 
 	// Prepare to create the side effect instance
@@ -655,7 +875,6 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		ctx:               ctx.ctx,
 		orchestrator:      ctx.orchestrator,
 		workflowID:        ctx.workflowID,
-		entity:            entity,
 		entityID:          entity.ID,
 		options:           options,
 		returnTypes:       returnTypes,
@@ -664,6 +883,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		parentExecutionID: ctx.executionID,
 		parentEntityID:    ctx.workflowID,
 		parentStepID:      ctx.stepID,
+		sideEffectEntity:  entity,
 	}
 
 	// Start the side effect instance
@@ -759,133 +979,6 @@ const (
 	StatusPaused    EntityStatus = "Paused"
 )
 
-// ExecutionData structures matching the ent schemas
-type WorkflowExecutionData struct {
-	Error  string   `json:"error,omitempty"`
-	Output [][]byte `json:"output,omitempty"`
-}
-
-type ActivityExecutionData struct {
-	Heartbeats       [][]byte   `json:"heartbeats,omitempty"`
-	LastHeartbeat    *time.Time `json:"last_heartbeat,omitempty"`
-	Progress         []byte     `json:"progress,omitempty"`
-	ExecutionDetails []byte     `json:"execution_details,omitempty"`
-	ErrMessage       string     `json:"err_message,omitempty"`
-	Output           [][]byte   `json:"output,omitempty"`
-}
-
-type SideEffectExecutionData struct {
-	Output           [][]byte   `json:"output,omitempty"`
-	EffectTime       *time.Time `json:"effect_time,omitempty"`
-	EffectMetadata   []byte     `json:"effect_metadata,omitempty"`
-	ExecutionContext []byte     `json:"execution_context,omitempty"`
-}
-
-type SagaExecutionData struct {
-	Error  string   `json:"error,omitempty"`
-	Output [][]byte `json:"output,omitempty"`
-}
-
-// Entity represents the base entity for workflows, activities, and side effects.
-type Entity struct {
-	ID             int
-	HandlerName    string
-	Type           string // "Workflow", "Activity", etc.
-	Status         string // "Pending", "Running", etc.
-	StepID         string
-	RunID          int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Executions     []*Execution
-	WorkflowData   *WorkflowData
-	ActivityData   *ActivityData
-	SideEffectData *SideEffectData
-	SagaData       *SagaData
-	Paused         bool
-	Resumable      bool
-	HandlerInfo    *HandlerInfo
-}
-
-// Execution represents a single execution attempt of an entity.
-type Execution struct {
-	ID                      int
-	EntityID                int
-	StartedAt               time.Time
-	CompletedAt             *time.Time
-	Status                  string // "Pending", "Running", etc.
-	Attempt                 int
-	Error                   string // Error message
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	WorkflowExecutionData   *WorkflowExecutionData
-	ActivityExecutionData   *ActivityExecutionData
-	SideEffectExecutionData *SideEffectExecutionData
-	SagaExecutionData       *SagaExecutionData
-}
-
-// Hierarchy tracks parent-child relationships between entities.
-type Hierarchy struct {
-	RunID             int
-	ParentEntityID    int
-	ChildEntityID     int
-	ParentExecutionID int
-	ChildExecutionID  int
-	ParentStepID      string
-	ChildStepID       string
-	ParentType        string
-	ChildType         string
-}
-
-// Version tracks entity versions.
-type Version struct {
-	ID       int
-	EntityID int                    // The Entity ID (workflow ID)
-	ChangeID string                 // The unique identifier for the code change
-	Version  int                    // The version
-	Data     map[string]interface{} // Additional data if needed
-}
-
-// Run represents a workflow execution group.
-type Run struct {
-	ID        int
-	Status    string // "Pending", "Running", "Completed", etc.
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Entities  []*Entity
-}
-
-// Data structures matching the ent schemas
-type WorkflowData struct {
-	Duration    string               `json:"duration,omitempty"`
-	Paused      bool                 `json:"paused"`
-	Resumable   bool                 `json:"resumable"`
-	RetryState  *RetryState          `json:"retry_state"`
-	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
-	Input       [][]byte             `json:"input,omitempty"`
-	RetryOf     *int                 `json:"retry_of,omitempty"`
-}
-
-type ActivityData struct {
-	Timeout      int64                `json:"timeout,omitempty"`
-	MaxAttempts  int                  `json:"max_attempts"`
-	ScheduledFor *time.Time           `json:"scheduled_for,omitempty"`
-	RetryPolicy  *retryPolicyInternal `json:"retry_policy"`
-	Input        [][]byte             `json:"input,omitempty"`
-	Output       [][]byte             `json:"output,omitempty"`
-}
-
-type SideEffectData struct {
-	Input       [][]byte             `json:"input,omitempty"`
-	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
-}
-
-type SagaData struct {
-	Compensating     bool                 `json:"compensating"`
-	CompensationData [][]byte             `json:"compensation_data,omitempty"`
-	RetryState       *RetryState          `json:"retry_state"`
-	RetryPolicy      *retryPolicyInternal `json:"retry_policy"`
-}
-
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
 	stepID            string
@@ -899,10 +992,10 @@ type WorkflowInstance struct {
 	orchestrator      *Orchestrator
 	workflowID        int
 	options           *WorkflowOptions
-	entity            *Entity
+	workflowEntity    *WorkflowEntity
 	entityID          int
 	executionID       int
-	execution         *Execution // Current execution
+	execution         *WorkflowExecution // Current execution
 	continueAsNew     *ContinueAsNewError
 	parentExecutionID int
 	parentEntityID    int
@@ -972,16 +1065,16 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
 		if wi.orchestrator.IsPaused() {
 			log.Printf("WorkflowInstance %s is paused", wi.stepID)
-			wi.entity.Status = string(StatusPaused)
-			wi.entity.Paused = true
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.workflowEntity.Status = string(StatusPaused)
+			wi.workflowEntity.Paused = true
+			wi.orchestrator.db.UpdateWorkflowEntity(wi.workflowEntity)
 			wi.fsm.Fire(TriggerPause)
 			return
 		}
 
 		// Create Execution without ID
-		execution := &Execution{
-			EntityID:  wi.entity.ID,
+		execution := &WorkflowExecution{
+			EntityID:  wi.workflowEntity.ID,
 			Attempt:   attempt,
 			Status:    string(StatusRunning),
 			StartedAt: time.Now(),
@@ -989,8 +1082,8 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 		}
 		// Add execution to database, which assigns the ID
-		execution = wi.orchestrator.db.AddExecution(execution)
-		wi.entity.Executions = append(wi.entity.Executions, execution)
+		execution = wi.orchestrator.db.AddWorkflowExecution(execution)
+		wi.workflowEntity.Executions = append(wi.workflowEntity.Executions, execution)
 		executionID := execution.ID
 		wi.executionID = executionID // Store execution ID
 		wi.execution = execution
@@ -1001,7 +1094,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			hierarchy := &Hierarchy{
 				RunID:             wi.orchestrator.runID,
 				ParentEntityID:    wi.parentEntityID,
-				ChildEntityID:     wi.entityID,
+				ChildEntityID:     wi.workflowEntity.ID,
 				ParentExecutionID: wi.parentExecutionID,
 				ChildExecutionID:  wi.executionID,
 				ParentStepID:      wi.parentStepID,
@@ -1012,13 +1105,13 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.AddHierarchy(hierarchy)
 		}
 
-		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entityID, executionID)
+		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.workflowEntity.ID, executionID)
 
 		err := wi.runWorkflow(execution)
 		if errors.Is(err, ErrPaused) {
-			wi.entity.Status = string(StatusPaused)
-			wi.entity.Paused = true
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.workflowEntity.Status = string(StatusPaused)
+			wi.workflowEntity.Paused = true
+			wi.orchestrator.db.UpdateWorkflowEntity(wi.workflowEntity)
 			wi.fsm.Fire(TriggerPause)
 			return
 		}
@@ -1027,9 +1120,9 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			execution.Status = string(StatusCompleted)
 			completedAt := time.Now()
 			execution.CompletedAt = &completedAt
-			wi.entity.Status = string(StatusCompleted)
-			wi.orchestrator.db.UpdateExecution(execution)
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.workflowEntity.Status = string(StatusCompleted)
+			wi.orchestrator.db.UpdateWorkflowExecution(execution)
+			wi.orchestrator.db.UpdateWorkflowEntity(wi.workflowEntity)
 			wi.fsm.Fire(TriggerComplete)
 			return
 		} else {
@@ -1038,15 +1131,15 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			execution.CompletedAt = &completedAt
 			execution.Error = err.Error()
 			wi.err = err
-			wi.orchestrator.db.UpdateExecution(execution)
+			wi.orchestrator.db.UpdateWorkflowExecution(execution)
 			if attempt < maxAttempts {
 				execution.Status = string(StatusRetried)
-				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.entityID, executionID, attempt+1, maxAttempts, initialInterval)
+				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.workflowEntity.ID, executionID, attempt+1, maxAttempts, initialInterval)
 				time.Sleep(initialInterval)
 			} else {
 				// Max attempts reached
-				wi.entity.Status = string(StatusFailed)
-				wi.orchestrator.db.UpdateEntity(wi.entity)
+				wi.workflowEntity.Status = string(StatusFailed)
+				wi.orchestrator.db.UpdateWorkflowEntity(wi.workflowEntity)
 				wi.fsm.Fire(TriggerFail)
 				return
 			}
@@ -1054,13 +1147,13 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	}
 }
 
-func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
-	log.Printf("WorkflowInstance %s (Entity ID: %d, Execution ID: %d) runWorkflow attempt %d", wi.stepID, wi.entityID, execution.ID, execution.Attempt)
+func (wi *WorkflowInstance) runWorkflow(execution *WorkflowExecution) error {
+	log.Printf("WorkflowInstance %s (Entity ID: %d, Execution ID: %d) runWorkflow attempt %d", wi.stepID, wi.workflowEntity.ID, execution.ID, execution.Attempt)
 
 	// Check if result already exists in the database
-	latestExecution := wi.orchestrator.db.GetLatestExecution(wi.entity.ID)
+	latestExecution := wi.orchestrator.db.GetLatestWorkflowExecution(wi.workflowEntity.ID)
 	if latestExecution != nil && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Output != nil {
-		log.Printf("Result found in database for entity ID: %d", wi.entity.ID)
+		log.Printf("Result found in database for entity ID: %d", wi.workflowEntity.ID)
 		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing outputs: %v", err)
@@ -1076,14 +1169,14 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	ctxWorkflow := &WorkflowContext{
 		orchestrator: wi.orchestrator,
 		ctx:          wi.ctx,
-		workflowID:   wi.entity.ID,
+		workflowID:   wi.workflowEntity.ID,
 		stepID:       wi.stepID,
 		options:      wi.options,
 		executionID:  wi.executionID,
 	}
 
 	// Convert inputs from serialization
-	inputs, err := convertInputsFromSerialization(handler, wi.entity.WorkflowData.Input)
+	inputs, err := convertInputsFromSerialization(handler, wi.workflowEntity.WorkflowData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
 		return err
@@ -1144,7 +1237,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 			// Update the execution with the execution data
 			wi.execution.WorkflowExecutionData = workflowExecutionData
-			wi.orchestrator.db.UpdateExecution(wi.execution)
+			wi.orchestrator.db.UpdateWorkflowExecution(wi.execution)
 
 			return wi.err
 		}
@@ -1175,14 +1268,14 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 		// Update the execution with the execution data
 		wi.execution.WorkflowExecutionData = workflowExecutionData
-		wi.orchestrator.db.UpdateExecution(wi.execution)
+		wi.orchestrator.db.UpdateWorkflowExecution(wi.execution)
 
 		return nil
 	}
 }
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.entityID)
+	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.workflowEntity.ID)
 	if wi.continueAsNew != nil {
 		// Handle ContinueAsNew
 		o := wi.orchestrator
@@ -1250,20 +1343,19 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			Input:       inputBytes,
 		}
 
-		// Create a new Entity without ID (database assigns it)
-		newEntity := &Entity{
-			StepID:       wi.entity.StepID, // Use the same stepID
+		// Create a new WorkflowEntity without ID (database assigns it)
+		newEntity := &WorkflowEntity{
+			StepID:       wi.workflowEntity.StepID, // Use the same stepID
 			HandlerName:  newHandler.HandlerName,
-			Type:         string(EntityTypeWorkflow),
 			Status:       string(StatusPending),
-			RunID:        wi.entity.RunID, // Share the same RunID
+			RunID:        wi.workflowEntity.RunID, // Share the same RunID
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 			WorkflowData: workflowData,
 		}
 		newEntity.HandlerInfo = &newHandler
 		// Add the entity to the database, which assigns the ID
-		newEntity = o.db.AddEntity(newEntity)
+		newEntity = o.db.AddWorkflowEntity(newEntity)
 
 		// Create a new WorkflowInstance
 		newInstance := &WorkflowInstance{
@@ -1274,7 +1366,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			orchestrator:      o,
 			workflowID:        newEntity.ID,
 			options:           wi.continueAsNew.Options,
-			entity:            newEntity,
+			workflowEntity:    newEntity,
 			entityID:          newEntity.ID,
 			parentExecutionID: wi.parentExecutionID,
 			parentEntityID:    wi.parentEntityID,
@@ -1314,7 +1406,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 }
 
 func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s (Entity ID: %d) onFailed called", wi.stepID, wi.entityID)
+	log.Printf("WorkflowInstance %s (Entity ID: %d) onFailed called", wi.stepID, wi.workflowEntity.ID)
 	if wi.future != nil {
 		wi.future.setError(wi.err)
 	}
@@ -1331,7 +1423,7 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 }
 
 func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error {
-	log.Printf("WorkflowInstance %s (Entity ID: %d) onPaused called", wi.stepID, wi.entityID)
+	log.Printf("WorkflowInstance %s (Entity ID: %d) onPaused called", wi.stepID, wi.workflowEntity.ID)
 	if wi.future != nil {
 		wi.future.setError(ErrPaused)
 	}
@@ -1351,10 +1443,10 @@ type ActivityInstance struct {
 	orchestrator      *Orchestrator
 	workflowID        int
 	options           *ActivityOptions
-	entity            *Entity
+	activityEntity    *ActivityEntity
 	entityID          int
 	executionID       int
-	execution         *Execution // Current execution
+	execution         *ActivityExecution // Current execution
 	parentExecutionID int
 	parentEntityID    int
 	parentStepID      string
@@ -1423,16 +1515,16 @@ func (ai *ActivityInstance) executeWithRetry() {
 	for attempt = 1; attempt <= maxAttempts; attempt++ {
 		if ai.orchestrator.IsPaused() {
 			log.Printf("ActivityInstance %s is paused", ai.stepID)
-			ai.entity.Status = string(StatusPaused)
-			ai.entity.Paused = true
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.activityEntity.Status = string(StatusPaused)
+			ai.activityEntity.Paused = true
+			ai.orchestrator.db.UpdateActivityEntity(ai.activityEntity)
 			ai.fsm.Fire(TriggerPause)
 			return
 		}
 
 		// Create Execution without ID
-		execution := &Execution{
-			EntityID:  ai.entity.ID,
+		execution := &ActivityExecution{
+			EntityID:  ai.activityEntity.ID,
 			Attempt:   attempt,
 			Status:    string(StatusRunning),
 			StartedAt: time.Now(),
@@ -1440,8 +1532,8 @@ func (ai *ActivityInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 		}
 		// Add execution to database, which assigns the ID
-		execution = ai.orchestrator.db.AddExecution(execution)
-		ai.entity.Executions = append(ai.entity.Executions, execution)
+		execution = ai.orchestrator.db.AddActivityExecution(execution)
+		ai.activityEntity.Executions = append(ai.activityEntity.Executions, execution)
 		executionID := execution.ID
 		ai.executionID = executionID // Store execution ID
 		ai.execution = execution
@@ -1452,7 +1544,7 @@ func (ai *ActivityInstance) executeWithRetry() {
 			hierarchy := &Hierarchy{
 				RunID:             ai.orchestrator.runID,
 				ParentEntityID:    ai.parentEntityID,
-				ChildEntityID:     ai.entityID,
+				ChildEntityID:     ai.activityEntity.ID,
 				ParentExecutionID: ai.parentExecutionID,
 				ChildExecutionID:  ai.executionID,
 				ParentStepID:      ai.parentStepID,
@@ -1463,13 +1555,13 @@ func (ai *ActivityInstance) executeWithRetry() {
 			ai.orchestrator.db.AddHierarchy(hierarchy)
 		}
 
-		log.Printf("Executing activity %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.entityID, executionID)
+		log.Printf("Executing activity %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.activityEntity.ID, executionID)
 
 		err := ai.runActivity(execution)
 		if errors.Is(err, ErrPaused) {
-			ai.entity.Status = string(StatusPaused)
-			ai.entity.Paused = true
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.activityEntity.Status = string(StatusPaused)
+			ai.activityEntity.Paused = true
+			ai.orchestrator.db.UpdateActivityEntity(ai.activityEntity)
 			ai.fsm.Fire(TriggerPause)
 			return
 		}
@@ -1478,9 +1570,9 @@ func (ai *ActivityInstance) executeWithRetry() {
 			execution.Status = string(StatusCompleted)
 			completedAt := time.Now()
 			execution.CompletedAt = &completedAt
-			ai.entity.Status = string(StatusCompleted)
-			ai.orchestrator.db.UpdateExecution(execution)
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.activityEntity.Status = string(StatusCompleted)
+			ai.orchestrator.db.UpdateActivityExecution(execution)
+			ai.orchestrator.db.UpdateActivityEntity(ai.activityEntity)
 			ai.fsm.Fire(TriggerComplete)
 			return
 		} else {
@@ -1489,15 +1581,15 @@ func (ai *ActivityInstance) executeWithRetry() {
 			execution.CompletedAt = &completedAt
 			execution.Error = err.Error()
 			ai.err = err
-			ai.orchestrator.db.UpdateExecution(execution)
+			ai.orchestrator.db.UpdateActivityExecution(execution)
 			if attempt < maxAttempts {
 				execution.Status = string(StatusRetried)
-				log.Printf("Retrying activity %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", ai.stepID, ai.entityID, executionID, attempt+1, maxAttempts, initialInterval)
+				log.Printf("Retrying activity %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", ai.stepID, ai.activityEntity.ID, executionID, attempt+1, maxAttempts, initialInterval)
 				time.Sleep(initialInterval)
 			} else {
 				// Max attempts reached
-				ai.entity.Status = string(StatusFailed)
-				ai.orchestrator.db.UpdateEntity(ai.entity)
+				ai.activityEntity.Status = string(StatusFailed)
+				ai.orchestrator.db.UpdateActivityEntity(ai.activityEntity)
 				ai.fsm.Fire(TriggerFail)
 				return
 			}
@@ -1505,13 +1597,13 @@ func (ai *ActivityInstance) executeWithRetry() {
 	}
 }
 
-func (ai *ActivityInstance) runActivity(execution *Execution) error {
-	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d) runActivity attempt %d", ai.stepID, ai.entityID, execution.ID, execution.Attempt)
+func (ai *ActivityInstance) runActivity(execution *ActivityExecution) error {
+	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d) runActivity attempt %d", ai.stepID, ai.activityEntity.ID, execution.ID, execution.Attempt)
 
 	// Check if result already exists in the database
-	latestExecution := ai.orchestrator.db.GetLatestExecution(ai.entity.ID)
+	latestExecution := ai.orchestrator.db.GetLatestActivityExecution(ai.activityEntity.ID)
 	if latestExecution != nil && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Output != nil {
-		log.Printf("Result found in database for entity ID: %d", ai.entity.ID)
+		log.Printf("Result found in database for entity ID: %d", ai.activityEntity.ID)
 		outputs, err := convertOutputsFromSerialization(ai.handler, latestExecution.ActivityExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing outputs: %v", err)
@@ -1533,7 +1625,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 	}()
 
 	// Convert inputs from serialization
-	inputs, err := convertInputsFromSerialization(handler, ai.entity.ActivityData.Input)
+	inputs, err := convertInputsFromSerialization(handler, ai.activityEntity.ActivityData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
 		return err
@@ -1577,7 +1669,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 
 		// Update the execution with the execution data
 		ai.execution.ActivityExecutionData = activityExecutionData
-		ai.orchestrator.db.UpdateExecution(ai.execution)
+		ai.orchestrator.db.UpdateActivityExecution(ai.execution)
 
 		return ai.err
 	} else {
@@ -1605,14 +1697,14 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 
 		// Update the execution with the execution data
 		ai.execution.ActivityExecutionData = activityExecutionData
-		ai.orchestrator.db.UpdateExecution(ai.execution)
+		ai.orchestrator.db.UpdateActivityExecution(ai.execution)
 
 		return nil
 	}
 }
 
 func (ai *ActivityInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	log.Printf("ActivityInstance %s (Entity ID: %d) onCompleted called", ai.stepID, ai.entityID)
+	log.Printf("ActivityInstance %s (Entity ID: %d) onCompleted called", ai.stepID, ai.activityEntity.ID)
 	if ai.future != nil {
 		ai.future.setResult(ai.results)
 	}
@@ -1620,7 +1712,7 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, _ ...interface{}) err
 }
 
 func (ai *ActivityInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	log.Printf("ActivityInstance %s (Entity ID: %d) onFailed called", ai.stepID, ai.entityID)
+	log.Printf("ActivityInstance %s (Entity ID: %d) onFailed called", ai.stepID, ai.activityEntity.ID)
 	if ai.future != nil {
 		ai.future.setError(ai.err)
 	}
@@ -1628,7 +1720,7 @@ func (ai *ActivityInstance) onFailed(_ context.Context, _ ...interface{}) error 
 }
 
 func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error {
-	log.Printf("ActivityInstance %s (Entity ID: %d) onPaused called", ai.stepID, ai.entityID)
+	log.Printf("ActivityInstance %s (Entity ID: %d) onPaused called", ai.stepID, ai.activityEntity.ID)
 	if ai.future != nil {
 		ai.future.setError(ErrPaused)
 	}
@@ -1646,17 +1738,17 @@ type SideEffectInstance struct {
 	ctx               context.Context
 	orchestrator      *Orchestrator
 	workflowID        int
-	entity            *Entity
 	entityID          int
 	executionID       int
 	options           *WorkflowOptions
-	execution         *Execution // Current execution
+	execution         *SideEffectExecution // Current execution
 	returnTypes       []reflect.Type
 	handlerName       string
 	handler           HandlerInfo
 	parentExecutionID int
 	parentEntityID    int
 	parentStepID      string
+	sideEffectEntity  *SideEffectEntity
 }
 
 func (sei *SideEffectInstance) Start() {
@@ -1696,8 +1788,8 @@ func (sei *SideEffectInstance) executeWithRetry() {
 	var retryPolicy *RetryPolicy
 
 	// Get the retry policy from the entity data
-	if sei.entity.SideEffectData != nil && sei.entity.SideEffectData.RetryPolicy != nil {
-		rp := sei.entity.SideEffectData.RetryPolicy
+	if sei.sideEffectEntity.SideEffectData != nil && sei.sideEffectEntity.SideEffectData.RetryPolicy != nil {
+		rp := sei.sideEffectEntity.SideEffectData.RetryPolicy
 		retryPolicy = &RetryPolicy{
 			MaxAttempts:        rp.MaxAttempts,
 			InitialInterval:    time.Duration(rp.InitialInterval),
@@ -1733,16 +1825,16 @@ func (sei *SideEffectInstance) executeWithRetry() {
 	for attempt = 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
 		if sei.orchestrator.IsPaused() {
 			log.Printf("SideEffectInstance %s is paused", sei.stepID)
-			sei.entity.Status = string(StatusPaused)
-			sei.entity.Paused = true
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.sideEffectEntity.Status = string(StatusPaused)
+			sei.sideEffectEntity.Paused = true
+			sei.orchestrator.db.UpdateSideEffectEntity(sei.sideEffectEntity)
 			sei.fsm.Fire(TriggerPause)
 			return
 		}
 
 		// Create Execution without ID
-		execution := &Execution{
-			EntityID:  sei.entity.ID,
+		execution := &SideEffectExecution{
+			EntityID:  sei.sideEffectEntity.ID,
 			Attempt:   attempt,
 			Status:    string(StatusRunning),
 			StartedAt: time.Now(),
@@ -1750,8 +1842,8 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 		}
 		// Add execution to database, which assigns the ID
-		execution = sei.orchestrator.db.AddExecution(execution)
-		sei.entity.Executions = append(sei.entity.Executions, execution)
+		execution = sei.orchestrator.db.AddSideEffectExecution(execution)
+		sei.sideEffectEntity.Executions = append(sei.sideEffectEntity.Executions, execution)
 		executionID := execution.ID
 		sei.executionID = executionID // Store execution ID
 		sei.execution = execution
@@ -1762,7 +1854,7 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			hierarchy := &Hierarchy{
 				RunID:             sei.orchestrator.runID,
 				ParentEntityID:    sei.parentEntityID,
-				ChildEntityID:     sei.entityID,
+				ChildEntityID:     sei.sideEffectEntity.ID,
 				ParentExecutionID: sei.parentExecutionID,
 				ChildExecutionID:  sei.executionID,
 				ParentStepID:      sei.parentStepID,
@@ -1773,13 +1865,13 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			sei.orchestrator.db.AddHierarchy(hierarchy)
 		}
 
-		log.Printf("Executing side effect %s (Entity ID: %d, Execution ID: %d)", sei.stepID, sei.entityID, executionID)
+		log.Printf("Executing side effect %s (Entity ID: %d, Execution ID: %d)", sei.stepID, sei.sideEffectEntity.ID, executionID)
 
 		err := sei.runSideEffect(execution)
 		if errors.Is(err, ErrPaused) {
-			sei.entity.Status = string(StatusPaused)
-			sei.entity.Paused = true
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.sideEffectEntity.Status = string(StatusPaused)
+			sei.sideEffectEntity.Paused = true
+			sei.orchestrator.db.UpdateSideEffectEntity(sei.sideEffectEntity)
 			sei.fsm.Fire(TriggerPause)
 			return
 		}
@@ -1788,9 +1880,9 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			execution.Status = string(StatusCompleted)
 			completedAt := time.Now()
 			execution.CompletedAt = &completedAt
-			sei.entity.Status = string(StatusCompleted)
-			sei.orchestrator.db.UpdateExecution(execution)
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.sideEffectEntity.Status = string(StatusCompleted)
+			sei.orchestrator.db.UpdateSideEffectExecution(execution)
+			sei.orchestrator.db.UpdateSideEffectEntity(sei.sideEffectEntity)
 			sei.fsm.Fire(TriggerComplete)
 			return
 		} else {
@@ -1799,15 +1891,15 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			execution.CompletedAt = &completedAt
 			execution.Error = err.Error()
 			sei.err = err
-			sei.orchestrator.db.UpdateExecution(execution)
+			sei.orchestrator.db.UpdateSideEffectExecution(execution)
 			if attempt < retryPolicy.MaxAttempts {
 				execution.Status = string(StatusRetried)
-				log.Printf("Retrying side effect %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", sei.stepID, sei.entityID, executionID, attempt+1, retryPolicy.MaxAttempts, retryPolicy.InitialInterval)
+				log.Printf("Retrying side effect %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", sei.stepID, sei.sideEffectEntity.ID, executionID, attempt+1, retryPolicy.MaxAttempts, retryPolicy.InitialInterval)
 				time.Sleep(retryPolicy.InitialInterval)
 			} else {
 				// Max attempts reached
-				sei.entity.Status = string(StatusFailed)
-				sei.orchestrator.db.UpdateEntity(sei.entity)
+				sei.sideEffectEntity.Status = string(StatusFailed)
+				sei.orchestrator.db.UpdateSideEffectEntity(sei.sideEffectEntity)
 				sei.fsm.Fire(TriggerFail)
 				return
 			}
@@ -1815,13 +1907,13 @@ func (sei *SideEffectInstance) executeWithRetry() {
 	}
 }
 
-func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
-	log.Printf("SideEffectInstance %s (Entity ID: %d, Execution ID: %d) runSideEffect attempt %d", sei.stepID, sei.entityID, execution.ID, execution.Attempt)
+func (sei *SideEffectInstance) runSideEffect(execution *SideEffectExecution) error {
+	log.Printf("SideEffectInstance %s (Entity ID: %d, Execution ID: %d) runSideEffect attempt %d", sei.stepID, sei.sideEffectEntity.ID, execution.ID, execution.Attempt)
 
 	// Check if result already exists in the database
-	latestExecution := sei.orchestrator.db.GetLatestExecution(sei.entity.ID)
+	latestExecution := sei.orchestrator.db.GetLatestSideEffectExecution(sei.sideEffectEntity.ID)
 	if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
-		log.Printf("Result found in database for entity ID: %d", sei.entity.ID)
+		log.Printf("Result found in database for entity ID: %d", sei.sideEffectEntity.ID)
 		outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing side effect result: %v", err)
@@ -1882,13 +1974,13 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 
 	// Update the execution with the execution data
 	sei.execution.SideEffectExecutionData = sideEffectExecutionData
-	sei.orchestrator.db.UpdateExecution(sei.execution)
+	sei.orchestrator.db.UpdateSideEffectExecution(sei.execution)
 
 	return nil
 }
 
 func (sei *SideEffectInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	log.Printf("SideEffectInstance %s (Entity ID: %d) onCompleted called", sei.stepID, sei.entityID)
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onCompleted called", sei.stepID, sei.sideEffectEntity.ID)
 	if sei.future != nil {
 		sei.future.setResult(sei.results)
 	}
@@ -1896,7 +1988,7 @@ func (sei *SideEffectInstance) onCompleted(_ context.Context, _ ...interface{}) 
 }
 
 func (sei *SideEffectInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	log.Printf("SideEffectInstance %s (Entity ID: %d) onFailed called", sei.stepID, sei.entityID)
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onFailed called", sei.stepID, sei.sideEffectEntity.ID)
 	if sei.future != nil {
 		sei.future.setError(sei.err)
 	}
@@ -1904,11 +1996,19 @@ func (sei *SideEffectInstance) onFailed(_ context.Context, _ ...interface{}) err
 }
 
 func (sei *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
-	log.Printf("SideEffectInstance %s (Entity ID: %d) onPaused called", sei.stepID, sei.entityID)
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onPaused called", sei.stepID, sei.sideEffectEntity.ID)
 	if sei.future != nil {
 		sei.future.setError(ErrPaused)
 	}
 	return nil
+}
+
+type TransactionContext struct {
+	ctx context.Context
+}
+
+type CompensationContext struct {
+	ctx context.Context
 }
 
 // Saga types and implementations
@@ -2072,19 +2172,19 @@ func (o *Orchestrator) executeSaga(ctx *WorkflowContext, stepID string, saga *Sa
 		done: make(chan struct{}),
 	}
 
-	// Create a new Entity for the Saga
-	entity := &Entity{
+	// Create a new SagaEntity
+	entity := &SagaEntity{
 		StepID:    stepID,
-		Type:      string(EntityTypeSaga),
 		Status:    string(StatusPending),
 		RunID:     o.runID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		SagaData:  &SagaData{},
 	}
+	entity.HandlerInfo = saga.HandlerInfo
 
 	// Add the entity to the database
-	entity = o.db.AddEntity(entity)
+	entity = o.db.AddSagaEntity(entity)
 
 	// Prepare to create the SagaInstance
 	sagaInstance := &SagaInstance{
@@ -2107,14 +2207,6 @@ func (o *Orchestrator) executeSaga(ctx *WorkflowContext, stepID string, saga *Sa
 	return sagaInfo
 }
 
-type TransactionContext struct {
-	ctx context.Context
-}
-
-type CompensationContext struct {
-	ctx context.Context
-}
-
 type SagaInstance struct {
 	saga              *SagaDefinition
 	ctx               context.Context
@@ -2122,14 +2214,14 @@ type SagaInstance struct {
 	workflowID        int
 	stepID            string
 	sagaInfo          *SagaInfo
-	entity            *Entity
+	entity            *SagaEntity
 	fsm               *stateless.StateMachine
 	err               error
 	currentStep       int
 	compensations     []int // Indices of steps to compensate
 	mu                sync.Mutex
 	executionID       int
-	execution         *Execution
+	execution         *SagaExecution
 	parentExecutionID int
 	parentEntityID    int
 	parentStepID      string
@@ -2164,7 +2256,7 @@ func (si *SagaInstance) Start() {
 
 func (si *SagaInstance) executeSaga(_ context.Context, _ ...interface{}) error {
 	// Create Execution without ID
-	execution := &Execution{
+	execution := &SagaExecution{
 		EntityID:  si.entity.ID,
 		Attempt:   1,
 		Status:    string(StatusRunning),
@@ -2173,7 +2265,7 @@ func (si *SagaInstance) executeSaga(_ context.Context, _ ...interface{}) error {
 		UpdatedAt: time.Now(),
 	}
 	// Add execution to database, which assigns the ID
-	execution = si.orchestrator.db.AddExecution(execution)
+	execution = si.orchestrator.db.AddSagaExecution(execution)
 	si.entity.Executions = append(si.entity.Executions, execution)
 	executionID := execution.ID
 	si.executionID = executionID // Store execution ID
@@ -2259,13 +2351,13 @@ func (si *SagaInstance) executeCompensations() {
 func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	// Update entity status to Completed
 	si.entity.Status = string(StatusCompleted)
-	si.orchestrator.db.UpdateEntity(si.entity)
+	si.orchestrator.db.UpdateSagaEntity(si.entity)
 
 	// Update execution status to Completed
 	si.execution.Status = string(StatusCompleted)
 	completedAt := time.Now()
 	si.execution.CompletedAt = &completedAt
-	si.orchestrator.db.UpdateExecution(si.execution)
+	si.orchestrator.db.UpdateSagaExecution(si.execution)
 
 	// Notify SagaInfo
 	si.sagaInfo.err = nil
@@ -2277,13 +2369,13 @@ func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	// Update entity status to Failed
 	si.entity.Status = string(StatusFailed)
-	si.orchestrator.db.UpdateEntity(si.entity)
+	si.orchestrator.db.UpdateSagaEntity(si.entity)
 
 	// Update execution status to Failed
 	si.execution.Status = string(StatusFailed)
 	completedAt := time.Now()
 	si.execution.CompletedAt = &completedAt
-	si.orchestrator.db.UpdateExecution(si.execution)
+	si.orchestrator.db.UpdateSagaExecution(si.execution)
 
 	// Set the error in SagaInfo
 	if si.err != nil {
@@ -2293,10 +2385,10 @@ func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	}
 
 	// Mark parent Workflow as Failed
-	parentEntity := si.orchestrator.db.GetEntity(si.workflowID)
+	parentEntity := si.orchestrator.db.GetWorkflowEntity(si.workflowID)
 	if parentEntity != nil {
 		parentEntity.Status = string(StatusFailed)
-		si.orchestrator.db.UpdateEntity(parentEntity)
+		si.orchestrator.db.UpdateWorkflowEntity(parentEntity)
 	}
 
 	close(si.sagaInfo.done)
@@ -2322,52 +2414,109 @@ type Database interface {
 	GetRun(id int) *Run
 	UpdateRun(run *Run)
 
-	// Entity methods
-	AddEntity(entity *Entity) *Entity
-	GetEntity(id int) *Entity
-	UpdateEntity(entity *Entity)
-	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) *Entity
-	GetChildEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *Entity
-
-	// Execution methods
-	AddExecution(execution *Execution) *Execution
-	GetExecution(id int) *Execution
-	UpdateExecution(execution *Execution)
-	GetLatestExecution(entityID int) *Execution
+	// Version methods
+	GetVersion(entityID int, changeID string) *Version
+	SetVersion(version *Version) *Version
 
 	// Hierarchy methods
 	AddHierarchy(hierarchy *Hierarchy)
 	GetHierarchy(parentID, childID int) *Hierarchy
 
-	// Version methods
-	GetVersion(entityID int, changeID string) *Version
-	SetVersion(version *Version) *Version
+	// WorkflowEntity methods
+	AddWorkflowEntity(entity *WorkflowEntity) *WorkflowEntity
+	GetWorkflowEntity(id int) *WorkflowEntity
+	UpdateWorkflowEntity(entity *WorkflowEntity)
+	GetWorkflowEntityByWorkflowIDAndStepID(workflowID int, stepID string) *WorkflowEntity
+	GetChildWorkflowEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *WorkflowEntity
+
+	// ActivityEntity methods
+	AddActivityEntity(entity *ActivityEntity) *ActivityEntity
+	GetActivityEntity(id int) *ActivityEntity
+	UpdateActivityEntity(entity *ActivityEntity)
+	GetActivityEntityByWorkflowIDAndStepID(workflowID int, stepID string) *ActivityEntity
+	GetChildActivityEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *ActivityEntity
+
+	// SideEffectEntity methods
+	AddSideEffectEntity(entity *SideEffectEntity) *SideEffectEntity
+	GetSideEffectEntity(id int) *SideEffectEntity
+	UpdateSideEffectEntity(entity *SideEffectEntity)
+	GetSideEffectEntityByWorkflowIDAndStepID(workflowID int, stepID string) *SideEffectEntity
+	GetChildSideEffectEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *SideEffectEntity
+
+	// SagaEntity methods
+	AddSagaEntity(entity *SagaEntity) *SagaEntity
+	GetSagaEntity(id int) *SagaEntity
+	UpdateSagaEntity(entity *SagaEntity)
+	GetSagaEntityByWorkflowIDAndStepID(workflowID int, stepID string) *SagaEntity
+	GetChildSagaEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *SagaEntity
+
+	// WorkflowExecution methods
+	AddWorkflowExecution(execution *WorkflowExecution) *WorkflowExecution
+	GetWorkflowExecution(id int) *WorkflowExecution
+	UpdateWorkflowExecution(execution *WorkflowExecution)
+	GetLatestWorkflowExecution(entityID int) *WorkflowExecution
+
+	// ActivityExecution methods
+	AddActivityExecution(execution *ActivityExecution) *ActivityExecution
+	GetActivityExecution(id int) *ActivityExecution
+	UpdateActivityExecution(execution *ActivityExecution)
+	GetLatestActivityExecution(entityID int) *ActivityExecution
+
+	// SideEffectExecution methods
+	AddSideEffectExecution(execution *SideEffectExecution) *SideEffectExecution
+	GetSideEffectExecution(id int) *SideEffectExecution
+	UpdateSideEffectExecution(execution *SideEffectExecution)
+	GetLatestSideEffectExecution(entityID int) *SideEffectExecution
+
+	// SagaExecution methods
+	AddSagaExecution(execution *SagaExecution) *SagaExecution
+	GetSagaExecution(id int) *SagaExecution
+	UpdateSagaExecution(execution *SagaExecution)
+	GetLatestSagaExecution(entityID int) *SagaExecution
 }
 
 // DefaultDatabase is an in-memory implementation of Database.
 type DefaultDatabase struct {
-	runs        map[int]*Run
-	entities    map[int]*Entity
-	executions  map[int]*Execution
-	versions    map[int]*Version
-	hierarchies []*Hierarchy
-	mu          sync.Mutex
+	runs                 map[int]*Run
+	versions             map[int]*Version
+	hierarchies          []*Hierarchy
+	workflowEntities     map[int]*WorkflowEntity
+	activityEntities     map[int]*ActivityEntity
+	sideEffectEntities   map[int]*SideEffectEntity
+	sagaEntities         map[int]*SagaEntity
+	workflowExecutions   map[int]*WorkflowExecution
+	activityExecutions   map[int]*ActivityExecution
+	sideEffectExecutions map[int]*SideEffectExecution
+	sagaExecutions       map[int]*SagaExecution
+	mu                   sync.Mutex
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
 	return &DefaultDatabase{
-		runs:       make(map[int]*Run),
-		entities:   make(map[int]*Entity),
-		executions: make(map[int]*Execution),
-		versions:   make(map[int]*Version),
+		runs:                 make(map[int]*Run),
+		versions:             make(map[int]*Version),
+		workflowEntities:     make(map[int]*WorkflowEntity),
+		activityEntities:     make(map[int]*ActivityEntity),
+		sideEffectEntities:   make(map[int]*SideEffectEntity),
+		sagaEntities:         make(map[int]*SagaEntity),
+		workflowExecutions:   make(map[int]*WorkflowExecution),
+		activityExecutions:   make(map[int]*ActivityExecution),
+		sideEffectExecutions: make(map[int]*SideEffectExecution),
+		sagaExecutions:       make(map[int]*SagaExecution),
 	}
 }
 
 var (
-	runIDCounter       int64
-	entityIDCounter    int64
-	executionIDCounter int64
-	versionIDCounter   int64
+	runIDCounter                 int64
+	versionIDCounter             int64
+	workflowEntityIDCounter      int64
+	activityEntityIDCounter      int64
+	sideEffectEntityIDCounter    int64
+	sagaEntityIDCounter          int64
+	workflowExecutionIDCounter   int64
+	activityExecutionIDCounter   int64
+	sideEffectExecutionIDCounter int64
+	sagaExecutionIDCounter       int64
 )
 
 func (db *DefaultDatabase) AddRun(run *Run) *Run {
@@ -2391,108 +2540,6 @@ func (db *DefaultDatabase) UpdateRun(run *Run) {
 	db.runs[run.ID] = run
 }
 
-func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
-	entity.ID = entityID
-	db.entities[entity.ID] = entity
-
-	// Add the entity to its Run
-	run := db.runs[entity.RunID]
-	if run != nil {
-		run.Entities = append(run.Entities, entity)
-	}
-	return entity
-}
-
-func (db *DefaultDatabase) GetEntity(id int) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.entities[id]
-}
-
-func (db *DefaultDatabase) UpdateEntity(entity *Entity) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.entities[entity.ID] = entity
-}
-
-func (db *DefaultDatabase) AddExecution(execution *Execution) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	executionID := int(atomic.AddInt64(&executionIDCounter, 1))
-	execution.ID = executionID
-	db.executions[execution.ID] = execution
-	return execution
-}
-
-func (db *DefaultDatabase) GetExecution(id int) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.executions[id]
-}
-
-func (db *DefaultDatabase) UpdateExecution(execution *Execution) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.executions[execution.ID] = execution
-}
-
-func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.hierarchies = append(db.hierarchies, hierarchy)
-}
-
-func (db *DefaultDatabase) GetHierarchy(parentID, childID int) *Hierarchy {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, h := range db.hierarchies {
-		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
-			return h
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) GetLatestExecution(entityID int) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	var latestExecution *Execution
-	for _, execution := range db.executions {
-		if execution.EntityID == entityID {
-			if latestExecution == nil || execution.ID > latestExecution.ID {
-				latestExecution = execution
-			}
-		}
-	}
-	return latestExecution
-}
-
-func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, entity := range db.entities {
-		if entity.ID == workflowID && entity.StepID == stepID {
-			return entity
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, hierarchy := range db.hierarchies {
-		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
-			childEntityID := hierarchy.ChildEntityID
-			return db.entities[childEntityID]
-		}
-	}
-	return nil
-}
-
 func (db *DefaultDatabase) GetVersion(entityID int, changeID string) *Version {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -2513,14 +2560,379 @@ func (db *DefaultDatabase) SetVersion(version *Version) *Version {
 	return version
 }
 
+func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.hierarchies = append(db.hierarchies, hierarchy)
+}
+
+func (db *DefaultDatabase) GetHierarchy(parentID, childID int) *Hierarchy {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, h := range db.hierarchies {
+		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
+			return h
+		}
+	}
+	return nil
+}
+
+// WorkflowEntity methods
+func (db *DefaultDatabase) AddWorkflowEntity(entity *WorkflowEntity) *WorkflowEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entityID := int(atomic.AddInt64(&workflowEntityIDCounter, 1))
+	entity.ID = entityID
+	db.workflowEntities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run := db.runs[entity.RunID]
+	if run != nil {
+		run.Entities = append(run.Entities, entity)
+	}
+	return entity
+}
+
+func (db *DefaultDatabase) GetWorkflowEntity(id int) *WorkflowEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.workflowEntities[id]
+}
+
+func (db *DefaultDatabase) UpdateWorkflowEntity(entity *WorkflowEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.workflowEntities[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetChildWorkflowEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *WorkflowEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
+			childEntityID := hierarchy.ChildEntityID
+			if entity, exists := db.workflowEntities[childEntityID]; exists {
+				return entity
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) GetWorkflowEntityByWorkflowIDAndStepID(workflowID int, stepID string) *WorkflowEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if entity, exists := db.workflowEntities[workflowID]; exists && entity.StepID == stepID {
+		return entity
+	}
+	return nil
+}
+
+// ActivityEntity methods
+func (db *DefaultDatabase) AddActivityEntity(entity *ActivityEntity) *ActivityEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entityID := int(atomic.AddInt64(&activityEntityIDCounter, 1))
+	entity.ID = entityID
+	db.activityEntities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run := db.runs[entity.RunID]
+	if run != nil {
+		run.Entities = append(run.Entities, entity)
+	}
+	return entity
+}
+
+func (db *DefaultDatabase) GetActivityEntity(id int) *ActivityEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.activityEntities[id]
+}
+
+func (db *DefaultDatabase) UpdateActivityEntity(entity *ActivityEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.activityEntities[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetChildActivityEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *ActivityEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
+			childEntityID := hierarchy.ChildEntityID
+			if entity, exists := db.activityEntities[childEntityID]; exists {
+				return entity
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) GetActivityEntityByWorkflowIDAndStepID(workflowID int, stepID string) *ActivityEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if entity, exists := db.activityEntities[workflowID]; exists && entity.StepID == stepID {
+		return entity
+	}
+	return nil
+}
+
+// SideEffectEntity methods
+func (db *DefaultDatabase) AddSideEffectEntity(entity *SideEffectEntity) *SideEffectEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entityID := int(atomic.AddInt64(&sideEffectEntityIDCounter, 1))
+	entity.ID = entityID
+	db.sideEffectEntities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run := db.runs[entity.RunID]
+	if run != nil {
+		run.Entities = append(run.Entities, entity)
+	}
+	return entity
+}
+
+func (db *DefaultDatabase) GetSideEffectEntity(id int) *SideEffectEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.sideEffectEntities[id]
+}
+
+func (db *DefaultDatabase) UpdateSideEffectEntity(entity *SideEffectEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.sideEffectEntities[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetChildSideEffectEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *SideEffectEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
+			childEntityID := hierarchy.ChildEntityID
+			if entity, exists := db.sideEffectEntities[childEntityID]; exists {
+				return entity
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) GetSideEffectEntityByWorkflowIDAndStepID(workflowID int, stepID string) *SideEffectEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if entity, exists := db.sideEffectEntities[workflowID]; exists && entity.StepID == stepID {
+		return entity
+	}
+	return nil
+}
+
+// SagaEntity methods
+func (db *DefaultDatabase) AddSagaEntity(entity *SagaEntity) *SagaEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entityID := int(atomic.AddInt64(&sagaEntityIDCounter, 1))
+	entity.ID = entityID
+	db.sagaEntities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run := db.runs[entity.RunID]
+	if run != nil {
+		run.Entities = append(run.Entities, entity)
+	}
+	return entity
+}
+
+func (db *DefaultDatabase) GetSagaEntity(id int) *SagaEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.sagaEntities[id]
+}
+
+func (db *DefaultDatabase) UpdateSagaEntity(entity *SagaEntity) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.sagaEntities[entity.ID] = entity
+}
+
+func (db *DefaultDatabase) GetChildSagaEntityByParentEntityIDAndStepID(parentEntityID int, stepID string) *SagaEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
+			childEntityID := hierarchy.ChildEntityID
+			if entity, exists := db.sagaEntities[childEntityID]; exists {
+				return entity
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) GetSagaEntityByWorkflowIDAndStepID(workflowID int, stepID string) *SagaEntity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if entity, exists := db.sagaEntities[workflowID]; exists && entity.StepID == stepID {
+		return entity
+	}
+	return nil
+}
+
+// WorkflowExecution methods
+func (db *DefaultDatabase) AddWorkflowExecution(execution *WorkflowExecution) *WorkflowExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	executionID := int(atomic.AddInt64(&workflowExecutionIDCounter, 1))
+	execution.ID = executionID
+	db.workflowExecutions[execution.ID] = execution
+	return execution
+}
+
+func (db *DefaultDatabase) GetWorkflowExecution(id int) *WorkflowExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.workflowExecutions[id]
+}
+
+func (db *DefaultDatabase) UpdateWorkflowExecution(execution *WorkflowExecution) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.workflowExecutions[execution.ID] = execution
+}
+
+func (db *DefaultDatabase) GetLatestWorkflowExecution(entityID int) *WorkflowExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var latestExecution *WorkflowExecution
+	for _, execution := range db.workflowExecutions {
+		if execution.EntityID == entityID {
+			if latestExecution == nil || execution.ID > latestExecution.ID {
+				latestExecution = execution
+			}
+		}
+	}
+	return latestExecution
+}
+
+// ActivityExecution methods
+func (db *DefaultDatabase) AddActivityExecution(execution *ActivityExecution) *ActivityExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	executionID := int(atomic.AddInt64(&activityExecutionIDCounter, 1))
+	execution.ID = executionID
+	db.activityExecutions[execution.ID] = execution
+	return execution
+}
+
+func (db *DefaultDatabase) GetActivityExecution(id int) *ActivityExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.activityExecutions[id]
+}
+
+func (db *DefaultDatabase) UpdateActivityExecution(execution *ActivityExecution) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.activityExecutions[execution.ID] = execution
+}
+
+func (db *DefaultDatabase) GetLatestActivityExecution(entityID int) *ActivityExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var latestExecution *ActivityExecution
+	for _, execution := range db.activityExecutions {
+		if execution.EntityID == entityID {
+			if latestExecution == nil || execution.ID > latestExecution.ID {
+				latestExecution = execution
+			}
+		}
+	}
+	return latestExecution
+}
+
+// SideEffectExecution methods
+func (db *DefaultDatabase) AddSideEffectExecution(execution *SideEffectExecution) *SideEffectExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	executionID := int(atomic.AddInt64(&sideEffectExecutionIDCounter, 1))
+	execution.ID = executionID
+	db.sideEffectExecutions[execution.ID] = execution
+	return execution
+}
+
+func (db *DefaultDatabase) GetSideEffectExecution(id int) *SideEffectExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.sideEffectExecutions[id]
+}
+
+func (db *DefaultDatabase) UpdateSideEffectExecution(execution *SideEffectExecution) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.sideEffectExecutions[execution.ID] = execution
+}
+
+func (db *DefaultDatabase) GetLatestSideEffectExecution(entityID int) *SideEffectExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var latestExecution *SideEffectExecution
+	for _, execution := range db.sideEffectExecutions {
+		if execution.EntityID == entityID {
+			if latestExecution == nil || execution.ID > latestExecution.ID {
+				latestExecution = execution
+			}
+		}
+	}
+	return latestExecution
+}
+
+// SagaExecution methods
+func (db *DefaultDatabase) AddSagaExecution(execution *SagaExecution) *SagaExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	executionID := int(atomic.AddInt64(&sagaExecutionIDCounter, 1))
+	execution.ID = executionID
+	db.sagaExecutions[execution.ID] = execution
+	return execution
+}
+
+func (db *DefaultDatabase) GetSagaExecution(id int) *SagaExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.sagaExecutions[id]
+}
+
+func (db *DefaultDatabase) UpdateSagaExecution(execution *SagaExecution) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.sagaExecutions[execution.ID] = execution
+}
+
+func (db *DefaultDatabase) GetLatestSagaExecution(entityID int) *SagaExecution {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var latestExecution *SagaExecution
+	for _, execution := range db.sagaExecutions {
+		if execution.EntityID == entityID {
+			if latestExecution == nil || execution.ID > latestExecution.ID {
+				latestExecution = execution
+			}
+		}
+	}
+	return latestExecution
+}
+
 // Clear removes all Runs that are 'Completed' and their associated data.
 func (db *DefaultDatabase) Clear() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	runsToDelete := []int{}
-	entitiesToDelete := map[int]*Entity{}
-	executionsToDelete := map[int]*Execution{}
+	entitiesToDelete := map[int]string{} // EntityID to EntityType
+	executionsToDelete := map[int]string{}
 	hierarchiesToKeep := []*Hierarchy{}
 	versionsToDelete := map[int]*Version{}
 
@@ -2530,15 +2942,39 @@ func (db *DefaultDatabase) Clear() {
 			runsToDelete = append(runsToDelete, runID)
 			// Collect Entities associated with the Run
 			for _, entity := range run.Entities {
-				entitiesToDelete[entity.ID] = entity
+				switch e := entity.(type) {
+				case *WorkflowEntity:
+					entitiesToDelete[e.ID] = string(EntityTypeWorkflow)
+				case *ActivityEntity:
+					entitiesToDelete[e.ID] = string(EntityTypeActivity)
+				case *SideEffectEntity:
+					entitiesToDelete[e.ID] = string(EntityTypeSideEffect)
+				case *SagaEntity:
+					entitiesToDelete[e.ID] = string(EntityTypeSaga)
+				}
 			}
 		}
 	}
 
 	// Collect Executions associated with Entities to delete
-	for execID, execution := range db.executions {
+	for execID, execution := range db.workflowExecutions {
 		if _, exists := entitiesToDelete[execution.EntityID]; exists {
-			executionsToDelete[execID] = execution
+			executionsToDelete[execID] = string(EntityTypeWorkflow)
+		}
+	}
+	for execID, execution := range db.activityExecutions {
+		if _, exists := entitiesToDelete[execution.EntityID]; exists {
+			executionsToDelete[execID] = string(EntityTypeActivity)
+		}
+	}
+	for execID, execution := range db.sideEffectExecutions {
+		if _, exists := entitiesToDelete[execution.EntityID]; exists {
+			executionsToDelete[execID] = string(EntityTypeSideEffect)
+		}
+	}
+	for execID, execution := range db.sagaExecutions {
+		if _, exists := entitiesToDelete[execution.EntityID]; exists {
+			executionsToDelete[execID] = string(EntityTypeSaga)
 		}
 	}
 
@@ -2565,14 +3001,30 @@ func (db *DefaultDatabase) Clear() {
 		delete(db.runs, runID)
 	}
 
-	// Delete Entities
-	for entityID := range entitiesToDelete {
-		delete(db.entities, entityID)
+	// Delete Entities and Executions
+	for entityID, entityType := range entitiesToDelete {
+		switch EntityType(entityType) {
+		case EntityTypeWorkflow:
+			delete(db.workflowEntities, entityID)
+		case EntityTypeActivity:
+			delete(db.activityEntities, entityID)
+		case EntityTypeSideEffect:
+			delete(db.sideEffectEntities, entityID)
+		case EntityTypeSaga:
+			delete(db.sagaEntities, entityID)
+		}
 	}
-
-	// Delete Executions
-	for execID := range executionsToDelete {
-		delete(db.executions, execID)
+	for execID, entityType := range executionsToDelete {
+		switch EntityType(entityType) {
+		case EntityTypeWorkflow:
+			delete(db.workflowExecutions, execID)
+		case EntityTypeActivity:
+			delete(db.activityExecutions, execID)
+		case EntityTypeSideEffect:
+			delete(db.sideEffectExecutions, execID)
+		case EntityTypeSaga:
+			delete(db.sagaExecutions, execID)
+		}
 	}
 
 	// Delete Versions
@@ -2696,11 +3148,10 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options *WorkflowOptio
 		Input:       inputBytes,
 	}
 
-	// Create a new Entity without ID (database assigns it)
-	entity := &Entity{
+	// Create a new WorkflowEntity without ID (database assigns it)
+	entity := &WorkflowEntity{
 		StepID:       "root",
 		HandlerName:  handler.HandlerName,
-		Type:         string(EntityTypeWorkflow),
 		Status:       string(StatusPending),
 		RunID:        o.runID,
 		CreatedAt:    time.Now(),
@@ -2710,7 +3161,7 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options *WorkflowOptio
 	entity.HandlerInfo = &handler
 
 	// Add the entity to the database, which assigns the ID
-	entity = o.db.AddEntity(entity)
+	entity = o.db.AddWorkflowEntity(entity)
 
 	// Create a new WorkflowInstance
 	instance := &WorkflowInstance{
@@ -2721,7 +3172,7 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options *WorkflowOptio
 		orchestrator:      o,
 		workflowID:        entity.ID,
 		options:           options,
-		entity:            entity,
+		workflowEntity:    entity,
 		entityID:          entity.ID, // Store entity ID
 		parentExecutionID: 0,         // Root has no parent execution
 		parentEntityID:    0,         // Root has no parent entity
@@ -2764,7 +3215,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	o.cancel = cancel
 
 	// Retrieve the workflow entity
-	entity := o.db.GetEntity(entityID)
+	entity := o.db.GetWorkflowEntity(entityID)
 	if entity == nil {
 		log.Printf("No workflow found with ID: %d", entityID)
 		return NewFuture(0)
@@ -2776,7 +3227,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	// Update the entity's paused state
 	entity.Paused = false
 	entity.Resumable = true
-	o.db.UpdateEntity(entity)
+	o.db.UpdateWorkflowEntity(entity)
 
 	// Update Run status to Running
 	run := o.db.GetRun(o.runID)
@@ -2803,12 +3254,13 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 
 	// Create a new WorkflowInstance
 	instance := &WorkflowInstance{
-		stepID:       entity.StepID,
-		handler:      handler,
-		input:        inputs,
-		ctx:          o.ctx,
-		orchestrator: o,
-		workflowID:   entity.ID,
+		stepID:         entity.StepID,
+		handler:        handler,
+		input:          inputs,
+		ctx:            o.ctx,
+		orchestrator:   o,
+		workflowID:     entity.ID,
+		workflowEntity: entity,
 		options: &WorkflowOptions{
 			RetryPolicy: &RetryPolicy{
 				MaxAttempts:        int(entity.WorkflowData.RetryPolicy.MaxAttempts),
@@ -2818,7 +3270,6 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 			},
 			VersionOverrides: nil, // Adjust if necessary
 		},
-		entity:            entity,
 		entityID:          entity.ID,
 		parentExecutionID: 0, // Since we're resuming the root workflow
 		parentEntityID:    0,
@@ -2901,14 +3352,9 @@ func (o *Orchestrator) Wait() {
 // Retry retries a failed root workflow by creating a new entity and execution.
 func (o *Orchestrator) Retry(workflowID int) *Future {
 	// Retrieve the workflow entity
-	entity := o.db.GetEntity(workflowID)
+	entity := o.db.GetWorkflowEntity(workflowID)
 	if entity == nil {
 		log.Printf("No workflow found with ID: %d", workflowID)
-		return NewFuture(0)
-	}
-
-	if entity.Type != string(EntityTypeWorkflow) {
-		log.Printf("Entity with ID %d is not a workflow", workflowID)
 		return NewFuture(0)
 	}
 
@@ -2919,22 +3365,20 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 		return NewFuture(0)
 	}
 
-	// Create a new WorkflowData with RetryOf set
+	// Create a new WorkflowData
 	workflowData := &WorkflowData{
 		Duration:    "",
 		Paused:      false,
 		Resumable:   false,
-		RetryOf:     &workflowID,
 		RetryState:  &RetryState{Attempts: 0},
 		RetryPolicy: entity.WorkflowData.RetryPolicy,
 		Input:       entity.WorkflowData.Input,
 	}
 
-	// Create a new Entity
-	newEntity := &Entity{
+	// Create a new WorkflowEntity
+	newEntity := &WorkflowEntity{
 		StepID:       entity.StepID,
 		HandlerName:  entity.HandlerName,
-		Type:         string(EntityTypeWorkflow),
 		Status:       string(StatusPending),
 		RunID:        o.runID,
 		CreatedAt:    time.Now(),
@@ -2942,7 +3386,7 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 		WorkflowData: workflowData,
 		HandlerInfo:  entity.HandlerInfo,
 	}
-	newEntity = o.db.AddEntity(newEntity)
+	newEntity = o.db.AddWorkflowEntity(newEntity)
 
 	// Create a new WorkflowInstance
 	instance := &WorkflowInstance{
@@ -2953,7 +3397,7 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 		orchestrator:      o,
 		workflowID:        newEntity.ID,
 		options:           nil, // You might want to use the same options or set new ones
-		entity:            newEntity,
+		workflowEntity:    newEntity,
 		entityID:          newEntity.ID,
 		parentExecutionID: 0,
 		parentEntityID:    0,
