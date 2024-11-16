@@ -1491,7 +1491,7 @@ func (ai *ActivityInstance) executeWithRetry() {
 
 	if ai.options != nil && ai.options.RetryPolicy != nil {
 		rp := ai.options.RetryPolicy
-		// Fill default values if zero
+		// Fill default values where zero
 		if rp.MaxAttempts == 0 {
 			rp.MaxAttempts = 1
 		}
@@ -3057,7 +3057,7 @@ type Orchestrator struct {
 	pausedMu      sync.Mutex
 }
 
-func NewOrchestrator(ctx context.Context, db Database, registry *Registry, runID int) *Orchestrator {
+func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	ctx, cancel := context.WithCancel(ctx)
 	o := &Orchestrator{
@@ -3065,7 +3065,6 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, runID
 		registry: registry,
 		ctx:      ctx,
 		cancel:   cancel,
-		runID:    runID,
 	}
 	return o
 }
@@ -3357,6 +3356,9 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 		log.Printf("No workflow found with ID: %d", workflowID)
 		return NewFuture(0)
 	}
+
+	// Set the runID from the entity
+	o.runID = entity.RunID
 
 	// Copy inputs
 	inputs, err := convertInputsFromSerialization(*entity.HandlerInfo, entity.WorkflowData.Input)
@@ -3832,8 +3834,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Start a new orchestrator with runID 0 (which will create a new run)
-	orchestrator := NewOrchestrator(ctx, database, registry, 0)
+	// Start a new orchestrator
+	orchestrator := NewOrchestrator(ctx, database, registry)
 
 	subWorkflowFailed.Store(true)
 	continueAsNewCalled.Store(false)
@@ -3860,9 +3862,8 @@ func main() {
 	time.Sleep(3 * time.Second)
 
 	log.Printf("Resuming orchestrator")
-	// Retrieve the runID from the previous orchestrator
-	runID := orchestrator.runID
-	newOrchestrator := NewOrchestrator(ctx, database, registry, runID)
+	// Create a new orchestrator and resume
+	newOrchestrator := NewOrchestrator(ctx, database, registry)
 
 	future = newOrchestrator.Resume(future.WorkflowID())
 
