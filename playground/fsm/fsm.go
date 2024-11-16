@@ -243,8 +243,8 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
-		handlerInfo, ok := ctx.orchestrator.registry.workflows[entity.HandlerName]
-		if !ok {
+		handlerInfo := entity.HandlerInfo
+		if handlerInfo == nil {
 			err := fmt.Errorf("handler not found for workflow: %s", entity.HandlerName)
 			log.Printf("Error: %v", err)
 			future.setError(err)
@@ -253,7 +253,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
 		if latestExecution != nil && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Output != nil {
 			// Deserialize output
-			outputs, err := ConvertOutputsFromSerialization(handlerInfo, latestExecution.WorkflowExecutionData.Output)
+			outputs, err := ConvertOutputsFromSerialization(*handlerInfo, latestExecution.WorkflowExecutionData.Output)
 			if err != nil {
 				log.Printf("Error deserializing outputs: %v", err)
 				future.setError(err)
@@ -265,7 +265,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	}
 
 	// Register workflow on-the-fly
-	handler, err := ctx.orchestrator.registerWorkflow(workflowFunc)
+	handler, err := ctx.orchestrator.registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
 		log.Printf("Error registering workflow: %v", err)
 		future.setError(err)
@@ -366,8 +366,8 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
-		handlerInfo, ok := ctx.orchestrator.registry.activities[entity.HandlerName]
-		if !ok {
+		handlerInfo := entity.HandlerInfo
+		if handlerInfo == nil {
 			err := fmt.Errorf("handler not found for activity: %s", entity.HandlerName)
 			log.Printf("Error: %v", err)
 			future.setError(err)
@@ -376,7 +376,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
 		if latestExecution != nil && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Output != nil {
 			// Deserialize output
-			outputs, err := ConvertOutputsFromSerialization(handlerInfo, latestExecution.ActivityExecutionData.Output)
+			outputs, err := ConvertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Output)
 			if err != nil {
 				log.Printf("Error deserializing outputs: %v", err)
 				future.setError(err)
@@ -388,7 +388,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	}
 
 	// Register activity on-the-fly
-	handler, err := ctx.orchestrator.registerActivity(activityFunc)
+	handler, err := ctx.orchestrator.registry.RegisterActivity(activityFunc)
 	if err != nil {
 		log.Printf("Error registering activity: %v", err)
 		future.setError(err)
@@ -515,6 +515,16 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		}
 	}
 
+	// Register side effect on-the-fly
+	handlerName := getFunctionName(sideEffectFunc)
+
+	// Side Effects are anonymous functions, we don't need to register them at all
+	handler := HandlerInfo{
+		HandlerName: handlerName,
+		Handler:     sideEffectFunc,
+		ReturnTypes: returnTypes,
+	}
+
 	// Use the retry policy from options or default
 	var retryPolicy *RetryPolicy
 	if options.RetryPolicy != nil {
@@ -547,7 +557,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	// Create a new Entity without ID (database assigns it)
 	entity = &Entity{
 		StepID:         stepID,
-		HandlerName:    getFunctionName(sideEffectFunc),
+		HandlerName:    handlerName,
 		Type:           string(EntityTypeSideEffect),
 		Status:         string(StatusPending),
 		RunID:          ctx.orchestrator.runID,
@@ -555,6 +565,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		UpdatedAt:      time.Now(),
 		SideEffectData: sideEffectData,
 	}
+	entity.HandlerInfo = &handler
 
 	// Add the entity to the database, which assigns the ID
 	entity = ctx.orchestrator.db.AddEntity(entity)
@@ -585,6 +596,8 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		entityID:       entity.ID,
 		options:        options,
 		returnTypes:    returnTypes,
+		handlerName:    handlerName,
+		handler:        handler,
 	}
 	ctx.orchestrator.addSideEffectInstance(sideEffectInstance)
 	sideEffectInstance.Start()
@@ -914,13 +927,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 		return nil
 	}
 
-	// Register workflow on-the-fly
-	handler, ok := wi.orchestrator.registry.workflows[wi.handler.HandlerName]
-	if !ok {
-		err := fmt.Errorf("error getting handler for workflow: %s", wi.handler.HandlerName)
-		return err
-	}
-
+	handler := wi.handler
 	f := handler.Handler
 
 	ctxWorkflow := &WorkflowContext{
@@ -1326,6 +1333,8 @@ type SideEffectInstance struct {
 	options        WorkflowOptions
 	execution      *Execution // Current execution
 	returnTypes    []reflect.Type
+	handlerName    string
+	handler        HandlerInfo
 }
 
 func (sei *SideEffectInstance) Start() {
@@ -1482,8 +1491,11 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	default:
 	}
 
+	// Retrieve the function from handler
+	f := sei.handler.Handler
+
 	argsValues := []reflect.Value{}
-	results := reflect.ValueOf(sei.sideEffectFunc).Call(argsValues)
+	results := reflect.ValueOf(f).Call(argsValues)
 	numOut := len(results)
 	if numOut == 0 {
 		err := fmt.Errorf("side effect should return at least a value")
@@ -2036,6 +2048,7 @@ func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepID(parentEntityI
 // Orchestrator orchestrates the execution of workflows and activities.
 type Orchestrator struct {
 	db            Database
+	registry      *Registry
 	rootWf        *WorkflowInstance
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -2047,21 +2060,20 @@ type Orchestrator struct {
 	activitiesMu  sync.Mutex
 	sideEffectsMu sync.Mutex
 	sagasMu       sync.Mutex
-	registry      *Registry
 	err           error
 	runID         int
 	paused        bool
 	pausedMu      sync.Mutex
 }
 
-func NewOrchestrator(db Database, ctx context.Context) *Orchestrator {
+func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	ctx, cancel := context.WithCancel(ctx)
 	o := &Orchestrator{
 		db:       db,
+		registry: registry,
 		ctx:      ctx,
 		cancel:   cancel,
-		registry: newRegistry(),
 		runID:    generateRunID(),
 	}
 	return o
@@ -2074,13 +2086,9 @@ func generateRunID() int {
 }
 
 func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
-
-	handlerName := getFunctionName(workflowFunc)
-
-	// Retrieve the handler
-	handler, ok := o.registry.workflows[handlerName]
-	if !ok {
-		log.Printf("No handler registered for workflow: %s", handlerName)
+	handler, err := o.registry.RegisterWorkflow(workflowFunc)
+	if err != nil {
+		log.Printf("Error registering workflow: %v", err)
 		return NewFuture(0)
 	}
 
@@ -2189,11 +2197,12 @@ func (o *Orchestrator) Resume(id int) *Future {
 	o.db.UpdateEntity(entity)
 
 	// Retrieve the handler
-	handler, ok := o.registry.workflows[entity.HandlerName]
-	if !ok {
-		log.Printf("No handler registered for workflow: %s", entity.HandlerName)
+	handlerInfo := entity.HandlerInfo
+	if handlerInfo == nil {
+		log.Printf("No handler info found for workflow: %s", entity.HandlerName)
 		return NewFuture(0)
 	}
+	handler := *handlerInfo
 
 	// Convert inputs from serialization
 	inputs, err := ConvertInputsFromSerialization(handler, entity.WorkflowData.Input)
@@ -2232,11 +2241,6 @@ func (o *Orchestrator) Resume(id int) *Future {
 	instance.Start()
 
 	return future
-}
-
-func (o *Orchestrator) RegisterWorkflow(workflowFunc interface{}) error {
-	_, err := o.registerWorkflow(workflowFunc)
-	return err
 }
 
 func (o *Orchestrator) stopWithError(err error) {
@@ -2297,27 +2301,29 @@ func (o *Orchestrator) Wait() {
 	}
 }
 
-// Registry holds registered workflows and activities.
+// Registry holds registered workflows, activities, and side effects.
 type Registry struct {
-	workflows  map[string]HandlerInfo
-	activities map[string]HandlerInfo
-	mu         sync.Mutex
+	workflows   map[string]HandlerInfo
+	activities  map[string]HandlerInfo
+	sideEffects map[string]HandlerInfo
+	mu          sync.Mutex
 }
 
-func newRegistry() *Registry {
+func NewRegistry() *Registry {
 	return &Registry{
-		workflows:  make(map[string]HandlerInfo),
-		activities: make(map[string]HandlerInfo),
+		workflows:   make(map[string]HandlerInfo),
+		activities:  make(map[string]HandlerInfo),
+		sideEffects: make(map[string]HandlerInfo),
 	}
 }
 
-func (o *Orchestrator) registerWorkflow(workflowFunc interface{}) (HandlerInfo, error) {
+func (r *Registry) RegisterWorkflow(workflowFunc interface{}) (HandlerInfo, error) {
 	funcName := getFunctionName(workflowFunc)
-	o.registry.mu.Lock()
-	defer o.registry.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Check if already registered
-	if handler, ok := o.registry.workflows[funcName]; ok {
+	if handler, ok := r.workflows[funcName]; ok {
 		return handler, nil
 	}
 
@@ -2375,17 +2381,17 @@ func (o *Orchestrator) registerWorkflow(workflowFunc interface{}) (HandlerInfo, 
 		NumOut:          numOut - 1,
 	}
 
-	o.registry.workflows[funcName] = handler
+	r.workflows[funcName] = handler
 	return handler, nil
 }
 
-func (o *Orchestrator) registerActivity(activityFunc interface{}) (HandlerInfo, error) {
+func (r *Registry) RegisterActivity(activityFunc interface{}) (HandlerInfo, error) {
 	funcName := getFunctionName(activityFunc)
-	o.registry.mu.Lock()
-	defer o.registry.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Check if already registered
-	if handler, ok := o.registry.activities[funcName]; ok {
+	if handler, ok := r.activities[funcName]; ok {
 		return handler, nil
 	}
 
@@ -2443,7 +2449,7 @@ func (o *Orchestrator) registerActivity(activityFunc interface{}) (HandlerInfo, 
 		NumOut:          numOut - 1,
 	}
 
-	o.registry.activities[funcName] = handler
+	r.activities[funcName] = handler
 	return handler, nil
 }
 
@@ -2494,7 +2500,7 @@ type UpdateLedgerSaga struct {
 func (s UpdateLedgerSaga) Transaction(ctx TransactionContext) (interface{}, error) {
 	log.Printf("UpdateLedgerSaga Transaction called with Data: %d", s.Data)
 	// Simulate successful transaction
-	return nil, fmt.Errorf("failed transaction")
+	return nil, nil
 }
 
 func (s UpdateLedgerSaga) Compensation(ctx CompensationContext) (interface{}, error) {
@@ -2602,6 +2608,10 @@ func SubWorkflow(ctx *WorkflowContext, data int) (int, error) {
 	return result, nil
 }
 
+func SubManyWorkflow(ctx *WorkflowContext) (int, int, error) {
+	return 1, 2, nil
+}
+
 func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("Workflow called with data: %d", data)
 	var value int
@@ -2663,7 +2673,15 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	if shouldDouble {
 		result *= 2
 	}
-	log.Printf("Workflow returning result: %d", result)
+
+	var a int
+	var b int
+	if err := ctx.Workflow("a-b", SubManyWorkflow, WorkflowOptions{}).Get(&a, &b); err != nil {
+		log.Printf("Workflow encountered error from sub-many-workflow: %v", err)
+		return -1, err
+	}
+
+	log.Printf("Workflow returning result: %d - %v %v", result, a, b)
 	return result, nil
 }
 
@@ -2672,12 +2690,13 @@ func main() {
 	log.Printf("main started")
 
 	database := NewDefaultDatabase()
+	registry := NewRegistry()
+	registry.RegisterWorkflow(Workflow) // Only register the root workflow
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	orchestrator := NewOrchestrator(database, ctx)
-	orchestrator.RegisterWorkflow(Workflow) // orchestrator should be scoped to a specific amount of workflows
+	orchestrator := NewOrchestrator(ctx, database, registry)
 
 	subWorkflowFailed.Store(true)
 
@@ -2700,10 +2719,16 @@ func main() {
 	time.Sleep(3 * time.Second)
 
 	log.Printf("Resuming orchestrator")
-	newOrchestrator := NewOrchestrator(database, context.Background())
-	newOrchestrator.RegisterWorkflow(Workflow)
+	newOrchestrator := NewOrchestrator(ctx, database, registry)
 
 	future = newOrchestrator.Resume(future.workflowID)
+
+	var result int
+	if err := future.Get(&result); err != nil {
+		log.Printf("Workflow failed with error: %v", err)
+	} else {
+		log.Printf("Workflow completed with result: %d", result)
+	}
 
 	newOrchestrator.Wait()
 
