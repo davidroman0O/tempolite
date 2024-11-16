@@ -136,7 +136,7 @@ func ConvertSingleOutputFromSerialization(outputType reflect.Type, executionOutp
 
 // Future represents an asynchronous result.
 type Future struct {
-	result     interface{}
+	results    []interface{}
 	err        error
 	done       chan struct{}
 	workflowID int
@@ -149,23 +149,28 @@ func NewFuture(workflowID int) *Future {
 	}
 }
 
-func (f *Future) Get(result interface{}) error {
+func (f *Future) Get(outputs ...interface{}) error {
 	log.Printf("Future.Get called")
 	<-f.done
 	if f.err != nil {
 		log.Printf("Future.Get returning error: %v", f.err)
 		return f.err
 	}
-	if result != nil && f.result != nil {
-		reflect.ValueOf(result).Elem().Set(reflect.ValueOf(f.result))
-		log.Printf("Future.Get returning result: %v", f.result)
+	if len(outputs) > len(f.results) {
+		return fmt.Errorf("number of outputs requested exceeds number of results")
+	}
+	for i := 0; i < len(outputs); i++ {
+		if outputs[i] != nil && f.results[i] != nil {
+			reflect.ValueOf(outputs[i]).Elem().Set(reflect.ValueOf(f.results[i]))
+			log.Printf("Future.Get setting output[%d]: %v", i, f.results[i])
+		}
 	}
 	return nil
 }
 
-func (f *Future) setResult(result interface{}) {
-	log.Printf("Future.setResult called with result: %v", result)
-	f.result = result
+func (f *Future) setResult(results []interface{}) {
+	log.Printf("Future.setResult called with results: %v", results)
+	f.results = results
 	close(f.done)
 }
 
@@ -254,7 +259,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 				future.setError(err)
 				return future
 			}
-			future.setResult(outputs[0])
+			future.setResult(outputs)
 			return future
 		}
 	}
@@ -377,7 +382,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 				future.setError(err)
 				return future
 			}
-			future.setResult(outputs[0])
+			future.setResult(outputs)
 			return future
 		}
 	}
@@ -488,23 +493,24 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		ctx.orchestrator.stopWithError(err)
 		return future
 	}
-	returnType := sideEffectFuncType.Out(0)
+	returnTypes := make([]reflect.Type, sideEffectFuncType.NumOut())
+	for i := 0; i < sideEffectFuncType.NumOut(); i++ {
+		returnTypes[i] = sideEffectFuncType.Out(i)
+	}
 
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepID(ctx.workflowID, stepID)
 	if entity != nil {
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
-		if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Result != nil {
-			// Deserialize result using the returnType
-			buf := bytes.NewBuffer(latestExecution.SideEffectExecutionData.Result)
-			decodedObj := reflect.New(returnType).Interface()
-			if err := rtl.Decode(buf, decodedObj); err != nil {
+		if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
+			// Deserialize result using the returnTypes
+			outputs, err := ConvertOutputsFromSerialization(HandlerInfo{ReturnTypes: returnTypes}, latestExecution.SideEffectExecutionData.Output)
+			if err != nil {
 				log.Printf("Error deserializing side effect result: %v", err)
 				future.setError(err)
 				return future
 			}
-			result := reflect.ValueOf(decodedObj).Elem().Interface()
-			future.setResult(result)
+			future.setResult(outputs)
 			return future
 		}
 	}
@@ -578,7 +584,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		entity:         entity,
 		entityID:       entity.ID,
 		options:        options,
-		returnType:     returnType,
+		returnTypes:    returnTypes,
 	}
 	ctx.orchestrator.addSideEffectInstance(sideEffectInstance)
 	sideEffectInstance.Start()
@@ -668,7 +674,7 @@ type ActivityExecutionData struct {
 }
 
 type SideEffectExecutionData struct {
-	Result           []byte     `json:"result,omitempty"`
+	Output           [][]byte   `json:"output,omitempty"`
 	EffectTime       *time.Time `json:"effect_time,omitempty"`
 	EffectMetadata   []byte     `json:"effect_metadata,omitempty"`
 	ExecutionContext []byte     `json:"execution_context,omitempty"`
@@ -764,7 +770,7 @@ type WorkflowInstance struct {
 	stepID       string
 	handler      HandlerInfo
 	input        []interface{}
-	result       interface{}
+	results      []interface{}
 	err          error
 	fsm          *stateless.StateMachine
 	future       *Future
@@ -904,7 +910,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 			log.Printf("Error deserializing outputs: %v", err)
 			return err
 		}
-		wi.result = outputs[0]
+		wi.results = outputs
 		return nil
 	}
 
@@ -984,14 +990,19 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 		return wi.err
 	} else {
+		outputs := []interface{}{}
 		if numOut > 1 {
-			result := results[0].Interface()
-			log.Printf("Workflow returned result: %v", result)
-			wi.result = result
+			for i := 0; i < numOut-1; i++ {
+				result := results[i].Interface()
+				log.Printf("Workflow returned result [%d]: %v", i, result)
+				outputs = append(outputs, result)
+			}
 		}
 
+		wi.results = outputs
+
 		// Serialize output
-		outputBytes, err := ConvertOutputsForSerialization([]interface{}{wi.result})
+		outputBytes, err := ConvertOutputsForSerialization(wi.results)
 		if err != nil {
 			log.Printf("Error serializing output: %v", err)
 			return err
@@ -1014,7 +1025,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.entityID)
 	if wi.future != nil {
-		wi.future.setResult(wi.result)
+		wi.future.setResult(wi.results)
 	}
 	return nil
 }
@@ -1040,7 +1051,7 @@ type ActivityInstance struct {
 	stepID       string
 	handler      HandlerInfo
 	input        []interface{}
-	result       interface{}
+	results      []interface{}
 	err          error
 	fsm          *stateless.StateMachine
 	future       *Future
@@ -1180,7 +1191,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 			log.Printf("Error deserializing outputs: %v", err)
 			return err
 		}
-		ai.result = outputs[0]
+		ai.results = outputs
 		return nil
 	}
 
@@ -1244,15 +1255,18 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 
 		return ai.err
 	} else {
-		var result interface{}
+		outputs := []interface{}{}
 		if numOut > 1 {
-			result = results[0].Interface()
-			log.Printf("Activity returned result: %v", result)
+			for i := 0; i < numOut-1; i++ {
+				result := results[i].Interface()
+				log.Printf("Activity returned result [%d]: %v", i, result)
+				outputs = append(outputs, result)
+			}
 		}
-		ai.result = result
+		ai.results = outputs
 
 		// Serialize output
-		outputBytes, err := ConvertOutputsForSerialization([]interface{}{result})
+		outputBytes, err := ConvertOutputsForSerialization(ai.results)
 		if err != nil {
 			log.Printf("Error serializing output: %v", err)
 			return err
@@ -1274,7 +1288,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 func (ai *ActivityInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d) onCompleted called", ai.stepID, ai.entityID)
 	if ai.future != nil {
-		ai.future.setResult(ai.result)
+		ai.future.setResult(ai.results)
 	}
 	return nil
 }
@@ -1299,7 +1313,7 @@ func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error 
 type SideEffectInstance struct {
 	stepID         string
 	sideEffectFunc interface{}
-	result         interface{}
+	results        []interface{}
 	err            error
 	fsm            *stateless.StateMachine
 	future         *Future
@@ -1311,7 +1325,7 @@ type SideEffectInstance struct {
 	executionID    int
 	options        WorkflowOptions
 	execution      *Execution // Current execution
-	returnType     reflect.Type
+	returnTypes    []reflect.Type
 }
 
 func (sei *SideEffectInstance) Start() {
@@ -1441,15 +1455,14 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 
 	// Check if result already exists in the database
 	latestExecution := sei.orchestrator.db.GetLatestExecution(sei.entity.ID)
-	if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Result != nil {
+	if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
 		log.Printf("Result found in database for entity ID: %d", sei.entity.ID)
-		buf := bytes.NewBuffer(latestExecution.SideEffectExecutionData.Result)
-		decodedObj := reflect.New(sei.returnType).Interface()
-		if err := rtl.Decode(buf, decodedObj); err != nil {
+		outputs, err := ConvertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Output)
+		if err != nil {
 			log.Printf("Error deserializing side effect result: %v", err)
 			return err
 		}
-		sei.result = reflect.ValueOf(decodedObj).Elem().Interface()
+		sei.results = outputs
 		return nil
 	}
 
@@ -1479,12 +1492,16 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 		return err
 	}
 
-	result := results[0].Interface()
-	log.Printf("Side effect returned result: %v", result)
-	sei.result = result
+	outputs := []interface{}{}
+	for i := 0; i < numOut; i++ {
+		result := results[i].Interface()
+		log.Printf("Side effect returned result [%d]: %v", i, result)
+		outputs = append(outputs, result)
+	}
+	sei.results = outputs
 
 	// Serialize output
-	outputBytes, err := ConvertOutputsForSerialization([]interface{}{result})
+	outputBytes, err := ConvertOutputsForSerialization(sei.results)
 	if err != nil {
 		log.Printf("Error serializing output: %v", err)
 		return err
@@ -1492,7 +1509,7 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 
 	// Create SideEffectExecutionData
 	sideEffectExecutionData := &SideEffectExecutionData{
-		Result: outputBytes[0],
+		Output: outputBytes,
 	}
 
 	// Update the execution with the execution data
@@ -1505,7 +1522,7 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 func (sei *SideEffectInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("SideEffectInstance %s (Entity ID: %d) onCompleted called", sei.stepID, sei.entityID)
 	if sei.future != nil {
-		sei.future.setResult(sei.result)
+		sei.future.setResult(sei.results)
 	}
 	return nil
 }
@@ -2276,7 +2293,7 @@ func (o *Orchestrator) Wait() {
 	if o.rootWf.err != nil {
 		fmt.Printf("Root workflow failed with error: %v\n", o.rootWf.err)
 	} else {
-		fmt.Printf("Root workflow completed successfully with result: %v\n", o.rootWf.result)
+		fmt.Printf("Root workflow completed successfully with results: %v\n", o.rootWf.results)
 	}
 }
 
@@ -2660,7 +2677,7 @@ func main() {
 	defer cancel()
 
 	orchestrator := NewOrchestrator(database, ctx)
-	orchestrator.RegisterWorkflow(Workflow) // orchestrator should be scopped to a specific amount of workflows
+	orchestrator.RegisterWorkflow(Workflow) // orchestrator should be scoped to a specific amount of workflows
 
 	subWorkflowFailed.Store(true)
 
@@ -2684,7 +2701,7 @@ func main() {
 
 	log.Printf("Resuming orchestrator")
 	newOrchestrator := NewOrchestrator(database, context.Background())
-	orchestrator.RegisterWorkflow(Workflow)
+	newOrchestrator.RegisterWorkflow(Workflow)
 
 	future = newOrchestrator.Resume(future.workflowID)
 
