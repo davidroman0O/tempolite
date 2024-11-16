@@ -201,9 +201,10 @@ type retryPolicyInternal struct {
 	MaxInterval        int64   `json:"max_interval"` // Stored in nanoseconds
 }
 
-// WorkflowOptions provides options for workflows, including retry policies.
+// WorkflowOptions provides options for workflows, including retry policies and version overrides.
 type WorkflowOptions struct {
-	RetryPolicy *RetryPolicy
+	RetryPolicy      *RetryPolicy
+	VersionOverrides map[string]int // Map of changeID to forced version
 }
 
 // ActivityOptions provides options for activities, including retry policies.
@@ -217,6 +218,7 @@ type WorkflowContext struct {
 	ctx          context.Context
 	workflowID   int
 	stepID       string
+	options      *WorkflowOptions
 }
 
 var ErrPaused = errors.New("execution paused")
@@ -748,6 +750,24 @@ type Hierarchy struct {
 	ChildType         string
 }
 
+// Version tracks entity versions.
+type Version struct {
+	ID       int
+	EntityID int                    // The Entity ID (workflow ID)
+	ChangeID string                 // The unique identifier for the code change
+	Version  int                    // The version
+	Data     map[string]interface{} // Additional data if needed
+}
+
+// Run represents a workflow execution group.
+type Run struct {
+	ID        int
+	Status    string // "Pending", "Running", "Completed", etc.
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Entities  []*Entity
+}
+
 // Data structures matching the ent schemas
 type WorkflowData struct {
 	Duration    string               `json:"duration,omitempty"`
@@ -764,6 +784,7 @@ type ActivityData struct {
 	ScheduledFor *time.Time           `json:"scheduled_for,omitempty"`
 	RetryPolicy  *retryPolicyInternal `json:"retry_policy"`
 	Input        [][]byte             `json:"input,omitempty"`
+	Output       [][]byte             `json:"output,omitempty"`
 }
 
 type SideEffectData struct {
@@ -935,6 +956,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 		ctx:          wi.ctx,
 		workflowID:   wi.entity.ID,
 		stepID:       wi.stepID,
+		options:      &wi.options,
 	}
 
 	// Convert inputs from serialization
@@ -1911,6 +1933,11 @@ func (o *Orchestrator) addSagaInstance(si *SagaInstance) {
 
 // Database interface defines methods for interacting with the data store.
 type Database interface {
+	// Run methods
+	AddRun(run *Run) *Run
+	GetRun(id int) *Run
+	UpdateRun(run *Run)
+
 	// Entity methods
 	AddEntity(entity *Entity) *Entity
 	GetEntity(id int) *Entity
@@ -1927,27 +1954,58 @@ type Database interface {
 	// Hierarchy methods
 	AddHierarchy(hierarchy *Hierarchy)
 	GetHierarchy(parentID, childID int) *Hierarchy
+
+	// Version methods
+	GetVersion(entityID int, changeID string) *Version
+	SetVersion(version *Version) *Version
 }
 
 // DefaultDatabase is an in-memory implementation of Database.
 type DefaultDatabase struct {
+	runs        map[int]*Run
 	entities    map[int]*Entity
 	executions  map[int]*Execution
+	versions    map[int]*Version
 	hierarchies []*Hierarchy
 	mu          sync.Mutex
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
 	return &DefaultDatabase{
+		runs:       make(map[int]*Run),
 		entities:   make(map[int]*Entity),
 		executions: make(map[int]*Execution),
+		versions:   make(map[int]*Version),
 	}
 }
 
 var (
+	runIDCounter       int64
 	entityIDCounter    int64
 	executionIDCounter int64
+	versionIDCounter   int64
 )
+
+func (db *DefaultDatabase) AddRun(run *Run) *Run {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	runID := int(atomic.AddInt64(&runIDCounter, 1))
+	run.ID = runID
+	db.runs[run.ID] = run
+	return run
+}
+
+func (db *DefaultDatabase) GetRun(id int) *Run {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.runs[id]
+}
+
+func (db *DefaultDatabase) UpdateRun(run *Run) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.runs[run.ID] = run
+}
 
 func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
 	db.mu.Lock()
@@ -1955,6 +2013,12 @@ func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
 	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
 	entity.ID = entityID
 	db.entities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run := db.runs[entity.RunID]
+	if run != nil {
+		run.Entities = append(run.Entities, entity)
+	}
 	return entity
 }
 
@@ -2026,7 +2090,7 @@ func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	for _, entity := range db.entities {
-		if entity.RunID == workflowID && entity.StepID == stepID {
+		if entity.ID == workflowID && entity.StepID == stepID {
 			return entity
 		}
 	}
@@ -2043,6 +2107,26 @@ func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepID(parentEntityI
 		}
 	}
 	return nil
+}
+
+func (db *DefaultDatabase) GetVersion(entityID int, changeID string) *Version {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, version := range db.versions {
+		if version.EntityID == entityID && version.ChangeID == changeID {
+			return version
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) SetVersion(version *Version) *Version {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	versionID := int(atomic.AddInt64(&versionIDCounter, 1))
+	version.ID = versionID
+	db.versions[version.ID] = version
+	return version
 }
 
 // Orchestrator orchestrates the execution of workflows and activities.
@@ -2066,7 +2150,7 @@ type Orchestrator struct {
 	pausedMu      sync.Mutex
 }
 
-func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orchestrator {
+func NewOrchestrator(ctx context.Context, db Database, registry *Registry, runID int) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	ctx, cancel := context.WithCancel(ctx)
 	o := &Orchestrator{
@@ -2074,15 +2158,9 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orch
 		registry: registry,
 		ctx:      ctx,
 		cancel:   cancel,
-		runID:    generateRunID(),
+		runID:    runID,
 	}
 	return o
-}
-
-var runIDCounter int64
-
-func generateRunID() int {
-	return int(atomic.AddInt64(&runIDCounter, 1))
 }
 
 func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOptions, args ...interface{}) *Future {
@@ -2090,6 +2168,17 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 	if err != nil {
 		log.Printf("Error registering workflow: %v", err)
 		return NewFuture(0)
+	}
+
+	if o.runID == 0 {
+		// Create a new Run
+		run := &Run{
+			Status:    string(StatusPending),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		run = o.db.AddRun(run)
+		o.runID = run.ID
 	}
 
 	// Convert inputs to [][]byte
@@ -2175,7 +2264,7 @@ func (o *Orchestrator) IsPaused() bool {
 	return o.paused
 }
 
-func (o *Orchestrator) Resume(id int) *Future {
+func (o *Orchestrator) Resume(entityID int) *Future {
 	o.pausedMu.Lock()
 	o.paused = false
 	o.pausedMu.Unlock()
@@ -2185,11 +2274,14 @@ func (o *Orchestrator) Resume(id int) *Future {
 	o.cancel = cancel
 
 	// Retrieve the workflow entity
-	entity := o.db.GetEntity(id)
+	entity := o.db.GetEntity(entityID)
 	if entity == nil {
-		log.Printf("No workflow found with ID: %d", id)
+		log.Printf("No workflow found with ID: %d", entityID)
 		return NewFuture(0)
 	}
+
+	// Set the runID from the entity
+	o.runID = entity.RunID
 
 	// Update the entity's paused state
 	entity.Paused = false
@@ -2226,6 +2318,7 @@ func (o *Orchestrator) Resume(id int) *Future {
 				BackoffCoefficient: entity.WorkflowData.RetryPolicy.BackoffCoefficient,
 				MaxInterval:        time.Duration(entity.WorkflowData.RetryPolicy.MaxInterval),
 			},
+			VersionOverrides: nil, // Adjust if necessary
 		},
 		entity:   entity,
 		entityID: entity.ID,
@@ -2623,6 +2716,18 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	default:
 	}
 
+	// Versioning example
+	changeID := "ChangeIDCalculateTax"
+	const DefaultVersion = 0
+	version := ctx.GetVersion(changeID, DefaultVersion, 1)
+	if version == DefaultVersion {
+		log.Printf("Using default version logic")
+		// Original logic
+	} else {
+		log.Printf("Using new version logic")
+		// New logic
+	}
+
 	var shouldDouble bool
 	if err := ctx.SideEffect("side-effect-step", func() bool {
 		log.Printf("Side effect called")
@@ -2685,6 +2790,31 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	return result, nil
 }
 
+// GetVersion retrieves or sets a version for a changeID.
+func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+	// First check if version is overridden in options
+	if ctx.options != nil && ctx.options.VersionOverrides != nil {
+		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
+			return forcedVersion
+		}
+	}
+
+	version := ctx.orchestrator.db.GetVersion(ctx.workflowID, changeID)
+	if version != nil {
+		return version.Version
+	}
+
+	// If version not found, create a new version.
+	newVersion := &Version{
+		EntityID: ctx.workflowID,
+		ChangeID: changeID,
+		Version:  maxSupported,
+	}
+
+	ctx.orchestrator.db.SetVersion(newVersion)
+	return newVersion.Version
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.Printf("main started")
@@ -2696,7 +2826,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	orchestrator := NewOrchestrator(ctx, database, registry)
+	// Start a new orchestrator with runID 0 (which will create a new run)
+	orchestrator := NewOrchestrator(ctx, database, registry, 0)
 
 	subWorkflowFailed.Store(true)
 
@@ -2706,6 +2837,9 @@ func main() {
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,
 			MaxInterval:        5 * time.Minute,
+		},
+		VersionOverrides: map[string]int{
+			"ChangeIDCalculateTax": 1, // Force version 1
 		},
 	}, 40)
 
@@ -2719,7 +2853,9 @@ func main() {
 	time.Sleep(3 * time.Second)
 
 	log.Printf("Resuming orchestrator")
-	newOrchestrator := NewOrchestrator(ctx, database, registry)
+	// Retrieve the runID from the previous orchestrator
+	runID := orchestrator.runID
+	newOrchestrator := NewOrchestrator(ctx, database, registry, runID)
 
 	future = newOrchestrator.Resume(future.workflowID)
 
