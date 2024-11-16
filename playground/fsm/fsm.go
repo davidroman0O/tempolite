@@ -44,7 +44,7 @@ const (
 )
 
 // Serialization functions
-func ConvertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
+func convertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
 	inputs := [][]byte{}
 
 	for _, input := range executionInputs {
@@ -64,7 +64,7 @@ func ConvertInputsForSerialization(executionInputs []interface{}) ([][]byte, err
 	return inputs, nil
 }
 
-func ConvertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, error) {
+func convertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, error) {
 	outputs := [][]byte{}
 
 	for _, output := range executionOutputs {
@@ -84,7 +84,7 @@ func ConvertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, e
 	return outputs, nil
 }
 
-func ConvertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][]byte) ([]interface{}, error) {
+func convertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][]byte) ([]interface{}, error) {
 	inputs := []interface{}{}
 
 	for idx, inputType := range handlerInfo.ParamTypes {
@@ -103,7 +103,7 @@ func ConvertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][
 	return inputs, nil
 }
 
-func ConvertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [][]byte) ([]interface{}, error) {
+func convertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [][]byte) ([]interface{}, error) {
 	output := []interface{}{}
 
 	for idx, outputType := range handlerInfo.ReturnTypes {
@@ -122,7 +122,7 @@ func ConvertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [
 	return output, nil
 }
 
-func ConvertSingleOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
+func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
 	buf := bytes.NewBuffer(executionOutput)
 
 	decodedObj := reflect.New(outputType).Interface()
@@ -255,7 +255,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
 		if latestExecution != nil && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Output != nil {
 			// Deserialize output
-			outputs, err := ConvertOutputsFromSerialization(*handlerInfo, latestExecution.WorkflowExecutionData.Output)
+			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.WorkflowExecutionData.Output)
 			if err != nil {
 				log.Printf("Error deserializing outputs: %v", err)
 				future.setError(err)
@@ -276,7 +276,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 	}
 
 	// Convert inputs to [][]byte
-	inputBytes, err := ConvertInputsForSerialization(args)
+	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
 		log.Printf("Error converting inputs: %v", err)
 		future.setError(err)
@@ -378,7 +378,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
 		if latestExecution != nil && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Output != nil {
 			// Deserialize output
-			outputs, err := ConvertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Output)
+			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Output)
 			if err != nil {
 				log.Printf("Error deserializing outputs: %v", err)
 				future.setError(err)
@@ -399,7 +399,7 @@ func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, op
 	}
 
 	// Convert inputs to [][]byte
-	inputBytes, err := ConvertInputsForSerialization(args)
+	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
 		log.Printf("Error converting inputs: %v", err)
 		future.setError(err)
@@ -506,7 +506,7 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
 		if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
 			// Deserialize result using the returnTypes
-			outputs, err := ConvertOutputsFromSerialization(HandlerInfo{ReturnTypes: returnTypes}, latestExecution.SideEffectExecutionData.Output)
+			outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: returnTypes}, latestExecution.SideEffectExecutionData.Output)
 			if err != nil {
 				log.Printf("Error deserializing side effect result: %v", err)
 				future.setError(err)
@@ -958,7 +958,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	latestExecution := wi.orchestrator.db.GetLatestExecution(wi.entity.ID)
 	if latestExecution != nil && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Output != nil {
 		log.Printf("Result found in database for entity ID: %d", wi.entity.ID)
-		outputs, err := ConvertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Output)
+		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing outputs: %v", err)
 			return err
@@ -979,7 +979,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	}
 
 	// Convert inputs from serialization
-	inputs, err := ConvertInputsFromSerialization(handler, wi.entity.WorkflowData.Input)
+	inputs, err := convertInputsFromSerialization(handler, wi.entity.WorkflowData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
 		return err
@@ -1057,7 +1057,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 		wi.results = outputs
 
 		// Serialize output
-		outputBytes, err := ConvertOutputsForSerialization(wi.results)
+		outputBytes, err := convertOutputsForSerialization(wi.results)
 		if err != nil {
 			log.Printf("Error serializing output: %v", err)
 			return err
@@ -1092,7 +1092,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			return nil
 		}
 		// Convert inputs to [][]byte
-		inputBytes, err := ConvertInputsForSerialization(wi.continueAsNew.Args)
+		inputBytes, err := convertInputsForSerialization(wi.continueAsNew.Args)
 		if err != nil {
 			log.Printf("Error converting inputs in ContinueAsNew: %v", err)
 			wi.err = err
@@ -1335,7 +1335,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 	latestExecution := ai.orchestrator.db.GetLatestExecution(ai.entity.ID)
 	if latestExecution != nil && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Output != nil {
 		log.Printf("Result found in database for entity ID: %d", ai.entity.ID)
-		outputs, err := ConvertOutputsFromSerialization(ai.handler, latestExecution.ActivityExecutionData.Output)
+		outputs, err := convertOutputsFromSerialization(ai.handler, latestExecution.ActivityExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing outputs: %v", err)
 			return err
@@ -1356,7 +1356,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 	}()
 
 	// Convert inputs from serialization
-	inputs, err := ConvertInputsFromSerialization(handler, ai.entity.ActivityData.Input)
+	inputs, err := convertInputsFromSerialization(handler, ai.entity.ActivityData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
 		return err
@@ -1415,7 +1415,7 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 		ai.results = outputs
 
 		// Serialize output
-		outputBytes, err := ConvertOutputsForSerialization(ai.results)
+		outputBytes, err := convertOutputsForSerialization(ai.results)
 		if err != nil {
 			log.Printf("Error serializing output: %v", err)
 			return err
@@ -1608,7 +1608,7 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	latestExecution := sei.orchestrator.db.GetLatestExecution(sei.entity.ID)
 	if latestExecution != nil && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Output != nil {
 		log.Printf("Result found in database for entity ID: %d", sei.entity.ID)
-		outputs, err := ConvertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Output)
+		outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Output)
 		if err != nil {
 			log.Printf("Error deserializing side effect result: %v", err)
 			return err
@@ -1655,7 +1655,7 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	sei.results = outputs
 
 	// Serialize output
-	outputBytes, err := ConvertOutputsForSerialization(sei.results)
+	outputBytes, err := convertOutputsForSerialization(sei.results)
 	if err != nil {
 		log.Printf("Error serializing output: %v", err)
 		return err
@@ -2381,7 +2381,7 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 	}
 
 	// Convert inputs to [][]byte
-	inputBytes, err := ConvertInputsForSerialization(args)
+	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
 		log.Printf("Error converting inputs: %v", err)
 		return NewFuture(0)
@@ -2504,7 +2504,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	handler := *handlerInfo
 
 	// Convert inputs from serialization
-	inputs, err := ConvertInputsFromSerialization(handler, entity.WorkflowData.Input)
+	inputs, err := convertInputsFromSerialization(handler, entity.WorkflowData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
 		return NewFuture(0)
