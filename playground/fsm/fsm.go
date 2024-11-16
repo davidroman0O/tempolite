@@ -816,6 +816,7 @@ type WorkflowInstance struct {
 	entityID     int
 	executionID  int
 	execution    *Execution // Current execution
+	//isRoot       bool        // Indicates if this is the root workflow instance
 }
 
 func (wi *WorkflowInstance) Start() {
@@ -1056,6 +1057,17 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 	if wi.future != nil {
 		wi.future.setResult(wi.results)
 	}
+
+	// If this is the root workflow, update the Run status to Completed
+	if wi.orchestrator.rootWf == wi {
+		run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
+		if run != nil {
+			run.Status = string(StatusCompleted)
+			run.UpdatedAt = time.Now()
+			wi.orchestrator.db.UpdateRun(run)
+		}
+	}
+
 	return nil
 }
 
@@ -1064,6 +1076,17 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 	if wi.future != nil {
 		wi.future.setError(wi.err)
 	}
+
+	// If this is the root workflow, update the Run status to Failed
+	if wi.orchestrator.rootWf == wi {
+		run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
+		if run != nil {
+			run.Status = string(StatusFailed)
+			run.UpdatedAt = time.Now()
+			wi.orchestrator.db.UpdateRun(run)
+		}
+	}
+
 	return nil
 }
 
@@ -2129,6 +2152,77 @@ func (db *DefaultDatabase) SetVersion(version *Version) *Version {
 	return version
 }
 
+// Clear removes all Runs that are 'Completed' and their associated data.
+func (db *DefaultDatabase) Clear() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	runsToDelete := []int{}
+	entitiesToDelete := map[int]*Entity{}
+	executionsToDelete := map[int]*Execution{}
+	hierarchiesToKeep := []*Hierarchy{}
+	versionsToDelete := map[int]*Version{}
+
+	// Find Runs to delete
+	for runID, run := range db.runs {
+		if run.Status == string(StatusCompleted) {
+			runsToDelete = append(runsToDelete, runID)
+			// Collect Entities associated with the Run
+			for _, entity := range run.Entities {
+				entitiesToDelete[entity.ID] = entity
+			}
+		}
+	}
+
+	// Collect Executions associated with Entities to delete
+	for execID, execution := range db.executions {
+		if _, exists := entitiesToDelete[execution.EntityID]; exists {
+			executionsToDelete[execID] = execution
+		}
+	}
+
+	// Collect Versions associated with Entities to delete
+	for versionID, version := range db.versions {
+		if _, exists := entitiesToDelete[version.EntityID]; exists {
+			versionsToDelete[versionID] = version
+		}
+	}
+
+	// Filter Hierarchies to keep only those not associated with Entities to delete
+	for _, hierarchy := range db.hierarchies {
+		if _, parentExists := entitiesToDelete[hierarchy.ParentEntityID]; parentExists {
+			continue
+		}
+		if _, childExists := entitiesToDelete[hierarchy.ChildEntityID]; childExists {
+			continue
+		}
+		hierarchiesToKeep = append(hierarchiesToKeep, hierarchy)
+	}
+
+	// Delete Runs
+	for _, runID := range runsToDelete {
+		delete(db.runs, runID)
+	}
+
+	// Delete Entities
+	for entityID := range entitiesToDelete {
+		delete(db.entities, entityID)
+	}
+
+	// Delete Executions
+	for execID := range executionsToDelete {
+		delete(db.executions, execID)
+	}
+
+	// Delete Versions
+	for versionID := range versionsToDelete {
+		delete(db.versions, versionID)
+	}
+
+	// Replace hierarchies with the filtered ones
+	db.hierarchies = hierarchiesToKeep
+}
+
 // Orchestrator orchestrates the execution of workflows and activities.
 type Orchestrator struct {
 	db            Database
@@ -2179,6 +2273,14 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 		}
 		run = o.db.AddRun(run)
 		o.runID = run.ID
+	}
+
+	// Update Run status to Running
+	run := o.db.GetRun(o.runID)
+	if run != nil {
+		run.Status = string(StatusRunning)
+		run.UpdatedAt = time.Now()
+		o.db.UpdateRun(run)
 	}
 
 	// Convert inputs to [][]byte
@@ -2236,6 +2338,7 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 		options:      options,
 		entity:       entity,
 		entityID:     entity.ID, // Store entity ID
+		//isRoot:       true,
 	}
 
 	future := NewFuture(entity.ID)
@@ -2287,6 +2390,14 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	entity.Paused = false
 	entity.Resumable = true
 	o.db.UpdateEntity(entity)
+
+	// Update Run status to Running
+	run := o.db.GetRun(o.runID)
+	if run != nil {
+		run.Status = string(StatusRunning)
+		run.UpdatedAt = time.Now()
+		o.db.UpdateRun(run)
+	}
 
 	// Retrieve the handler
 	handlerInfo := entity.HandlerInfo
@@ -2385,6 +2496,9 @@ func (o *Orchestrator) Wait() {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+
+	// Root workflow has completed or failed
+	// The Run's status should have been updated in onCompleted or onFailed of the root workflow
 
 	// Check if rootWf has any error
 	if o.rootWf.err != nil {
@@ -2867,6 +2981,9 @@ func main() {
 	}
 
 	newOrchestrator.Wait()
+
+	// After execution, clear completed Runs to free up memory
+	database.Clear()
 
 	log.Printf("main finished")
 }
