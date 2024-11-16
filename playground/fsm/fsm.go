@@ -142,6 +142,10 @@ type Future struct {
 	workflowID int
 }
 
+func (f *Future) WorkflowID() int {
+	return f.workflowID
+}
+
 func NewFuture(workflowID int) *Future {
 	return &Future{
 		done:       make(chan struct{}),
@@ -230,6 +234,31 @@ func (ctx *WorkflowContext) checkPause() error {
 		return ErrPaused
 	}
 	return nil
+}
+
+// GetVersion retrieves or sets a version for a changeID.
+func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+	// First check if version is overridden in options
+	if ctx.options != nil && ctx.options.VersionOverrides != nil {
+		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
+			return forcedVersion
+		}
+	}
+
+	version := ctx.orchestrator.db.GetVersion(ctx.workflowID, changeID)
+	if version != nil {
+		return version.Version
+	}
+
+	// If version not found, create a new version.
+	newVersion := &Version{
+		EntityID: ctx.workflowID,
+		ChangeID: changeID,
+		Version:  maxSupported,
+	}
+
+	ctx.orchestrator.db.SetVersion(newVersion)
+	return newVersion.Version
 }
 
 func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
@@ -833,6 +862,7 @@ type WorkflowData struct {
 	RetryState  *RetryState          `json:"retry_state"`
 	RetryPolicy *retryPolicyInternal `json:"retry_policy"`
 	Input       [][]byte             `json:"input,omitempty"`
+	RetryOf     *int                 `json:"retry_of,omitempty"`
 }
 
 type ActivityData struct {
@@ -976,8 +1006,8 @@ func (wi *WorkflowInstance) executeWithRetry() {
 				ChildExecutionID:  wi.executionID,
 				ParentStepID:      wi.parentStepID,
 				ChildStepID:       wi.stepID,
-				ParentType:        string(wi.entity.Type), // Assuming parent and child are of same type
-				ChildType:         string(wi.entity.Type),
+				ParentType:        string(EntityTypeWorkflow),
+				ChildType:         string(EntityTypeWorkflow),
 			}
 			wi.orchestrator.db.AddHierarchy(hierarchy)
 		}
@@ -1667,11 +1697,12 @@ func (sei *SideEffectInstance) executeWithRetry() {
 
 	// Get the retry policy from the entity data
 	if sei.entity.SideEffectData != nil && sei.entity.SideEffectData.RetryPolicy != nil {
+		rp := sei.entity.SideEffectData.RetryPolicy
 		retryPolicy = &RetryPolicy{
-			MaxAttempts:        sei.entity.SideEffectData.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(sei.entity.SideEffectData.RetryPolicy.InitialInterval),
-			BackoffCoefficient: sei.entity.SideEffectData.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(sei.entity.SideEffectData.RetryPolicy.MaxInterval),
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    time.Duration(rp.InitialInterval),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        time.Duration(rp.MaxInterval),
 		}
 	}
 
@@ -2867,6 +2898,80 @@ func (o *Orchestrator) Wait() {
 	}
 }
 
+// Retry retries a failed root workflow by creating a new entity and execution.
+func (o *Orchestrator) Retry(workflowID int) *Future {
+	// Retrieve the workflow entity
+	entity := o.db.GetEntity(workflowID)
+	if entity == nil {
+		log.Printf("No workflow found with ID: %d", workflowID)
+		return NewFuture(0)
+	}
+
+	if entity.Type != string(EntityTypeWorkflow) {
+		log.Printf("Entity with ID %d is not a workflow", workflowID)
+		return NewFuture(0)
+	}
+
+	// Copy inputs
+	inputs, err := convertInputsFromSerialization(*entity.HandlerInfo, entity.WorkflowData.Input)
+	if err != nil {
+		log.Printf("Error converting inputs from serialization: %v", err)
+		return NewFuture(0)
+	}
+
+	// Create a new WorkflowData with RetryOf set
+	workflowData := &WorkflowData{
+		Duration:    "",
+		Paused:      false,
+		Resumable:   false,
+		RetryOf:     &workflowID,
+		RetryState:  &RetryState{Attempts: 0},
+		RetryPolicy: entity.WorkflowData.RetryPolicy,
+		Input:       entity.WorkflowData.Input,
+	}
+
+	// Create a new Entity
+	newEntity := &Entity{
+		StepID:       entity.StepID,
+		HandlerName:  entity.HandlerName,
+		Type:         string(EntityTypeWorkflow),
+		Status:       string(StatusPending),
+		RunID:        o.runID,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		WorkflowData: workflowData,
+		HandlerInfo:  entity.HandlerInfo,
+	}
+	newEntity = o.db.AddEntity(newEntity)
+
+	// Create a new WorkflowInstance
+	instance := &WorkflowInstance{
+		stepID:            newEntity.StepID,
+		handler:           *entity.HandlerInfo,
+		input:             inputs,
+		ctx:               o.ctx,
+		orchestrator:      o,
+		workflowID:        newEntity.ID,
+		options:           nil, // You might want to use the same options or set new ones
+		entity:            newEntity,
+		entityID:          newEntity.ID,
+		parentExecutionID: 0,
+		parentEntityID:    0,
+		parentStepID:      "",
+	}
+
+	future := NewFuture(newEntity.ID)
+	instance.future = future
+
+	// Store the root workflow instance
+	o.rootWf = instance
+
+	// Start the instance
+	instance.Start()
+
+	return future
+}
+
 // Registry holds registered workflows, activities, and side effects.
 type Registry struct {
 	workflows   map[string]HandlerInfo
@@ -3272,31 +3377,6 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	return result, nil
 }
 
-// GetVersion retrieves or sets a version for a changeID.
-func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
-	// First check if version is overridden in options
-	if ctx.options != nil && ctx.options.VersionOverrides != nil {
-		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
-			return forcedVersion
-		}
-	}
-
-	version := ctx.orchestrator.db.GetVersion(ctx.workflowID, changeID)
-	if version != nil {
-		return version.Version
-	}
-
-	// If version not found, create a new version.
-	newVersion := &Version{
-		EntityID: ctx.workflowID,
-		ChangeID: changeID,
-		Version:  maxSupported,
-	}
-
-	ctx.orchestrator.db.SetVersion(newVersion)
-	return newVersion.Version
-}
-
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 	log.Printf("main started")
@@ -3340,7 +3420,7 @@ func main() {
 	runID := orchestrator.runID
 	newOrchestrator := NewOrchestrator(ctx, database, registry, runID)
 
-	future = newOrchestrator.Resume(future.workflowID)
+	future = newOrchestrator.Resume(future.WorkflowID())
 
 	var result int
 	if err := future.Get(&result); err != nil {
@@ -3350,6 +3430,15 @@ func main() {
 	}
 
 	newOrchestrator.Wait()
+
+	log.Printf("Retrying workflow")
+	retryFuture := newOrchestrator.Retry(future.WorkflowID())
+
+	if err := retryFuture.Get(&result); err != nil {
+		log.Printf("Retried workflow failed with error: %v", err)
+	} else {
+		log.Printf("Retried workflow completed with result: %d", result)
+	}
 
 	// After execution, clear completed Runs to free up memory
 	database.Clear()
