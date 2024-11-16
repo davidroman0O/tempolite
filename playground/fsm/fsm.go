@@ -607,6 +607,24 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 	return future
 }
 
+// ContinueAsNew allows a workflow to continue as new with the given function and arguments.
+func (ctx *WorkflowContext) ContinueAsNew(workflowFunc interface{}, args ...interface{}) error {
+	return &ContinueAsNewError{
+		WorkflowFunc: workflowFunc,
+		Args:         args,
+	}
+}
+
+// ContinueAsNewError indicates that the workflow should restart with new inputs.
+type ContinueAsNewError struct {
+	WorkflowFunc interface{}
+	Args         []interface{}
+}
+
+func (e *ContinueAsNewError) Error() string {
+	return "workflow is continuing as new"
+}
+
 // SagaContext provides context for saga execution.
 type SagaContext struct {
 	ctx          context.Context
@@ -801,22 +819,22 @@ type SagaData struct {
 
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
-	stepID       string
-	handler      HandlerInfo
-	input        []interface{}
-	results      []interface{}
-	err          error
-	fsm          *stateless.StateMachine
-	future       *Future
-	ctx          context.Context
-	orchestrator *Orchestrator
-	workflowID   int
-	options      WorkflowOptions
-	entity       *Entity
-	entityID     int
-	executionID  int
-	execution    *Execution // Current execution
-	//isRoot       bool        // Indicates if this is the root workflow instance
+	stepID        string
+	handler       HandlerInfo
+	input         []interface{}
+	results       []interface{}
+	err           error
+	fsm           *stateless.StateMachine
+	future        *Future
+	ctx           context.Context
+	orchestrator  *Orchestrator
+	workflowID    int
+	options       WorkflowOptions
+	entity        *Entity
+	entityID      int
+	executionID   int
+	execution     *Execution // Current execution
+	continueAsNew *ContinueAsNewError
 }
 
 func (wi *WorkflowInstance) Start() {
@@ -1002,23 +1020,30 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	errInterface := results[numOut-1].Interface()
 
 	if errInterface != nil {
-		log.Printf("Workflow returned error: %v", errInterface)
-		wi.err = errInterface.(error)
+		if continueErr, ok := errInterface.(*ContinueAsNewError); ok {
+			log.Printf("Workflow requested ContinueAsNew")
+			wi.continueAsNew = continueErr
+			// We treat it as normal completion, return nil to proceed
+			return nil
+		} else {
+			log.Printf("Workflow returned error: %v", errInterface)
+			wi.err = errInterface.(error)
 
-		// Serialize error
-		errorMessage := wi.err.Error()
+			// Serialize error
+			errorMessage := wi.err.Error()
 
-		// Create WorkflowExecutionData
-		workflowExecutionData := &WorkflowExecutionData{
-			Error:  errorMessage,
-			Output: nil,
+			// Create WorkflowExecutionData
+			workflowExecutionData := &WorkflowExecutionData{
+				Error:  errorMessage,
+				Output: nil,
+			}
+
+			// Update the execution with the execution data
+			wi.execution.WorkflowExecutionData = workflowExecutionData
+			wi.orchestrator.db.UpdateExecution(wi.execution)
+
+			return wi.err
 		}
-
-		// Update the execution with the execution data
-		wi.execution.WorkflowExecutionData = workflowExecutionData
-		wi.orchestrator.db.UpdateExecution(wi.execution)
-
-		return wi.err
 	} else {
 		outputs := []interface{}{}
 		if numOut > 1 {
@@ -1054,20 +1079,94 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.entityID)
-	if wi.future != nil {
-		wi.future.setResult(wi.results)
-	}
+	if wi.continueAsNew != nil {
+		// Handle ContinueAsNew
+		o := wi.orchestrator
+		newHandler, err := o.registry.RegisterWorkflow(wi.continueAsNew.WorkflowFunc)
+		if err != nil {
+			log.Printf("Error registering workflow in ContinueAsNew: %v", err)
+			wi.err = err
+			if wi.future != nil {
+				wi.future.setError(wi.err)
+			}
+			return nil
+		}
+		// Convert inputs to [][]byte
+		inputBytes, err := ConvertInputsForSerialization(wi.continueAsNew.Args)
+		if err != nil {
+			log.Printf("Error converting inputs in ContinueAsNew: %v", err)
+			wi.err = err
+			if wi.future != nil {
+				wi.future.setError(wi.err)
+			}
+			return nil
+		}
+		// Create WorkflowData
+		workflowData := &WorkflowData{
+			Duration:    "",
+			Paused:      false,
+			Resumable:   false,
+			RetryState:  &RetryState{Attempts: 0},
+			RetryPolicy: wi.entity.WorkflowData.RetryPolicy, // Reuse the existing retry policy
+			Input:       inputBytes,
+		}
+		// Create a new Entity without ID (database assigns it)
+		newEntity := &Entity{
+			StepID:       wi.entity.StepID, // Use the same stepID
+			HandlerName:  newHandler.HandlerName,
+			Type:         string(EntityTypeWorkflow),
+			Status:       string(StatusPending),
+			RunID:        wi.entity.RunID, // Share the same RunID
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+			WorkflowData: workflowData,
+		}
+		newEntity.HandlerInfo = &newHandler
+		// Add the entity to the database, which assigns the ID
+		newEntity = o.db.AddEntity(newEntity)
 
-	// If this is the root workflow, update the Run status to Completed
-	if wi.orchestrator.rootWf == wi {
-		run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
-		if run != nil {
-			run.Status = string(StatusCompleted)
-			run.UpdatedAt = time.Now()
-			wi.orchestrator.db.UpdateRun(run)
+		// Create a new WorkflowInstance
+		newInstance := &WorkflowInstance{
+			stepID:       wi.stepID,
+			handler:      newHandler,
+			input:        wi.continueAsNew.Args,
+			ctx:          o.ctx,
+			orchestrator: o,
+			workflowID:   newEntity.ID,
+			options:      wi.options,
+			entity:       newEntity,
+			entityID:     newEntity.ID,
+		}
+		if wi == o.rootWf {
+			// Root workflow
+			o.rootWf = newInstance
+			// Complete the future immediately
+			if wi.future != nil {
+				// Set empty results as per instruction
+				wi.future.setResult(wi.results)
+			}
+		} else {
+			// Sub-workflow
+			// Pass the future to the newInstance
+			newInstance.future = wi.future
+		}
+		o.addWorkflowInstance(newInstance)
+		newInstance.Start()
+	} else {
+		// Normal completion
+		if wi.future != nil {
+			wi.future.setResult(wi.results)
+		}
+		// If this is the root workflow, update the Run status to Completed
+		if wi.orchestrator.rootWf == wi {
+			run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
+			if run != nil {
+				run.Status = string(StatusCompleted)
+				run.UpdatedAt = time.Now()
+				wi.orchestrator.db.UpdateRun(run)
+			}
 		}
 	}
-
 	return nil
 }
 
@@ -1076,7 +1175,6 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 	if wi.future != nil {
 		wi.future.setError(wi.err)
 	}
-
 	// If this is the root workflow, update the Run status to Failed
 	if wi.orchestrator.rootWf == wi {
 		run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
@@ -1086,7 +1184,6 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 			wi.orchestrator.db.UpdateRun(run)
 		}
 	}
-
 	return nil
 }
 
@@ -2338,7 +2435,6 @@ func (o *Orchestrator) Workflow(workflowFunc interface{}, options WorkflowOption
 		options:      options,
 		entity:       entity,
 		entityID:     entity.ID, // Store entity ID
-		//isRoot:       true,
 	}
 
 	future := NewFuture(entity.ID)
@@ -2819,6 +2915,8 @@ func SubManyWorkflow(ctx *WorkflowContext) (int, int, error) {
 	return 1, 2, nil
 }
 
+var continueAsNewCalled atomic.Bool
+
 func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	log.Printf("Workflow called with data: %d", data)
 	var value int
@@ -2858,6 +2956,16 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 		return -1, err
 	}
 
+	if !continueAsNewCalled.Load() {
+		continueAsNewCalled.Store(true)
+		log.Printf("Using ContinueAsNew to restart workflow")
+		err := ctx.ContinueAsNew(Workflow, data*2)
+		if err != nil {
+			return -1, err
+		}
+		return 0, nil // This line won't be executed
+	}
+
 	if err := ctx.Workflow("subworkflow-step", SubWorkflow, WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:        2,
@@ -2889,9 +2997,6 @@ func Workflow(ctx *WorkflowContext, data int) (int, error) {
 	}
 
 	result := value + data
-	if shouldDouble {
-		result *= 2
-	}
 
 	var a int
 	var b int
@@ -2944,6 +3049,7 @@ func main() {
 	orchestrator := NewOrchestrator(ctx, database, registry, 0)
 
 	subWorkflowFailed.Store(true)
+	continueAsNewCalled.Store(false)
 
 	future := orchestrator.Workflow(Workflow, WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
