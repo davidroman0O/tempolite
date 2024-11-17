@@ -16,6 +16,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sideeffectdata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/version"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
@@ -65,6 +66,18 @@ func (ec *EntityCreate) SetHandlerName(s string) *EntityCreate {
 // SetType sets the "type" field.
 func (ec *EntityCreate) SetType(e entity.Type) *EntityCreate {
 	ec.mutation.SetType(e)
+	return ec
+}
+
+// SetRetryState sets the "retry_state" field.
+func (ec *EntityCreate) SetRetryState(ss *schema.RetryState) *EntityCreate {
+	ec.mutation.SetRetryState(ss)
+	return ec
+}
+
+// SetRetryPolicy sets the "retry_policy" field.
+func (ec *EntityCreate) SetRetryPolicy(sp *schema.RetryPolicy) *EntityCreate {
+	ec.mutation.SetRetryPolicy(sp)
 	return ec
 }
 
@@ -267,6 +280,14 @@ func (ec *EntityCreate) defaults() {
 		v := entity.DefaultUpdatedAt()
 		ec.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := ec.mutation.RetryState(); !ok {
+		v := entity.DefaultRetryState
+		ec.mutation.SetRetryState(v)
+	}
+	if _, ok := ec.mutation.RetryPolicy(); !ok {
+		v := entity.DefaultRetryPolicy
+		ec.mutation.SetRetryPolicy(v)
+	}
 	if _, ok := ec.mutation.Status(); !ok {
 		v := entity.DefaultStatus
 		ec.mutation.SetStatus(v)
@@ -296,6 +317,12 @@ func (ec *EntityCreate) check() error {
 		if err := entity.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Entity.type": %w`, err)}
 		}
+	}
+	if _, ok := ec.mutation.RetryState(); !ok {
+		return &ValidationError{Name: "retry_state", err: errors.New(`ent: missing required field "Entity.retry_state"`)}
+	}
+	if _, ok := ec.mutation.RetryPolicy(); !ok {
+		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "Entity.retry_policy"`)}
 	}
 	if _, ok := ec.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Entity.status"`)}
@@ -352,6 +379,14 @@ func (ec *EntityCreate) createSpec() (*Entity, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.GetType(); ok {
 		_spec.SetField(entity.FieldType, field.TypeEnum, value)
 		_node.Type = value
+	}
+	if value, ok := ec.mutation.RetryState(); ok {
+		_spec.SetField(entity.FieldRetryState, field.TypeJSON, value)
+		_node.RetryState = value
+	}
+	if value, ok := ec.mutation.RetryPolicy(); ok {
+		_spec.SetField(entity.FieldRetryPolicy, field.TypeJSON, value)
+		_node.RetryPolicy = value
 	}
 	if value, ok := ec.mutation.Status(); ok {
 		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)

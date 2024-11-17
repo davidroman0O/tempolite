@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 const (
@@ -23,6 +24,10 @@ const (
 	FieldHandlerName = "handler_name"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldRetryState holds the string denoting the retry_state field in the database.
+	FieldRetryState = "retry_state"
+	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
+	FieldRetryPolicy = "retry_policy"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldStepID holds the string denoting the step_id field in the database.
@@ -110,6 +115,8 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldHandlerName,
 	FieldType,
+	FieldRetryState,
+	FieldRetryPolicy,
 	FieldStatus,
 	FieldStepID,
 }
@@ -145,6 +152,10 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	HandlerNameValidator func(string) error
+	// DefaultRetryState holds the default value on creation for the "retry_state" field.
+	DefaultRetryState *schema.RetryState
+	// DefaultRetryPolicy holds the default value on creation for the "retry_policy" field.
+	DefaultRetryPolicy *schema.RetryPolicy
 )
 
 // Type defines the type for the "type" enum field.

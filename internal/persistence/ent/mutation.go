@@ -73,7 +73,6 @@ type ActivityDataMutation struct {
 	max_attempts    *int
 	addmax_attempts *int
 	scheduled_for   *time.Time
-	retry_policy    **schema.RetryPolicy
 	input           *[][]uint8
 	appendinput     [][]uint8
 	output          *[][]uint8
@@ -361,42 +360,6 @@ func (m *ActivityDataMutation) ResetScheduledFor() {
 	delete(m.clearedFields, activitydata.FieldScheduledFor)
 }
 
-// SetRetryPolicy sets the "retry_policy" field.
-func (m *ActivityDataMutation) SetRetryPolicy(sp *schema.RetryPolicy) {
-	m.retry_policy = &sp
-}
-
-// RetryPolicy returns the value of the "retry_policy" field in the mutation.
-func (m *ActivityDataMutation) RetryPolicy() (r *schema.RetryPolicy, exists bool) {
-	v := m.retry_policy
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRetryPolicy returns the old "retry_policy" field's value of the ActivityData entity.
-// If the ActivityData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityDataMutation) OldRetryPolicy(ctx context.Context) (v *schema.RetryPolicy, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRetryPolicy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRetryPolicy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRetryPolicy: %w", err)
-	}
-	return oldValue.RetryPolicy, nil
-}
-
-// ResetRetryPolicy resets all changes to the "retry_policy" field.
-func (m *ActivityDataMutation) ResetRetryPolicy() {
-	m.retry_policy = nil
-}
-
 // SetInput sets the "input" field.
 func (m *ActivityDataMutation) SetInput(u [][]uint8) {
 	m.input = &u
@@ -656,7 +619,7 @@ func (m *ActivityDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityDataMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 6)
 	if m.timeout != nil {
 		fields = append(fields, activitydata.FieldTimeout)
 	}
@@ -665,9 +628,6 @@ func (m *ActivityDataMutation) Fields() []string {
 	}
 	if m.scheduled_for != nil {
 		fields = append(fields, activitydata.FieldScheduledFor)
-	}
-	if m.retry_policy != nil {
-		fields = append(fields, activitydata.FieldRetryPolicy)
 	}
 	if m.input != nil {
 		fields = append(fields, activitydata.FieldInput)
@@ -692,8 +652,6 @@ func (m *ActivityDataMutation) Field(name string) (ent.Value, bool) {
 		return m.MaxAttempts()
 	case activitydata.FieldScheduledFor:
 		return m.ScheduledFor()
-	case activitydata.FieldRetryPolicy:
-		return m.RetryPolicy()
 	case activitydata.FieldInput:
 		return m.Input()
 	case activitydata.FieldOutput:
@@ -715,8 +673,6 @@ func (m *ActivityDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldMaxAttempts(ctx)
 	case activitydata.FieldScheduledFor:
 		return m.OldScheduledFor(ctx)
-	case activitydata.FieldRetryPolicy:
-		return m.OldRetryPolicy(ctx)
 	case activitydata.FieldInput:
 		return m.OldInput(ctx)
 	case activitydata.FieldOutput:
@@ -752,13 +708,6 @@ func (m *ActivityDataMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetScheduledFor(v)
-		return nil
-	case activitydata.FieldRetryPolicy:
-		v, ok := value.(*schema.RetryPolicy)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRetryPolicy(v)
 		return nil
 	case activitydata.FieldInput:
 		v, ok := value.([][]uint8)
@@ -904,9 +853,6 @@ func (m *ActivityDataMutation) ResetField(name string) error {
 		return nil
 	case activitydata.FieldScheduledFor:
 		m.ResetScheduledFor()
-		return nil
-	case activitydata.FieldRetryPolicy:
-		m.ResetRetryPolicy()
 		return nil
 	case activitydata.FieldInput:
 		m.ResetInput()
@@ -2001,6 +1947,8 @@ type EntityMutation struct {
 	updated_at              *time.Time
 	handler_name            *string
 	_type                   *entity.Type
+	retry_state             **schema.RetryState
+	retry_policy            **schema.RetryPolicy
 	status                  *entity.Status
 	step_id                 *string
 	clearedFields           map[string]struct{}
@@ -2267,6 +2215,78 @@ func (m *EntityMutation) OldType(ctx context.Context) (v entity.Type, err error)
 // ResetType resets all changes to the "type" field.
 func (m *EntityMutation) ResetType() {
 	m._type = nil
+}
+
+// SetRetryState sets the "retry_state" field.
+func (m *EntityMutation) SetRetryState(ss *schema.RetryState) {
+	m.retry_state = &ss
+}
+
+// RetryState returns the value of the "retry_state" field in the mutation.
+func (m *EntityMutation) RetryState() (r *schema.RetryState, exists bool) {
+	v := m.retry_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryState returns the old "retry_state" field's value of the Entity entity.
+// If the Entity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityMutation) OldRetryState(ctx context.Context) (v *schema.RetryState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryState: %w", err)
+	}
+	return oldValue.RetryState, nil
+}
+
+// ResetRetryState resets all changes to the "retry_state" field.
+func (m *EntityMutation) ResetRetryState() {
+	m.retry_state = nil
+}
+
+// SetRetryPolicy sets the "retry_policy" field.
+func (m *EntityMutation) SetRetryPolicy(sp *schema.RetryPolicy) {
+	m.retry_policy = &sp
+}
+
+// RetryPolicy returns the value of the "retry_policy" field in the mutation.
+func (m *EntityMutation) RetryPolicy() (r *schema.RetryPolicy, exists bool) {
+	v := m.retry_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetryPolicy returns the old "retry_policy" field's value of the Entity entity.
+// If the Entity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntityMutation) OldRetryPolicy(ctx context.Context) (v *schema.RetryPolicy, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetryPolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetryPolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetryPolicy: %w", err)
+	}
+	return oldValue.RetryPolicy, nil
+}
+
+// ResetRetryPolicy resets all changes to the "retry_policy" field.
+func (m *EntityMutation) ResetRetryPolicy() {
+	m.retry_policy = nil
 }
 
 // SetStatus sets the "status" field.
@@ -2717,7 +2737,7 @@ func (m *EntityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntityMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 8)
 	if m.created_at != nil {
 		fields = append(fields, entity.FieldCreatedAt)
 	}
@@ -2729,6 +2749,12 @@ func (m *EntityMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, entity.FieldType)
+	}
+	if m.retry_state != nil {
+		fields = append(fields, entity.FieldRetryState)
+	}
+	if m.retry_policy != nil {
+		fields = append(fields, entity.FieldRetryPolicy)
 	}
 	if m.status != nil {
 		fields = append(fields, entity.FieldStatus)
@@ -2752,6 +2778,10 @@ func (m *EntityMutation) Field(name string) (ent.Value, bool) {
 		return m.HandlerName()
 	case entity.FieldType:
 		return m.GetType()
+	case entity.FieldRetryState:
+		return m.RetryState()
+	case entity.FieldRetryPolicy:
+		return m.RetryPolicy()
 	case entity.FieldStatus:
 		return m.Status()
 	case entity.FieldStepID:
@@ -2773,6 +2803,10 @@ func (m *EntityMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldHandlerName(ctx)
 	case entity.FieldType:
 		return m.OldType(ctx)
+	case entity.FieldRetryState:
+		return m.OldRetryState(ctx)
+	case entity.FieldRetryPolicy:
+		return m.OldRetryPolicy(ctx)
 	case entity.FieldStatus:
 		return m.OldStatus(ctx)
 	case entity.FieldStepID:
@@ -2813,6 +2847,20 @@ func (m *EntityMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
+		return nil
+	case entity.FieldRetryState:
+		v, ok := value.(*schema.RetryState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryState(v)
+		return nil
+	case entity.FieldRetryPolicy:
+		v, ok := value.(*schema.RetryPolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetryPolicy(v)
 		return nil
 	case entity.FieldStatus:
 		v, ok := value.(entity.Status)
@@ -2888,6 +2936,12 @@ func (m *EntityMutation) ResetField(name string) error {
 		return nil
 	case entity.FieldType:
 		m.ResetType()
+		return nil
+	case entity.FieldRetryState:
+		m.ResetRetryState()
+		return nil
+	case entity.FieldRetryPolicy:
+		m.ResetRetryPolicy()
 		return nil
 	case entity.FieldStatus:
 		m.ResetStatus()
@@ -9363,8 +9417,6 @@ type WorkflowDataMutation struct {
 	duration      *string
 	paused        *bool
 	resumable     *bool
-	retry_state   **schema.RetryState
-	retry_policy  **schema.RetryPolicy
 	input         *[][]uint8
 	appendinput   [][]uint8
 	attempt       *int
@@ -9596,78 +9648,6 @@ func (m *WorkflowDataMutation) ResetResumable() {
 	m.resumable = nil
 }
 
-// SetRetryState sets the "retry_state" field.
-func (m *WorkflowDataMutation) SetRetryState(ss *schema.RetryState) {
-	m.retry_state = &ss
-}
-
-// RetryState returns the value of the "retry_state" field in the mutation.
-func (m *WorkflowDataMutation) RetryState() (r *schema.RetryState, exists bool) {
-	v := m.retry_state
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRetryState returns the old "retry_state" field's value of the WorkflowData entity.
-// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowDataMutation) OldRetryState(ctx context.Context) (v *schema.RetryState, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRetryState is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRetryState requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRetryState: %w", err)
-	}
-	return oldValue.RetryState, nil
-}
-
-// ResetRetryState resets all changes to the "retry_state" field.
-func (m *WorkflowDataMutation) ResetRetryState() {
-	m.retry_state = nil
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (m *WorkflowDataMutation) SetRetryPolicy(sp *schema.RetryPolicy) {
-	m.retry_policy = &sp
-}
-
-// RetryPolicy returns the value of the "retry_policy" field in the mutation.
-func (m *WorkflowDataMutation) RetryPolicy() (r *schema.RetryPolicy, exists bool) {
-	v := m.retry_policy
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRetryPolicy returns the old "retry_policy" field's value of the WorkflowData entity.
-// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowDataMutation) OldRetryPolicy(ctx context.Context) (v *schema.RetryPolicy, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRetryPolicy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRetryPolicy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRetryPolicy: %w", err)
-	}
-	return oldValue.RetryPolicy, nil
-}
-
-// ResetRetryPolicy resets all changes to the "retry_policy" field.
-func (m *WorkflowDataMutation) ResetRetryPolicy() {
-	m.retry_policy = nil
-}
-
 // SetInput sets the "input" field.
 func (m *WorkflowDataMutation) SetInput(u [][]uint8) {
 	m.input = &u
@@ -9862,7 +9842,7 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 5)
 	if m.duration != nil {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
@@ -9871,12 +9851,6 @@ func (m *WorkflowDataMutation) Fields() []string {
 	}
 	if m.resumable != nil {
 		fields = append(fields, workflowdata.FieldResumable)
-	}
-	if m.retry_state != nil {
-		fields = append(fields, workflowdata.FieldRetryState)
-	}
-	if m.retry_policy != nil {
-		fields = append(fields, workflowdata.FieldRetryPolicy)
 	}
 	if m.input != nil {
 		fields = append(fields, workflowdata.FieldInput)
@@ -9898,10 +9872,6 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 		return m.Paused()
 	case workflowdata.FieldResumable:
 		return m.Resumable()
-	case workflowdata.FieldRetryState:
-		return m.RetryState()
-	case workflowdata.FieldRetryPolicy:
-		return m.RetryPolicy()
 	case workflowdata.FieldInput:
 		return m.Input()
 	case workflowdata.FieldAttempt:
@@ -9921,10 +9891,6 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPaused(ctx)
 	case workflowdata.FieldResumable:
 		return m.OldResumable(ctx)
-	case workflowdata.FieldRetryState:
-		return m.OldRetryState(ctx)
-	case workflowdata.FieldRetryPolicy:
-		return m.OldRetryPolicy(ctx)
 	case workflowdata.FieldInput:
 		return m.OldInput(ctx)
 	case workflowdata.FieldAttempt:
@@ -9958,20 +9924,6 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetResumable(v)
-		return nil
-	case workflowdata.FieldRetryState:
-		v, ok := value.(*schema.RetryState)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRetryState(v)
-		return nil
-	case workflowdata.FieldRetryPolicy:
-		v, ok := value.(*schema.RetryPolicy)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRetryPolicy(v)
 		return nil
 	case workflowdata.FieldInput:
 		v, ok := value.([][]uint8)
@@ -10074,12 +10026,6 @@ func (m *WorkflowDataMutation) ResetField(name string) error {
 		return nil
 	case workflowdata.FieldResumable:
 		m.ResetResumable()
-		return nil
-	case workflowdata.FieldRetryState:
-		m.ResetRetryState()
-		return nil
-	case workflowdata.FieldRetryPolicy:
-		m.ResetRetryPolicy()
 		return nil
 	case workflowdata.FieldInput:
 		m.ResetInput()

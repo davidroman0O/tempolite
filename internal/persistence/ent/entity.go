@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sideeffectdata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 )
@@ -31,6 +33,10 @@ type Entity struct {
 	HandlerName string `json:"handler_name,omitempty"`
 	// Type holds the value of the "type" field.
 	Type entity.Type `json:"type,omitempty"`
+	// RetryState holds the value of the "retry_state" field.
+	RetryState *schema.RetryState `json:"retry_state,omitempty"`
+	// RetryPolicy holds the value of the "retry_policy" field.
+	RetryPolicy *schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Status holds the value of the "status" field.
 	Status entity.Status `json:"status,omitempty"`
 	// StepID holds the value of the "step_id" field.
@@ -155,6 +161,8 @@ func (*Entity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case entity.FieldRetryState, entity.FieldRetryPolicy:
+			values[i] = new([]byte)
 		case entity.FieldID:
 			values[i] = new(sql.NullInt64)
 		case entity.FieldHandlerName, entity.FieldType, entity.FieldStatus, entity.FieldStepID:
@@ -209,6 +217,22 @@ func (e *Entity) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
 				e.Type = entity.Type(value.String)
+			}
+		case entity.FieldRetryState:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field retry_state", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &e.RetryState); err != nil {
+					return fmt.Errorf("unmarshal field retry_state: %w", err)
+				}
+			}
+		case entity.FieldRetryPolicy:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field retry_policy", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &e.RetryPolicy); err != nil {
+					return fmt.Errorf("unmarshal field retry_policy: %w", err)
+				}
 			}
 		case entity.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -323,6 +347,12 @@ func (e *Entity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(fmt.Sprintf("%v", e.Type))
+	builder.WriteString(", ")
+	builder.WriteString("retry_state=")
+	builder.WriteString(fmt.Sprintf("%v", e.RetryState))
+	builder.WriteString(", ")
+	builder.WriteString("retry_policy=")
+	builder.WriteString(fmt.Sprintf("%v", e.RetryPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", e.Status))

@@ -93,6 +93,15 @@ func (Entity) Fields() []ent.Field {
 		field.Enum("type").
 			Values("Workflow", "Activity", "Saga", "SideEffect").
 			Immutable(),
+		field.JSON("retry_state", &RetryState{}).
+			Default(&RetryState{Attempts: 0}),
+		field.JSON("retry_policy", &RetryPolicy{}).
+			Default(&RetryPolicy{
+				MaxAttempts:        1,
+				InitialInterval:    1000000000, // 1 second in nanoseconds
+				BackoffCoefficient: 2.0,
+				MaxInterval:        300000000000, // 5 minutes in nanoseconds
+			}),
 		field.Enum("status").
 			// The status of the Entity is a but more generalised than the Execution status. It just don't know about retries.
 			Values(
@@ -285,15 +294,6 @@ func (WorkflowData) Fields() []ent.Field {
 			Default(false),
 		field.Bool("resumable").
 			Default(false),
-		field.JSON("retry_state", &RetryState{}).
-			Default(&RetryState{Attempts: 0}),
-		field.JSON("retry_policy", &RetryPolicy{}).
-			Default(&RetryPolicy{
-				MaxAttempts:        1,
-				InitialInterval:    1000000000, // 1 second in nanoseconds
-				BackoffCoefficient: 2.0,
-				MaxInterval:        300000000000, // 5 minutes in nanoseconds
-			}),
 		field.JSON("input", [][]byte{}).
 			Optional(),
 		field.Int("attempt").
@@ -322,13 +322,6 @@ func (ActivityData) Fields() []ent.Field {
 			Default(1),
 		field.Time("scheduled_for").
 			Optional(),
-		field.JSON("retry_policy", &RetryPolicy{}).
-			Default(&RetryPolicy{
-				MaxAttempts:        1,
-				InitialInterval:    1000000000, // 1 second in nanoseconds
-				BackoffCoefficient: 2.0,
-				MaxInterval:        300000000000, // 5 minutes in nanoseconds
-			}),
 		field.JSON("input", [][]byte{}).
 			Optional(),
 		field.JSON("output", [][]byte{}).

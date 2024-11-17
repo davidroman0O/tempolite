@@ -18,6 +18,7 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sideeffectdata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/version"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
@@ -53,6 +54,18 @@ func (eu *EntityUpdate) SetNillableHandlerName(s *string) *EntityUpdate {
 	if s != nil {
 		eu.SetHandlerName(*s)
 	}
+	return eu
+}
+
+// SetRetryState sets the "retry_state" field.
+func (eu *EntityUpdate) SetRetryState(ss *schema.RetryState) *EntityUpdate {
+	eu.mutation.SetRetryState(ss)
+	return eu
+}
+
+// SetRetryPolicy sets the "retry_policy" field.
+func (eu *EntityUpdate) SetRetryPolicy(sp *schema.RetryPolicy) *EntityUpdate {
+	eu.mutation.SetRetryPolicy(sp)
 	return eu
 }
 
@@ -375,6 +388,12 @@ func (eu *EntityUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := eu.mutation.HandlerName(); ok {
 		_spec.SetField(entity.FieldHandlerName, field.TypeString, value)
 	}
+	if value, ok := eu.mutation.RetryState(); ok {
+		_spec.SetField(entity.FieldRetryState, field.TypeJSON, value)
+	}
+	if value, ok := eu.mutation.RetryPolicy(); ok {
+		_spec.SetField(entity.FieldRetryPolicy, field.TypeJSON, value)
+	}
 	if value, ok := eu.mutation.Status(); ok {
 		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)
 	}
@@ -682,6 +701,18 @@ func (euo *EntityUpdateOne) SetNillableHandlerName(s *string) *EntityUpdateOne {
 	if s != nil {
 		euo.SetHandlerName(*s)
 	}
+	return euo
+}
+
+// SetRetryState sets the "retry_state" field.
+func (euo *EntityUpdateOne) SetRetryState(ss *schema.RetryState) *EntityUpdateOne {
+	euo.mutation.SetRetryState(ss)
+	return euo
+}
+
+// SetRetryPolicy sets the "retry_policy" field.
+func (euo *EntityUpdateOne) SetRetryPolicy(sp *schema.RetryPolicy) *EntityUpdateOne {
+	euo.mutation.SetRetryPolicy(sp)
 	return euo
 }
 
@@ -1033,6 +1064,12 @@ func (euo *EntityUpdateOne) sqlSave(ctx context.Context) (_node *Entity, err err
 	}
 	if value, ok := euo.mutation.HandlerName(); ok {
 		_spec.SetField(entity.FieldHandlerName, field.TypeString, value)
+	}
+	if value, ok := euo.mutation.RetryState(); ok {
+		_spec.SetField(entity.FieldRetryState, field.TypeJSON, value)
+	}
+	if value, ok := euo.mutation.RetryPolicy(); ok {
+		_spec.SetField(entity.FieldRetryPolicy, field.TypeJSON, value)
 	}
 	if value, ok := euo.mutation.Status(); ok {
 		_spec.SetField(entity.FieldStatus, field.TypeEnum, value)

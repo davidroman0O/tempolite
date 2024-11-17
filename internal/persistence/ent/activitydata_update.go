@@ -15,7 +15,6 @@ import (
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 // ActivityDataUpdate is the builder for updating ActivityData entities.
@@ -96,12 +95,6 @@ func (adu *ActivityDataUpdate) SetNillableScheduledFor(t *time.Time) *ActivityDa
 // ClearScheduledFor clears the value of the "scheduled_for" field.
 func (adu *ActivityDataUpdate) ClearScheduledFor() *ActivityDataUpdate {
 	adu.mutation.ClearScheduledFor()
-	return adu
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (adu *ActivityDataUpdate) SetRetryPolicy(sp *schema.RetryPolicy) *ActivityDataUpdate {
-	adu.mutation.SetRetryPolicy(sp)
 	return adu
 }
 
@@ -252,9 +245,6 @@ func (adu *ActivityDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if adu.mutation.ScheduledForCleared() {
 		_spec.ClearField(activitydata.FieldScheduledFor, field.TypeTime)
 	}
-	if value, ok := adu.mutation.RetryPolicy(); ok {
-		_spec.SetField(activitydata.FieldRetryPolicy, field.TypeJSON, value)
-	}
 	if value, ok := adu.mutation.Input(); ok {
 		_spec.SetField(activitydata.FieldInput, field.TypeJSON, value)
 	}
@@ -397,12 +387,6 @@ func (aduo *ActivityDataUpdateOne) SetNillableScheduledFor(t *time.Time) *Activi
 // ClearScheduledFor clears the value of the "scheduled_for" field.
 func (aduo *ActivityDataUpdateOne) ClearScheduledFor() *ActivityDataUpdateOne {
 	aduo.mutation.ClearScheduledFor()
-	return aduo
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (aduo *ActivityDataUpdateOne) SetRetryPolicy(sp *schema.RetryPolicy) *ActivityDataUpdateOne {
-	aduo.mutation.SetRetryPolicy(sp)
 	return aduo
 }
 
@@ -582,9 +566,6 @@ func (aduo *ActivityDataUpdateOne) sqlSave(ctx context.Context) (_node *Activity
 	}
 	if aduo.mutation.ScheduledForCleared() {
 		_spec.ClearField(activitydata.FieldScheduledFor, field.TypeTime)
-	}
-	if value, ok := aduo.mutation.RetryPolicy(); ok {
-		_spec.SetField(activitydata.FieldRetryPolicy, field.TypeJSON, value)
 	}
 	if value, ok := aduo.mutation.Input(); ok {
 		_spec.SetField(activitydata.FieldInput, field.TypeJSON, value)

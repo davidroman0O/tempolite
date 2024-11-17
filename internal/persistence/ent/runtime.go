@@ -27,12 +27,8 @@ func init() {
 	activitydataDescMaxAttempts := activitydataFields[1].Descriptor()
 	// activitydata.DefaultMaxAttempts holds the default value on creation for the max_attempts field.
 	activitydata.DefaultMaxAttempts = activitydataDescMaxAttempts.Default.(int)
-	// activitydataDescRetryPolicy is the schema descriptor for retry_policy field.
-	activitydataDescRetryPolicy := activitydataFields[3].Descriptor()
-	// activitydata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
-	activitydata.DefaultRetryPolicy = activitydataDescRetryPolicy.Default.(*schema.RetryPolicy)
 	// activitydataDescAttempt is the schema descriptor for attempt field.
-	activitydataDescAttempt := activitydataFields[6].Descriptor()
+	activitydataDescAttempt := activitydataFields[5].Descriptor()
 	// activitydata.DefaultAttempt holds the default value on creation for the attempt field.
 	activitydata.DefaultAttempt = activitydataDescAttempt.Default.(int)
 	entityMixin := schema.Entity{}.Mixin()
@@ -54,6 +50,14 @@ func init() {
 	entityDescHandlerName := entityFields[0].Descriptor()
 	// entity.HandlerNameValidator is a validator for the "handler_name" field. It is called by the builders before save.
 	entity.HandlerNameValidator = entityDescHandlerName.Validators[0].(func(string) error)
+	// entityDescRetryState is the schema descriptor for retry_state field.
+	entityDescRetryState := entityFields[2].Descriptor()
+	// entity.DefaultRetryState holds the default value on creation for the retry_state field.
+	entity.DefaultRetryState = entityDescRetryState.Default.(*schema.RetryState)
+	// entityDescRetryPolicy is the schema descriptor for retry_policy field.
+	entityDescRetryPolicy := entityFields[3].Descriptor()
+	// entity.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
+	entity.DefaultRetryPolicy = entityDescRetryPolicy.Default.(*schema.RetryPolicy)
 	executionMixin := schema.Execution{}.Mixin()
 	executionMixinFields0 := executionMixin[0].Fields()
 	_ = executionMixinFields0
@@ -131,16 +135,8 @@ func init() {
 	workflowdataDescResumable := workflowdataFields[2].Descriptor()
 	// workflowdata.DefaultResumable holds the default value on creation for the resumable field.
 	workflowdata.DefaultResumable = workflowdataDescResumable.Default.(bool)
-	// workflowdataDescRetryState is the schema descriptor for retry_state field.
-	workflowdataDescRetryState := workflowdataFields[3].Descriptor()
-	// workflowdata.DefaultRetryState holds the default value on creation for the retry_state field.
-	workflowdata.DefaultRetryState = workflowdataDescRetryState.Default.(*schema.RetryState)
-	// workflowdataDescRetryPolicy is the schema descriptor for retry_policy field.
-	workflowdataDescRetryPolicy := workflowdataFields[4].Descriptor()
-	// workflowdata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
-	workflowdata.DefaultRetryPolicy = workflowdataDescRetryPolicy.Default.(*schema.RetryPolicy)
 	// workflowdataDescAttempt is the schema descriptor for attempt field.
-	workflowdataDescAttempt := workflowdataFields[6].Descriptor()
+	workflowdataDescAttempt := workflowdataFields[4].Descriptor()
 	// workflowdata.DefaultAttempt holds the default value on creation for the attempt field.
 	workflowdata.DefaultAttempt = workflowdataDescAttempt.Default.(int)
 }

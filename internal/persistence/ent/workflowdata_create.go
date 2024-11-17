@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 )
 
@@ -60,18 +59,6 @@ func (wdc *WorkflowDataCreate) SetNillableResumable(b *bool) *WorkflowDataCreate
 	if b != nil {
 		wdc.SetResumable(*b)
 	}
-	return wdc
-}
-
-// SetRetryState sets the "retry_state" field.
-func (wdc *WorkflowDataCreate) SetRetryState(ss *schema.RetryState) *WorkflowDataCreate {
-	wdc.mutation.SetRetryState(ss)
-	return wdc
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (wdc *WorkflowDataCreate) SetRetryPolicy(sp *schema.RetryPolicy) *WorkflowDataCreate {
-	wdc.mutation.SetRetryPolicy(sp)
 	return wdc
 }
 
@@ -149,14 +136,6 @@ func (wdc *WorkflowDataCreate) defaults() {
 		v := workflowdata.DefaultResumable
 		wdc.mutation.SetResumable(v)
 	}
-	if _, ok := wdc.mutation.RetryState(); !ok {
-		v := workflowdata.DefaultRetryState
-		wdc.mutation.SetRetryState(v)
-	}
-	if _, ok := wdc.mutation.RetryPolicy(); !ok {
-		v := workflowdata.DefaultRetryPolicy
-		wdc.mutation.SetRetryPolicy(v)
-	}
 	if _, ok := wdc.mutation.Attempt(); !ok {
 		v := workflowdata.DefaultAttempt
 		wdc.mutation.SetAttempt(v)
@@ -170,12 +149,6 @@ func (wdc *WorkflowDataCreate) check() error {
 	}
 	if _, ok := wdc.mutation.Resumable(); !ok {
 		return &ValidationError{Name: "resumable", err: errors.New(`ent: missing required field "WorkflowData.resumable"`)}
-	}
-	if _, ok := wdc.mutation.RetryState(); !ok {
-		return &ValidationError{Name: "retry_state", err: errors.New(`ent: missing required field "WorkflowData.retry_state"`)}
-	}
-	if _, ok := wdc.mutation.RetryPolicy(); !ok {
-		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "WorkflowData.retry_policy"`)}
 	}
 	if _, ok := wdc.mutation.Attempt(); !ok {
 		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "WorkflowData.attempt"`)}
@@ -220,14 +193,6 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 	if value, ok := wdc.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
 		_node.Resumable = value
-	}
-	if value, ok := wdc.mutation.RetryState(); ok {
-		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
-		_node.RetryState = value
-	}
-	if value, ok := wdc.mutation.RetryPolicy(); ok {
-		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)
-		_node.RetryPolicy = value
 	}
 	if value, ok := wdc.mutation.Input(); ok {
 		_spec.SetField(workflowdata.FieldInput, field.TypeJSON, value)

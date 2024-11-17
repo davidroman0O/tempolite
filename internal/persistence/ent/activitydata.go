@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 // ActivityData is the model entity for the ActivityData schema.
@@ -26,8 +25,6 @@ type ActivityData struct {
 	MaxAttempts int `json:"max_attempts,omitempty"`
 	// ScheduledFor holds the value of the "scheduled_for" field.
 	ScheduledFor time.Time `json:"scheduled_for,omitempty"`
-	// RetryPolicy holds the value of the "retry_policy" field.
-	RetryPolicy *schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Input holds the value of the "input" field.
 	Input [][]uint8 `json:"input,omitempty"`
 	// Output holds the value of the "output" field.
@@ -66,7 +63,7 @@ func (*ActivityData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case activitydata.FieldRetryPolicy, activitydata.FieldInput, activitydata.FieldOutput:
+		case activitydata.FieldInput, activitydata.FieldOutput:
 			values[i] = new([]byte)
 		case activitydata.FieldID, activitydata.FieldTimeout, activitydata.FieldMaxAttempts, activitydata.FieldAttempt:
 			values[i] = new(sql.NullInt64)
@@ -112,14 +109,6 @@ func (ad *ActivityData) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field scheduled_for", values[i])
 			} else if value.Valid {
 				ad.ScheduledFor = value.Time
-			}
-		case activitydata.FieldRetryPolicy:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field retry_policy", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ad.RetryPolicy); err != nil {
-					return fmt.Errorf("unmarshal field retry_policy: %w", err)
-				}
 			}
 		case activitydata.FieldInput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -199,9 +188,6 @@ func (ad *ActivityData) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("scheduled_for=")
 	builder.WriteString(ad.ScheduledFor.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("retry_policy=")
-	builder.WriteString(fmt.Sprintf("%v", ad.RetryPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", ad.Input))

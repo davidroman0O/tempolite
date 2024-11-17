@@ -5,7 +5,6 @@ package activitydata
 import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 const (
@@ -19,8 +18,6 @@ const (
 	FieldMaxAttempts = "max_attempts"
 	// FieldScheduledFor holds the string denoting the scheduled_for field in the database.
 	FieldScheduledFor = "scheduled_for"
-	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
-	FieldRetryPolicy = "retry_policy"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
 	// FieldOutput holds the string denoting the output field in the database.
@@ -46,7 +43,6 @@ var Columns = []string{
 	FieldTimeout,
 	FieldMaxAttempts,
 	FieldScheduledFor,
-	FieldRetryPolicy,
 	FieldInput,
 	FieldOutput,
 	FieldAttempt,
@@ -76,8 +72,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultMaxAttempts holds the default value on creation for the "max_attempts" field.
 	DefaultMaxAttempts int
-	// DefaultRetryPolicy holds the default value on creation for the "retry_policy" field.
-	DefaultRetryPolicy *schema.RetryPolicy
 	// DefaultAttempt holds the default value on creation for the "attempt" field.
 	DefaultAttempt int
 )

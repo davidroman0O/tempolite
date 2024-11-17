@@ -13,7 +13,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 )
 
@@ -75,18 +74,6 @@ func (wdu *WorkflowDataUpdate) SetNillableResumable(b *bool) *WorkflowDataUpdate
 	if b != nil {
 		wdu.SetResumable(*b)
 	}
-	return wdu
-}
-
-// SetRetryState sets the "retry_state" field.
-func (wdu *WorkflowDataUpdate) SetRetryState(ss *schema.RetryState) *WorkflowDataUpdate {
-	wdu.mutation.SetRetryState(ss)
-	return wdu
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (wdu *WorkflowDataUpdate) SetRetryPolicy(sp *schema.RetryPolicy) *WorkflowDataUpdate {
-	wdu.mutation.SetRetryPolicy(sp)
 	return wdu
 }
 
@@ -210,12 +197,6 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := wdu.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
 	}
-	if value, ok := wdu.mutation.RetryState(); ok {
-		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
-	}
-	if value, ok := wdu.mutation.RetryPolicy(); ok {
-		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)
-	}
 	if value, ok := wdu.mutation.Input(); ok {
 		_spec.SetField(workflowdata.FieldInput, field.TypeJSON, value)
 	}
@@ -327,18 +308,6 @@ func (wduo *WorkflowDataUpdateOne) SetNillableResumable(b *bool) *WorkflowDataUp
 	if b != nil {
 		wduo.SetResumable(*b)
 	}
-	return wduo
-}
-
-// SetRetryState sets the "retry_state" field.
-func (wduo *WorkflowDataUpdateOne) SetRetryState(ss *schema.RetryState) *WorkflowDataUpdateOne {
-	wduo.mutation.SetRetryState(ss)
-	return wduo
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (wduo *WorkflowDataUpdateOne) SetRetryPolicy(sp *schema.RetryPolicy) *WorkflowDataUpdateOne {
-	wduo.mutation.SetRetryPolicy(sp)
 	return wduo
 }
 
@@ -491,12 +460,6 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 	}
 	if value, ok := wduo.mutation.Resumable(); ok {
 		_spec.SetField(workflowdata.FieldResumable, field.TypeBool, value)
-	}
-	if value, ok := wduo.mutation.RetryState(); ok {
-		_spec.SetField(workflowdata.FieldRetryState, field.TypeJSON, value)
-	}
-	if value, ok := wduo.mutation.RetryPolicy(); ok {
-		_spec.SetField(workflowdata.FieldRetryPolicy, field.TypeJSON, value)
 	}
 	if value, ok := wduo.mutation.Input(); ok {
 		_spec.SetField(workflowdata.FieldInput, field.TypeJSON, value)

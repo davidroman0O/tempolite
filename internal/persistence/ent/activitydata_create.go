@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 // ActivityDataCreate is the builder for creating a ActivityData entity.
@@ -61,12 +60,6 @@ func (adc *ActivityDataCreate) SetNillableScheduledFor(t *time.Time) *ActivityDa
 	if t != nil {
 		adc.SetScheduledFor(*t)
 	}
-	return adc
-}
-
-// SetRetryPolicy sets the "retry_policy" field.
-func (adc *ActivityDataCreate) SetRetryPolicy(sp *schema.RetryPolicy) *ActivityDataCreate {
-	adc.mutation.SetRetryPolicy(sp)
 	return adc
 }
 
@@ -146,10 +139,6 @@ func (adc *ActivityDataCreate) defaults() {
 		v := activitydata.DefaultMaxAttempts
 		adc.mutation.SetMaxAttempts(v)
 	}
-	if _, ok := adc.mutation.RetryPolicy(); !ok {
-		v := activitydata.DefaultRetryPolicy
-		adc.mutation.SetRetryPolicy(v)
-	}
 	if _, ok := adc.mutation.Attempt(); !ok {
 		v := activitydata.DefaultAttempt
 		adc.mutation.SetAttempt(v)
@@ -160,9 +149,6 @@ func (adc *ActivityDataCreate) defaults() {
 func (adc *ActivityDataCreate) check() error {
 	if _, ok := adc.mutation.MaxAttempts(); !ok {
 		return &ValidationError{Name: "max_attempts", err: errors.New(`ent: missing required field "ActivityData.max_attempts"`)}
-	}
-	if _, ok := adc.mutation.RetryPolicy(); !ok {
-		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "ActivityData.retry_policy"`)}
 	}
 	if _, ok := adc.mutation.Attempt(); !ok {
 		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "ActivityData.attempt"`)}
@@ -207,10 +193,6 @@ func (adc *ActivityDataCreate) createSpec() (*ActivityData, *sqlgraph.CreateSpec
 	if value, ok := adc.mutation.ScheduledFor(); ok {
 		_spec.SetField(activitydata.FieldScheduledFor, field.TypeTime, value)
 		_node.ScheduledFor = value
-	}
-	if value, ok := adc.mutation.RetryPolicy(); ok {
-		_spec.SetField(activitydata.FieldRetryPolicy, field.TypeJSON, value)
-		_node.RetryPolicy = value
 	}
 	if value, ok := adc.mutation.Input(); ok {
 		_spec.SetField(activitydata.FieldInput, field.TypeJSON, value)

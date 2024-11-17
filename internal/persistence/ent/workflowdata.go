@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
 )
 
@@ -25,10 +24,6 @@ type WorkflowData struct {
 	Paused bool `json:"paused,omitempty"`
 	// Resumable holds the value of the "resumable" field.
 	Resumable bool `json:"resumable,omitempty"`
-	// RetryState holds the value of the "retry_state" field.
-	RetryState *schema.RetryState `json:"retry_state,omitempty"`
-	// RetryPolicy holds the value of the "retry_policy" field.
-	RetryPolicy *schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Input holds the value of the "input" field.
 	Input [][]uint8 `json:"input,omitempty"`
 	// Attempt holds the value of the "attempt" field.
@@ -65,7 +60,7 @@ func (*WorkflowData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case workflowdata.FieldRetryState, workflowdata.FieldRetryPolicy, workflowdata.FieldInput:
+		case workflowdata.FieldInput:
 			values[i] = new([]byte)
 		case workflowdata.FieldPaused, workflowdata.FieldResumable:
 			values[i] = new(sql.NullBool)
@@ -113,22 +108,6 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field resumable", values[i])
 			} else if value.Valid {
 				wd.Resumable = value.Bool
-			}
-		case workflowdata.FieldRetryState:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field retry_state", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wd.RetryState); err != nil {
-					return fmt.Errorf("unmarshal field retry_state: %w", err)
-				}
-			}
-		case workflowdata.FieldRetryPolicy:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field retry_policy", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wd.RetryPolicy); err != nil {
-					return fmt.Errorf("unmarshal field retry_policy: %w", err)
-				}
 			}
 		case workflowdata.FieldInput:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -200,12 +179,6 @@ func (wd *WorkflowData) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("resumable=")
 	builder.WriteString(fmt.Sprintf("%v", wd.Resumable))
-	builder.WriteString(", ")
-	builder.WriteString("retry_state=")
-	builder.WriteString(fmt.Sprintf("%v", wd.RetryState))
-	builder.WriteString(", ")
-	builder.WriteString("retry_policy=")
-	builder.WriteString(fmt.Sprintf("%v", wd.RetryPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", wd.Input))

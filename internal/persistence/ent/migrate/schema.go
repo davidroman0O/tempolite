@@ -15,7 +15,6 @@ var (
 		{Name: "timeout", Type: field.TypeInt64, Nullable: true},
 		{Name: "max_attempts", Type: field.TypeInt, Default: 1},
 		{Name: "scheduled_for", Type: field.TypeTime, Nullable: true},
-		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
@@ -29,7 +28,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_data_entities_activity_data",
-				Columns:    []*schema.Column{ActivityDataColumns[8]},
+				Columns:    []*schema.Column{ActivityDataColumns[7]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -83,6 +82,8 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
+		{Name: "retry_state", Type: field.TypeJSON},
+		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Queued", "Running", "Paused", "Cancelled", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "queue_entities", Type: field.TypeInt, Nullable: true},
@@ -96,13 +97,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entities_queues_entities",
-				Columns:    []*schema.Column{EntitiesColumns[7]},
+				Columns:    []*schema.Column{EntitiesColumns[9]},
 				RefColumns: []*schema.Column{QueuesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "entities_runs_entities",
-				Columns:    []*schema.Column{EntitiesColumns[8]},
+				Columns:    []*schema.Column{EntitiesColumns[10]},
 				RefColumns: []*schema.Column{RunsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -347,8 +348,6 @@ var (
 		{Name: "duration", Type: field.TypeString, Nullable: true},
 		{Name: "paused", Type: field.TypeBool, Default: false},
 		{Name: "resumable", Type: field.TypeBool, Default: false},
-		{Name: "retry_state", Type: field.TypeJSON},
-		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
 		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "entity_workflow_data", Type: field.TypeInt, Unique: true},
@@ -361,7 +360,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[8]},
+				Columns:    []*schema.Column{WorkflowDataColumns[6]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

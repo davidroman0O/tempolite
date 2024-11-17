@@ -5,7 +5,6 @@ package workflowdata
 import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 )
 
 const (
@@ -19,10 +18,6 @@ const (
 	FieldPaused = "paused"
 	// FieldResumable holds the string denoting the resumable field in the database.
 	FieldResumable = "resumable"
-	// FieldRetryState holds the string denoting the retry_state field in the database.
-	FieldRetryState = "retry_state"
-	// FieldRetryPolicy holds the string denoting the retry_policy field in the database.
-	FieldRetryPolicy = "retry_policy"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
 	// FieldAttempt holds the string denoting the attempt field in the database.
@@ -46,8 +41,6 @@ var Columns = []string{
 	FieldDuration,
 	FieldPaused,
 	FieldResumable,
-	FieldRetryState,
-	FieldRetryPolicy,
 	FieldInput,
 	FieldAttempt,
 }
@@ -78,10 +71,6 @@ var (
 	DefaultPaused bool
 	// DefaultResumable holds the default value on creation for the "resumable" field.
 	DefaultResumable bool
-	// DefaultRetryState holds the default value on creation for the "retry_state" field.
-	DefaultRetryState *schema.RetryState
-	// DefaultRetryPolicy holds the default value on creation for the "retry_policy" field.
-	DefaultRetryPolicy *schema.RetryPolicy
 	// DefaultAttempt holds the default value on creation for the "attempt" field.
 	DefaultAttempt int
 )
