@@ -62,7 +62,7 @@ func (r *Registry) RegisterWorkflow(workflowFunc interface{}) (HandlerInfo, erro
 		return HandlerInfo{}, err
 	}
 
-	expectedContextType := reflect.TypeOf(&WorkflowContext{})
+	expectedContextType := reflect.TypeOf(WorkflowContext{})
 	if handlerType.In(0) != expectedContextType {
 		err := fmt.Errorf("first parameter of workflow function must be *WorkflowContext")
 		return HandlerInfo{}, err

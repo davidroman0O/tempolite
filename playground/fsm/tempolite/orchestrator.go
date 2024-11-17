@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -302,18 +303,47 @@ func (o *Orchestrator) Wait() {
 			o.rootWf.fsm.Fire(TriggerFail)
 			return
 		default:
-			time.Sleep(100 * time.Millisecond)
+			// tbf i don't know yet which one
+			// time.Sleep(5 * time.Millisecond)
+			runtime.Gosched()
 		}
 	}
 
 	// Root workflow has completed or failed
 	// The Run's status should have been updated in onCompleted or onFailed of the root workflow
 
-	// Check if rootWf has any error
-	if o.rootWf.err != nil {
-		fmt.Printf("Root workflow failed with error: %v\n", o.rootWf.err)
-	} else {
-		fmt.Printf("Root workflow completed successfully with results: %v\n", o.rootWf.results)
+	// Get final status from the database instead of relying on error field
+	entity := o.db.GetEntity(o.rootWf.entityID)
+	if entity == nil {
+		log.Printf("Could not find root workflow entity")
+		return
+	}
+
+	latestExecution := o.db.GetLatestExecution(entity.ID)
+	if latestExecution == nil {
+		log.Printf("Could not find latest execution for root workflow")
+		return
+	}
+
+	switch entity.Status {
+	case StatusCompleted:
+		if o.rootWf.results != nil && len(o.rootWf.results) > 0 {
+			fmt.Printf("Root workflow completed successfully with results: %v\n", o.rootWf.results)
+		} else {
+			fmt.Printf("Root workflow completed successfully\n")
+		}
+	case StatusFailed:
+		var errMsg string
+		if latestExecution.Error != "" {
+			errMsg = latestExecution.Error
+		} else if o.rootWf.err != nil {
+			errMsg = o.rootWf.err.Error()
+		} else {
+			errMsg = "unknown error"
+		}
+		fmt.Printf("Root workflow failed with error: %v\n", errMsg)
+	default:
+		fmt.Printf("Root workflow ended with status: %s\n", entity.Status)
 	}
 }
 
@@ -394,7 +424,7 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 	return future
 }
 
-func (o *Orchestrator) executeSaga(ctx *WorkflowContext, stepID string, saga *SagaDefinition) *SagaInfo {
+func (o *Orchestrator) executeSaga(ctx WorkflowContext, stepID string, saga *SagaDefinition) *SagaInfo {
 	sagaInfo := &SagaInfo{
 		done: make(chan struct{}),
 	}

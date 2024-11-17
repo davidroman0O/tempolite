@@ -32,6 +32,8 @@ type retryPolicyInternal struct {
 	MaxInterval        int64   `json:"max_interval"`
 }
 
+var DefaultVersion int = 0
+
 // Version tracks entity versions
 type Version struct {
 	ID       int
@@ -299,22 +301,52 @@ func NewFuture(workflowID int) *Future {
 	}
 }
 
-func (f *Future) Get(outputs ...interface{}) error {
-	log.Printf("Future.Get called")
+func (f *Future) Get(out ...interface{}) error {
 	<-f.done
 	if f.err != nil {
-		log.Printf("Future.Get returning error: %v", f.err)
 		return f.err
 	}
-	if len(outputs) > len(f.results) {
-		return fmt.Errorf("number of outputs requested exceeds number of results")
+
+	if len(out) == 0 {
+		return nil
 	}
-	for i := 0; i < len(outputs); i++ {
-		if outputs[i] != nil && f.results[i] != nil {
-			reflect.ValueOf(outputs[i]).Elem().Set(reflect.ValueOf(f.results[i]))
-			log.Printf("Future.Get setting output[%d]: %v", i, f.results[i])
+
+	// Handle the case where we have a single result
+	if len(f.results) == 1 && len(out) == 1 {
+		val := reflect.ValueOf(out[0])
+		if val.Kind() != reflect.Ptr {
+			return fmt.Errorf("output parameter must be a pointer")
 		}
+		val = val.Elem()
+
+		result := reflect.ValueOf(f.results[0])
+		if !result.Type().AssignableTo(val.Type()) {
+			return fmt.Errorf("cannot assign type %v to %v", result.Type(), val.Type())
+		}
+
+		val.Set(result)
+		return nil
 	}
+
+	if len(out) > len(f.results) {
+		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results))
+	}
+
+	for i := 0; i < len(out); i++ {
+		val := reflect.ValueOf(out[i])
+		if val.Kind() != reflect.Ptr {
+			return fmt.Errorf("output parameter %d must be a pointer", i)
+		}
+		val = val.Elem()
+
+		result := reflect.ValueOf(f.results[i])
+		if !result.Type().AssignableTo(val.Type()) {
+			return fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i)
+		}
+
+		val.Set(result)
+	}
+
 	return nil
 }
 

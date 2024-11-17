@@ -8,7 +8,7 @@ import (
 )
 
 // Activity creates an activity.
-func (ctx *WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *Future {
+func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
 		future := NewFuture(0)

@@ -27,4 +27,11 @@ type Database interface {
 	GetExecution(id int) *Execution
 	UpdateExecution(execution *Execution)
 	GetLatestExecution(entityID int) *Execution
+
+	// Queues
+	AddQueue(queue *Queue) *Queue
+	GetQueue(id int) *Queue
+	GetQueueByName(name string) *Queue
+	UpdateQueue(queue *Queue)
+	ListQueues() []*Queue
 }

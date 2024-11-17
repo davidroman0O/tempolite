@@ -278,17 +278,16 @@ func (si *SagaInstance) executeTransactions() {
 		if err != nil {
 			// Transaction failed
 			log.Printf("Transaction failed at step %d: %v", si.currentStep, err)
-			// Record the steps up to the last successful one
-			if si.currentStep > 0 {
-				si.compensations = si.compensations[:si.currentStep]
-			}
+
+			// Store the error
 			si.err = fmt.Errorf("transaction failed at step %d: %v", si.currentStep, err)
 
 			// Update execution error
 			si.execution.Error = si.err.Error()
 			si.orchestrator.db.UpdateExecution(si.execution)
 
-			si.fsm.Fire(TriggerFail)
+			// Execute compensations for all completed steps
+			si.executeCompensations()
 			return
 		}
 		// Record the successful transaction
@@ -301,24 +300,48 @@ func (si *SagaInstance) executeTransactions() {
 }
 
 func (si *SagaInstance) executeCompensations() {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+	// Create a separate slice for tracking compensation errors
+	var compensationErrors []error
 
 	// Compensate in reverse order
 	for i := len(si.compensations) - 1; i >= 0; i-- {
 		stepIndex := si.compensations[i]
 		step := si.saga.Steps[stepIndex]
+
+		log.Printf("Executing compensation for step %d", stepIndex)
+
 		_, err := step.Compensation(CompensationContext{
 			ctx: si.ctx,
 		})
 		if err != nil {
-			// Compensation failed
+			// Log compensation failure but continue with other compensations
 			log.Printf("Compensation failed for step %d: %v", stepIndex, err)
-			si.err = fmt.Errorf("compensation failed at step %d: %v", stepIndex, err)
-			break // Exit after first compensation failure
+			compensationErrors = append(compensationErrors, fmt.Errorf("compensation failed at step %d: %v", stepIndex, err))
 		}
 	}
-	// All compensations completed (successfully or not)
+
+	// If there were any compensation errors, append them to the saga error
+	if len(compensationErrors) > 0 {
+		var errMsg string
+		if si.err != nil {
+			errMsg = si.err.Error() + "; "
+		}
+		errMsg += "compensation errors: "
+		for i, err := range compensationErrors {
+			if i > 0 {
+				errMsg += "; "
+			}
+			errMsg += err.Error()
+		}
+		si.err = errors.New(errMsg)
+	}
+
+	// Update the execution status
+	si.execution.Status = ExecutionStatusFailed
+	si.execution.Error = si.err.Error()
+	si.orchestrator.db.UpdateExecution(si.execution)
+
+	// Fire the fail trigger after compensations are complete
 	si.fsm.Fire(TriggerFail)
 }
 

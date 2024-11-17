@@ -202,7 +202,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	handler := wi.handler
 	f := handler.Handler
 
-	ctxWorkflow := &WorkflowContext{
+	ctxWorkflow := WorkflowContext{
 		orchestrator: wi.orchestrator,
 		ctx:          wi.ctx,
 		workflowID:   wi.entity.ID,

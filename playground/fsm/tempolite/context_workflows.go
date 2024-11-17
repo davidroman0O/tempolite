@@ -47,7 +47,7 @@ func (ac WorkflowContext) Err() error {
 	return ac.ctx.Err()
 }
 
-func (ctx *WorkflowContext) checkPause() error {
+func (ctx WorkflowContext) checkPause() error {
 	if ctx.orchestrator.IsPaused() {
 		log.Printf("WorkflowContext detected orchestrator is paused")
 		return ErrPaused
@@ -56,7 +56,7 @@ func (ctx *WorkflowContext) checkPause() error {
 }
 
 // GetVersion retrieves or sets a version for a changeID.
-func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
 	// First check if version is overridden in options
 	if ctx.options != nil && ctx.options.VersionOverrides != nil {
 		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
@@ -81,7 +81,7 @@ func (ctx *WorkflowContext) GetVersion(changeID string, minSupported, maxSupport
 }
 
 // Workflow creates a sub-workflow.
-func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
 		future := NewFuture(0)
@@ -231,7 +231,7 @@ func (ctx *WorkflowContext) Workflow(stepID string, workflowFunc interface{}, op
 }
 
 // ContinueAsNew allows a workflow to continue as new with the given function and arguments.
-func (ctx *WorkflowContext) ContinueAsNew(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) error {
+func (ctx WorkflowContext) ContinueAsNew(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) error {
 	return &ContinueAsNewError{
 		WorkflowFunc: workflowFunc,
 		Options:      options,

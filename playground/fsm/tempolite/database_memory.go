@@ -3,15 +3,17 @@ package tempolite
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // DefaultDatabase is an in-memory implementation of Database.
 type DefaultDatabase struct {
 	runs        map[int]*Run
-	versions    map[int]*Version
+	versions    map[int]*Version // for in-memory we will basically run the latest all the time, it's just that we don't know if the dev will re-use other workflows. Hopefully we can still force it.
 	hierarchies []*Hierarchy
 	entities    map[int]*Entity
 	executions  map[int]*Execution
+	queues      map[int]*Queue
 	mu          sync.Mutex
 }
 
@@ -21,6 +23,7 @@ func NewDefaultDatabase() *DefaultDatabase {
 		versions:    make(map[int]*Version),
 		entities:    make(map[int]*Entity),
 		executions:  make(map[int]*Execution),
+		queues:      make(map[int]*Queue),
 		hierarchies: []*Hierarchy{},
 	}
 }
@@ -249,4 +252,63 @@ func (db *DefaultDatabase) Clear() {
 
 	// Replace hierarchies with the filtered ones
 	db.hierarchies = hierarchiesToKeep
+}
+
+func (db *DefaultDatabase) AddQueue(queue *Queue) *Queue {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Check if queue with same name exists
+	for _, q := range db.queues {
+		if q.Name == queue.Name {
+			return q
+		}
+	}
+
+	queue.ID = len(db.queues) + 1
+	queue.CreatedAt = time.Now()
+	queue.UpdatedAt = time.Now()
+
+	if db.queues == nil {
+		db.queues = make(map[int]*Queue)
+	}
+	db.queues[queue.ID] = queue
+	return queue
+}
+
+func (db *DefaultDatabase) GetQueue(id int) *Queue {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.queues[id]
+}
+
+func (db *DefaultDatabase) GetQueueByName(name string) *Queue {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for _, queue := range db.queues {
+		if queue.Name == name {
+			return queue
+		}
+	}
+	return nil
+}
+
+func (db *DefaultDatabase) UpdateQueue(queue *Queue) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if existing, exists := db.queues[queue.ID]; exists {
+		existing.UpdatedAt = time.Now()
+		existing.Name = queue.Name
+		existing.Entities = queue.Entities
+	}
+}
+
+func (db *DefaultDatabase) ListQueues() []*Queue {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	queues := make([]*Queue, 0, len(db.queues))
+	for _, q := range db.queues {
+		queues = append(queues, q)
+	}
+	return queues
 }

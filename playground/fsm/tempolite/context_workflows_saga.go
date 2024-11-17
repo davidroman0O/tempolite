@@ -13,7 +13,7 @@ type SagaContext struct {
 	stepID       string
 }
 
-func (ctx *WorkflowContext) Saga(stepID string, saga *SagaDefinition) *SagaInfo {
+func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) *SagaInfo {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Saga paused at stepID: %s", stepID)
 		sagaInfo := &SagaInfo{

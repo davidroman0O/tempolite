@@ -9,7 +9,7 @@ import (
 )
 
 // SideEffect executes a side effect function
-func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}, options *WorkflowOptions) *Future {
+func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
 		future := NewFuture(0)
@@ -68,31 +68,31 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 
 	// Use the retry policy from options or default
 	var retryPolicy *RetryPolicy
-	if options != nil && options.RetryPolicy != nil {
-		rp := options.RetryPolicy
-		// Fill defaults where zero
-		if rp.MaxAttempts == 0 {
-			rp.MaxAttempts = 1
-		}
-		if rp.InitialInterval == 0 {
-			rp.InitialInterval = time.Second
-		}
-		if rp.BackoffCoefficient == 0 {
-			rp.BackoffCoefficient = 2.0
-		}
-		if rp.MaxInterval == 0 {
-			rp.MaxInterval = 5 * time.Minute
-		}
-		retryPolicy = rp
-	} else {
-		// Default retry policy with MaxAttempts=1
-		retryPolicy = &RetryPolicy{
-			MaxAttempts:        1,
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaxInterval:        5 * time.Minute,
-		}
+	// if options != nil && options.RetryPolicy != nil {
+	// 	rp := options.RetryPolicy
+	// 	// Fill defaults where zero
+	// 	if rp.MaxAttempts == 0 {
+	// 		rp.MaxAttempts = 1
+	// 	}
+	// 	if rp.InitialInterval == 0 {
+	// 		rp.InitialInterval = time.Second
+	// 	}
+	// 	if rp.BackoffCoefficient == 0 {
+	// 		rp.BackoffCoefficient = 2.0
+	// 	}
+	// 	if rp.MaxInterval == 0 {
+	// 		rp.MaxInterval = 5 * time.Minute
+	// 	}
+	// 	retryPolicy = rp
+	// } else {
+	// Default retry policy with MaxAttempts=1
+	retryPolicy = &RetryPolicy{
+		MaxAttempts:        1,
+		InitialInterval:    time.Second,
+		BackoffCoefficient: 2.0,
+		MaxInterval:        5 * time.Minute,
 	}
+	// }
 
 	// Convert API RetryPolicy to internal retry policy
 	internalRetryPolicy := &retryPolicyInternal{
@@ -132,14 +132,15 @@ func (ctx *WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}
 
 	// Prepare to create the side effect instance
 	sideEffectInstance := &SideEffectInstance{
-		stepID:            stepID,
-		sideEffectFunc:    sideEffectFunc,
-		future:            future,
-		ctx:               ctx.ctx,
-		orchestrator:      ctx.orchestrator,
-		workflowID:        ctx.workflowID,
-		entityID:          entity.ID,
-		options:           options,
+		stepID:         stepID,
+		sideEffectFunc: sideEffectFunc,
+		future:         future,
+		ctx:            ctx.ctx,
+		orchestrator:   ctx.orchestrator,
+		workflowID:     ctx.workflowID,
+		entityID:       entity.ID,
+		options:        nil,
+		// options:           options,
 		returnTypes:       returnTypes,
 		handlerName:       handlerName,
 		handler:           handler,
