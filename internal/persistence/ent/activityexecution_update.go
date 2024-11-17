@@ -30,42 +30,21 @@ func (aeu *ActivityExecutionUpdate) Where(ps ...predicate.ActivityExecution) *Ac
 	return aeu
 }
 
-// SetAttempt sets the "attempt" field.
-func (aeu *ActivityExecutionUpdate) SetAttempt(i int) *ActivityExecutionUpdate {
-	aeu.mutation.ResetAttempt()
-	aeu.mutation.SetAttempt(i)
+// SetInputs sets the "inputs" field.
+func (aeu *ActivityExecutionUpdate) SetInputs(u [][]uint8) *ActivityExecutionUpdate {
+	aeu.mutation.SetInputs(u)
 	return aeu
 }
 
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (aeu *ActivityExecutionUpdate) SetNillableAttempt(i *int) *ActivityExecutionUpdate {
-	if i != nil {
-		aeu.SetAttempt(*i)
-	}
+// AppendInputs appends u to the "inputs" field.
+func (aeu *ActivityExecutionUpdate) AppendInputs(u [][]uint8) *ActivityExecutionUpdate {
+	aeu.mutation.AppendInputs(u)
 	return aeu
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (aeu *ActivityExecutionUpdate) AddAttempt(i int) *ActivityExecutionUpdate {
-	aeu.mutation.AddAttempt(i)
-	return aeu
-}
-
-// SetInput sets the "input" field.
-func (aeu *ActivityExecutionUpdate) SetInput(u [][]uint8) *ActivityExecutionUpdate {
-	aeu.mutation.SetInput(u)
-	return aeu
-}
-
-// AppendInput appends u to the "input" field.
-func (aeu *ActivityExecutionUpdate) AppendInput(u [][]uint8) *ActivityExecutionUpdate {
-	aeu.mutation.AppendInput(u)
-	return aeu
-}
-
-// ClearInput clears the value of the "input" field.
-func (aeu *ActivityExecutionUpdate) ClearInput() *ActivityExecutionUpdate {
-	aeu.mutation.ClearInput()
+// ClearInputs clears the value of the "inputs" field.
+func (aeu *ActivityExecutionUpdate) ClearInputs() *ActivityExecutionUpdate {
+	aeu.mutation.ClearInputs()
 	return aeu
 }
 
@@ -163,22 +142,16 @@ func (aeu *ActivityExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 			}
 		}
 	}
-	if value, ok := aeu.mutation.Attempt(); ok {
-		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := aeu.mutation.Inputs(); ok {
+		_spec.SetField(activityexecution.FieldInputs, field.TypeJSON, value)
 	}
-	if value, ok := aeu.mutation.AddedAttempt(); ok {
-		_spec.AddField(activityexecution.FieldAttempt, field.TypeInt, value)
-	}
-	if value, ok := aeu.mutation.Input(); ok {
-		_spec.SetField(activityexecution.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := aeu.mutation.AppendedInput(); ok {
+	if value, ok := aeu.mutation.AppendedInputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecution.FieldInput, value)
+			sqljson.Append(u, activityexecution.FieldInputs, value)
 		})
 	}
-	if aeu.mutation.InputCleared() {
-		_spec.ClearField(activityexecution.FieldInput, field.TypeJSON)
+	if aeu.mutation.InputsCleared() {
+		_spec.ClearField(activityexecution.FieldInputs, field.TypeJSON)
 	}
 	if aeu.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -258,42 +231,21 @@ type ActivityExecutionUpdateOne struct {
 	mutation *ActivityExecutionMutation
 }
 
-// SetAttempt sets the "attempt" field.
-func (aeuo *ActivityExecutionUpdateOne) SetAttempt(i int) *ActivityExecutionUpdateOne {
-	aeuo.mutation.ResetAttempt()
-	aeuo.mutation.SetAttempt(i)
+// SetInputs sets the "inputs" field.
+func (aeuo *ActivityExecutionUpdateOne) SetInputs(u [][]uint8) *ActivityExecutionUpdateOne {
+	aeuo.mutation.SetInputs(u)
 	return aeuo
 }
 
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (aeuo *ActivityExecutionUpdateOne) SetNillableAttempt(i *int) *ActivityExecutionUpdateOne {
-	if i != nil {
-		aeuo.SetAttempt(*i)
-	}
+// AppendInputs appends u to the "inputs" field.
+func (aeuo *ActivityExecutionUpdateOne) AppendInputs(u [][]uint8) *ActivityExecutionUpdateOne {
+	aeuo.mutation.AppendInputs(u)
 	return aeuo
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (aeuo *ActivityExecutionUpdateOne) AddAttempt(i int) *ActivityExecutionUpdateOne {
-	aeuo.mutation.AddAttempt(i)
-	return aeuo
-}
-
-// SetInput sets the "input" field.
-func (aeuo *ActivityExecutionUpdateOne) SetInput(u [][]uint8) *ActivityExecutionUpdateOne {
-	aeuo.mutation.SetInput(u)
-	return aeuo
-}
-
-// AppendInput appends u to the "input" field.
-func (aeuo *ActivityExecutionUpdateOne) AppendInput(u [][]uint8) *ActivityExecutionUpdateOne {
-	aeuo.mutation.AppendInput(u)
-	return aeuo
-}
-
-// ClearInput clears the value of the "input" field.
-func (aeuo *ActivityExecutionUpdateOne) ClearInput() *ActivityExecutionUpdateOne {
-	aeuo.mutation.ClearInput()
+// ClearInputs clears the value of the "inputs" field.
+func (aeuo *ActivityExecutionUpdateOne) ClearInputs() *ActivityExecutionUpdateOne {
+	aeuo.mutation.ClearInputs()
 	return aeuo
 }
 
@@ -421,22 +373,16 @@ func (aeuo *ActivityExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Act
 			}
 		}
 	}
-	if value, ok := aeuo.mutation.Attempt(); ok {
-		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)
+	if value, ok := aeuo.mutation.Inputs(); ok {
+		_spec.SetField(activityexecution.FieldInputs, field.TypeJSON, value)
 	}
-	if value, ok := aeuo.mutation.AddedAttempt(); ok {
-		_spec.AddField(activityexecution.FieldAttempt, field.TypeInt, value)
-	}
-	if value, ok := aeuo.mutation.Input(); ok {
-		_spec.SetField(activityexecution.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := aeuo.mutation.AppendedInput(); ok {
+	if value, ok := aeuo.mutation.AppendedInputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecution.FieldInput, value)
+			sqljson.Append(u, activityexecution.FieldInputs, value)
 		})
 	}
-	if aeuo.mutation.InputCleared() {
-		_spec.ClearField(activityexecution.FieldInput, field.TypeJSON)
+	if aeuo.mutation.InputsCleared() {
+		_spec.ClearField(activityexecution.FieldInputs, field.TypeJSON)
 	}
 	if aeuo.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

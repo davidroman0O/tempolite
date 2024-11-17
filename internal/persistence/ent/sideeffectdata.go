@@ -3,7 +3,6 @@
 package ent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -15,13 +14,9 @@ import (
 
 // SideEffectData is the model entity for the SideEffectData schema.
 type SideEffectData struct {
-	config `json:"-"`
+	config
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Input holds the value of the "input" field.
-	Input [][]uint8 `json:"input,omitempty"`
-	// Output holds the value of the "output" field.
-	Output [][]uint8 `json:"output,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SideEffectDataQuery when eager-loading is set.
 	Edges                   SideEffectDataEdges `json:"edges"`
@@ -54,8 +49,6 @@ func (*SideEffectData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sideeffectdata.FieldInput, sideeffectdata.FieldOutput:
-			values[i] = new([]byte)
 		case sideeffectdata.FieldID:
 			values[i] = new(sql.NullInt64)
 		case sideeffectdata.ForeignKeys[0]: // entity_side_effect_data
@@ -81,22 +74,6 @@ func (sed *SideEffectData) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			sed.ID = int(value.Int64)
-		case sideeffectdata.FieldInput:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field input", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sed.Input); err != nil {
-					return fmt.Errorf("unmarshal field input: %w", err)
-				}
-			}
-		case sideeffectdata.FieldOutput:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field output", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sed.Output); err != nil {
-					return fmt.Errorf("unmarshal field output: %w", err)
-				}
-			}
 		case sideeffectdata.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field entity_side_effect_data", value)
@@ -144,12 +121,7 @@ func (sed *SideEffectData) Unwrap() *SideEffectData {
 func (sed *SideEffectData) String() string {
 	var builder strings.Builder
 	builder.WriteString("SideEffectData(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", sed.ID))
-	builder.WriteString("input=")
-	builder.WriteString(fmt.Sprintf("%v", sed.Input))
-	builder.WriteString(", ")
-	builder.WriteString("output=")
-	builder.WriteString(fmt.Sprintf("%v", sed.Output))
+	builder.WriteString(fmt.Sprintf("id=%v", sed.ID))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -68,6 +68,11 @@ func Resumable(v bool) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldEQ(FieldResumable, v))
 }
 
+// Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
+func Attempt(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldEQ(FieldAttempt, v))
+}
+
 // DurationEQ applies the EQ predicate on the "duration" field.
 func DurationEQ(v string) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldEQ(FieldDuration, v))
@@ -171,6 +176,46 @@ func InputIsNil() predicate.WorkflowData {
 // InputNotNil applies the NotNil predicate on the "input" field.
 func InputNotNil() predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldNotNull(FieldInput))
+}
+
+// AttemptEQ applies the EQ predicate on the "attempt" field.
+func AttemptEQ(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldEQ(FieldAttempt, v))
+}
+
+// AttemptNEQ applies the NEQ predicate on the "attempt" field.
+func AttemptNEQ(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldNEQ(FieldAttempt, v))
+}
+
+// AttemptIn applies the In predicate on the "attempt" field.
+func AttemptIn(vs ...int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldIn(FieldAttempt, vs...))
+}
+
+// AttemptNotIn applies the NotIn predicate on the "attempt" field.
+func AttemptNotIn(vs ...int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldNotIn(FieldAttempt, vs...))
+}
+
+// AttemptGT applies the GT predicate on the "attempt" field.
+func AttemptGT(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldGT(FieldAttempt, v))
+}
+
+// AttemptGTE applies the GTE predicate on the "attempt" field.
+func AttemptGTE(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldGTE(FieldAttempt, v))
+}
+
+// AttemptLT applies the LT predicate on the "attempt" field.
+func AttemptLT(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldLT(FieldAttempt, v))
+}
+
+// AttemptLTE applies the LTE predicate on the "attempt" field.
+func AttemptLTE(v int) predicate.WorkflowData {
+	return predicate.WorkflowData(sql.FieldLTE(FieldAttempt, v))
 }
 
 // HasEntity applies the HasEdge predicate on the "entity" edge.

@@ -25,6 +25,8 @@ const (
 	FieldRetryPolicy = "retry_policy"
 	// FieldInput holds the string denoting the input field in the database.
 	FieldInput = "input"
+	// FieldAttempt holds the string denoting the attempt field in the database.
+	FieldAttempt = "attempt"
 	// EdgeEntity holds the string denoting the entity edge name in mutations.
 	EdgeEntity = "entity"
 	// Table holds the table name of the workflowdata in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldRetryState,
 	FieldRetryPolicy,
 	FieldInput,
+	FieldAttempt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "workflow_data"
@@ -79,6 +82,8 @@ var (
 	DefaultRetryState *schema.RetryState
 	// DefaultRetryPolicy holds the default value on creation for the "retry_policy" field.
 	DefaultRetryPolicy *schema.RetryPolicy
+	// DefaultAttempt holds the default value on creation for the "attempt" field.
+	DefaultAttempt int
 )
 
 // OrderOption defines the ordering options for the WorkflowData queries.
@@ -102,6 +107,11 @@ func ByPaused(opts ...sql.OrderTermOption) OrderOption {
 // ByResumable orders the results by the resumable field.
 func ByResumable(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResumable, opts...).ToFunc()
+}
+
+// ByAttempt orders the results by the attempt field.
+func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
 }
 
 // ByEntityField orders the results by entity field.

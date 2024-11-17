@@ -299,12 +299,12 @@ func (aedq *ActivityExecutionDataQuery) WithActivityExecution(opts ...func(*Acti
 // Example:
 //
 //	var v []struct {
-//		Heartbeats [][]uint8 `json:"heartbeats,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ActivityExecutionData.Query().
-//		GroupBy(activityexecutiondata.FieldHeartbeats).
+//		GroupBy(activityexecutiondata.FieldLastHeartbeat).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (aedq *ActivityExecutionDataQuery) GroupBy(field string, fields ...string) *ActivityExecutionDataGroupBy {
@@ -322,11 +322,11 @@ func (aedq *ActivityExecutionDataQuery) GroupBy(field string, fields ...string) 
 // Example:
 //
 //	var v []struct {
-//		Heartbeats [][]uint8 `json:"heartbeats,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //	}
 //
 //	client.ActivityExecutionData.Query().
-//		Select(activityexecutiondata.FieldHeartbeats).
+//		Select(activityexecutiondata.FieldLastHeartbeat).
 //		Scan(ctx, &v)
 func (aedq *ActivityExecutionDataQuery) Select(fields ...string) *ActivityExecutionDataSelect {
 	aedq.ctx.Fields = append(aedq.ctx.Fields, fields...)

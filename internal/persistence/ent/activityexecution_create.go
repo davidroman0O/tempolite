@@ -21,23 +21,9 @@ type ActivityExecutionCreate struct {
 	hooks    []Hook
 }
 
-// SetAttempt sets the "attempt" field.
-func (aec *ActivityExecutionCreate) SetAttempt(i int) *ActivityExecutionCreate {
-	aec.mutation.SetAttempt(i)
-	return aec
-}
-
-// SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (aec *ActivityExecutionCreate) SetNillableAttempt(i *int) *ActivityExecutionCreate {
-	if i != nil {
-		aec.SetAttempt(*i)
-	}
-	return aec
-}
-
-// SetInput sets the "input" field.
-func (aec *ActivityExecutionCreate) SetInput(u [][]uint8) *ActivityExecutionCreate {
-	aec.mutation.SetInput(u)
+// SetInputs sets the "inputs" field.
+func (aec *ActivityExecutionCreate) SetInputs(u [][]uint8) *ActivityExecutionCreate {
+	aec.mutation.SetInputs(u)
 	return aec
 }
 
@@ -78,7 +64,6 @@ func (aec *ActivityExecutionCreate) Mutation() *ActivityExecutionMutation {
 
 // Save creates the ActivityExecution in the database.
 func (aec *ActivityExecutionCreate) Save(ctx context.Context) (*ActivityExecution, error) {
-	aec.defaults()
 	return withHooks(ctx, aec.sqlSave, aec.mutation, aec.hooks)
 }
 
@@ -104,19 +89,8 @@ func (aec *ActivityExecutionCreate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (aec *ActivityExecutionCreate) defaults() {
-	if _, ok := aec.mutation.Attempt(); !ok {
-		v := activityexecution.DefaultAttempt
-		aec.mutation.SetAttempt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (aec *ActivityExecutionCreate) check() error {
-	if _, ok := aec.mutation.Attempt(); !ok {
-		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "ActivityExecution.attempt"`)}
-	}
 	if len(aec.mutation.ExecutionIDs()) == 0 {
 		return &ValidationError{Name: "execution", err: errors.New(`ent: missing required edge "ActivityExecution.execution"`)}
 	}
@@ -146,13 +120,9 @@ func (aec *ActivityExecutionCreate) createSpec() (*ActivityExecution, *sqlgraph.
 		_node = &ActivityExecution{config: aec.config}
 		_spec = sqlgraph.NewCreateSpec(activityexecution.Table, sqlgraph.NewFieldSpec(activityexecution.FieldID, field.TypeInt))
 	)
-	if value, ok := aec.mutation.Attempt(); ok {
-		_spec.SetField(activityexecution.FieldAttempt, field.TypeInt, value)
-		_node.Attempt = value
-	}
-	if value, ok := aec.mutation.Input(); ok {
-		_spec.SetField(activityexecution.FieldInput, field.TypeJSON, value)
-		_node.Input = value
+	if value, ok := aec.mutation.Inputs(); ok {
+		_spec.SetField(activityexecution.FieldInputs, field.TypeJSON, value)
+		_node.Inputs = value
 	}
 	if nodes := aec.mutation.ExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -208,7 +178,6 @@ func (aecb *ActivityExecutionCreateBulk) Save(ctx context.Context) ([]*ActivityE
 	for i := range aecb.builders {
 		func(i int, root context.Context) {
 			builder := aecb.builders[i]
-			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*ActivityExecutionMutation)
 				if !ok {

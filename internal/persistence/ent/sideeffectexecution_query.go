@@ -332,18 +332,6 @@ func (seeq *SideEffectExecutionQuery) WithExecutionData(opts ...func(*SideEffect
 
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
-//
-// Example:
-//
-//	var v []struct {
-//		Result []uint8 `json:"result,omitempty"`
-//		Count int `json:"count,omitempty"`
-//	}
-//
-//	client.SideEffectExecution.Query().
-//		GroupBy(sideeffectexecution.FieldResult).
-//		Aggregate(ent.Count()).
-//		Scan(ctx, &v)
 func (seeq *SideEffectExecutionQuery) GroupBy(field string, fields ...string) *SideEffectExecutionGroupBy {
 	seeq.ctx.Fields = append([]string{field}, fields...)
 	grbuild := &SideEffectExecutionGroupBy{build: seeq}
@@ -355,16 +343,6 @@ func (seeq *SideEffectExecutionQuery) GroupBy(field string, fields ...string) *S
 
 // Select allows the selection one or more fields/columns for the given query,
 // instead of selecting all fields in the entity.
-//
-// Example:
-//
-//	var v []struct {
-//		Result []uint8 `json:"result,omitempty"`
-//	}
-//
-//	client.SideEffectExecution.Query().
-//		Select(sideeffectexecution.FieldResult).
-//		Scan(ctx, &v)
 func (seeq *SideEffectExecutionQuery) Select(fields ...string) *SideEffectExecutionSelect {
 	seeq.ctx.Fields = append(seeq.ctx.Fields, fields...)
 	sbuild := &SideEffectExecutionSelect{SideEffectExecutionQuery: seeq}

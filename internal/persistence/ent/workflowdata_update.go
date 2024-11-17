@@ -108,6 +108,27 @@ func (wdu *WorkflowDataUpdate) ClearInput() *WorkflowDataUpdate {
 	return wdu
 }
 
+// SetAttempt sets the "attempt" field.
+func (wdu *WorkflowDataUpdate) SetAttempt(i int) *WorkflowDataUpdate {
+	wdu.mutation.ResetAttempt()
+	wdu.mutation.SetAttempt(i)
+	return wdu
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (wdu *WorkflowDataUpdate) SetNillableAttempt(i *int) *WorkflowDataUpdate {
+	if i != nil {
+		wdu.SetAttempt(*i)
+	}
+	return wdu
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (wdu *WorkflowDataUpdate) AddAttempt(i int) *WorkflowDataUpdate {
+	wdu.mutation.AddAttempt(i)
+	return wdu
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (wdu *WorkflowDataUpdate) SetEntityID(id int) *WorkflowDataUpdate {
 	wdu.mutation.SetEntityID(id)
@@ -205,6 +226,12 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if wdu.mutation.InputCleared() {
 		_spec.ClearField(workflowdata.FieldInput, field.TypeJSON)
+	}
+	if value, ok := wdu.mutation.Attempt(); ok {
+		_spec.SetField(workflowdata.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := wdu.mutation.AddedAttempt(); ok {
+		_spec.AddField(workflowdata.FieldAttempt, field.TypeInt, value)
 	}
 	if wdu.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -330,6 +357,27 @@ func (wduo *WorkflowDataUpdateOne) AppendInput(u [][]uint8) *WorkflowDataUpdateO
 // ClearInput clears the value of the "input" field.
 func (wduo *WorkflowDataUpdateOne) ClearInput() *WorkflowDataUpdateOne {
 	wduo.mutation.ClearInput()
+	return wduo
+}
+
+// SetAttempt sets the "attempt" field.
+func (wduo *WorkflowDataUpdateOne) SetAttempt(i int) *WorkflowDataUpdateOne {
+	wduo.mutation.ResetAttempt()
+	wduo.mutation.SetAttempt(i)
+	return wduo
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (wduo *WorkflowDataUpdateOne) SetNillableAttempt(i *int) *WorkflowDataUpdateOne {
+	if i != nil {
+		wduo.SetAttempt(*i)
+	}
+	return wduo
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (wduo *WorkflowDataUpdateOne) AddAttempt(i int) *WorkflowDataUpdateOne {
+	wduo.mutation.AddAttempt(i)
 	return wduo
 }
 
@@ -460,6 +508,12 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 	}
 	if wduo.mutation.InputCleared() {
 		_spec.ClearField(workflowdata.FieldInput, field.TypeJSON)
+	}
+	if value, ok := wduo.mutation.Attempt(); ok {
+		_spec.SetField(workflowdata.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := wduo.mutation.AddedAttempt(); ok {
+		_spec.AddField(workflowdata.FieldAttempt, field.TypeInt, value)
 	}
 	if wduo.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{

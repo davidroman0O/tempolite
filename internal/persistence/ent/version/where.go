@@ -53,9 +53,79 @@ func IDLTE(id int) predicate.Version {
 	return predicate.Version(sql.FieldLTE(FieldID, id))
 }
 
+// ChangeID applies equality check predicate on the "changeID" field. It's identical to ChangeIDEQ.
+func ChangeID(v string) predicate.Version {
+	return predicate.Version(sql.FieldEQ(FieldChangeID, v))
+}
+
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
 func Version(v int) predicate.Version {
 	return predicate.Version(sql.FieldEQ(FieldVersion, v))
+}
+
+// ChangeIDEQ applies the EQ predicate on the "changeID" field.
+func ChangeIDEQ(v string) predicate.Version {
+	return predicate.Version(sql.FieldEQ(FieldChangeID, v))
+}
+
+// ChangeIDNEQ applies the NEQ predicate on the "changeID" field.
+func ChangeIDNEQ(v string) predicate.Version {
+	return predicate.Version(sql.FieldNEQ(FieldChangeID, v))
+}
+
+// ChangeIDIn applies the In predicate on the "changeID" field.
+func ChangeIDIn(vs ...string) predicate.Version {
+	return predicate.Version(sql.FieldIn(FieldChangeID, vs...))
+}
+
+// ChangeIDNotIn applies the NotIn predicate on the "changeID" field.
+func ChangeIDNotIn(vs ...string) predicate.Version {
+	return predicate.Version(sql.FieldNotIn(FieldChangeID, vs...))
+}
+
+// ChangeIDGT applies the GT predicate on the "changeID" field.
+func ChangeIDGT(v string) predicate.Version {
+	return predicate.Version(sql.FieldGT(FieldChangeID, v))
+}
+
+// ChangeIDGTE applies the GTE predicate on the "changeID" field.
+func ChangeIDGTE(v string) predicate.Version {
+	return predicate.Version(sql.FieldGTE(FieldChangeID, v))
+}
+
+// ChangeIDLT applies the LT predicate on the "changeID" field.
+func ChangeIDLT(v string) predicate.Version {
+	return predicate.Version(sql.FieldLT(FieldChangeID, v))
+}
+
+// ChangeIDLTE applies the LTE predicate on the "changeID" field.
+func ChangeIDLTE(v string) predicate.Version {
+	return predicate.Version(sql.FieldLTE(FieldChangeID, v))
+}
+
+// ChangeIDContains applies the Contains predicate on the "changeID" field.
+func ChangeIDContains(v string) predicate.Version {
+	return predicate.Version(sql.FieldContains(FieldChangeID, v))
+}
+
+// ChangeIDHasPrefix applies the HasPrefix predicate on the "changeID" field.
+func ChangeIDHasPrefix(v string) predicate.Version {
+	return predicate.Version(sql.FieldHasPrefix(FieldChangeID, v))
+}
+
+// ChangeIDHasSuffix applies the HasSuffix predicate on the "changeID" field.
+func ChangeIDHasSuffix(v string) predicate.Version {
+	return predicate.Version(sql.FieldHasSuffix(FieldChangeID, v))
+}
+
+// ChangeIDEqualFold applies the EqualFold predicate on the "changeID" field.
+func ChangeIDEqualFold(v string) predicate.Version {
+	return predicate.Version(sql.FieldEqualFold(FieldChangeID, v))
+}
+
+// ChangeIDContainsFold applies the ContainsFold predicate on the "changeID" field.
+func ChangeIDContainsFold(v string) predicate.Version {
+	return predicate.Version(sql.FieldContainsFold(FieldChangeID, v))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.

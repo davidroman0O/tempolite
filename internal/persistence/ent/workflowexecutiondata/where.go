@@ -3,6 +3,8 @@
 package workflowexecutiondata
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -53,94 +55,69 @@ func IDLTE(id int) predicate.WorkflowExecutionData {
 	return predicate.WorkflowExecutionData(sql.FieldLTE(FieldID, id))
 }
 
-// Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
-func Error(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldError, v))
+// LastHeartbeat applies equality check predicate on the "last_heartbeat" field. It's identical to LastHeartbeatEQ.
+func LastHeartbeat(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
 }
 
-// ErrorEQ applies the EQ predicate on the "error" field.
-func ErrorEQ(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldError, v))
+// LastHeartbeatEQ applies the EQ predicate on the "last_heartbeat" field.
+func LastHeartbeatEQ(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
 }
 
-// ErrorNEQ applies the NEQ predicate on the "error" field.
-func ErrorNEQ(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNEQ(FieldError, v))
+// LastHeartbeatNEQ applies the NEQ predicate on the "last_heartbeat" field.
+func LastHeartbeatNEQ(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldNEQ(FieldLastHeartbeat, v))
 }
 
-// ErrorIn applies the In predicate on the "error" field.
-func ErrorIn(vs ...string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIn(FieldError, vs...))
+// LastHeartbeatIn applies the In predicate on the "last_heartbeat" field.
+func LastHeartbeatIn(vs ...time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldIn(FieldLastHeartbeat, vs...))
 }
 
-// ErrorNotIn applies the NotIn predicate on the "error" field.
-func ErrorNotIn(vs ...string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotIn(FieldError, vs...))
+// LastHeartbeatNotIn applies the NotIn predicate on the "last_heartbeat" field.
+func LastHeartbeatNotIn(vs ...time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldNotIn(FieldLastHeartbeat, vs...))
 }
 
-// ErrorGT applies the GT predicate on the "error" field.
-func ErrorGT(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldGT(FieldError, v))
+// LastHeartbeatGT applies the GT predicate on the "last_heartbeat" field.
+func LastHeartbeatGT(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldGT(FieldLastHeartbeat, v))
 }
 
-// ErrorGTE applies the GTE predicate on the "error" field.
-func ErrorGTE(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldGTE(FieldError, v))
+// LastHeartbeatGTE applies the GTE predicate on the "last_heartbeat" field.
+func LastHeartbeatGTE(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldGTE(FieldLastHeartbeat, v))
 }
 
-// ErrorLT applies the LT predicate on the "error" field.
-func ErrorLT(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldLT(FieldError, v))
+// LastHeartbeatLT applies the LT predicate on the "last_heartbeat" field.
+func LastHeartbeatLT(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldLT(FieldLastHeartbeat, v))
 }
 
-// ErrorLTE applies the LTE predicate on the "error" field.
-func ErrorLTE(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldLTE(FieldError, v))
+// LastHeartbeatLTE applies the LTE predicate on the "last_heartbeat" field.
+func LastHeartbeatLTE(v time.Time) predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldLTE(FieldLastHeartbeat, v))
 }
 
-// ErrorContains applies the Contains predicate on the "error" field.
-func ErrorContains(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldContains(FieldError, v))
+// LastHeartbeatIsNil applies the IsNil predicate on the "last_heartbeat" field.
+func LastHeartbeatIsNil() predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldLastHeartbeat))
 }
 
-// ErrorHasPrefix applies the HasPrefix predicate on the "error" field.
-func ErrorHasPrefix(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldHasPrefix(FieldError, v))
+// LastHeartbeatNotNil applies the NotNil predicate on the "last_heartbeat" field.
+func LastHeartbeatNotNil() predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldLastHeartbeat))
 }
 
-// ErrorHasSuffix applies the HasSuffix predicate on the "error" field.
-func ErrorHasSuffix(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldHasSuffix(FieldError, v))
+// OutputsIsNil applies the IsNil predicate on the "outputs" field.
+func OutputsIsNil() predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldOutputs))
 }
 
-// ErrorIsNil applies the IsNil predicate on the "error" field.
-func ErrorIsNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldError))
-}
-
-// ErrorNotNil applies the NotNil predicate on the "error" field.
-func ErrorNotNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldError))
-}
-
-// ErrorEqualFold applies the EqualFold predicate on the "error" field.
-func ErrorEqualFold(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldEqualFold(FieldError, v))
-}
-
-// ErrorContainsFold applies the ContainsFold predicate on the "error" field.
-func ErrorContainsFold(v string) predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldContainsFold(FieldError, v))
-}
-
-// OutputIsNil applies the IsNil predicate on the "output" field.
-func OutputIsNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldIsNull(FieldOutput))
-}
-
-// OutputNotNil applies the NotNil predicate on the "output" field.
-func OutputNotNil() predicate.WorkflowExecutionData {
-	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldOutput))
+// OutputsNotNil applies the NotNil predicate on the "outputs" field.
+func OutputsNotNil() predicate.WorkflowExecutionData {
+	return predicate.WorkflowExecutionData(sql.FieldNotNull(FieldOutputs))
 }
 
 // HasWorkflowExecution applies the HasEdge predicate on the "workflow_execution" edge.

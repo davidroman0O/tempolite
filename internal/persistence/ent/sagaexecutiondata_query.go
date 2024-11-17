@@ -299,12 +299,12 @@ func (sedq *SagaExecutionDataQuery) WithSagaExecution(opts ...func(*SagaExecutio
 // Example:
 //
 //	var v []struct {
-//		TransactionHistory [][]uint8 `json:"transaction_history,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SagaExecutionData.Query().
-//		GroupBy(sagaexecutiondata.FieldTransactionHistory).
+//		GroupBy(sagaexecutiondata.FieldLastHeartbeat).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (sedq *SagaExecutionDataQuery) GroupBy(field string, fields ...string) *SagaExecutionDataGroupBy {
@@ -322,11 +322,11 @@ func (sedq *SagaExecutionDataQuery) GroupBy(field string, fields ...string) *Sag
 // Example:
 //
 //	var v []struct {
-//		TransactionHistory [][]uint8 `json:"transaction_history,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //	}
 //
 //	client.SagaExecutionData.Query().
-//		Select(sagaexecutiondata.FieldTransactionHistory).
+//		Select(sagaexecutiondata.FieldLastHeartbeat).
 //		Scan(ctx, &v)
 func (sedq *SagaExecutionDataQuery) Select(fields ...string) *SagaExecutionDataSelect {
 	sedq.ctx.Fields = append(sedq.ctx.Fields, fields...)

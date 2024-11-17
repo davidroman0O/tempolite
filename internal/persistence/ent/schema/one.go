@@ -55,7 +55,15 @@ func (Run) Mixin() []ent.Mixin {
 func (Run) Fields() []ent.Field {
 	return []ent.Field{
 		field.Enum("status").
-			Values("Pending", "Running", "Completed", "Failed", "Cancelled").
+			// Statues for Run are generalized statuses, we do not care about the details here,
+			// if my entity/execution is doing someting it doing something, if it is done it is done.
+			Values(
+				"Pending",
+				"Running",
+				"Completed",
+				"Failed",
+				"Cancelled",
+			).
 			Default("Pending"),
 	}
 }
@@ -86,7 +94,16 @@ func (Entity) Fields() []ent.Field {
 			Values("Workflow", "Activity", "Saga", "SideEffect").
 			Immutable(),
 		field.Enum("status").
-			Values("Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			// The status of the Entity is a but more generalised than the Execution status. It just don't know about retries.
+			Values(
+				"Pending",   // It was just created
+				"Queued",    // It was pulled by a worker
+				"Running",   // It is currently running
+				"Paused",    // It was Running but it was paused, meaning that type is a Workflow since they are the only ones that can be paused
+				"Cancelled", // It was Running Or Pending Or Queued but it was cancelled
+				"Completed", // Final state for all components when they are successfully completed
+				"Failed",    // Final state for all components when they are failed
+			).
 			Default("Pending"),
 		field.String("step_id"),
 	}
@@ -133,8 +150,19 @@ func (Execution) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.Enum("status").
-			Values("Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused").
+			Values(
+				"Pending",   // It was just created
+				"Queued",    // It was pulled by a worker
+				"Running",   // It is currently running
+				"Retried",   // It was failed but it was allowed to retry, it should re-change to "Running" when running the new execution
+				"Paused",    // It was Running but it was paused, meaning that type is a Workflow since they are the only ones that can be paused
+				"Cancelled", // It was Running Or Pending Or Queued but it was cancelled
+				"Completed", // Final state for all components when they are successfully completed
+				"Failed",    // Final state for all components when they are failed
+			).
 			Default("Pending"),
+		field.String("error").
+			Optional(),
 	}
 }
 
@@ -186,6 +214,7 @@ type Version struct {
 
 func (Version) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("changeID"),
 		field.Int("version").
 			Positive(),
 		field.JSON("data", map[string]interface{}{}),
@@ -267,6 +296,8 @@ func (WorkflowData) Fields() []ent.Field {
 			}),
 		field.JSON("input", [][]byte{}).
 			Optional(),
+		field.Int("attempt").
+			Default(1),
 	}
 }
 
@@ -302,6 +333,8 @@ func (ActivityData) Fields() []ent.Field {
 			Optional(),
 		field.JSON("output", [][]byte{}).
 			Optional(),
+		field.Int("attempt").
+			Default(1),
 	}
 }
 
@@ -341,12 +374,7 @@ type SideEffectData struct {
 }
 
 func (SideEffectData) Fields() []ent.Field {
-	return []ent.Field{
-		field.JSON("input", [][]byte{}).
-			Optional(),
-		field.JSON("output", [][]byte{}).
-			Optional(),
-	}
+	return []ent.Field{}
 }
 
 func (SideEffectData) Edges() []ent.Edge {
@@ -365,7 +393,10 @@ type WorkflowExecution struct {
 }
 
 func (WorkflowExecution) Fields() []ent.Field {
-	return []ent.Field{}
+	return []ent.Field{
+		field.JSON("inputs", [][]byte{}).
+			Optional(),
+	}
 }
 
 func (WorkflowExecution) Edges() []ent.Edge {
@@ -385,9 +416,7 @@ type ActivityExecution struct {
 
 func (ActivityExecution) Fields() []ent.Field {
 	return []ent.Field{
-		field.Int("attempt").
-			Default(1),
-		field.JSON("input", [][]byte{}).
+		field.JSON("inputs", [][]byte{}).
 			Optional(),
 	}
 }
@@ -411,8 +440,6 @@ func (SagaExecution) Fields() []ent.Field {
 	return []ent.Field{
 		field.Enum("step_type").
 			Values("transaction", "compensation"),
-		field.JSON("compensation_data", []byte{}).
-			Optional(),
 	}
 }
 
@@ -432,10 +459,7 @@ type SideEffectExecution struct {
 }
 
 func (SideEffectExecution) Fields() []ent.Field {
-	return []ent.Field{
-		field.JSON("result", []byte{}).
-			Optional(),
-	}
+	return []ent.Field{}
 }
 
 func (SideEffectExecution) Edges() []ent.Edge {
@@ -457,9 +481,10 @@ type WorkflowExecutionData struct {
 
 func (WorkflowExecutionData) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("error").
-			Optional(),
-		field.JSON("output", [][]byte{}).
+		field.Time("last_heartbeat").
+			Optional().
+			Nillable(), // we might introduce a heartbeat mechanism just to keep track of activity aliveness
+		field.JSON("outputs", [][]byte{}).
 			Optional(),
 	}
 }
@@ -479,14 +504,10 @@ type ActivityExecutionData struct {
 
 func (ActivityExecutionData) Fields() []ent.Field {
 	return []ent.Field{
-		field.JSON("heartbeats", [][]byte{}).
-			Optional(),
 		field.Time("last_heartbeat").
 			Optional().
-			Nillable(),
-		field.JSON("progress", []byte{}).
-			Optional(),
-		field.JSON("execution_details", []byte{}).
+			Nillable(), // we might introduce a heartbeat mechanism just to keep track of activity aliveness
+		field.JSON("outputs", [][]byte{}).
 			Optional(),
 	}
 }
@@ -506,13 +527,12 @@ type SagaExecutionData struct {
 
 func (SagaExecutionData) Fields() []ent.Field {
 	return []ent.Field{
-		field.JSON("transaction_history", [][]byte{}).
-			Optional(),
-		field.JSON("compensation_history", [][]byte{}).
-			Optional(),
-		field.Time("last_transaction").
+		field.Time("last_heartbeat").
 			Optional().
-			Nillable(),
+			Nillable(), // we might introduce a heartbeat mechanism just to keep track of activity aliveness
+		field.JSON("output", [][]byte{}).
+			Optional(),
+		field.Bool("hasOutput").Default(false), // we might or might not have an output
 	}
 }
 
@@ -531,12 +551,7 @@ type SideEffectExecutionData struct {
 
 func (SideEffectExecutionData) Fields() []ent.Field {
 	return []ent.Field{
-		field.Time("effect_time").
-			Optional().
-			Nillable(),
-		field.JSON("effect_metadata", []byte{}).
-			Optional(),
-		field.JSON("execution_context", []byte{}).
+		field.JSON("outputs", [][]byte{}).
 			Optional(),
 	}
 }

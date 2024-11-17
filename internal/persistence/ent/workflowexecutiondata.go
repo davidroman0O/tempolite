@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -18,10 +19,10 @@ type WorkflowExecutionData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Error holds the value of the "error" field.
-	Error string `json:"error,omitempty"`
-	// Output holds the value of the "output" field.
-	Output [][]uint8 `json:"output,omitempty"`
+	// LastHeartbeat holds the value of the "last_heartbeat" field.
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	// Outputs holds the value of the "outputs" field.
+	Outputs [][]uint8 `json:"outputs,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the WorkflowExecutionDataQuery when eager-loading is set.
 	Edges                             WorkflowExecutionDataEdges `json:"edges"`
@@ -54,12 +55,12 @@ func (*WorkflowExecutionData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case workflowexecutiondata.FieldOutput:
+		case workflowexecutiondata.FieldOutputs:
 			values[i] = new([]byte)
 		case workflowexecutiondata.FieldID:
 			values[i] = new(sql.NullInt64)
-		case workflowexecutiondata.FieldError:
-			values[i] = new(sql.NullString)
+		case workflowexecutiondata.FieldLastHeartbeat:
+			values[i] = new(sql.NullTime)
 		case workflowexecutiondata.ForeignKeys[0]: // workflow_execution_execution_data
 			values[i] = new(sql.NullInt64)
 		default:
@@ -83,18 +84,19 @@ func (wed *WorkflowExecutionData) assignValues(columns []string, values []any) e
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			wed.ID = int(value.Int64)
-		case workflowexecutiondata.FieldError:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field error", values[i])
+		case workflowexecutiondata.FieldLastHeartbeat:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field last_heartbeat", values[i])
 			} else if value.Valid {
-				wed.Error = value.String
+				wed.LastHeartbeat = new(time.Time)
+				*wed.LastHeartbeat = value.Time
 			}
-		case workflowexecutiondata.FieldOutput:
+		case workflowexecutiondata.FieldOutputs:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field output", values[i])
+				return fmt.Errorf("unexpected type %T for field outputs", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wed.Output); err != nil {
-					return fmt.Errorf("unmarshal field output: %w", err)
+				if err := json.Unmarshal(*value, &wed.Outputs); err != nil {
+					return fmt.Errorf("unmarshal field outputs: %w", err)
 				}
 			}
 		case workflowexecutiondata.ForeignKeys[0]:
@@ -145,11 +147,13 @@ func (wed *WorkflowExecutionData) String() string {
 	var builder strings.Builder
 	builder.WriteString("WorkflowExecutionData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", wed.ID))
-	builder.WriteString("error=")
-	builder.WriteString(wed.Error)
+	if v := wed.LastHeartbeat; v != nil {
+		builder.WriteString("last_heartbeat=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
-	builder.WriteString("output=")
-	builder.WriteString(fmt.Sprintf("%v", wed.Output))
+	builder.WriteString("outputs=")
+	builder.WriteString(fmt.Sprintf("%v", wed.Outputs))
 	builder.WriteByte(')')
 	return builder.String()
 }

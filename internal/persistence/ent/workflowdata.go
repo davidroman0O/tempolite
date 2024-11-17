@@ -31,6 +31,8 @@ type WorkflowData struct {
 	RetryPolicy *schema.RetryPolicy `json:"retry_policy,omitempty"`
 	// Input holds the value of the "input" field.
 	Input [][]uint8 `json:"input,omitempty"`
+	// Attempt holds the value of the "attempt" field.
+	Attempt int `json:"attempt,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the WorkflowDataQuery when eager-loading is set.
 	Edges                WorkflowDataEdges `json:"edges"`
@@ -67,7 +69,7 @@ func (*WorkflowData) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflowdata.FieldPaused, workflowdata.FieldResumable:
 			values[i] = new(sql.NullBool)
-		case workflowdata.FieldID:
+		case workflowdata.FieldID, workflowdata.FieldAttempt:
 			values[i] = new(sql.NullInt64)
 		case workflowdata.FieldDuration:
 			values[i] = new(sql.NullString)
@@ -136,6 +138,12 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field input: %w", err)
 				}
 			}
+		case workflowdata.FieldAttempt:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempt", values[i])
+			} else if value.Valid {
+				wd.Attempt = int(value.Int64)
+			}
 		case workflowdata.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field entity_workflow_data", value)
@@ -201,6 +209,9 @@ func (wd *WorkflowData) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("input=")
 	builder.WriteString(fmt.Sprintf("%v", wd.Input))
+	builder.WriteString(", ")
+	builder.WriteString("attempt=")
+	builder.WriteString(fmt.Sprintf("%v", wd.Attempt))
 	builder.WriteByte(')')
 	return builder.String()
 }

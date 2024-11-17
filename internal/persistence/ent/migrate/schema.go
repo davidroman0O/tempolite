@@ -18,6 +18,7 @@ var (
 		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
 		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "entity_activity_data", Type: field.TypeInt, Unique: true},
 	}
 	// ActivityDataTable holds the schema information for the "activity_data" table.
@@ -28,7 +29,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_data_entities_activity_data",
-				Columns:    []*schema.Column{ActivityDataColumns[7]},
+				Columns:    []*schema.Column{ActivityDataColumns[8]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -37,8 +38,7 @@ var (
 	// ActivityExecutionsColumns holds the columns for the "activity_executions" table.
 	ActivityExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "attempt", Type: field.TypeInt, Default: 1},
-		{Name: "input", Type: field.TypeJSON, Nullable: true},
+		{Name: "inputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "execution_activity_execution", Type: field.TypeInt, Unique: true},
 	}
 	// ActivityExecutionsTable holds the schema information for the "activity_executions" table.
@@ -49,7 +49,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_executions_executions_activity_execution",
-				Columns:    []*schema.Column{ActivityExecutionsColumns[3]},
+				Columns:    []*schema.Column{ActivityExecutionsColumns[2]},
 				RefColumns: []*schema.Column{ExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -58,10 +58,8 @@ var (
 	// ActivityExecutionDataColumns holds the columns for the "activity_execution_data" table.
 	ActivityExecutionDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "heartbeats", Type: field.TypeJSON, Nullable: true},
 		{Name: "last_heartbeat", Type: field.TypeTime, Nullable: true},
-		{Name: "progress", Type: field.TypeJSON, Nullable: true},
-		{Name: "execution_details", Type: field.TypeJSON, Nullable: true},
+		{Name: "outputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "activity_execution_execution_data", Type: field.TypeInt, Unique: true},
 	}
 	// ActivityExecutionDataTable holds the schema information for the "activity_execution_data" table.
@@ -72,7 +70,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "activity_execution_data_activity_executions_execution_data",
-				Columns:    []*schema.Column{ActivityExecutionDataColumns[5]},
+				Columns:    []*schema.Column{ActivityExecutionDataColumns[3]},
 				RefColumns: []*schema.Column{ActivityExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -85,7 +83,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"Workflow", "Activity", "Saga", "SideEffect"}},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Queued", "Running", "Paused", "Cancelled", "Completed", "Failed"}, Default: "Pending"},
 		{Name: "step_id", Type: field.TypeString},
 		{Name: "queue_entities", Type: field.TypeInt, Nullable: true},
 		{Name: "run_entities", Type: field.TypeInt},
@@ -117,7 +115,8 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "started_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Taken", "Queued", "Running", "Completed", "Failed", "Retried", "Cancelled", "Paused"}, Default: "Pending"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"Pending", "Queued", "Running", "Retried", "Paused", "Cancelled", "Completed", "Failed"}, Default: "Pending"},
+		{Name: "error", Type: field.TypeString, Nullable: true},
 		{Name: "entity_executions", Type: field.TypeInt},
 	}
 	// ExecutionsTable holds the schema information for the "executions" table.
@@ -128,7 +127,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "executions_entities_executions",
-				Columns:    []*schema.Column{ExecutionsColumns[6]},
+				Columns:    []*schema.Column{ExecutionsColumns[7]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -224,7 +223,6 @@ var (
 	SagaExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "step_type", Type: field.TypeEnum, Enums: []string{"transaction", "compensation"}},
-		{Name: "compensation_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "execution_saga_execution", Type: field.TypeInt, Unique: true},
 	}
 	// SagaExecutionsTable holds the schema information for the "saga_executions" table.
@@ -235,7 +233,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "saga_executions_executions_saga_execution",
-				Columns:    []*schema.Column{SagaExecutionsColumns[3]},
+				Columns:    []*schema.Column{SagaExecutionsColumns[2]},
 				RefColumns: []*schema.Column{ExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -244,9 +242,9 @@ var (
 	// SagaExecutionDataColumns holds the columns for the "saga_execution_data" table.
 	SagaExecutionDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "transaction_history", Type: field.TypeJSON, Nullable: true},
-		{Name: "compensation_history", Type: field.TypeJSON, Nullable: true},
-		{Name: "last_transaction", Type: field.TypeTime, Nullable: true},
+		{Name: "last_heartbeat", Type: field.TypeTime, Nullable: true},
+		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "has_output", Type: field.TypeBool, Default: false},
 		{Name: "saga_execution_execution_data", Type: field.TypeInt, Unique: true},
 	}
 	// SagaExecutionDataTable holds the schema information for the "saga_execution_data" table.
@@ -266,8 +264,6 @@ var (
 	// SideEffectDataColumns holds the columns for the "side_effect_data" table.
 	SideEffectDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "input", Type: field.TypeJSON, Nullable: true},
-		{Name: "output", Type: field.TypeJSON, Nullable: true},
 		{Name: "entity_side_effect_data", Type: field.TypeInt, Unique: true},
 	}
 	// SideEffectDataTable holds the schema information for the "side_effect_data" table.
@@ -278,7 +274,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_data_entities_side_effect_data",
-				Columns:    []*schema.Column{SideEffectDataColumns[3]},
+				Columns:    []*schema.Column{SideEffectDataColumns[1]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -287,7 +283,6 @@ var (
 	// SideEffectExecutionsColumns holds the columns for the "side_effect_executions" table.
 	SideEffectExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "result", Type: field.TypeJSON, Nullable: true},
 		{Name: "execution_side_effect_execution", Type: field.TypeInt, Unique: true},
 	}
 	// SideEffectExecutionsTable holds the schema information for the "side_effect_executions" table.
@@ -298,7 +293,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_executions_executions_side_effect_execution",
-				Columns:    []*schema.Column{SideEffectExecutionsColumns[2]},
+				Columns:    []*schema.Column{SideEffectExecutionsColumns[1]},
 				RefColumns: []*schema.Column{ExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -307,9 +302,7 @@ var (
 	// SideEffectExecutionDataColumns holds the columns for the "side_effect_execution_data" table.
 	SideEffectExecutionDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "effect_time", Type: field.TypeTime, Nullable: true},
-		{Name: "effect_metadata", Type: field.TypeJSON, Nullable: true},
-		{Name: "execution_context", Type: field.TypeJSON, Nullable: true},
+		{Name: "outputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "side_effect_execution_execution_data", Type: field.TypeInt, Unique: true},
 	}
 	// SideEffectExecutionDataTable holds the schema information for the "side_effect_execution_data" table.
@@ -320,7 +313,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "side_effect_execution_data_side_effect_executions_execution_data",
-				Columns:    []*schema.Column{SideEffectExecutionDataColumns[4]},
+				Columns:    []*schema.Column{SideEffectExecutionDataColumns[2]},
 				RefColumns: []*schema.Column{SideEffectExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -329,6 +322,7 @@ var (
 	// VersionsColumns holds the columns for the "versions" table.
 	VersionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "change_id", Type: field.TypeString},
 		{Name: "version", Type: field.TypeInt},
 		{Name: "data", Type: field.TypeJSON},
 		{Name: "entity_versions", Type: field.TypeInt},
@@ -341,7 +335,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "versions_entities_versions",
-				Columns:    []*schema.Column{VersionsColumns[3]},
+				Columns:    []*schema.Column{VersionsColumns[4]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -356,6 +350,7 @@ var (
 		{Name: "retry_state", Type: field.TypeJSON},
 		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "input", Type: field.TypeJSON, Nullable: true},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "entity_workflow_data", Type: field.TypeInt, Unique: true},
 	}
 	// WorkflowDataTable holds the schema information for the "workflow_data" table.
@@ -366,7 +361,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[7]},
+				Columns:    []*schema.Column{WorkflowDataColumns[8]},
 				RefColumns: []*schema.Column{EntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -375,6 +370,7 @@ var (
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
 	WorkflowExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "inputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "execution_workflow_execution", Type: field.TypeInt, Unique: true},
 	}
 	// WorkflowExecutionsTable holds the schema information for the "workflow_executions" table.
@@ -385,7 +381,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_executions_executions_workflow_execution",
-				Columns:    []*schema.Column{WorkflowExecutionsColumns[1]},
+				Columns:    []*schema.Column{WorkflowExecutionsColumns[2]},
 				RefColumns: []*schema.Column{ExecutionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -394,8 +390,8 @@ var (
 	// WorkflowExecutionDataColumns holds the columns for the "workflow_execution_data" table.
 	WorkflowExecutionDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "error", Type: field.TypeString, Nullable: true},
-		{Name: "output", Type: field.TypeJSON, Nullable: true},
+		{Name: "last_heartbeat", Type: field.TypeTime, Nullable: true},
+		{Name: "outputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "workflow_execution_execution_data", Type: field.TypeInt, Unique: true},
 	}
 	// WorkflowExecutionDataTable holds the schema information for the "workflow_execution_data" table.

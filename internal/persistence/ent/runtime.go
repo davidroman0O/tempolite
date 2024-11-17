@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/activitydata"
-	"github.com/davidroman0O/tempolite/internal/persistence/ent/activityexecution"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/queue"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/run"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagadata"
+	"github.com/davidroman0O/tempolite/internal/persistence/ent/sagaexecutiondata"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/schema"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/version"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/workflowdata"
@@ -31,12 +31,10 @@ func init() {
 	activitydataDescRetryPolicy := activitydataFields[3].Descriptor()
 	// activitydata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
 	activitydata.DefaultRetryPolicy = activitydataDescRetryPolicy.Default.(*schema.RetryPolicy)
-	activityexecutionFields := schema.ActivityExecution{}.Fields()
-	_ = activityexecutionFields
-	// activityexecutionDescAttempt is the schema descriptor for attempt field.
-	activityexecutionDescAttempt := activityexecutionFields[0].Descriptor()
-	// activityexecution.DefaultAttempt holds the default value on creation for the attempt field.
-	activityexecution.DefaultAttempt = activityexecutionDescAttempt.Default.(int)
+	// activitydataDescAttempt is the schema descriptor for attempt field.
+	activitydataDescAttempt := activitydataFields[6].Descriptor()
+	// activitydata.DefaultAttempt holds the default value on creation for the attempt field.
+	activitydata.DefaultAttempt = activitydataDescAttempt.Default.(int)
 	entityMixin := schema.Entity{}.Mixin()
 	entityMixinFields0 := entityMixin[0].Fields()
 	_ = entityMixinFields0
@@ -111,10 +109,16 @@ func init() {
 	sagadataDescCompensating := sagadataFields[0].Descriptor()
 	// sagadata.DefaultCompensating holds the default value on creation for the compensating field.
 	sagadata.DefaultCompensating = sagadataDescCompensating.Default.(bool)
+	sagaexecutiondataFields := schema.SagaExecutionData{}.Fields()
+	_ = sagaexecutiondataFields
+	// sagaexecutiondataDescHasOutput is the schema descriptor for hasOutput field.
+	sagaexecutiondataDescHasOutput := sagaexecutiondataFields[2].Descriptor()
+	// sagaexecutiondata.DefaultHasOutput holds the default value on creation for the hasOutput field.
+	sagaexecutiondata.DefaultHasOutput = sagaexecutiondataDescHasOutput.Default.(bool)
 	versionFields := schema.Version{}.Fields()
 	_ = versionFields
 	// versionDescVersion is the schema descriptor for version field.
-	versionDescVersion := versionFields[0].Descriptor()
+	versionDescVersion := versionFields[1].Descriptor()
 	// version.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	version.VersionValidator = versionDescVersion.Validators[0].(func(int) error)
 	workflowdataFields := schema.WorkflowData{}.Fields()
@@ -135,4 +139,8 @@ func init() {
 	workflowdataDescRetryPolicy := workflowdataFields[4].Descriptor()
 	// workflowdata.DefaultRetryPolicy holds the default value on creation for the retry_policy field.
 	workflowdata.DefaultRetryPolicy = workflowdataDescRetryPolicy.Default.(*schema.RetryPolicy)
+	// workflowdataDescAttempt is the schema descriptor for attempt field.
+	workflowdataDescAttempt := workflowdataFields[6].Descriptor()
+	// workflowdata.DefaultAttempt holds the default value on creation for the attempt field.
+	workflowdata.DefaultAttempt = workflowdataDescAttempt.Default.(int)
 }

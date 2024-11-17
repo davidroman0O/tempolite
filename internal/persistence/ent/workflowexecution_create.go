@@ -21,6 +21,12 @@ type WorkflowExecutionCreate struct {
 	hooks    []Hook
 }
 
+// SetInputs sets the "inputs" field.
+func (wec *WorkflowExecutionCreate) SetInputs(u [][]uint8) *WorkflowExecutionCreate {
+	wec.mutation.SetInputs(u)
+	return wec
+}
+
 // SetExecutionID sets the "execution" edge to the Execution entity by ID.
 func (wec *WorkflowExecutionCreate) SetExecutionID(id int) *WorkflowExecutionCreate {
 	wec.mutation.SetExecutionID(id)
@@ -114,6 +120,10 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 		_node = &WorkflowExecution{config: wec.config}
 		_spec = sqlgraph.NewCreateSpec(workflowexecution.Table, sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeInt))
 	)
+	if value, ok := wec.mutation.Inputs(); ok {
+		_spec.SetField(workflowexecution.FieldInputs, field.TypeJSON, value)
+		_node.Inputs = value
+	}
 	if nodes := wec.mutation.ExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,

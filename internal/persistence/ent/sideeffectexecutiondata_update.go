@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -30,59 +29,21 @@ func (seedu *SideEffectExecutionDataUpdate) Where(ps ...predicate.SideEffectExec
 	return seedu
 }
 
-// SetEffectTime sets the "effect_time" field.
-func (seedu *SideEffectExecutionDataUpdate) SetEffectTime(t time.Time) *SideEffectExecutionDataUpdate {
-	seedu.mutation.SetEffectTime(t)
+// SetOutputs sets the "outputs" field.
+func (seedu *SideEffectExecutionDataUpdate) SetOutputs(u [][]uint8) *SideEffectExecutionDataUpdate {
+	seedu.mutation.SetOutputs(u)
 	return seedu
 }
 
-// SetNillableEffectTime sets the "effect_time" field if the given value is not nil.
-func (seedu *SideEffectExecutionDataUpdate) SetNillableEffectTime(t *time.Time) *SideEffectExecutionDataUpdate {
-	if t != nil {
-		seedu.SetEffectTime(*t)
-	}
+// AppendOutputs appends u to the "outputs" field.
+func (seedu *SideEffectExecutionDataUpdate) AppendOutputs(u [][]uint8) *SideEffectExecutionDataUpdate {
+	seedu.mutation.AppendOutputs(u)
 	return seedu
 }
 
-// ClearEffectTime clears the value of the "effect_time" field.
-func (seedu *SideEffectExecutionDataUpdate) ClearEffectTime() *SideEffectExecutionDataUpdate {
-	seedu.mutation.ClearEffectTime()
-	return seedu
-}
-
-// SetEffectMetadata sets the "effect_metadata" field.
-func (seedu *SideEffectExecutionDataUpdate) SetEffectMetadata(u []uint8) *SideEffectExecutionDataUpdate {
-	seedu.mutation.SetEffectMetadata(u)
-	return seedu
-}
-
-// AppendEffectMetadata appends u to the "effect_metadata" field.
-func (seedu *SideEffectExecutionDataUpdate) AppendEffectMetadata(u []uint8) *SideEffectExecutionDataUpdate {
-	seedu.mutation.AppendEffectMetadata(u)
-	return seedu
-}
-
-// ClearEffectMetadata clears the value of the "effect_metadata" field.
-func (seedu *SideEffectExecutionDataUpdate) ClearEffectMetadata() *SideEffectExecutionDataUpdate {
-	seedu.mutation.ClearEffectMetadata()
-	return seedu
-}
-
-// SetExecutionContext sets the "execution_context" field.
-func (seedu *SideEffectExecutionDataUpdate) SetExecutionContext(u []uint8) *SideEffectExecutionDataUpdate {
-	seedu.mutation.SetExecutionContext(u)
-	return seedu
-}
-
-// AppendExecutionContext appends u to the "execution_context" field.
-func (seedu *SideEffectExecutionDataUpdate) AppendExecutionContext(u []uint8) *SideEffectExecutionDataUpdate {
-	seedu.mutation.AppendExecutionContext(u)
-	return seedu
-}
-
-// ClearExecutionContext clears the value of the "execution_context" field.
-func (seedu *SideEffectExecutionDataUpdate) ClearExecutionContext() *SideEffectExecutionDataUpdate {
-	seedu.mutation.ClearExecutionContext()
+// ClearOutputs clears the value of the "outputs" field.
+func (seedu *SideEffectExecutionDataUpdate) ClearOutputs() *SideEffectExecutionDataUpdate {
+	seedu.mutation.ClearOutputs()
 	return seedu
 }
 
@@ -155,33 +116,16 @@ func (seedu *SideEffectExecutionDataUpdate) sqlSave(ctx context.Context) (n int,
 			}
 		}
 	}
-	if value, ok := seedu.mutation.EffectTime(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectTime, field.TypeTime, value)
+	if value, ok := seedu.mutation.Outputs(); ok {
+		_spec.SetField(sideeffectexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if seedu.mutation.EffectTimeCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldEffectTime, field.TypeTime)
-	}
-	if value, ok := seedu.mutation.EffectMetadata(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectMetadata, field.TypeJSON, value)
-	}
-	if value, ok := seedu.mutation.AppendedEffectMetadata(); ok {
+	if value, ok := seedu.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecutiondata.FieldEffectMetadata, value)
+			sqljson.Append(u, sideeffectexecutiondata.FieldOutputs, value)
 		})
 	}
-	if seedu.mutation.EffectMetadataCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldEffectMetadata, field.TypeJSON)
-	}
-	if value, ok := seedu.mutation.ExecutionContext(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldExecutionContext, field.TypeJSON, value)
-	}
-	if value, ok := seedu.mutation.AppendedExecutionContext(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecutiondata.FieldExecutionContext, value)
-		})
-	}
-	if seedu.mutation.ExecutionContextCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldExecutionContext, field.TypeJSON)
+	if seedu.mutation.OutputsCleared() {
+		_spec.ClearField(sideeffectexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if seedu.mutation.SideEffectExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -232,59 +176,21 @@ type SideEffectExecutionDataUpdateOne struct {
 	mutation *SideEffectExecutionDataMutation
 }
 
-// SetEffectTime sets the "effect_time" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) SetEffectTime(t time.Time) *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.SetEffectTime(t)
+// SetOutputs sets the "outputs" field.
+func (seeduo *SideEffectExecutionDataUpdateOne) SetOutputs(u [][]uint8) *SideEffectExecutionDataUpdateOne {
+	seeduo.mutation.SetOutputs(u)
 	return seeduo
 }
 
-// SetNillableEffectTime sets the "effect_time" field if the given value is not nil.
-func (seeduo *SideEffectExecutionDataUpdateOne) SetNillableEffectTime(t *time.Time) *SideEffectExecutionDataUpdateOne {
-	if t != nil {
-		seeduo.SetEffectTime(*t)
-	}
+// AppendOutputs appends u to the "outputs" field.
+func (seeduo *SideEffectExecutionDataUpdateOne) AppendOutputs(u [][]uint8) *SideEffectExecutionDataUpdateOne {
+	seeduo.mutation.AppendOutputs(u)
 	return seeduo
 }
 
-// ClearEffectTime clears the value of the "effect_time" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) ClearEffectTime() *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.ClearEffectTime()
-	return seeduo
-}
-
-// SetEffectMetadata sets the "effect_metadata" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) SetEffectMetadata(u []uint8) *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.SetEffectMetadata(u)
-	return seeduo
-}
-
-// AppendEffectMetadata appends u to the "effect_metadata" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) AppendEffectMetadata(u []uint8) *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.AppendEffectMetadata(u)
-	return seeduo
-}
-
-// ClearEffectMetadata clears the value of the "effect_metadata" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) ClearEffectMetadata() *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.ClearEffectMetadata()
-	return seeduo
-}
-
-// SetExecutionContext sets the "execution_context" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) SetExecutionContext(u []uint8) *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.SetExecutionContext(u)
-	return seeduo
-}
-
-// AppendExecutionContext appends u to the "execution_context" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) AppendExecutionContext(u []uint8) *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.AppendExecutionContext(u)
-	return seeduo
-}
-
-// ClearExecutionContext clears the value of the "execution_context" field.
-func (seeduo *SideEffectExecutionDataUpdateOne) ClearExecutionContext() *SideEffectExecutionDataUpdateOne {
-	seeduo.mutation.ClearExecutionContext()
+// ClearOutputs clears the value of the "outputs" field.
+func (seeduo *SideEffectExecutionDataUpdateOne) ClearOutputs() *SideEffectExecutionDataUpdateOne {
+	seeduo.mutation.ClearOutputs()
 	return seeduo
 }
 
@@ -387,33 +293,16 @@ func (seeduo *SideEffectExecutionDataUpdateOne) sqlSave(ctx context.Context) (_n
 			}
 		}
 	}
-	if value, ok := seeduo.mutation.EffectTime(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectTime, field.TypeTime, value)
+	if value, ok := seeduo.mutation.Outputs(); ok {
+		_spec.SetField(sideeffectexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if seeduo.mutation.EffectTimeCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldEffectTime, field.TypeTime)
-	}
-	if value, ok := seeduo.mutation.EffectMetadata(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectMetadata, field.TypeJSON, value)
-	}
-	if value, ok := seeduo.mutation.AppendedEffectMetadata(); ok {
+	if value, ok := seeduo.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecutiondata.FieldEffectMetadata, value)
+			sqljson.Append(u, sideeffectexecutiondata.FieldOutputs, value)
 		})
 	}
-	if seeduo.mutation.EffectMetadataCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldEffectMetadata, field.TypeJSON)
-	}
-	if value, ok := seeduo.mutation.ExecutionContext(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldExecutionContext, field.TypeJSON, value)
-	}
-	if value, ok := seeduo.mutation.AppendedExecutionContext(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecutiondata.FieldExecutionContext, value)
-		})
-	}
-	if seeduo.mutation.ExecutionContextCleared() {
-		_spec.ClearField(sideeffectexecutiondata.FieldExecutionContext, field.TypeJSON)
+	if seeduo.mutation.OutputsCleared() {
+		_spec.ClearField(sideeffectexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if seeduo.mutation.SideEffectExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

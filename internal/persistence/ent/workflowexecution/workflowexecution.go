@@ -12,6 +12,8 @@ const (
 	Label = "workflow_execution"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldInputs holds the string denoting the inputs field in the database.
+	FieldInputs = "inputs"
 	// EdgeExecution holds the string denoting the execution edge name in mutations.
 	EdgeExecution = "execution"
 	// EdgeExecutionData holds the string denoting the execution_data edge name in mutations.
@@ -37,6 +39,7 @@ const (
 // Columns holds all SQL columns for workflowexecution fields.
 var Columns = []string{
 	FieldID,
+	FieldInputs,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "workflow_executions"

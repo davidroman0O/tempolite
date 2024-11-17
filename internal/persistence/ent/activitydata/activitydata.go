@@ -25,6 +25,8 @@ const (
 	FieldInput = "input"
 	// FieldOutput holds the string denoting the output field in the database.
 	FieldOutput = "output"
+	// FieldAttempt holds the string denoting the attempt field in the database.
+	FieldAttempt = "attempt"
 	// EdgeEntity holds the string denoting the entity edge name in mutations.
 	EdgeEntity = "entity"
 	// Table holds the table name of the activitydata in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldRetryPolicy,
 	FieldInput,
 	FieldOutput,
+	FieldAttempt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "activity_data"
@@ -75,6 +78,8 @@ var (
 	DefaultMaxAttempts int
 	// DefaultRetryPolicy holds the default value on creation for the "retry_policy" field.
 	DefaultRetryPolicy *schema.RetryPolicy
+	// DefaultAttempt holds the default value on creation for the "attempt" field.
+	DefaultAttempt int
 )
 
 // OrderOption defines the ordering options for the ActivityData queries.
@@ -98,6 +103,11 @@ func ByMaxAttempts(opts ...sql.OrderTermOption) OrderOption {
 // ByScheduledFor orders the results by the scheduled_for field.
 func ByScheduledFor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldScheduledFor, opts...).ToFunc()
+}
+
+// ByAttempt orders the results by the attempt field.
+func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
 }
 
 // ByEntityField orders the results by entity field.

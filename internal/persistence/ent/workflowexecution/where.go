@@ -53,6 +53,16 @@ func IDLTE(id int) predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(sql.FieldLTE(FieldID, id))
 }
 
+// InputsIsNil applies the IsNil predicate on the "inputs" field.
+func InputsIsNil() predicate.WorkflowExecution {
+	return predicate.WorkflowExecution(sql.FieldIsNull(FieldInputs))
+}
+
+// InputsNotNil applies the NotNil predicate on the "inputs" field.
+func InputsNotNil() predicate.WorkflowExecution {
+	return predicate.WorkflowExecution(sql.FieldNotNull(FieldInputs))
+}
+
 // HasExecution applies the HasEdge predicate on the "execution" edge.
 func HasExecution() predicate.WorkflowExecution {
 	return predicate.WorkflowExecution(func(s *sql.Selector) {

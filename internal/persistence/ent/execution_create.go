@@ -95,6 +95,20 @@ func (ec *ExecutionCreate) SetNillableStatus(e *execution.Status) *ExecutionCrea
 	return ec
 }
 
+// SetError sets the "error" field.
+func (ec *ExecutionCreate) SetError(s string) *ExecutionCreate {
+	ec.mutation.SetError(s)
+	return ec
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (ec *ExecutionCreate) SetNillableError(s *string) *ExecutionCreate {
+	if s != nil {
+		ec.SetError(*s)
+	}
+	return ec
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (ec *ExecutionCreate) SetEntityID(id int) *ExecutionCreate {
 	ec.mutation.SetEntityID(id)
@@ -302,6 +316,10 @@ func (ec *ExecutionCreate) createSpec() (*Execution, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.Status(); ok {
 		_spec.SetField(execution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := ec.mutation.Error(); ok {
+		_spec.SetField(execution.FieldError, field.TypeString, value)
+		_node.Error = value
 	}
 	if nodes := ec.mutation.EntityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

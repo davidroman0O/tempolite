@@ -20,6 +20,12 @@ type VersionCreate struct {
 	hooks    []Hook
 }
 
+// SetChangeID sets the "changeID" field.
+func (vc *VersionCreate) SetChangeID(s string) *VersionCreate {
+	vc.mutation.SetChangeID(s)
+	return vc
+}
+
 // SetVersion sets the "version" field.
 func (vc *VersionCreate) SetVersion(i int) *VersionCreate {
 	vc.mutation.SetVersion(i)
@@ -77,6 +83,9 @@ func (vc *VersionCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (vc *VersionCreate) check() error {
+	if _, ok := vc.mutation.ChangeID(); !ok {
+		return &ValidationError{Name: "changeID", err: errors.New(`ent: missing required field "Version.changeID"`)}
+	}
 	if _, ok := vc.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Version.version"`)}
 	}
@@ -117,6 +126,10 @@ func (vc *VersionCreate) createSpec() (*Version, *sqlgraph.CreateSpec) {
 		_node = &Version{config: vc.config}
 		_spec = sqlgraph.NewCreateSpec(version.Table, sqlgraph.NewFieldSpec(version.FieldID, field.TypeInt))
 	)
+	if value, ok := vc.mutation.ChangeID(); ok {
+		_spec.SetField(version.FieldChangeID, field.TypeString, value)
+		_node.ChangeID = value
+	}
 	if value, ok := vc.mutation.Version(); ok {
 		_spec.SetField(version.FieldVersion, field.TypeInt, value)
 		_node.Version = value

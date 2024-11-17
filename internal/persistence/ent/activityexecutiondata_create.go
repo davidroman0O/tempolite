@@ -21,12 +21,6 @@ type ActivityExecutionDataCreate struct {
 	hooks    []Hook
 }
 
-// SetHeartbeats sets the "heartbeats" field.
-func (aedc *ActivityExecutionDataCreate) SetHeartbeats(u [][]uint8) *ActivityExecutionDataCreate {
-	aedc.mutation.SetHeartbeats(u)
-	return aedc
-}
-
 // SetLastHeartbeat sets the "last_heartbeat" field.
 func (aedc *ActivityExecutionDataCreate) SetLastHeartbeat(t time.Time) *ActivityExecutionDataCreate {
 	aedc.mutation.SetLastHeartbeat(t)
@@ -41,15 +35,9 @@ func (aedc *ActivityExecutionDataCreate) SetNillableLastHeartbeat(t *time.Time) 
 	return aedc
 }
 
-// SetProgress sets the "progress" field.
-func (aedc *ActivityExecutionDataCreate) SetProgress(u []uint8) *ActivityExecutionDataCreate {
-	aedc.mutation.SetProgress(u)
-	return aedc
-}
-
-// SetExecutionDetails sets the "execution_details" field.
-func (aedc *ActivityExecutionDataCreate) SetExecutionDetails(u []uint8) *ActivityExecutionDataCreate {
-	aedc.mutation.SetExecutionDetails(u)
+// SetOutputs sets the "outputs" field.
+func (aedc *ActivityExecutionDataCreate) SetOutputs(u [][]uint8) *ActivityExecutionDataCreate {
+	aedc.mutation.SetOutputs(u)
 	return aedc
 }
 
@@ -127,21 +115,13 @@ func (aedc *ActivityExecutionDataCreate) createSpec() (*ActivityExecutionData, *
 		_node = &ActivityExecutionData{config: aedc.config}
 		_spec = sqlgraph.NewCreateSpec(activityexecutiondata.Table, sqlgraph.NewFieldSpec(activityexecutiondata.FieldID, field.TypeInt))
 	)
-	if value, ok := aedc.mutation.Heartbeats(); ok {
-		_spec.SetField(activityexecutiondata.FieldHeartbeats, field.TypeJSON, value)
-		_node.Heartbeats = value
-	}
 	if value, ok := aedc.mutation.LastHeartbeat(); ok {
 		_spec.SetField(activityexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 		_node.LastHeartbeat = &value
 	}
-	if value, ok := aedc.mutation.Progress(); ok {
-		_spec.SetField(activityexecutiondata.FieldProgress, field.TypeJSON, value)
-		_node.Progress = value
-	}
-	if value, ok := aedc.mutation.ExecutionDetails(); ok {
-		_spec.SetField(activityexecutiondata.FieldExecutionDetails, field.TypeJSON, value)
-		_node.ExecutionDetails = value
+	if value, ok := aedc.mutation.Outputs(); ok {
+		_spec.SetField(activityexecutiondata.FieldOutputs, field.TypeJSON, value)
+		_node.Outputs = value
 	}
 	if nodes := aedc.mutation.ActivityExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

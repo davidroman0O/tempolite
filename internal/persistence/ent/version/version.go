@@ -12,6 +12,8 @@ const (
 	Label = "version"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldChangeID holds the string denoting the changeid field in the database.
+	FieldChangeID = "change_id"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
 	// FieldData holds the string denoting the data field in the database.
@@ -32,6 +34,7 @@ const (
 // Columns holds all SQL columns for version fields.
 var Columns = []string{
 	FieldID,
+	FieldChangeID,
 	FieldVersion,
 	FieldData,
 }
@@ -68,6 +71,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByChangeID orders the results by the changeID field.
+func ByChangeID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldChangeID, opts...).ToFunc()
 }
 
 // ByVersion orders the results by the version field.

@@ -9,7 +9,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -27,24 +26,6 @@ type SideEffectExecutionUpdate struct {
 // Where appends a list predicates to the SideEffectExecutionUpdate builder.
 func (seeu *SideEffectExecutionUpdate) Where(ps ...predicate.SideEffectExecution) *SideEffectExecutionUpdate {
 	seeu.mutation.Where(ps...)
-	return seeu
-}
-
-// SetResult sets the "result" field.
-func (seeu *SideEffectExecutionUpdate) SetResult(u []uint8) *SideEffectExecutionUpdate {
-	seeu.mutation.SetResult(u)
-	return seeu
-}
-
-// AppendResult appends u to the "result" field.
-func (seeu *SideEffectExecutionUpdate) AppendResult(u []uint8) *SideEffectExecutionUpdate {
-	seeu.mutation.AppendResult(u)
-	return seeu
-}
-
-// ClearResult clears the value of the "result" field.
-func (seeu *SideEffectExecutionUpdate) ClearResult() *SideEffectExecutionUpdate {
-	seeu.mutation.ClearResult()
 	return seeu
 }
 
@@ -142,17 +123,6 @@ func (seeu *SideEffectExecutionUpdate) sqlSave(ctx context.Context) (n int, err 
 			}
 		}
 	}
-	if value, ok := seeu.mutation.Result(); ok {
-		_spec.SetField(sideeffectexecution.FieldResult, field.TypeJSON, value)
-	}
-	if value, ok := seeu.mutation.AppendedResult(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecution.FieldResult, value)
-		})
-	}
-	if seeu.mutation.ResultCleared() {
-		_spec.ClearField(sideeffectexecution.FieldResult, field.TypeJSON)
-	}
 	if seeu.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
@@ -229,24 +199,6 @@ type SideEffectExecutionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *SideEffectExecutionMutation
-}
-
-// SetResult sets the "result" field.
-func (seeuo *SideEffectExecutionUpdateOne) SetResult(u []uint8) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.SetResult(u)
-	return seeuo
-}
-
-// AppendResult appends u to the "result" field.
-func (seeuo *SideEffectExecutionUpdateOne) AppendResult(u []uint8) *SideEffectExecutionUpdateOne {
-	seeuo.mutation.AppendResult(u)
-	return seeuo
-}
-
-// ClearResult clears the value of the "result" field.
-func (seeuo *SideEffectExecutionUpdateOne) ClearResult() *SideEffectExecutionUpdateOne {
-	seeuo.mutation.ClearResult()
-	return seeuo
 }
 
 // SetExecutionID sets the "execution" edge to the Execution entity by ID.
@@ -372,17 +324,6 @@ func (seeuo *SideEffectExecutionUpdateOne) sqlSave(ctx context.Context) (_node *
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := seeuo.mutation.Result(); ok {
-		_spec.SetField(sideeffectexecution.FieldResult, field.TypeJSON, value)
-	}
-	if value, ok := seeuo.mutation.AppendedResult(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectexecution.FieldResult, value)
-		})
-	}
-	if seeuo.mutation.ResultCleared() {
-		_spec.ClearField(sideeffectexecution.FieldResult, field.TypeJSON)
 	}
 	if seeuo.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

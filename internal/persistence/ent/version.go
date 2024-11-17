@@ -18,6 +18,8 @@ type Version struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// ChangeID holds the value of the "changeID" field.
+	ChangeID string `json:"changeID,omitempty"`
 	// Version holds the value of the "version" field.
 	Version int `json:"version,omitempty"`
 	// Data holds the value of the "data" field.
@@ -58,6 +60,8 @@ func (*Version) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case version.FieldID, version.FieldVersion:
 			values[i] = new(sql.NullInt64)
+		case version.FieldChangeID:
+			values[i] = new(sql.NullString)
 		case version.ForeignKeys[0]: // entity_versions
 			values[i] = new(sql.NullInt64)
 		default:
@@ -81,6 +85,12 @@ func (v *Version) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			v.ID = int(value.Int64)
+		case version.FieldChangeID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field changeID", values[i])
+			} else if value.Valid {
+				v.ChangeID = value.String
+			}
 		case version.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field version", values[i])
@@ -143,6 +153,9 @@ func (v *Version) String() string {
 	var builder strings.Builder
 	builder.WriteString("Version(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", v.ID))
+	builder.WriteString("changeID=")
+	builder.WriteString(v.ChangeID)
+	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", v.Version))
 	builder.WriteString(", ")

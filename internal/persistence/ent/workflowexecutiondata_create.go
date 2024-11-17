@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -20,23 +21,23 @@ type WorkflowExecutionDataCreate struct {
 	hooks    []Hook
 }
 
-// SetError sets the "error" field.
-func (wedc *WorkflowExecutionDataCreate) SetError(s string) *WorkflowExecutionDataCreate {
-	wedc.mutation.SetError(s)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (wedc *WorkflowExecutionDataCreate) SetLastHeartbeat(t time.Time) *WorkflowExecutionDataCreate {
+	wedc.mutation.SetLastHeartbeat(t)
 	return wedc
 }
 
-// SetNillableError sets the "error" field if the given value is not nil.
-func (wedc *WorkflowExecutionDataCreate) SetNillableError(s *string) *WorkflowExecutionDataCreate {
-	if s != nil {
-		wedc.SetError(*s)
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (wedc *WorkflowExecutionDataCreate) SetNillableLastHeartbeat(t *time.Time) *WorkflowExecutionDataCreate {
+	if t != nil {
+		wedc.SetLastHeartbeat(*t)
 	}
 	return wedc
 }
 
-// SetOutput sets the "output" field.
-func (wedc *WorkflowExecutionDataCreate) SetOutput(u [][]uint8) *WorkflowExecutionDataCreate {
-	wedc.mutation.SetOutput(u)
+// SetOutputs sets the "outputs" field.
+func (wedc *WorkflowExecutionDataCreate) SetOutputs(u [][]uint8) *WorkflowExecutionDataCreate {
+	wedc.mutation.SetOutputs(u)
 	return wedc
 }
 
@@ -114,13 +115,13 @@ func (wedc *WorkflowExecutionDataCreate) createSpec() (*WorkflowExecutionData, *
 		_node = &WorkflowExecutionData{config: wedc.config}
 		_spec = sqlgraph.NewCreateSpec(workflowexecutiondata.Table, sqlgraph.NewFieldSpec(workflowexecutiondata.FieldID, field.TypeInt))
 	)
-	if value, ok := wedc.mutation.Error(); ok {
-		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)
-		_node.Error = value
+	if value, ok := wedc.mutation.LastHeartbeat(); ok {
+		_spec.SetField(workflowexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
+		_node.LastHeartbeat = &value
 	}
-	if value, ok := wedc.mutation.Output(); ok {
-		_spec.SetField(workflowexecutiondata.FieldOutput, field.TypeJSON, value)
-		_node.Output = value
+	if value, ok := wedc.mutation.Outputs(); ok {
+		_spec.SetField(workflowexecutiondata.FieldOutputs, field.TypeJSON, value)
+		_node.Outputs = value
 	}
 	if nodes := wedc.mutation.WorkflowExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

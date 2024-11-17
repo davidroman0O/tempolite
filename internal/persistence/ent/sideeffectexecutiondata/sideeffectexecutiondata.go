@@ -12,12 +12,8 @@ const (
 	Label = "side_effect_execution_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldEffectTime holds the string denoting the effect_time field in the database.
-	FieldEffectTime = "effect_time"
-	// FieldEffectMetadata holds the string denoting the effect_metadata field in the database.
-	FieldEffectMetadata = "effect_metadata"
-	// FieldExecutionContext holds the string denoting the execution_context field in the database.
-	FieldExecutionContext = "execution_context"
+	// FieldOutputs holds the string denoting the outputs field in the database.
+	FieldOutputs = "outputs"
 	// EdgeSideEffectExecution holds the string denoting the side_effect_execution edge name in mutations.
 	EdgeSideEffectExecution = "side_effect_execution"
 	// Table holds the table name of the sideeffectexecutiondata in the database.
@@ -34,9 +30,7 @@ const (
 // Columns holds all SQL columns for sideeffectexecutiondata fields.
 var Columns = []string{
 	FieldID,
-	FieldEffectTime,
-	FieldEffectMetadata,
-	FieldExecutionContext,
+	FieldOutputs,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "side_effect_execution_data"
@@ -66,11 +60,6 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByEffectTime orders the results by the effect_time field.
-func ByEffectTime(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEffectTime, opts...).ToFunc()
 }
 
 // BySideEffectExecutionField orders the results by side_effect_execution field.

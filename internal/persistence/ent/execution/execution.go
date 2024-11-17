@@ -25,6 +25,8 @@ const (
 	FieldCompletedAt = "completed_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldError holds the string denoting the error field in the database.
+	FieldError = "error"
 	// EdgeEntity holds the string denoting the entity edge name in mutations.
 	EdgeEntity = "entity"
 	// EdgeWorkflowExecution holds the string denoting the workflow_execution edge name in mutations.
@@ -82,6 +84,7 @@ var Columns = []string{
 	FieldStartedAt,
 	FieldCompletedAt,
 	FieldStatus,
+	FieldError,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "executions"
@@ -125,14 +128,13 @@ const DefaultStatus = StatusPending
 // Status values.
 const (
 	StatusPending   Status = "Pending"
-	StatusTaken     Status = "Taken"
 	StatusQueued    Status = "Queued"
 	StatusRunning   Status = "Running"
+	StatusRetried   Status = "Retried"
+	StatusPaused    Status = "Paused"
+	StatusCancelled Status = "Cancelled"
 	StatusCompleted Status = "Completed"
 	StatusFailed    Status = "Failed"
-	StatusRetried   Status = "Retried"
-	StatusCancelled Status = "Cancelled"
-	StatusPaused    Status = "Paused"
 )
 
 func (s Status) String() string {
@@ -142,7 +144,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusTaken, StatusQueued, StatusRunning, StatusCompleted, StatusFailed, StatusRetried, StatusCancelled, StatusPaused:
+	case StatusPending, StatusQueued, StatusRunning, StatusRetried, StatusPaused, StatusCancelled, StatusCompleted, StatusFailed:
 		return nil
 	default:
 		return fmt.Errorf("execution: invalid enum value for status field: %q", s)
@@ -180,6 +182,11 @@ func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByError orders the results by the error field.
+func ByError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldError, opts...).ToFunc()
 }
 
 // ByEntityField orders the results by entity field.

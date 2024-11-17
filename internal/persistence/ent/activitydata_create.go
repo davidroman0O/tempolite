@@ -82,6 +82,20 @@ func (adc *ActivityDataCreate) SetOutput(u [][]uint8) *ActivityDataCreate {
 	return adc
 }
 
+// SetAttempt sets the "attempt" field.
+func (adc *ActivityDataCreate) SetAttempt(i int) *ActivityDataCreate {
+	adc.mutation.SetAttempt(i)
+	return adc
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (adc *ActivityDataCreate) SetNillableAttempt(i *int) *ActivityDataCreate {
+	if i != nil {
+		adc.SetAttempt(*i)
+	}
+	return adc
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (adc *ActivityDataCreate) SetEntityID(id int) *ActivityDataCreate {
 	adc.mutation.SetEntityID(id)
@@ -136,6 +150,10 @@ func (adc *ActivityDataCreate) defaults() {
 		v := activitydata.DefaultRetryPolicy
 		adc.mutation.SetRetryPolicy(v)
 	}
+	if _, ok := adc.mutation.Attempt(); !ok {
+		v := activitydata.DefaultAttempt
+		adc.mutation.SetAttempt(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -145,6 +163,9 @@ func (adc *ActivityDataCreate) check() error {
 	}
 	if _, ok := adc.mutation.RetryPolicy(); !ok {
 		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "ActivityData.retry_policy"`)}
+	}
+	if _, ok := adc.mutation.Attempt(); !ok {
+		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "ActivityData.attempt"`)}
 	}
 	if len(adc.mutation.EntityIDs()) == 0 {
 		return &ValidationError{Name: "entity", err: errors.New(`ent: missing required edge "ActivityData.entity"`)}
@@ -198,6 +219,10 @@ func (adc *ActivityDataCreate) createSpec() (*ActivityData, *sqlgraph.CreateSpec
 	if value, ok := adc.mutation.Output(); ok {
 		_spec.SetField(activitydata.FieldOutput, field.TypeJSON, value)
 		_node.Output = value
+	}
+	if value, ok := adc.mutation.Attempt(); ok {
+		_spec.SetField(activitydata.FieldAttempt, field.TypeInt, value)
+		_node.Attempt = value
 	}
 	if nodes := adc.mutation.EntityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -28,6 +28,20 @@ func (vu *VersionUpdate) Where(ps ...predicate.Version) *VersionUpdate {
 	return vu
 }
 
+// SetChangeID sets the "changeID" field.
+func (vu *VersionUpdate) SetChangeID(s string) *VersionUpdate {
+	vu.mutation.SetChangeID(s)
+	return vu
+}
+
+// SetNillableChangeID sets the "changeID" field if the given value is not nil.
+func (vu *VersionUpdate) SetNillableChangeID(s *string) *VersionUpdate {
+	if s != nil {
+		vu.SetChangeID(*s)
+	}
+	return vu
+}
+
 // SetVersion sets the "version" field.
 func (vu *VersionUpdate) SetVersion(i int) *VersionUpdate {
 	vu.mutation.ResetVersion()
@@ -129,6 +143,9 @@ func (vu *VersionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			}
 		}
 	}
+	if value, ok := vu.mutation.ChangeID(); ok {
+		_spec.SetField(version.FieldChangeID, field.TypeString, value)
+	}
 	if value, ok := vu.mutation.Version(); ok {
 		_spec.SetField(version.FieldVersion, field.TypeInt, value)
 	}
@@ -185,6 +202,20 @@ type VersionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *VersionMutation
+}
+
+// SetChangeID sets the "changeID" field.
+func (vuo *VersionUpdateOne) SetChangeID(s string) *VersionUpdateOne {
+	vuo.mutation.SetChangeID(s)
+	return vuo
+}
+
+// SetNillableChangeID sets the "changeID" field if the given value is not nil.
+func (vuo *VersionUpdateOne) SetNillableChangeID(s *string) *VersionUpdateOne {
+	if s != nil {
+		vuo.SetChangeID(*s)
+	}
+	return vuo
 }
 
 // SetVersion sets the "version" field.
@@ -317,6 +348,9 @@ func (vuo *VersionUpdateOne) sqlSave(ctx context.Context) (_node *Version, err e
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := vuo.mutation.ChangeID(); ok {
+		_spec.SetField(version.FieldChangeID, field.TypeString, value)
 	}
 	if value, ok := vuo.mutation.Version(); ok {
 		_spec.SetField(version.FieldVersion, field.TypeInt, value)

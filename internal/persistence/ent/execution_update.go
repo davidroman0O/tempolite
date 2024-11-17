@@ -87,6 +87,26 @@ func (eu *ExecutionUpdate) SetNillableStatus(e *execution.Status) *ExecutionUpda
 	return eu
 }
 
+// SetError sets the "error" field.
+func (eu *ExecutionUpdate) SetError(s string) *ExecutionUpdate {
+	eu.mutation.SetError(s)
+	return eu
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (eu *ExecutionUpdate) SetNillableError(s *string) *ExecutionUpdate {
+	if s != nil {
+		eu.SetError(*s)
+	}
+	return eu
+}
+
+// ClearError clears the value of the "error" field.
+func (eu *ExecutionUpdate) ClearError() *ExecutionUpdate {
+	eu.mutation.ClearError()
+	return eu
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (eu *ExecutionUpdate) SetEntityID(id int) *ExecutionUpdate {
 	eu.mutation.SetEntityID(id)
@@ -284,6 +304,12 @@ func (eu *ExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := eu.mutation.Status(); ok {
 		_spec.SetField(execution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := eu.mutation.Error(); ok {
+		_spec.SetField(execution.FieldError, field.TypeString, value)
+	}
+	if eu.mutation.ErrorCleared() {
+		_spec.ClearField(execution.FieldError, field.TypeString)
 	}
 	if eu.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -501,6 +527,26 @@ func (euo *ExecutionUpdateOne) SetNillableStatus(e *execution.Status) *Execution
 	if e != nil {
 		euo.SetStatus(*e)
 	}
+	return euo
+}
+
+// SetError sets the "error" field.
+func (euo *ExecutionUpdateOne) SetError(s string) *ExecutionUpdateOne {
+	euo.mutation.SetError(s)
+	return euo
+}
+
+// SetNillableError sets the "error" field if the given value is not nil.
+func (euo *ExecutionUpdateOne) SetNillableError(s *string) *ExecutionUpdateOne {
+	if s != nil {
+		euo.SetError(*s)
+	}
+	return euo
+}
+
+// ClearError clears the value of the "error" field.
+func (euo *ExecutionUpdateOne) ClearError() *ExecutionUpdateOne {
+	euo.mutation.ClearError()
 	return euo
 }
 
@@ -731,6 +777,12 @@ func (euo *ExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Execution, e
 	}
 	if value, ok := euo.mutation.Status(); ok {
 		_spec.SetField(execution.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := euo.mutation.Error(); ok {
+		_spec.SetField(execution.FieldError, field.TypeString, value)
+	}
+	if euo.mutation.ErrorCleared() {
+		_spec.ClearField(execution.FieldError, field.TypeString)
 	}
 	if euo.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -3,7 +3,6 @@
 package ent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -16,11 +15,9 @@ import (
 
 // SideEffectExecution is the model entity for the SideEffectExecution schema.
 type SideEffectExecution struct {
-	config `json:"-"`
+	config
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Result holds the value of the "result" field.
-	Result []uint8 `json:"result,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SideEffectExecutionQuery when eager-loading is set.
 	Edges                           SideEffectExecutionEdges `json:"edges"`
@@ -66,8 +63,6 @@ func (*SideEffectExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sideeffectexecution.FieldResult:
-			values[i] = new([]byte)
 		case sideeffectexecution.FieldID:
 			values[i] = new(sql.NullInt64)
 		case sideeffectexecution.ForeignKeys[0]: // execution_side_effect_execution
@@ -93,14 +88,6 @@ func (see *SideEffectExecution) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			see.ID = int(value.Int64)
-		case sideeffectexecution.FieldResult:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field result", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &see.Result); err != nil {
-					return fmt.Errorf("unmarshal field result: %w", err)
-				}
-			}
 		case sideeffectexecution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field execution_side_effect_execution", value)
@@ -153,9 +140,7 @@ func (see *SideEffectExecution) Unwrap() *SideEffectExecution {
 func (see *SideEffectExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("SideEffectExecution(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", see.ID))
-	builder.WriteString("result=")
-	builder.WriteString(fmt.Sprintf("%v", see.Result))
+	builder.WriteString(fmt.Sprintf("id=%v", see.ID))
 	builder.WriteByte(')')
 	return builder.String()
 }

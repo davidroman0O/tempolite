@@ -27,12 +27,6 @@ func (sec *SagaExecutionCreate) SetStepType(st sagaexecution.StepType) *SagaExec
 	return sec
 }
 
-// SetCompensationData sets the "compensation_data" field.
-func (sec *SagaExecutionCreate) SetCompensationData(u []uint8) *SagaExecutionCreate {
-	sec.mutation.SetCompensationData(u)
-	return sec
-}
-
 // SetExecutionID sets the "execution" edge to the Execution entity by ID.
 func (sec *SagaExecutionCreate) SetExecutionID(id int) *SagaExecutionCreate {
 	sec.mutation.SetExecutionID(id)
@@ -137,10 +131,6 @@ func (sec *SagaExecutionCreate) createSpec() (*SagaExecution, *sqlgraph.CreateSp
 	if value, ok := sec.mutation.StepType(); ok {
 		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
 		_node.StepType = value
-	}
-	if value, ok := sec.mutation.CompensationData(); ok {
-		_spec.SetField(sagaexecution.FieldCompensationData, field.TypeJSON, value)
-		_node.CompensationData = value
 	}
 	if nodes := sec.mutation.ExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

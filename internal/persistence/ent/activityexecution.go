@@ -19,10 +19,8 @@ type ActivityExecution struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Attempt holds the value of the "attempt" field.
-	Attempt int `json:"attempt,omitempty"`
-	// Input holds the value of the "input" field.
-	Input [][]uint8 `json:"input,omitempty"`
+	// Inputs holds the value of the "inputs" field.
+	Inputs [][]uint8 `json:"inputs,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityExecutionQuery when eager-loading is set.
 	Edges                        ActivityExecutionEdges `json:"edges"`
@@ -68,9 +66,9 @@ func (*ActivityExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case activityexecution.FieldInput:
+		case activityexecution.FieldInputs:
 			values[i] = new([]byte)
-		case activityexecution.FieldID, activityexecution.FieldAttempt:
+		case activityexecution.FieldID:
 			values[i] = new(sql.NullInt64)
 		case activityexecution.ForeignKeys[0]: // execution_activity_execution
 			values[i] = new(sql.NullInt64)
@@ -95,18 +93,12 @@ func (ae *ActivityExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			ae.ID = int(value.Int64)
-		case activityexecution.FieldAttempt:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field attempt", values[i])
-			} else if value.Valid {
-				ae.Attempt = int(value.Int64)
-			}
-		case activityexecution.FieldInput:
+		case activityexecution.FieldInputs:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field input", values[i])
+				return fmt.Errorf("unexpected type %T for field inputs", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ae.Input); err != nil {
-					return fmt.Errorf("unmarshal field input: %w", err)
+				if err := json.Unmarshal(*value, &ae.Inputs); err != nil {
+					return fmt.Errorf("unmarshal field inputs: %w", err)
 				}
 			}
 		case activityexecution.ForeignKeys[0]:
@@ -162,11 +154,8 @@ func (ae *ActivityExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("ActivityExecution(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", ae.ID))
-	builder.WriteString("attempt=")
-	builder.WriteString(fmt.Sprintf("%v", ae.Attempt))
-	builder.WriteString(", ")
-	builder.WriteString("input=")
-	builder.WriteString(fmt.Sprintf("%v", ae.Input))
+	builder.WriteString("inputs=")
+	builder.WriteString(fmt.Sprintf("%v", ae.Inputs))
 	builder.WriteByte(')')
 	return builder.String()
 }

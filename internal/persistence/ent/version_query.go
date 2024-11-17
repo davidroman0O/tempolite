@@ -299,12 +299,12 @@ func (vq *VersionQuery) WithEntity(opts ...func(*EntityQuery)) *VersionQuery {
 // Example:
 //
 //	var v []struct {
-//		Version int `json:"version,omitempty"`
+//		ChangeID string `json:"changeID,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Version.Query().
-//		GroupBy(version.FieldVersion).
+//		GroupBy(version.FieldChangeID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (vq *VersionQuery) GroupBy(field string, fields ...string) *VersionGroupBy {
@@ -322,11 +322,11 @@ func (vq *VersionQuery) GroupBy(field string, fields ...string) *VersionGroupBy 
 // Example:
 //
 //	var v []struct {
-//		Version int `json:"version,omitempty"`
+//		ChangeID string `json:"changeID,omitempty"`
 //	}
 //
 //	client.Version.Query().
-//		Select(version.FieldVersion).
+//		Select(version.FieldChangeID).
 //		Scan(ctx, &v)
 func (vq *VersionQuery) Select(fields ...string) *VersionSelect {
 	vq.ctx.Fields = append(vq.ctx.Fields, fields...)

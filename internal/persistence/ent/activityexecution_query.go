@@ -336,12 +336,12 @@ func (aeq *ActivityExecutionQuery) WithExecutionData(opts ...func(*ActivityExecu
 // Example:
 //
 //	var v []struct {
-//		Attempt int `json:"attempt,omitempty"`
+//		Inputs [][]uint8 `json:"inputs,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ActivityExecution.Query().
-//		GroupBy(activityexecution.FieldAttempt).
+//		GroupBy(activityexecution.FieldInputs).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (aeq *ActivityExecutionQuery) GroupBy(field string, fields ...string) *ActivityExecutionGroupBy {
@@ -359,11 +359,11 @@ func (aeq *ActivityExecutionQuery) GroupBy(field string, fields ...string) *Acti
 // Example:
 //
 //	var v []struct {
-//		Attempt int `json:"attempt,omitempty"`
+//		Inputs [][]uint8 `json:"inputs,omitempty"`
 //	}
 //
 //	client.ActivityExecution.Query().
-//		Select(activityexecution.FieldAttempt).
+//		Select(activityexecution.FieldInputs).
 //		Scan(ctx, &v)
 func (aeq *ActivityExecutionQuery) Select(fields ...string) *ActivityExecutionSelect {
 	aeq.ctx.Fields = append(aeq.ctx.Fields, fields...)

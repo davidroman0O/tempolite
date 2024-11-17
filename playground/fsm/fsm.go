@@ -3847,9 +3847,9 @@ func main() {
 			BackoffCoefficient: 2.0,
 			MaxInterval:        5 * time.Minute,
 		},
-		VersionOverrides: map[string]int{
-			"ChangeIDCalculateTax": 1, // Force version 1
-		},
+		// VersionOverrides: map[string]int{
+		// 	"ChangeIDCalculateTax": 1, // Force version 1
+		// },
 	}, 40)
 
 	// Simulate pause after 2 seconds

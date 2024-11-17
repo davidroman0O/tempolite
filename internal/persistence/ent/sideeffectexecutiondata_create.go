@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -21,29 +20,9 @@ type SideEffectExecutionDataCreate struct {
 	hooks    []Hook
 }
 
-// SetEffectTime sets the "effect_time" field.
-func (seedc *SideEffectExecutionDataCreate) SetEffectTime(t time.Time) *SideEffectExecutionDataCreate {
-	seedc.mutation.SetEffectTime(t)
-	return seedc
-}
-
-// SetNillableEffectTime sets the "effect_time" field if the given value is not nil.
-func (seedc *SideEffectExecutionDataCreate) SetNillableEffectTime(t *time.Time) *SideEffectExecutionDataCreate {
-	if t != nil {
-		seedc.SetEffectTime(*t)
-	}
-	return seedc
-}
-
-// SetEffectMetadata sets the "effect_metadata" field.
-func (seedc *SideEffectExecutionDataCreate) SetEffectMetadata(u []uint8) *SideEffectExecutionDataCreate {
-	seedc.mutation.SetEffectMetadata(u)
-	return seedc
-}
-
-// SetExecutionContext sets the "execution_context" field.
-func (seedc *SideEffectExecutionDataCreate) SetExecutionContext(u []uint8) *SideEffectExecutionDataCreate {
-	seedc.mutation.SetExecutionContext(u)
+// SetOutputs sets the "outputs" field.
+func (seedc *SideEffectExecutionDataCreate) SetOutputs(u [][]uint8) *SideEffectExecutionDataCreate {
+	seedc.mutation.SetOutputs(u)
 	return seedc
 }
 
@@ -121,17 +100,9 @@ func (seedc *SideEffectExecutionDataCreate) createSpec() (*SideEffectExecutionDa
 		_node = &SideEffectExecutionData{config: seedc.config}
 		_spec = sqlgraph.NewCreateSpec(sideeffectexecutiondata.Table, sqlgraph.NewFieldSpec(sideeffectexecutiondata.FieldID, field.TypeInt))
 	)
-	if value, ok := seedc.mutation.EffectTime(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectTime, field.TypeTime, value)
-		_node.EffectTime = &value
-	}
-	if value, ok := seedc.mutation.EffectMetadata(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldEffectMetadata, field.TypeJSON, value)
-		_node.EffectMetadata = value
-	}
-	if value, ok := seedc.mutation.ExecutionContext(); ok {
-		_spec.SetField(sideeffectexecutiondata.FieldExecutionContext, field.TypeJSON, value)
-		_node.ExecutionContext = value
+	if value, ok := seedc.mutation.Outputs(); ok {
+		_spec.SetField(sideeffectexecutiondata.FieldOutputs, field.TypeJSON, value)
+		_node.Outputs = value
 	}
 	if nodes := seedc.mutation.SideEffectExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

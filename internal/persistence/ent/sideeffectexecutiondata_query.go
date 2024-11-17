@@ -299,12 +299,12 @@ func (seedq *SideEffectExecutionDataQuery) WithSideEffectExecution(opts ...func(
 // Example:
 //
 //	var v []struct {
-//		EffectTime time.Time `json:"effect_time,omitempty"`
+//		Outputs [][]uint8 `json:"outputs,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SideEffectExecutionData.Query().
-//		GroupBy(sideeffectexecutiondata.FieldEffectTime).
+//		GroupBy(sideeffectexecutiondata.FieldOutputs).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (seedq *SideEffectExecutionDataQuery) GroupBy(field string, fields ...string) *SideEffectExecutionDataGroupBy {
@@ -322,11 +322,11 @@ func (seedq *SideEffectExecutionDataQuery) GroupBy(field string, fields ...strin
 // Example:
 //
 //	var v []struct {
-//		EffectTime time.Time `json:"effect_time,omitempty"`
+//		Outputs [][]uint8 `json:"outputs,omitempty"`
 //	}
 //
 //	client.SideEffectExecutionData.Query().
-//		Select(sideeffectexecutiondata.FieldEffectTime).
+//		Select(sideeffectexecutiondata.FieldOutputs).
 //		Scan(ctx, &v)
 func (seedq *SideEffectExecutionDataQuery) Select(fields ...string) *SideEffectExecutionDataSelect {
 	seedq.ctx.Fields = append(seedq.ctx.Fields, fields...)

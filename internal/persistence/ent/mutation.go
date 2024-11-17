@@ -78,6 +78,8 @@ type ActivityDataMutation struct {
 	appendinput     [][]uint8
 	output          *[][]uint8
 	appendoutput    [][]uint8
+	attempt         *int
+	addattempt      *int
 	clearedFields   map[string]struct{}
 	entity          *int
 	clearedentity   bool
@@ -525,6 +527,62 @@ func (m *ActivityDataMutation) ResetOutput() {
 	delete(m.clearedFields, activitydata.FieldOutput)
 }
 
+// SetAttempt sets the "attempt" field.
+func (m *ActivityDataMutation) SetAttempt(i int) {
+	m.attempt = &i
+	m.addattempt = nil
+}
+
+// Attempt returns the value of the "attempt" field in the mutation.
+func (m *ActivityDataMutation) Attempt() (r int, exists bool) {
+	v := m.attempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempt returns the old "attempt" field's value of the ActivityData entity.
+// If the ActivityData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityDataMutation) OldAttempt(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempt: %w", err)
+	}
+	return oldValue.Attempt, nil
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (m *ActivityDataMutation) AddAttempt(i int) {
+	if m.addattempt != nil {
+		*m.addattempt += i
+	} else {
+		m.addattempt = &i
+	}
+}
+
+// AddedAttempt returns the value that was added to the "attempt" field in this mutation.
+func (m *ActivityDataMutation) AddedAttempt() (r int, exists bool) {
+	v := m.addattempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempt resets all changes to the "attempt" field.
+func (m *ActivityDataMutation) ResetAttempt() {
+	m.attempt = nil
+	m.addattempt = nil
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by id.
 func (m *ActivityDataMutation) SetEntityID(id int) {
 	m.entity = &id
@@ -598,7 +656,7 @@ func (m *ActivityDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityDataMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.timeout != nil {
 		fields = append(fields, activitydata.FieldTimeout)
 	}
@@ -616,6 +674,9 @@ func (m *ActivityDataMutation) Fields() []string {
 	}
 	if m.output != nil {
 		fields = append(fields, activitydata.FieldOutput)
+	}
+	if m.attempt != nil {
+		fields = append(fields, activitydata.FieldAttempt)
 	}
 	return fields
 }
@@ -637,6 +698,8 @@ func (m *ActivityDataMutation) Field(name string) (ent.Value, bool) {
 		return m.Input()
 	case activitydata.FieldOutput:
 		return m.Output()
+	case activitydata.FieldAttempt:
+		return m.Attempt()
 	}
 	return nil, false
 }
@@ -658,6 +721,8 @@ func (m *ActivityDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldInput(ctx)
 	case activitydata.FieldOutput:
 		return m.OldOutput(ctx)
+	case activitydata.FieldAttempt:
+		return m.OldAttempt(ctx)
 	}
 	return nil, fmt.Errorf("unknown ActivityData field %s", name)
 }
@@ -709,6 +774,13 @@ func (m *ActivityDataMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOutput(v)
 		return nil
+	case activitydata.FieldAttempt:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ActivityData field %s", name)
 }
@@ -723,6 +795,9 @@ func (m *ActivityDataMutation) AddedFields() []string {
 	if m.addmax_attempts != nil {
 		fields = append(fields, activitydata.FieldMaxAttempts)
 	}
+	if m.addattempt != nil {
+		fields = append(fields, activitydata.FieldAttempt)
+	}
 	return fields
 }
 
@@ -735,6 +810,8 @@ func (m *ActivityDataMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTimeout()
 	case activitydata.FieldMaxAttempts:
 		return m.AddedMaxAttempts()
+	case activitydata.FieldAttempt:
+		return m.AddedAttempt()
 	}
 	return nil, false
 }
@@ -757,6 +834,13 @@ func (m *ActivityDataMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddMaxAttempts(v)
+		return nil
+	case activitydata.FieldAttempt:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityData numeric field %s", name)
@@ -829,6 +913,9 @@ func (m *ActivityDataMutation) ResetField(name string) error {
 		return nil
 	case activitydata.FieldOutput:
 		m.ResetOutput()
+		return nil
+	case activitydata.FieldAttempt:
+		m.ResetAttempt()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityData field %s", name)
@@ -914,10 +1001,8 @@ type ActivityExecutionMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int
-	attempt               *int
-	addattempt            *int
-	input                 *[][]uint8
-	appendinput           [][]uint8
+	inputs                *[][]uint8
+	appendinputs          [][]uint8
 	clearedFields         map[string]struct{}
 	execution             *int
 	clearedexecution      bool
@@ -1026,125 +1111,69 @@ func (m *ActivityExecutionMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetAttempt sets the "attempt" field.
-func (m *ActivityExecutionMutation) SetAttempt(i int) {
-	m.attempt = &i
-	m.addattempt = nil
+// SetInputs sets the "inputs" field.
+func (m *ActivityExecutionMutation) SetInputs(u [][]uint8) {
+	m.inputs = &u
+	m.appendinputs = nil
 }
 
-// Attempt returns the value of the "attempt" field in the mutation.
-func (m *ActivityExecutionMutation) Attempt() (r int, exists bool) {
-	v := m.attempt
+// Inputs returns the value of the "inputs" field in the mutation.
+func (m *ActivityExecutionMutation) Inputs() (r [][]uint8, exists bool) {
+	v := m.inputs
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAttempt returns the old "attempt" field's value of the ActivityExecution entity.
+// OldInputs returns the old "inputs" field's value of the ActivityExecution entity.
 // If the ActivityExecution object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionMutation) OldAttempt(ctx context.Context) (v int, err error) {
+func (m *ActivityExecutionMutation) OldInputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAttempt is only allowed on UpdateOne operations")
+		return v, errors.New("OldInputs is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAttempt requires an ID field in the mutation")
+		return v, errors.New("OldInputs requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAttempt: %w", err)
+		return v, fmt.Errorf("querying old value for OldInputs: %w", err)
 	}
-	return oldValue.Attempt, nil
+	return oldValue.Inputs, nil
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (m *ActivityExecutionMutation) AddAttempt(i int) {
-	if m.addattempt != nil {
-		*m.addattempt += i
-	} else {
-		m.addattempt = &i
-	}
+// AppendInputs adds u to the "inputs" field.
+func (m *ActivityExecutionMutation) AppendInputs(u [][]uint8) {
+	m.appendinputs = append(m.appendinputs, u...)
 }
 
-// AddedAttempt returns the value that was added to the "attempt" field in this mutation.
-func (m *ActivityExecutionMutation) AddedAttempt() (r int, exists bool) {
-	v := m.addattempt
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetAttempt resets all changes to the "attempt" field.
-func (m *ActivityExecutionMutation) ResetAttempt() {
-	m.attempt = nil
-	m.addattempt = nil
-}
-
-// SetInput sets the "input" field.
-func (m *ActivityExecutionMutation) SetInput(u [][]uint8) {
-	m.input = &u
-	m.appendinput = nil
-}
-
-// Input returns the value of the "input" field in the mutation.
-func (m *ActivityExecutionMutation) Input() (r [][]uint8, exists bool) {
-	v := m.input
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldInput returns the old "input" field's value of the ActivityExecution entity.
-// If the ActivityExecution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionMutation) OldInput(ctx context.Context) (v [][]uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInput is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInput requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInput: %w", err)
-	}
-	return oldValue.Input, nil
-}
-
-// AppendInput adds u to the "input" field.
-func (m *ActivityExecutionMutation) AppendInput(u [][]uint8) {
-	m.appendinput = append(m.appendinput, u...)
-}
-
-// AppendedInput returns the list of values that were appended to the "input" field in this mutation.
-func (m *ActivityExecutionMutation) AppendedInput() ([][]uint8, bool) {
-	if len(m.appendinput) == 0 {
+// AppendedInputs returns the list of values that were appended to the "inputs" field in this mutation.
+func (m *ActivityExecutionMutation) AppendedInputs() ([][]uint8, bool) {
+	if len(m.appendinputs) == 0 {
 		return nil, false
 	}
-	return m.appendinput, true
+	return m.appendinputs, true
 }
 
-// ClearInput clears the value of the "input" field.
-func (m *ActivityExecutionMutation) ClearInput() {
-	m.input = nil
-	m.appendinput = nil
-	m.clearedFields[activityexecution.FieldInput] = struct{}{}
+// ClearInputs clears the value of the "inputs" field.
+func (m *ActivityExecutionMutation) ClearInputs() {
+	m.inputs = nil
+	m.appendinputs = nil
+	m.clearedFields[activityexecution.FieldInputs] = struct{}{}
 }
 
-// InputCleared returns if the "input" field was cleared in this mutation.
-func (m *ActivityExecutionMutation) InputCleared() bool {
-	_, ok := m.clearedFields[activityexecution.FieldInput]
+// InputsCleared returns if the "inputs" field was cleared in this mutation.
+func (m *ActivityExecutionMutation) InputsCleared() bool {
+	_, ok := m.clearedFields[activityexecution.FieldInputs]
 	return ok
 }
 
-// ResetInput resets all changes to the "input" field.
-func (m *ActivityExecutionMutation) ResetInput() {
-	m.input = nil
-	m.appendinput = nil
-	delete(m.clearedFields, activityexecution.FieldInput)
+// ResetInputs resets all changes to the "inputs" field.
+func (m *ActivityExecutionMutation) ResetInputs() {
+	m.inputs = nil
+	m.appendinputs = nil
+	delete(m.clearedFields, activityexecution.FieldInputs)
 }
 
 // SetExecutionID sets the "execution" edge to the Execution entity by id.
@@ -1259,12 +1288,9 @@ func (m *ActivityExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 2)
-	if m.attempt != nil {
-		fields = append(fields, activityexecution.FieldAttempt)
-	}
-	if m.input != nil {
-		fields = append(fields, activityexecution.FieldInput)
+	fields := make([]string, 0, 1)
+	if m.inputs != nil {
+		fields = append(fields, activityexecution.FieldInputs)
 	}
 	return fields
 }
@@ -1274,10 +1300,8 @@ func (m *ActivityExecutionMutation) Fields() []string {
 // schema.
 func (m *ActivityExecutionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case activityexecution.FieldAttempt:
-		return m.Attempt()
-	case activityexecution.FieldInput:
-		return m.Input()
+	case activityexecution.FieldInputs:
+		return m.Inputs()
 	}
 	return nil, false
 }
@@ -1287,10 +1311,8 @@ func (m *ActivityExecutionMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ActivityExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case activityexecution.FieldAttempt:
-		return m.OldAttempt(ctx)
-	case activityexecution.FieldInput:
-		return m.OldInput(ctx)
+	case activityexecution.FieldInputs:
+		return m.OldInputs(ctx)
 	}
 	return nil, fmt.Errorf("unknown ActivityExecution field %s", name)
 }
@@ -1300,19 +1322,12 @@ func (m *ActivityExecutionMutation) OldField(ctx context.Context, name string) (
 // type.
 func (m *ActivityExecutionMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case activityexecution.FieldAttempt:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAttempt(v)
-		return nil
-	case activityexecution.FieldInput:
+	case activityexecution.FieldInputs:
 		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetInput(v)
+		m.SetInputs(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution field %s", name)
@@ -1321,21 +1336,13 @@ func (m *ActivityExecutionMutation) SetField(name string, value ent.Value) error
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *ActivityExecutionMutation) AddedFields() []string {
-	var fields []string
-	if m.addattempt != nil {
-		fields = append(fields, activityexecution.FieldAttempt)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *ActivityExecutionMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case activityexecution.FieldAttempt:
-		return m.AddedAttempt()
-	}
 	return nil, false
 }
 
@@ -1344,13 +1351,6 @@ func (m *ActivityExecutionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ActivityExecutionMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case activityexecution.FieldAttempt:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddAttempt(v)
-		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution numeric field %s", name)
 }
@@ -1359,8 +1359,8 @@ func (m *ActivityExecutionMutation) AddField(name string, value ent.Value) error
 // mutation.
 func (m *ActivityExecutionMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(activityexecution.FieldInput) {
-		fields = append(fields, activityexecution.FieldInput)
+	if m.FieldCleared(activityexecution.FieldInputs) {
+		fields = append(fields, activityexecution.FieldInputs)
 	}
 	return fields
 }
@@ -1376,8 +1376,8 @@ func (m *ActivityExecutionMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ActivityExecutionMutation) ClearField(name string) error {
 	switch name {
-	case activityexecution.FieldInput:
-		m.ClearInput()
+	case activityexecution.FieldInputs:
+		m.ClearInputs()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution nullable field %s", name)
@@ -1387,11 +1387,8 @@ func (m *ActivityExecutionMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ActivityExecutionMutation) ResetField(name string) error {
 	switch name {
-	case activityexecution.FieldAttempt:
-		m.ResetAttempt()
-		return nil
-	case activityexecution.FieldInput:
-		m.ResetInput()
+	case activityexecution.FieldInputs:
+		m.ResetInputs()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecution field %s", name)
@@ -1495,13 +1492,9 @@ type ActivityExecutionDataMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
-	heartbeats                *[][]uint8
-	appendheartbeats          [][]uint8
 	last_heartbeat            *time.Time
-	progress                  *[]uint8
-	appendprogress            []uint8
-	execution_details         *[]uint8
-	appendexecution_details   []uint8
+	outputs                   *[][]uint8
+	appendoutputs             [][]uint8
 	clearedFields             map[string]struct{}
 	activity_execution        *int
 	clearedactivity_execution bool
@@ -1608,71 +1601,6 @@ func (m *ActivityExecutionDataMutation) IDs(ctx context.Context) ([]int, error) 
 	}
 }
 
-// SetHeartbeats sets the "heartbeats" field.
-func (m *ActivityExecutionDataMutation) SetHeartbeats(u [][]uint8) {
-	m.heartbeats = &u
-	m.appendheartbeats = nil
-}
-
-// Heartbeats returns the value of the "heartbeats" field in the mutation.
-func (m *ActivityExecutionDataMutation) Heartbeats() (r [][]uint8, exists bool) {
-	v := m.heartbeats
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldHeartbeats returns the old "heartbeats" field's value of the ActivityExecutionData entity.
-// If the ActivityExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionDataMutation) OldHeartbeats(ctx context.Context) (v [][]uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldHeartbeats is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldHeartbeats requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldHeartbeats: %w", err)
-	}
-	return oldValue.Heartbeats, nil
-}
-
-// AppendHeartbeats adds u to the "heartbeats" field.
-func (m *ActivityExecutionDataMutation) AppendHeartbeats(u [][]uint8) {
-	m.appendheartbeats = append(m.appendheartbeats, u...)
-}
-
-// AppendedHeartbeats returns the list of values that were appended to the "heartbeats" field in this mutation.
-func (m *ActivityExecutionDataMutation) AppendedHeartbeats() ([][]uint8, bool) {
-	if len(m.appendheartbeats) == 0 {
-		return nil, false
-	}
-	return m.appendheartbeats, true
-}
-
-// ClearHeartbeats clears the value of the "heartbeats" field.
-func (m *ActivityExecutionDataMutation) ClearHeartbeats() {
-	m.heartbeats = nil
-	m.appendheartbeats = nil
-	m.clearedFields[activityexecutiondata.FieldHeartbeats] = struct{}{}
-}
-
-// HeartbeatsCleared returns if the "heartbeats" field was cleared in this mutation.
-func (m *ActivityExecutionDataMutation) HeartbeatsCleared() bool {
-	_, ok := m.clearedFields[activityexecutiondata.FieldHeartbeats]
-	return ok
-}
-
-// ResetHeartbeats resets all changes to the "heartbeats" field.
-func (m *ActivityExecutionDataMutation) ResetHeartbeats() {
-	m.heartbeats = nil
-	m.appendheartbeats = nil
-	delete(m.clearedFields, activityexecutiondata.FieldHeartbeats)
-}
-
 // SetLastHeartbeat sets the "last_heartbeat" field.
 func (m *ActivityExecutionDataMutation) SetLastHeartbeat(t time.Time) {
 	m.last_heartbeat = &t
@@ -1722,134 +1650,69 @@ func (m *ActivityExecutionDataMutation) ResetLastHeartbeat() {
 	delete(m.clearedFields, activityexecutiondata.FieldLastHeartbeat)
 }
 
-// SetProgress sets the "progress" field.
-func (m *ActivityExecutionDataMutation) SetProgress(u []uint8) {
-	m.progress = &u
-	m.appendprogress = nil
+// SetOutputs sets the "outputs" field.
+func (m *ActivityExecutionDataMutation) SetOutputs(u [][]uint8) {
+	m.outputs = &u
+	m.appendoutputs = nil
 }
 
-// Progress returns the value of the "progress" field in the mutation.
-func (m *ActivityExecutionDataMutation) Progress() (r []uint8, exists bool) {
-	v := m.progress
+// Outputs returns the value of the "outputs" field in the mutation.
+func (m *ActivityExecutionDataMutation) Outputs() (r [][]uint8, exists bool) {
+	v := m.outputs
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldProgress returns the old "progress" field's value of the ActivityExecutionData entity.
+// OldOutputs returns the old "outputs" field's value of the ActivityExecutionData entity.
 // If the ActivityExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionDataMutation) OldProgress(ctx context.Context) (v []uint8, err error) {
+func (m *ActivityExecutionDataMutation) OldOutputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldProgress is only allowed on UpdateOne operations")
+		return v, errors.New("OldOutputs is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldProgress requires an ID field in the mutation")
+		return v, errors.New("OldOutputs requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldProgress: %w", err)
+		return v, fmt.Errorf("querying old value for OldOutputs: %w", err)
 	}
-	return oldValue.Progress, nil
+	return oldValue.Outputs, nil
 }
 
-// AppendProgress adds u to the "progress" field.
-func (m *ActivityExecutionDataMutation) AppendProgress(u []uint8) {
-	m.appendprogress = append(m.appendprogress, u...)
+// AppendOutputs adds u to the "outputs" field.
+func (m *ActivityExecutionDataMutation) AppendOutputs(u [][]uint8) {
+	m.appendoutputs = append(m.appendoutputs, u...)
 }
 
-// AppendedProgress returns the list of values that were appended to the "progress" field in this mutation.
-func (m *ActivityExecutionDataMutation) AppendedProgress() ([]uint8, bool) {
-	if len(m.appendprogress) == 0 {
+// AppendedOutputs returns the list of values that were appended to the "outputs" field in this mutation.
+func (m *ActivityExecutionDataMutation) AppendedOutputs() ([][]uint8, bool) {
+	if len(m.appendoutputs) == 0 {
 		return nil, false
 	}
-	return m.appendprogress, true
+	return m.appendoutputs, true
 }
 
-// ClearProgress clears the value of the "progress" field.
-func (m *ActivityExecutionDataMutation) ClearProgress() {
-	m.progress = nil
-	m.appendprogress = nil
-	m.clearedFields[activityexecutiondata.FieldProgress] = struct{}{}
+// ClearOutputs clears the value of the "outputs" field.
+func (m *ActivityExecutionDataMutation) ClearOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	m.clearedFields[activityexecutiondata.FieldOutputs] = struct{}{}
 }
 
-// ProgressCleared returns if the "progress" field was cleared in this mutation.
-func (m *ActivityExecutionDataMutation) ProgressCleared() bool {
-	_, ok := m.clearedFields[activityexecutiondata.FieldProgress]
+// OutputsCleared returns if the "outputs" field was cleared in this mutation.
+func (m *ActivityExecutionDataMutation) OutputsCleared() bool {
+	_, ok := m.clearedFields[activityexecutiondata.FieldOutputs]
 	return ok
 }
 
-// ResetProgress resets all changes to the "progress" field.
-func (m *ActivityExecutionDataMutation) ResetProgress() {
-	m.progress = nil
-	m.appendprogress = nil
-	delete(m.clearedFields, activityexecutiondata.FieldProgress)
-}
-
-// SetExecutionDetails sets the "execution_details" field.
-func (m *ActivityExecutionDataMutation) SetExecutionDetails(u []uint8) {
-	m.execution_details = &u
-	m.appendexecution_details = nil
-}
-
-// ExecutionDetails returns the value of the "execution_details" field in the mutation.
-func (m *ActivityExecutionDataMutation) ExecutionDetails() (r []uint8, exists bool) {
-	v := m.execution_details
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldExecutionDetails returns the old "execution_details" field's value of the ActivityExecutionData entity.
-// If the ActivityExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityExecutionDataMutation) OldExecutionDetails(ctx context.Context) (v []uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExecutionDetails is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExecutionDetails requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExecutionDetails: %w", err)
-	}
-	return oldValue.ExecutionDetails, nil
-}
-
-// AppendExecutionDetails adds u to the "execution_details" field.
-func (m *ActivityExecutionDataMutation) AppendExecutionDetails(u []uint8) {
-	m.appendexecution_details = append(m.appendexecution_details, u...)
-}
-
-// AppendedExecutionDetails returns the list of values that were appended to the "execution_details" field in this mutation.
-func (m *ActivityExecutionDataMutation) AppendedExecutionDetails() ([]uint8, bool) {
-	if len(m.appendexecution_details) == 0 {
-		return nil, false
-	}
-	return m.appendexecution_details, true
-}
-
-// ClearExecutionDetails clears the value of the "execution_details" field.
-func (m *ActivityExecutionDataMutation) ClearExecutionDetails() {
-	m.execution_details = nil
-	m.appendexecution_details = nil
-	m.clearedFields[activityexecutiondata.FieldExecutionDetails] = struct{}{}
-}
-
-// ExecutionDetailsCleared returns if the "execution_details" field was cleared in this mutation.
-func (m *ActivityExecutionDataMutation) ExecutionDetailsCleared() bool {
-	_, ok := m.clearedFields[activityexecutiondata.FieldExecutionDetails]
-	return ok
-}
-
-// ResetExecutionDetails resets all changes to the "execution_details" field.
-func (m *ActivityExecutionDataMutation) ResetExecutionDetails() {
-	m.execution_details = nil
-	m.appendexecution_details = nil
-	delete(m.clearedFields, activityexecutiondata.FieldExecutionDetails)
+// ResetOutputs resets all changes to the "outputs" field.
+func (m *ActivityExecutionDataMutation) ResetOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	delete(m.clearedFields, activityexecutiondata.FieldOutputs)
 }
 
 // SetActivityExecutionID sets the "activity_execution" edge to the ActivityExecution entity by id.
@@ -1925,18 +1788,12 @@ func (m *ActivityExecutionDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityExecutionDataMutation) Fields() []string {
-	fields := make([]string, 0, 4)
-	if m.heartbeats != nil {
-		fields = append(fields, activityexecutiondata.FieldHeartbeats)
-	}
+	fields := make([]string, 0, 2)
 	if m.last_heartbeat != nil {
 		fields = append(fields, activityexecutiondata.FieldLastHeartbeat)
 	}
-	if m.progress != nil {
-		fields = append(fields, activityexecutiondata.FieldProgress)
-	}
-	if m.execution_details != nil {
-		fields = append(fields, activityexecutiondata.FieldExecutionDetails)
+	if m.outputs != nil {
+		fields = append(fields, activityexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -1946,14 +1803,10 @@ func (m *ActivityExecutionDataMutation) Fields() []string {
 // schema.
 func (m *ActivityExecutionDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case activityexecutiondata.FieldHeartbeats:
-		return m.Heartbeats()
 	case activityexecutiondata.FieldLastHeartbeat:
 		return m.LastHeartbeat()
-	case activityexecutiondata.FieldProgress:
-		return m.Progress()
-	case activityexecutiondata.FieldExecutionDetails:
-		return m.ExecutionDetails()
+	case activityexecutiondata.FieldOutputs:
+		return m.Outputs()
 	}
 	return nil, false
 }
@@ -1963,14 +1816,10 @@ func (m *ActivityExecutionDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ActivityExecutionDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case activityexecutiondata.FieldHeartbeats:
-		return m.OldHeartbeats(ctx)
 	case activityexecutiondata.FieldLastHeartbeat:
 		return m.OldLastHeartbeat(ctx)
-	case activityexecutiondata.FieldProgress:
-		return m.OldProgress(ctx)
-	case activityexecutiondata.FieldExecutionDetails:
-		return m.OldExecutionDetails(ctx)
+	case activityexecutiondata.FieldOutputs:
+		return m.OldOutputs(ctx)
 	}
 	return nil, fmt.Errorf("unknown ActivityExecutionData field %s", name)
 }
@@ -1980,13 +1829,6 @@ func (m *ActivityExecutionDataMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *ActivityExecutionDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case activityexecutiondata.FieldHeartbeats:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetHeartbeats(v)
-		return nil
 	case activityexecutiondata.FieldLastHeartbeat:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -1994,19 +1836,12 @@ func (m *ActivityExecutionDataMutation) SetField(name string, value ent.Value) e
 		}
 		m.SetLastHeartbeat(v)
 		return nil
-	case activityexecutiondata.FieldProgress:
-		v, ok := value.([]uint8)
+	case activityexecutiondata.FieldOutputs:
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetProgress(v)
-		return nil
-	case activityexecutiondata.FieldExecutionDetails:
-		v, ok := value.([]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetExecutionDetails(v)
+		m.SetOutputs(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecutionData field %s", name)
@@ -2038,17 +1873,11 @@ func (m *ActivityExecutionDataMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *ActivityExecutionDataMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(activityexecutiondata.FieldHeartbeats) {
-		fields = append(fields, activityexecutiondata.FieldHeartbeats)
-	}
 	if m.FieldCleared(activityexecutiondata.FieldLastHeartbeat) {
 		fields = append(fields, activityexecutiondata.FieldLastHeartbeat)
 	}
-	if m.FieldCleared(activityexecutiondata.FieldProgress) {
-		fields = append(fields, activityexecutiondata.FieldProgress)
-	}
-	if m.FieldCleared(activityexecutiondata.FieldExecutionDetails) {
-		fields = append(fields, activityexecutiondata.FieldExecutionDetails)
+	if m.FieldCleared(activityexecutiondata.FieldOutputs) {
+		fields = append(fields, activityexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -2064,17 +1893,11 @@ func (m *ActivityExecutionDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ActivityExecutionDataMutation) ClearField(name string) error {
 	switch name {
-	case activityexecutiondata.FieldHeartbeats:
-		m.ClearHeartbeats()
-		return nil
 	case activityexecutiondata.FieldLastHeartbeat:
 		m.ClearLastHeartbeat()
 		return nil
-	case activityexecutiondata.FieldProgress:
-		m.ClearProgress()
-		return nil
-	case activityexecutiondata.FieldExecutionDetails:
-		m.ClearExecutionDetails()
+	case activityexecutiondata.FieldOutputs:
+		m.ClearOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecutionData nullable field %s", name)
@@ -2084,17 +1907,11 @@ func (m *ActivityExecutionDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ActivityExecutionDataMutation) ResetField(name string) error {
 	switch name {
-	case activityexecutiondata.FieldHeartbeats:
-		m.ResetHeartbeats()
-		return nil
 	case activityexecutiondata.FieldLastHeartbeat:
 		m.ResetLastHeartbeat()
 		return nil
-	case activityexecutiondata.FieldProgress:
-		m.ResetProgress()
-		return nil
-	case activityexecutiondata.FieldExecutionDetails:
-		m.ResetExecutionDetails()
+	case activityexecutiondata.FieldOutputs:
+		m.ResetOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown ActivityExecutionData field %s", name)
@@ -3311,6 +3128,7 @@ type ExecutionMutation struct {
 	started_at                   *time.Time
 	completed_at                 *time.Time
 	status                       *execution.Status
+	error                        *string
 	clearedFields                map[string]struct{}
 	entity                       *int
 	clearedentity                bool
@@ -3618,6 +3436,55 @@ func (m *ExecutionMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetError sets the "error" field.
+func (m *ExecutionMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *ExecutionMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the Execution entity.
+// If the Execution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExecutionMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *ExecutionMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[execution.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *ExecutionMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[execution.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *ExecutionMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, execution.FieldError)
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by id.
 func (m *ExecutionMutation) SetEntityID(id int) {
 	m.entity = &id
@@ -3847,7 +3714,7 @@ func (m *ExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, execution.FieldCreatedAt)
 	}
@@ -3862,6 +3729,9 @@ func (m *ExecutionMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, execution.FieldStatus)
+	}
+	if m.error != nil {
+		fields = append(fields, execution.FieldError)
 	}
 	return fields
 }
@@ -3881,6 +3751,8 @@ func (m *ExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.CompletedAt()
 	case execution.FieldStatus:
 		return m.Status()
+	case execution.FieldError:
+		return m.Error()
 	}
 	return nil, false
 }
@@ -3900,6 +3772,8 @@ func (m *ExecutionMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldCompletedAt(ctx)
 	case execution.FieldStatus:
 		return m.OldStatus(ctx)
+	case execution.FieldError:
+		return m.OldError(ctx)
 	}
 	return nil, fmt.Errorf("unknown Execution field %s", name)
 }
@@ -3944,6 +3818,13 @@ func (m *ExecutionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetStatus(v)
 		return nil
+	case execution.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Execution field %s", name)
 }
@@ -3977,6 +3858,9 @@ func (m *ExecutionMutation) ClearedFields() []string {
 	if m.FieldCleared(execution.FieldCompletedAt) {
 		fields = append(fields, execution.FieldCompletedAt)
 	}
+	if m.FieldCleared(execution.FieldError) {
+		fields = append(fields, execution.FieldError)
+	}
 	return fields
 }
 
@@ -3993,6 +3877,9 @@ func (m *ExecutionMutation) ClearField(name string) error {
 	switch name {
 	case execution.FieldCompletedAt:
 		m.ClearCompletedAt()
+		return nil
+	case execution.FieldError:
+		m.ClearError()
 		return nil
 	}
 	return fmt.Errorf("unknown Execution nullable field %s", name)
@@ -4016,6 +3903,9 @@ func (m *ExecutionMutation) ResetField(name string) error {
 		return nil
 	case execution.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case execution.FieldError:
+		m.ResetError()
 		return nil
 	}
 	return fmt.Errorf("unknown Execution field %s", name)
@@ -6766,20 +6656,18 @@ func (m *SagaDataMutation) ResetEdge(name string) error {
 // SagaExecutionMutation represents an operation that mutates the SagaExecution nodes in the graph.
 type SagaExecutionMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int
-	step_type               *sagaexecution.StepType
-	compensation_data       *[]uint8
-	appendcompensation_data []uint8
-	clearedFields           map[string]struct{}
-	execution               *int
-	clearedexecution        bool
-	execution_data          *int
-	clearedexecution_data   bool
-	done                    bool
-	oldValue                func(context.Context) (*SagaExecution, error)
-	predicates              []predicate.SagaExecution
+	op                    Op
+	typ                   string
+	id                    *int
+	step_type             *sagaexecution.StepType
+	clearedFields         map[string]struct{}
+	execution             *int
+	clearedexecution      bool
+	execution_data        *int
+	clearedexecution_data bool
+	done                  bool
+	oldValue              func(context.Context) (*SagaExecution, error)
+	predicates            []predicate.SagaExecution
 }
 
 var _ ent.Mutation = (*SagaExecutionMutation)(nil)
@@ -6916,71 +6804,6 @@ func (m *SagaExecutionMutation) ResetStepType() {
 	m.step_type = nil
 }
 
-// SetCompensationData sets the "compensation_data" field.
-func (m *SagaExecutionMutation) SetCompensationData(u []uint8) {
-	m.compensation_data = &u
-	m.appendcompensation_data = nil
-}
-
-// CompensationData returns the value of the "compensation_data" field in the mutation.
-func (m *SagaExecutionMutation) CompensationData() (r []uint8, exists bool) {
-	v := m.compensation_data
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCompensationData returns the old "compensation_data" field's value of the SagaExecution entity.
-// If the SagaExecution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SagaExecutionMutation) OldCompensationData(ctx context.Context) (v []uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCompensationData is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCompensationData requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCompensationData: %w", err)
-	}
-	return oldValue.CompensationData, nil
-}
-
-// AppendCompensationData adds u to the "compensation_data" field.
-func (m *SagaExecutionMutation) AppendCompensationData(u []uint8) {
-	m.appendcompensation_data = append(m.appendcompensation_data, u...)
-}
-
-// AppendedCompensationData returns the list of values that were appended to the "compensation_data" field in this mutation.
-func (m *SagaExecutionMutation) AppendedCompensationData() ([]uint8, bool) {
-	if len(m.appendcompensation_data) == 0 {
-		return nil, false
-	}
-	return m.appendcompensation_data, true
-}
-
-// ClearCompensationData clears the value of the "compensation_data" field.
-func (m *SagaExecutionMutation) ClearCompensationData() {
-	m.compensation_data = nil
-	m.appendcompensation_data = nil
-	m.clearedFields[sagaexecution.FieldCompensationData] = struct{}{}
-}
-
-// CompensationDataCleared returns if the "compensation_data" field was cleared in this mutation.
-func (m *SagaExecutionMutation) CompensationDataCleared() bool {
-	_, ok := m.clearedFields[sagaexecution.FieldCompensationData]
-	return ok
-}
-
-// ResetCompensationData resets all changes to the "compensation_data" field.
-func (m *SagaExecutionMutation) ResetCompensationData() {
-	m.compensation_data = nil
-	m.appendcompensation_data = nil
-	delete(m.clearedFields, sagaexecution.FieldCompensationData)
-}
-
 // SetExecutionID sets the "execution" edge to the Execution entity by id.
 func (m *SagaExecutionMutation) SetExecutionID(id int) {
 	m.execution = &id
@@ -7093,12 +6916,9 @@ func (m *SagaExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SagaExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 1)
 	if m.step_type != nil {
 		fields = append(fields, sagaexecution.FieldStepType)
-	}
-	if m.compensation_data != nil {
-		fields = append(fields, sagaexecution.FieldCompensationData)
 	}
 	return fields
 }
@@ -7110,8 +6930,6 @@ func (m *SagaExecutionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case sagaexecution.FieldStepType:
 		return m.StepType()
-	case sagaexecution.FieldCompensationData:
-		return m.CompensationData()
 	}
 	return nil, false
 }
@@ -7123,8 +6941,6 @@ func (m *SagaExecutionMutation) OldField(ctx context.Context, name string) (ent.
 	switch name {
 	case sagaexecution.FieldStepType:
 		return m.OldStepType(ctx)
-	case sagaexecution.FieldCompensationData:
-		return m.OldCompensationData(ctx)
 	}
 	return nil, fmt.Errorf("unknown SagaExecution field %s", name)
 }
@@ -7140,13 +6956,6 @@ func (m *SagaExecutionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStepType(v)
-		return nil
-	case sagaexecution.FieldCompensationData:
-		v, ok := value.([]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCompensationData(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SagaExecution field %s", name)
@@ -7177,11 +6986,7 @@ func (m *SagaExecutionMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *SagaExecutionMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(sagaexecution.FieldCompensationData) {
-		fields = append(fields, sagaexecution.FieldCompensationData)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -7194,11 +6999,6 @@ func (m *SagaExecutionMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *SagaExecutionMutation) ClearField(name string) error {
-	switch name {
-	case sagaexecution.FieldCompensationData:
-		m.ClearCompensationData()
-		return nil
-	}
 	return fmt.Errorf("unknown SagaExecution nullable field %s", name)
 }
 
@@ -7208,9 +7008,6 @@ func (m *SagaExecutionMutation) ResetField(name string) error {
 	switch name {
 	case sagaexecution.FieldStepType:
 		m.ResetStepType()
-		return nil
-	case sagaexecution.FieldCompensationData:
-		m.ResetCompensationData()
 		return nil
 	}
 	return fmt.Errorf("unknown SagaExecution field %s", name)
@@ -7311,20 +7108,19 @@ func (m *SagaExecutionMutation) ResetEdge(name string) error {
 // SagaExecutionDataMutation represents an operation that mutates the SagaExecutionData nodes in the graph.
 type SagaExecutionDataMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *int
-	transaction_history        *[][]uint8
-	appendtransaction_history  [][]uint8
-	compensation_history       *[][]uint8
-	appendcompensation_history [][]uint8
-	last_transaction           *time.Time
-	clearedFields              map[string]struct{}
-	saga_execution             *int
-	clearedsaga_execution      bool
-	done                       bool
-	oldValue                   func(context.Context) (*SagaExecutionData, error)
-	predicates                 []predicate.SagaExecutionData
+	op                    Op
+	typ                   string
+	id                    *int
+	last_heartbeat        *time.Time
+	output                *[][]uint8
+	appendoutput          [][]uint8
+	hasOutput             *bool
+	clearedFields         map[string]struct{}
+	saga_execution        *int
+	clearedsaga_execution bool
+	done                  bool
+	oldValue              func(context.Context) (*SagaExecutionData, error)
+	predicates            []predicate.SagaExecutionData
 }
 
 var _ ent.Mutation = (*SagaExecutionDataMutation)(nil)
@@ -7425,183 +7221,154 @@ func (m *SagaExecutionDataMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTransactionHistory sets the "transaction_history" field.
-func (m *SagaExecutionDataMutation) SetTransactionHistory(u [][]uint8) {
-	m.transaction_history = &u
-	m.appendtransaction_history = nil
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (m *SagaExecutionDataMutation) SetLastHeartbeat(t time.Time) {
+	m.last_heartbeat = &t
 }
 
-// TransactionHistory returns the value of the "transaction_history" field in the mutation.
-func (m *SagaExecutionDataMutation) TransactionHistory() (r [][]uint8, exists bool) {
-	v := m.transaction_history
+// LastHeartbeat returns the value of the "last_heartbeat" field in the mutation.
+func (m *SagaExecutionDataMutation) LastHeartbeat() (r time.Time, exists bool) {
+	v := m.last_heartbeat
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTransactionHistory returns the old "transaction_history" field's value of the SagaExecutionData entity.
+// OldLastHeartbeat returns the old "last_heartbeat" field's value of the SagaExecutionData entity.
 // If the SagaExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SagaExecutionDataMutation) OldTransactionHistory(ctx context.Context) (v [][]uint8, err error) {
+func (m *SagaExecutionDataMutation) OldLastHeartbeat(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTransactionHistory is only allowed on UpdateOne operations")
+		return v, errors.New("OldLastHeartbeat is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTransactionHistory requires an ID field in the mutation")
+		return v, errors.New("OldLastHeartbeat requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTransactionHistory: %w", err)
+		return v, fmt.Errorf("querying old value for OldLastHeartbeat: %w", err)
 	}
-	return oldValue.TransactionHistory, nil
+	return oldValue.LastHeartbeat, nil
 }
 
-// AppendTransactionHistory adds u to the "transaction_history" field.
-func (m *SagaExecutionDataMutation) AppendTransactionHistory(u [][]uint8) {
-	m.appendtransaction_history = append(m.appendtransaction_history, u...)
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (m *SagaExecutionDataMutation) ClearLastHeartbeat() {
+	m.last_heartbeat = nil
+	m.clearedFields[sagaexecutiondata.FieldLastHeartbeat] = struct{}{}
 }
 
-// AppendedTransactionHistory returns the list of values that were appended to the "transaction_history" field in this mutation.
-func (m *SagaExecutionDataMutation) AppendedTransactionHistory() ([][]uint8, bool) {
-	if len(m.appendtransaction_history) == 0 {
+// LastHeartbeatCleared returns if the "last_heartbeat" field was cleared in this mutation.
+func (m *SagaExecutionDataMutation) LastHeartbeatCleared() bool {
+	_, ok := m.clearedFields[sagaexecutiondata.FieldLastHeartbeat]
+	return ok
+}
+
+// ResetLastHeartbeat resets all changes to the "last_heartbeat" field.
+func (m *SagaExecutionDataMutation) ResetLastHeartbeat() {
+	m.last_heartbeat = nil
+	delete(m.clearedFields, sagaexecutiondata.FieldLastHeartbeat)
+}
+
+// SetOutput sets the "output" field.
+func (m *SagaExecutionDataMutation) SetOutput(u [][]uint8) {
+	m.output = &u
+	m.appendoutput = nil
+}
+
+// Output returns the value of the "output" field in the mutation.
+func (m *SagaExecutionDataMutation) Output() (r [][]uint8, exists bool) {
+	v := m.output
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutput returns the old "output" field's value of the SagaExecutionData entity.
+// If the SagaExecutionData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SagaExecutionDataMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutput requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutput: %w", err)
+	}
+	return oldValue.Output, nil
+}
+
+// AppendOutput adds u to the "output" field.
+func (m *SagaExecutionDataMutation) AppendOutput(u [][]uint8) {
+	m.appendoutput = append(m.appendoutput, u...)
+}
+
+// AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
+func (m *SagaExecutionDataMutation) AppendedOutput() ([][]uint8, bool) {
+	if len(m.appendoutput) == 0 {
 		return nil, false
 	}
-	return m.appendtransaction_history, true
+	return m.appendoutput, true
 }
 
-// ClearTransactionHistory clears the value of the "transaction_history" field.
-func (m *SagaExecutionDataMutation) ClearTransactionHistory() {
-	m.transaction_history = nil
-	m.appendtransaction_history = nil
-	m.clearedFields[sagaexecutiondata.FieldTransactionHistory] = struct{}{}
+// ClearOutput clears the value of the "output" field.
+func (m *SagaExecutionDataMutation) ClearOutput() {
+	m.output = nil
+	m.appendoutput = nil
+	m.clearedFields[sagaexecutiondata.FieldOutput] = struct{}{}
 }
 
-// TransactionHistoryCleared returns if the "transaction_history" field was cleared in this mutation.
-func (m *SagaExecutionDataMutation) TransactionHistoryCleared() bool {
-	_, ok := m.clearedFields[sagaexecutiondata.FieldTransactionHistory]
+// OutputCleared returns if the "output" field was cleared in this mutation.
+func (m *SagaExecutionDataMutation) OutputCleared() bool {
+	_, ok := m.clearedFields[sagaexecutiondata.FieldOutput]
 	return ok
 }
 
-// ResetTransactionHistory resets all changes to the "transaction_history" field.
-func (m *SagaExecutionDataMutation) ResetTransactionHistory() {
-	m.transaction_history = nil
-	m.appendtransaction_history = nil
-	delete(m.clearedFields, sagaexecutiondata.FieldTransactionHistory)
+// ResetOutput resets all changes to the "output" field.
+func (m *SagaExecutionDataMutation) ResetOutput() {
+	m.output = nil
+	m.appendoutput = nil
+	delete(m.clearedFields, sagaexecutiondata.FieldOutput)
 }
 
-// SetCompensationHistory sets the "compensation_history" field.
-func (m *SagaExecutionDataMutation) SetCompensationHistory(u [][]uint8) {
-	m.compensation_history = &u
-	m.appendcompensation_history = nil
+// SetHasOutput sets the "hasOutput" field.
+func (m *SagaExecutionDataMutation) SetHasOutput(b bool) {
+	m.hasOutput = &b
 }
 
-// CompensationHistory returns the value of the "compensation_history" field in the mutation.
-func (m *SagaExecutionDataMutation) CompensationHistory() (r [][]uint8, exists bool) {
-	v := m.compensation_history
+// HasOutput returns the value of the "hasOutput" field in the mutation.
+func (m *SagaExecutionDataMutation) HasOutput() (r bool, exists bool) {
+	v := m.hasOutput
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCompensationHistory returns the old "compensation_history" field's value of the SagaExecutionData entity.
+// OldHasOutput returns the old "hasOutput" field's value of the SagaExecutionData entity.
 // If the SagaExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SagaExecutionDataMutation) OldCompensationHistory(ctx context.Context) (v [][]uint8, err error) {
+func (m *SagaExecutionDataMutation) OldHasOutput(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCompensationHistory is only allowed on UpdateOne operations")
+		return v, errors.New("OldHasOutput is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCompensationHistory requires an ID field in the mutation")
+		return v, errors.New("OldHasOutput requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCompensationHistory: %w", err)
+		return v, fmt.Errorf("querying old value for OldHasOutput: %w", err)
 	}
-	return oldValue.CompensationHistory, nil
+	return oldValue.HasOutput, nil
 }
 
-// AppendCompensationHistory adds u to the "compensation_history" field.
-func (m *SagaExecutionDataMutation) AppendCompensationHistory(u [][]uint8) {
-	m.appendcompensation_history = append(m.appendcompensation_history, u...)
-}
-
-// AppendedCompensationHistory returns the list of values that were appended to the "compensation_history" field in this mutation.
-func (m *SagaExecutionDataMutation) AppendedCompensationHistory() ([][]uint8, bool) {
-	if len(m.appendcompensation_history) == 0 {
-		return nil, false
-	}
-	return m.appendcompensation_history, true
-}
-
-// ClearCompensationHistory clears the value of the "compensation_history" field.
-func (m *SagaExecutionDataMutation) ClearCompensationHistory() {
-	m.compensation_history = nil
-	m.appendcompensation_history = nil
-	m.clearedFields[sagaexecutiondata.FieldCompensationHistory] = struct{}{}
-}
-
-// CompensationHistoryCleared returns if the "compensation_history" field was cleared in this mutation.
-func (m *SagaExecutionDataMutation) CompensationHistoryCleared() bool {
-	_, ok := m.clearedFields[sagaexecutiondata.FieldCompensationHistory]
-	return ok
-}
-
-// ResetCompensationHistory resets all changes to the "compensation_history" field.
-func (m *SagaExecutionDataMutation) ResetCompensationHistory() {
-	m.compensation_history = nil
-	m.appendcompensation_history = nil
-	delete(m.clearedFields, sagaexecutiondata.FieldCompensationHistory)
-}
-
-// SetLastTransaction sets the "last_transaction" field.
-func (m *SagaExecutionDataMutation) SetLastTransaction(t time.Time) {
-	m.last_transaction = &t
-}
-
-// LastTransaction returns the value of the "last_transaction" field in the mutation.
-func (m *SagaExecutionDataMutation) LastTransaction() (r time.Time, exists bool) {
-	v := m.last_transaction
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastTransaction returns the old "last_transaction" field's value of the SagaExecutionData entity.
-// If the SagaExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SagaExecutionDataMutation) OldLastTransaction(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastTransaction is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastTransaction requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastTransaction: %w", err)
-	}
-	return oldValue.LastTransaction, nil
-}
-
-// ClearLastTransaction clears the value of the "last_transaction" field.
-func (m *SagaExecutionDataMutation) ClearLastTransaction() {
-	m.last_transaction = nil
-	m.clearedFields[sagaexecutiondata.FieldLastTransaction] = struct{}{}
-}
-
-// LastTransactionCleared returns if the "last_transaction" field was cleared in this mutation.
-func (m *SagaExecutionDataMutation) LastTransactionCleared() bool {
-	_, ok := m.clearedFields[sagaexecutiondata.FieldLastTransaction]
-	return ok
-}
-
-// ResetLastTransaction resets all changes to the "last_transaction" field.
-func (m *SagaExecutionDataMutation) ResetLastTransaction() {
-	m.last_transaction = nil
-	delete(m.clearedFields, sagaexecutiondata.FieldLastTransaction)
+// ResetHasOutput resets all changes to the "hasOutput" field.
+func (m *SagaExecutionDataMutation) ResetHasOutput() {
+	m.hasOutput = nil
 }
 
 // SetSagaExecutionID sets the "saga_execution" edge to the SagaExecution entity by id.
@@ -7678,14 +7445,14 @@ func (m *SagaExecutionDataMutation) Type() string {
 // AddedFields().
 func (m *SagaExecutionDataMutation) Fields() []string {
 	fields := make([]string, 0, 3)
-	if m.transaction_history != nil {
-		fields = append(fields, sagaexecutiondata.FieldTransactionHistory)
+	if m.last_heartbeat != nil {
+		fields = append(fields, sagaexecutiondata.FieldLastHeartbeat)
 	}
-	if m.compensation_history != nil {
-		fields = append(fields, sagaexecutiondata.FieldCompensationHistory)
+	if m.output != nil {
+		fields = append(fields, sagaexecutiondata.FieldOutput)
 	}
-	if m.last_transaction != nil {
-		fields = append(fields, sagaexecutiondata.FieldLastTransaction)
+	if m.hasOutput != nil {
+		fields = append(fields, sagaexecutiondata.FieldHasOutput)
 	}
 	return fields
 }
@@ -7695,12 +7462,12 @@ func (m *SagaExecutionDataMutation) Fields() []string {
 // schema.
 func (m *SagaExecutionDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case sagaexecutiondata.FieldTransactionHistory:
-		return m.TransactionHistory()
-	case sagaexecutiondata.FieldCompensationHistory:
-		return m.CompensationHistory()
-	case sagaexecutiondata.FieldLastTransaction:
-		return m.LastTransaction()
+	case sagaexecutiondata.FieldLastHeartbeat:
+		return m.LastHeartbeat()
+	case sagaexecutiondata.FieldOutput:
+		return m.Output()
+	case sagaexecutiondata.FieldHasOutput:
+		return m.HasOutput()
 	}
 	return nil, false
 }
@@ -7710,12 +7477,12 @@ func (m *SagaExecutionDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SagaExecutionDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case sagaexecutiondata.FieldTransactionHistory:
-		return m.OldTransactionHistory(ctx)
-	case sagaexecutiondata.FieldCompensationHistory:
-		return m.OldCompensationHistory(ctx)
-	case sagaexecutiondata.FieldLastTransaction:
-		return m.OldLastTransaction(ctx)
+	case sagaexecutiondata.FieldLastHeartbeat:
+		return m.OldLastHeartbeat(ctx)
+	case sagaexecutiondata.FieldOutput:
+		return m.OldOutput(ctx)
+	case sagaexecutiondata.FieldHasOutput:
+		return m.OldHasOutput(ctx)
 	}
 	return nil, fmt.Errorf("unknown SagaExecutionData field %s", name)
 }
@@ -7725,26 +7492,26 @@ func (m *SagaExecutionDataMutation) OldField(ctx context.Context, name string) (
 // type.
 func (m *SagaExecutionDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case sagaexecutiondata.FieldTransactionHistory:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTransactionHistory(v)
-		return nil
-	case sagaexecutiondata.FieldCompensationHistory:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCompensationHistory(v)
-		return nil
-	case sagaexecutiondata.FieldLastTransaction:
+	case sagaexecutiondata.FieldLastHeartbeat:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetLastTransaction(v)
+		m.SetLastHeartbeat(v)
+		return nil
+	case sagaexecutiondata.FieldOutput:
+		v, ok := value.([][]uint8)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutput(v)
+		return nil
+	case sagaexecutiondata.FieldHasOutput:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasOutput(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SagaExecutionData field %s", name)
@@ -7776,14 +7543,11 @@ func (m *SagaExecutionDataMutation) AddField(name string, value ent.Value) error
 // mutation.
 func (m *SagaExecutionDataMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(sagaexecutiondata.FieldTransactionHistory) {
-		fields = append(fields, sagaexecutiondata.FieldTransactionHistory)
+	if m.FieldCleared(sagaexecutiondata.FieldLastHeartbeat) {
+		fields = append(fields, sagaexecutiondata.FieldLastHeartbeat)
 	}
-	if m.FieldCleared(sagaexecutiondata.FieldCompensationHistory) {
-		fields = append(fields, sagaexecutiondata.FieldCompensationHistory)
-	}
-	if m.FieldCleared(sagaexecutiondata.FieldLastTransaction) {
-		fields = append(fields, sagaexecutiondata.FieldLastTransaction)
+	if m.FieldCleared(sagaexecutiondata.FieldOutput) {
+		fields = append(fields, sagaexecutiondata.FieldOutput)
 	}
 	return fields
 }
@@ -7799,14 +7563,11 @@ func (m *SagaExecutionDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *SagaExecutionDataMutation) ClearField(name string) error {
 	switch name {
-	case sagaexecutiondata.FieldTransactionHistory:
-		m.ClearTransactionHistory()
+	case sagaexecutiondata.FieldLastHeartbeat:
+		m.ClearLastHeartbeat()
 		return nil
-	case sagaexecutiondata.FieldCompensationHistory:
-		m.ClearCompensationHistory()
-		return nil
-	case sagaexecutiondata.FieldLastTransaction:
-		m.ClearLastTransaction()
+	case sagaexecutiondata.FieldOutput:
+		m.ClearOutput()
 		return nil
 	}
 	return fmt.Errorf("unknown SagaExecutionData nullable field %s", name)
@@ -7816,14 +7577,14 @@ func (m *SagaExecutionDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SagaExecutionDataMutation) ResetField(name string) error {
 	switch name {
-	case sagaexecutiondata.FieldTransactionHistory:
-		m.ResetTransactionHistory()
+	case sagaexecutiondata.FieldLastHeartbeat:
+		m.ResetLastHeartbeat()
 		return nil
-	case sagaexecutiondata.FieldCompensationHistory:
-		m.ResetCompensationHistory()
+	case sagaexecutiondata.FieldOutput:
+		m.ResetOutput()
 		return nil
-	case sagaexecutiondata.FieldLastTransaction:
-		m.ResetLastTransaction()
+	case sagaexecutiondata.FieldHasOutput:
+		m.ResetHasOutput()
 		return nil
 	}
 	return fmt.Errorf("unknown SagaExecutionData field %s", name)
@@ -7909,10 +7670,6 @@ type SideEffectDataMutation struct {
 	op            Op
 	typ           string
 	id            *int
-	input         *[][]uint8
-	appendinput   [][]uint8
-	output        *[][]uint8
-	appendoutput  [][]uint8
 	clearedFields map[string]struct{}
 	entity        *int
 	clearedentity bool
@@ -8019,136 +7776,6 @@ func (m *SideEffectDataMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetInput sets the "input" field.
-func (m *SideEffectDataMutation) SetInput(u [][]uint8) {
-	m.input = &u
-	m.appendinput = nil
-}
-
-// Input returns the value of the "input" field in the mutation.
-func (m *SideEffectDataMutation) Input() (r [][]uint8, exists bool) {
-	v := m.input
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldInput returns the old "input" field's value of the SideEffectData entity.
-// If the SideEffectData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectDataMutation) OldInput(ctx context.Context) (v [][]uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInput is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInput requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInput: %w", err)
-	}
-	return oldValue.Input, nil
-}
-
-// AppendInput adds u to the "input" field.
-func (m *SideEffectDataMutation) AppendInput(u [][]uint8) {
-	m.appendinput = append(m.appendinput, u...)
-}
-
-// AppendedInput returns the list of values that were appended to the "input" field in this mutation.
-func (m *SideEffectDataMutation) AppendedInput() ([][]uint8, bool) {
-	if len(m.appendinput) == 0 {
-		return nil, false
-	}
-	return m.appendinput, true
-}
-
-// ClearInput clears the value of the "input" field.
-func (m *SideEffectDataMutation) ClearInput() {
-	m.input = nil
-	m.appendinput = nil
-	m.clearedFields[sideeffectdata.FieldInput] = struct{}{}
-}
-
-// InputCleared returns if the "input" field was cleared in this mutation.
-func (m *SideEffectDataMutation) InputCleared() bool {
-	_, ok := m.clearedFields[sideeffectdata.FieldInput]
-	return ok
-}
-
-// ResetInput resets all changes to the "input" field.
-func (m *SideEffectDataMutation) ResetInput() {
-	m.input = nil
-	m.appendinput = nil
-	delete(m.clearedFields, sideeffectdata.FieldInput)
-}
-
-// SetOutput sets the "output" field.
-func (m *SideEffectDataMutation) SetOutput(u [][]uint8) {
-	m.output = &u
-	m.appendoutput = nil
-}
-
-// Output returns the value of the "output" field in the mutation.
-func (m *SideEffectDataMutation) Output() (r [][]uint8, exists bool) {
-	v := m.output
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldOutput returns the old "output" field's value of the SideEffectData entity.
-// If the SideEffectData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectDataMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldOutput requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldOutput: %w", err)
-	}
-	return oldValue.Output, nil
-}
-
-// AppendOutput adds u to the "output" field.
-func (m *SideEffectDataMutation) AppendOutput(u [][]uint8) {
-	m.appendoutput = append(m.appendoutput, u...)
-}
-
-// AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *SideEffectDataMutation) AppendedOutput() ([][]uint8, bool) {
-	if len(m.appendoutput) == 0 {
-		return nil, false
-	}
-	return m.appendoutput, true
-}
-
-// ClearOutput clears the value of the "output" field.
-func (m *SideEffectDataMutation) ClearOutput() {
-	m.output = nil
-	m.appendoutput = nil
-	m.clearedFields[sideeffectdata.FieldOutput] = struct{}{}
-}
-
-// OutputCleared returns if the "output" field was cleared in this mutation.
-func (m *SideEffectDataMutation) OutputCleared() bool {
-	_, ok := m.clearedFields[sideeffectdata.FieldOutput]
-	return ok
-}
-
-// ResetOutput resets all changes to the "output" field.
-func (m *SideEffectDataMutation) ResetOutput() {
-	m.output = nil
-	m.appendoutput = nil
-	delete(m.clearedFields, sideeffectdata.FieldOutput)
-}
-
 // SetEntityID sets the "entity" edge to the Entity entity by id.
 func (m *SideEffectDataMutation) SetEntityID(id int) {
 	m.entity = &id
@@ -8222,13 +7849,7 @@ func (m *SideEffectDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectDataMutation) Fields() []string {
-	fields := make([]string, 0, 2)
-	if m.input != nil {
-		fields = append(fields, sideeffectdata.FieldInput)
-	}
-	if m.output != nil {
-		fields = append(fields, sideeffectdata.FieldOutput)
-	}
+	fields := make([]string, 0, 0)
 	return fields
 }
 
@@ -8236,12 +7857,6 @@ func (m *SideEffectDataMutation) Fields() []string {
 // return value indicates that this field was not set, or was not defined in the
 // schema.
 func (m *SideEffectDataMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case sideeffectdata.FieldInput:
-		return m.Input()
-	case sideeffectdata.FieldOutput:
-		return m.Output()
-	}
 	return nil, false
 }
 
@@ -8249,12 +7864,6 @@ func (m *SideEffectDataMutation) Field(name string) (ent.Value, bool) {
 // returned if the mutation operation is not UpdateOne, or the query to the
 // database failed.
 func (m *SideEffectDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case sideeffectdata.FieldInput:
-		return m.OldInput(ctx)
-	case sideeffectdata.FieldOutput:
-		return m.OldOutput(ctx)
-	}
 	return nil, fmt.Errorf("unknown SideEffectData field %s", name)
 }
 
@@ -8263,20 +7872,6 @@ func (m *SideEffectDataMutation) OldField(ctx context.Context, name string) (ent
 // type.
 func (m *SideEffectDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case sideeffectdata.FieldInput:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetInput(v)
-		return nil
-	case sideeffectdata.FieldOutput:
-		v, ok := value.([][]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetOutput(v)
-		return nil
 	}
 	return fmt.Errorf("unknown SideEffectData field %s", name)
 }
@@ -8298,22 +7893,13 @@ func (m *SideEffectDataMutation) AddedField(name string) (ent.Value, bool) {
 // the field is not defined in the schema, or if the type mismatched the field
 // type.
 func (m *SideEffectDataMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
 	return fmt.Errorf("unknown SideEffectData numeric field %s", name)
 }
 
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *SideEffectDataMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(sideeffectdata.FieldInput) {
-		fields = append(fields, sideeffectdata.FieldInput)
-	}
-	if m.FieldCleared(sideeffectdata.FieldOutput) {
-		fields = append(fields, sideeffectdata.FieldOutput)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -8326,28 +7912,12 @@ func (m *SideEffectDataMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *SideEffectDataMutation) ClearField(name string) error {
-	switch name {
-	case sideeffectdata.FieldInput:
-		m.ClearInput()
-		return nil
-	case sideeffectdata.FieldOutput:
-		m.ClearOutput()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectData nullable field %s", name)
 }
 
 // ResetField resets all changes in the mutation for the field with the given name.
 // It returns an error if the field is not defined in the schema.
 func (m *SideEffectDataMutation) ResetField(name string) error {
-	switch name {
-	case sideeffectdata.FieldInput:
-		m.ResetInput()
-		return nil
-	case sideeffectdata.FieldOutput:
-		m.ResetOutput()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectData field %s", name)
 }
 
@@ -8431,8 +8001,6 @@ type SideEffectExecutionMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int
-	result                *[]uint8
-	appendresult          []uint8
 	clearedFields         map[string]struct{}
 	execution             *int
 	clearedexecution      bool
@@ -8539,71 +8107,6 @@ func (m *SideEffectExecutionMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetResult sets the "result" field.
-func (m *SideEffectExecutionMutation) SetResult(u []uint8) {
-	m.result = &u
-	m.appendresult = nil
-}
-
-// Result returns the value of the "result" field in the mutation.
-func (m *SideEffectExecutionMutation) Result() (r []uint8, exists bool) {
-	v := m.result
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldResult returns the old "result" field's value of the SideEffectExecution entity.
-// If the SideEffectExecution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionMutation) OldResult(ctx context.Context) (v []uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldResult is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldResult requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldResult: %w", err)
-	}
-	return oldValue.Result, nil
-}
-
-// AppendResult adds u to the "result" field.
-func (m *SideEffectExecutionMutation) AppendResult(u []uint8) {
-	m.appendresult = append(m.appendresult, u...)
-}
-
-// AppendedResult returns the list of values that were appended to the "result" field in this mutation.
-func (m *SideEffectExecutionMutation) AppendedResult() ([]uint8, bool) {
-	if len(m.appendresult) == 0 {
-		return nil, false
-	}
-	return m.appendresult, true
-}
-
-// ClearResult clears the value of the "result" field.
-func (m *SideEffectExecutionMutation) ClearResult() {
-	m.result = nil
-	m.appendresult = nil
-	m.clearedFields[sideeffectexecution.FieldResult] = struct{}{}
-}
-
-// ResultCleared returns if the "result" field was cleared in this mutation.
-func (m *SideEffectExecutionMutation) ResultCleared() bool {
-	_, ok := m.clearedFields[sideeffectexecution.FieldResult]
-	return ok
-}
-
-// ResetResult resets all changes to the "result" field.
-func (m *SideEffectExecutionMutation) ResetResult() {
-	m.result = nil
-	m.appendresult = nil
-	delete(m.clearedFields, sideeffectexecution.FieldResult)
 }
 
 // SetExecutionID sets the "execution" edge to the Execution entity by id.
@@ -8718,10 +8221,7 @@ func (m *SideEffectExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 1)
-	if m.result != nil {
-		fields = append(fields, sideeffectexecution.FieldResult)
-	}
+	fields := make([]string, 0, 0)
 	return fields
 }
 
@@ -8729,10 +8229,6 @@ func (m *SideEffectExecutionMutation) Fields() []string {
 // return value indicates that this field was not set, or was not defined in the
 // schema.
 func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case sideeffectexecution.FieldResult:
-		return m.Result()
-	}
 	return nil, false
 }
 
@@ -8740,10 +8236,6 @@ func (m *SideEffectExecutionMutation) Field(name string) (ent.Value, bool) {
 // returned if the mutation operation is not UpdateOne, or the query to the
 // database failed.
 func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case sideeffectexecution.FieldResult:
-		return m.OldResult(ctx)
-	}
 	return nil, fmt.Errorf("unknown SideEffectExecution field %s", name)
 }
 
@@ -8752,13 +8244,6 @@ func (m *SideEffectExecutionMutation) OldField(ctx context.Context, name string)
 // type.
 func (m *SideEffectExecutionMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case sideeffectexecution.FieldResult:
-		v, ok := value.([]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetResult(v)
-		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecution field %s", name)
 }
@@ -8780,19 +8265,13 @@ func (m *SideEffectExecutionMutation) AddedField(name string) (ent.Value, bool) 
 // the field is not defined in the schema, or if the type mismatched the field
 // type.
 func (m *SideEffectExecutionMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
 	return fmt.Errorf("unknown SideEffectExecution numeric field %s", name)
 }
 
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *SideEffectExecutionMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(sideeffectexecution.FieldResult) {
-		fields = append(fields, sideeffectexecution.FieldResult)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -8805,22 +8284,12 @@ func (m *SideEffectExecutionMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *SideEffectExecutionMutation) ClearField(name string) error {
-	switch name {
-	case sideeffectexecution.FieldResult:
-		m.ClearResult()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectExecution nullable field %s", name)
 }
 
 // ResetField resets all changes in the mutation for the field with the given name.
 // It returns an error if the field is not defined in the schema.
 func (m *SideEffectExecutionMutation) ResetField(name string) error {
-	switch name {
-	case sideeffectexecution.FieldResult:
-		m.ResetResult()
-		return nil
-	}
 	return fmt.Errorf("unknown SideEffectExecution field %s", name)
 }
 
@@ -8922,11 +8391,8 @@ type SideEffectExecutionDataMutation struct {
 	op                           Op
 	typ                          string
 	id                           *int
-	effect_time                  *time.Time
-	effect_metadata              *[]uint8
-	appendeffect_metadata        []uint8
-	execution_context            *[]uint8
-	appendexecution_context      []uint8
+	outputs                      *[][]uint8
+	appendoutputs                [][]uint8
 	clearedFields                map[string]struct{}
 	side_effect_execution        *int
 	clearedside_effect_execution bool
@@ -9033,183 +8499,69 @@ func (m *SideEffectExecutionDataMutation) IDs(ctx context.Context) ([]int, error
 	}
 }
 
-// SetEffectTime sets the "effect_time" field.
-func (m *SideEffectExecutionDataMutation) SetEffectTime(t time.Time) {
-	m.effect_time = &t
+// SetOutputs sets the "outputs" field.
+func (m *SideEffectExecutionDataMutation) SetOutputs(u [][]uint8) {
+	m.outputs = &u
+	m.appendoutputs = nil
 }
 
-// EffectTime returns the value of the "effect_time" field in the mutation.
-func (m *SideEffectExecutionDataMutation) EffectTime() (r time.Time, exists bool) {
-	v := m.effect_time
+// Outputs returns the value of the "outputs" field in the mutation.
+func (m *SideEffectExecutionDataMutation) Outputs() (r [][]uint8, exists bool) {
+	v := m.outputs
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldEffectTime returns the old "effect_time" field's value of the SideEffectExecutionData entity.
+// OldOutputs returns the old "outputs" field's value of the SideEffectExecutionData entity.
 // If the SideEffectExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionDataMutation) OldEffectTime(ctx context.Context) (v *time.Time, err error) {
+func (m *SideEffectExecutionDataMutation) OldOutputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEffectTime is only allowed on UpdateOne operations")
+		return v, errors.New("OldOutputs is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEffectTime requires an ID field in the mutation")
+		return v, errors.New("OldOutputs requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEffectTime: %w", err)
+		return v, fmt.Errorf("querying old value for OldOutputs: %w", err)
 	}
-	return oldValue.EffectTime, nil
+	return oldValue.Outputs, nil
 }
 
-// ClearEffectTime clears the value of the "effect_time" field.
-func (m *SideEffectExecutionDataMutation) ClearEffectTime() {
-	m.effect_time = nil
-	m.clearedFields[sideeffectexecutiondata.FieldEffectTime] = struct{}{}
+// AppendOutputs adds u to the "outputs" field.
+func (m *SideEffectExecutionDataMutation) AppendOutputs(u [][]uint8) {
+	m.appendoutputs = append(m.appendoutputs, u...)
 }
 
-// EffectTimeCleared returns if the "effect_time" field was cleared in this mutation.
-func (m *SideEffectExecutionDataMutation) EffectTimeCleared() bool {
-	_, ok := m.clearedFields[sideeffectexecutiondata.FieldEffectTime]
-	return ok
-}
-
-// ResetEffectTime resets all changes to the "effect_time" field.
-func (m *SideEffectExecutionDataMutation) ResetEffectTime() {
-	m.effect_time = nil
-	delete(m.clearedFields, sideeffectexecutiondata.FieldEffectTime)
-}
-
-// SetEffectMetadata sets the "effect_metadata" field.
-func (m *SideEffectExecutionDataMutation) SetEffectMetadata(u []uint8) {
-	m.effect_metadata = &u
-	m.appendeffect_metadata = nil
-}
-
-// EffectMetadata returns the value of the "effect_metadata" field in the mutation.
-func (m *SideEffectExecutionDataMutation) EffectMetadata() (r []uint8, exists bool) {
-	v := m.effect_metadata
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEffectMetadata returns the old "effect_metadata" field's value of the SideEffectExecutionData entity.
-// If the SideEffectExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionDataMutation) OldEffectMetadata(ctx context.Context) (v []uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEffectMetadata is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEffectMetadata requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEffectMetadata: %w", err)
-	}
-	return oldValue.EffectMetadata, nil
-}
-
-// AppendEffectMetadata adds u to the "effect_metadata" field.
-func (m *SideEffectExecutionDataMutation) AppendEffectMetadata(u []uint8) {
-	m.appendeffect_metadata = append(m.appendeffect_metadata, u...)
-}
-
-// AppendedEffectMetadata returns the list of values that were appended to the "effect_metadata" field in this mutation.
-func (m *SideEffectExecutionDataMutation) AppendedEffectMetadata() ([]uint8, bool) {
-	if len(m.appendeffect_metadata) == 0 {
+// AppendedOutputs returns the list of values that were appended to the "outputs" field in this mutation.
+func (m *SideEffectExecutionDataMutation) AppendedOutputs() ([][]uint8, bool) {
+	if len(m.appendoutputs) == 0 {
 		return nil, false
 	}
-	return m.appendeffect_metadata, true
+	return m.appendoutputs, true
 }
 
-// ClearEffectMetadata clears the value of the "effect_metadata" field.
-func (m *SideEffectExecutionDataMutation) ClearEffectMetadata() {
-	m.effect_metadata = nil
-	m.appendeffect_metadata = nil
-	m.clearedFields[sideeffectexecutiondata.FieldEffectMetadata] = struct{}{}
+// ClearOutputs clears the value of the "outputs" field.
+func (m *SideEffectExecutionDataMutation) ClearOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	m.clearedFields[sideeffectexecutiondata.FieldOutputs] = struct{}{}
 }
 
-// EffectMetadataCleared returns if the "effect_metadata" field was cleared in this mutation.
-func (m *SideEffectExecutionDataMutation) EffectMetadataCleared() bool {
-	_, ok := m.clearedFields[sideeffectexecutiondata.FieldEffectMetadata]
+// OutputsCleared returns if the "outputs" field was cleared in this mutation.
+func (m *SideEffectExecutionDataMutation) OutputsCleared() bool {
+	_, ok := m.clearedFields[sideeffectexecutiondata.FieldOutputs]
 	return ok
 }
 
-// ResetEffectMetadata resets all changes to the "effect_metadata" field.
-func (m *SideEffectExecutionDataMutation) ResetEffectMetadata() {
-	m.effect_metadata = nil
-	m.appendeffect_metadata = nil
-	delete(m.clearedFields, sideeffectexecutiondata.FieldEffectMetadata)
-}
-
-// SetExecutionContext sets the "execution_context" field.
-func (m *SideEffectExecutionDataMutation) SetExecutionContext(u []uint8) {
-	m.execution_context = &u
-	m.appendexecution_context = nil
-}
-
-// ExecutionContext returns the value of the "execution_context" field in the mutation.
-func (m *SideEffectExecutionDataMutation) ExecutionContext() (r []uint8, exists bool) {
-	v := m.execution_context
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldExecutionContext returns the old "execution_context" field's value of the SideEffectExecutionData entity.
-// If the SideEffectExecutionData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectExecutionDataMutation) OldExecutionContext(ctx context.Context) (v []uint8, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExecutionContext is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExecutionContext requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExecutionContext: %w", err)
-	}
-	return oldValue.ExecutionContext, nil
-}
-
-// AppendExecutionContext adds u to the "execution_context" field.
-func (m *SideEffectExecutionDataMutation) AppendExecutionContext(u []uint8) {
-	m.appendexecution_context = append(m.appendexecution_context, u...)
-}
-
-// AppendedExecutionContext returns the list of values that were appended to the "execution_context" field in this mutation.
-func (m *SideEffectExecutionDataMutation) AppendedExecutionContext() ([]uint8, bool) {
-	if len(m.appendexecution_context) == 0 {
-		return nil, false
-	}
-	return m.appendexecution_context, true
-}
-
-// ClearExecutionContext clears the value of the "execution_context" field.
-func (m *SideEffectExecutionDataMutation) ClearExecutionContext() {
-	m.execution_context = nil
-	m.appendexecution_context = nil
-	m.clearedFields[sideeffectexecutiondata.FieldExecutionContext] = struct{}{}
-}
-
-// ExecutionContextCleared returns if the "execution_context" field was cleared in this mutation.
-func (m *SideEffectExecutionDataMutation) ExecutionContextCleared() bool {
-	_, ok := m.clearedFields[sideeffectexecutiondata.FieldExecutionContext]
-	return ok
-}
-
-// ResetExecutionContext resets all changes to the "execution_context" field.
-func (m *SideEffectExecutionDataMutation) ResetExecutionContext() {
-	m.execution_context = nil
-	m.appendexecution_context = nil
-	delete(m.clearedFields, sideeffectexecutiondata.FieldExecutionContext)
+// ResetOutputs resets all changes to the "outputs" field.
+func (m *SideEffectExecutionDataMutation) ResetOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	delete(m.clearedFields, sideeffectexecutiondata.FieldOutputs)
 }
 
 // SetSideEffectExecutionID sets the "side_effect_execution" edge to the SideEffectExecution entity by id.
@@ -9285,15 +8637,9 @@ func (m *SideEffectExecutionDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SideEffectExecutionDataMutation) Fields() []string {
-	fields := make([]string, 0, 3)
-	if m.effect_time != nil {
-		fields = append(fields, sideeffectexecutiondata.FieldEffectTime)
-	}
-	if m.effect_metadata != nil {
-		fields = append(fields, sideeffectexecutiondata.FieldEffectMetadata)
-	}
-	if m.execution_context != nil {
-		fields = append(fields, sideeffectexecutiondata.FieldExecutionContext)
+	fields := make([]string, 0, 1)
+	if m.outputs != nil {
+		fields = append(fields, sideeffectexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -9303,12 +8649,8 @@ func (m *SideEffectExecutionDataMutation) Fields() []string {
 // schema.
 func (m *SideEffectExecutionDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case sideeffectexecutiondata.FieldEffectTime:
-		return m.EffectTime()
-	case sideeffectexecutiondata.FieldEffectMetadata:
-		return m.EffectMetadata()
-	case sideeffectexecutiondata.FieldExecutionContext:
-		return m.ExecutionContext()
+	case sideeffectexecutiondata.FieldOutputs:
+		return m.Outputs()
 	}
 	return nil, false
 }
@@ -9318,12 +8660,8 @@ func (m *SideEffectExecutionDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SideEffectExecutionDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case sideeffectexecutiondata.FieldEffectTime:
-		return m.OldEffectTime(ctx)
-	case sideeffectexecutiondata.FieldEffectMetadata:
-		return m.OldEffectMetadata(ctx)
-	case sideeffectexecutiondata.FieldExecutionContext:
-		return m.OldExecutionContext(ctx)
+	case sideeffectexecutiondata.FieldOutputs:
+		return m.OldOutputs(ctx)
 	}
 	return nil, fmt.Errorf("unknown SideEffectExecutionData field %s", name)
 }
@@ -9333,26 +8671,12 @@ func (m *SideEffectExecutionDataMutation) OldField(ctx context.Context, name str
 // type.
 func (m *SideEffectExecutionDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case sideeffectexecutiondata.FieldEffectTime:
-		v, ok := value.(time.Time)
+	case sideeffectexecutiondata.FieldOutputs:
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetEffectTime(v)
-		return nil
-	case sideeffectexecutiondata.FieldEffectMetadata:
-		v, ok := value.([]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEffectMetadata(v)
-		return nil
-	case sideeffectexecutiondata.FieldExecutionContext:
-		v, ok := value.([]uint8)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetExecutionContext(v)
+		m.SetOutputs(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecutionData field %s", name)
@@ -9384,14 +8708,8 @@ func (m *SideEffectExecutionDataMutation) AddField(name string, value ent.Value)
 // mutation.
 func (m *SideEffectExecutionDataMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(sideeffectexecutiondata.FieldEffectTime) {
-		fields = append(fields, sideeffectexecutiondata.FieldEffectTime)
-	}
-	if m.FieldCleared(sideeffectexecutiondata.FieldEffectMetadata) {
-		fields = append(fields, sideeffectexecutiondata.FieldEffectMetadata)
-	}
-	if m.FieldCleared(sideeffectexecutiondata.FieldExecutionContext) {
-		fields = append(fields, sideeffectexecutiondata.FieldExecutionContext)
+	if m.FieldCleared(sideeffectexecutiondata.FieldOutputs) {
+		fields = append(fields, sideeffectexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -9407,14 +8725,8 @@ func (m *SideEffectExecutionDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *SideEffectExecutionDataMutation) ClearField(name string) error {
 	switch name {
-	case sideeffectexecutiondata.FieldEffectTime:
-		m.ClearEffectTime()
-		return nil
-	case sideeffectexecutiondata.FieldEffectMetadata:
-		m.ClearEffectMetadata()
-		return nil
-	case sideeffectexecutiondata.FieldExecutionContext:
-		m.ClearExecutionContext()
+	case sideeffectexecutiondata.FieldOutputs:
+		m.ClearOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecutionData nullable field %s", name)
@@ -9424,14 +8736,8 @@ func (m *SideEffectExecutionDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SideEffectExecutionDataMutation) ResetField(name string) error {
 	switch name {
-	case sideeffectexecutiondata.FieldEffectTime:
-		m.ResetEffectTime()
-		return nil
-	case sideeffectexecutiondata.FieldEffectMetadata:
-		m.ResetEffectMetadata()
-		return nil
-	case sideeffectexecutiondata.FieldExecutionContext:
-		m.ResetExecutionContext()
+	case sideeffectexecutiondata.FieldOutputs:
+		m.ResetOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown SideEffectExecutionData field %s", name)
@@ -9517,6 +8823,7 @@ type VersionMutation struct {
 	op            Op
 	typ           string
 	id            *int
+	changeID      *string
 	version       *int
 	addversion    *int
 	data          *map[string]interface{}
@@ -9624,6 +8931,42 @@ func (m *VersionMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetChangeID sets the "changeID" field.
+func (m *VersionMutation) SetChangeID(s string) {
+	m.changeID = &s
+}
+
+// ChangeID returns the value of the "changeID" field in the mutation.
+func (m *VersionMutation) ChangeID() (r string, exists bool) {
+	v := m.changeID
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChangeID returns the old "changeID" field's value of the Version entity.
+// If the Version object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VersionMutation) OldChangeID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChangeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChangeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChangeID: %w", err)
+	}
+	return oldValue.ChangeID, nil
+}
+
+// ResetChangeID resets all changes to the "changeID" field.
+func (m *VersionMutation) ResetChangeID() {
+	m.changeID = nil
 }
 
 // SetVersion sets the "version" field.
@@ -9791,7 +9134,10 @@ func (m *VersionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *VersionMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 3)
+	if m.changeID != nil {
+		fields = append(fields, version.FieldChangeID)
+	}
 	if m.version != nil {
 		fields = append(fields, version.FieldVersion)
 	}
@@ -9806,6 +9152,8 @@ func (m *VersionMutation) Fields() []string {
 // schema.
 func (m *VersionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case version.FieldChangeID:
+		return m.ChangeID()
 	case version.FieldVersion:
 		return m.Version()
 	case version.FieldData:
@@ -9819,6 +9167,8 @@ func (m *VersionMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *VersionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case version.FieldChangeID:
+		return m.OldChangeID(ctx)
 	case version.FieldVersion:
 		return m.OldVersion(ctx)
 	case version.FieldData:
@@ -9832,6 +9182,13 @@ func (m *VersionMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *VersionMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case version.FieldChangeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChangeID(v)
+		return nil
 	case version.FieldVersion:
 		v, ok := value.(int)
 		if !ok {
@@ -9910,6 +9267,9 @@ func (m *VersionMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *VersionMutation) ResetField(name string) error {
 	switch name {
+	case version.FieldChangeID:
+		m.ResetChangeID()
+		return nil
 	case version.FieldVersion:
 		m.ResetVersion()
 		return nil
@@ -10007,6 +9367,8 @@ type WorkflowDataMutation struct {
 	retry_policy  **schema.RetryPolicy
 	input         *[][]uint8
 	appendinput   [][]uint8
+	attempt       *int
+	addattempt    *int
 	clearedFields map[string]struct{}
 	entity        *int
 	clearedentity bool
@@ -10371,6 +9733,62 @@ func (m *WorkflowDataMutation) ResetInput() {
 	delete(m.clearedFields, workflowdata.FieldInput)
 }
 
+// SetAttempt sets the "attempt" field.
+func (m *WorkflowDataMutation) SetAttempt(i int) {
+	m.attempt = &i
+	m.addattempt = nil
+}
+
+// Attempt returns the value of the "attempt" field in the mutation.
+func (m *WorkflowDataMutation) Attempt() (r int, exists bool) {
+	v := m.attempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempt returns the old "attempt" field's value of the WorkflowData entity.
+// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowDataMutation) OldAttempt(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempt: %w", err)
+	}
+	return oldValue.Attempt, nil
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (m *WorkflowDataMutation) AddAttempt(i int) {
+	if m.addattempt != nil {
+		*m.addattempt += i
+	} else {
+		m.addattempt = &i
+	}
+}
+
+// AddedAttempt returns the value that was added to the "attempt" field in this mutation.
+func (m *WorkflowDataMutation) AddedAttempt() (r int, exists bool) {
+	v := m.addattempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempt resets all changes to the "attempt" field.
+func (m *WorkflowDataMutation) ResetAttempt() {
+	m.attempt = nil
+	m.addattempt = nil
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by id.
 func (m *WorkflowDataMutation) SetEntityID(id int) {
 	m.entity = &id
@@ -10444,7 +9862,7 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.duration != nil {
 		fields = append(fields, workflowdata.FieldDuration)
 	}
@@ -10462,6 +9880,9 @@ func (m *WorkflowDataMutation) Fields() []string {
 	}
 	if m.input != nil {
 		fields = append(fields, workflowdata.FieldInput)
+	}
+	if m.attempt != nil {
+		fields = append(fields, workflowdata.FieldAttempt)
 	}
 	return fields
 }
@@ -10483,6 +9904,8 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 		return m.RetryPolicy()
 	case workflowdata.FieldInput:
 		return m.Input()
+	case workflowdata.FieldAttempt:
+		return m.Attempt()
 	}
 	return nil, false
 }
@@ -10504,6 +9927,8 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldRetryPolicy(ctx)
 	case workflowdata.FieldInput:
 		return m.OldInput(ctx)
+	case workflowdata.FieldAttempt:
+		return m.OldAttempt(ctx)
 	}
 	return nil, fmt.Errorf("unknown WorkflowData field %s", name)
 }
@@ -10555,6 +9980,13 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInput(v)
 		return nil
+	case workflowdata.FieldAttempt:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowData field %s", name)
 }
@@ -10562,13 +9994,21 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *WorkflowDataMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addattempt != nil {
+		fields = append(fields, workflowdata.FieldAttempt)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *WorkflowDataMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case workflowdata.FieldAttempt:
+		return m.AddedAttempt()
+	}
 	return nil, false
 }
 
@@ -10577,6 +10017,13 @@ func (m *WorkflowDataMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *WorkflowDataMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case workflowdata.FieldAttempt:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowData numeric field %s", name)
 }
@@ -10636,6 +10083,9 @@ func (m *WorkflowDataMutation) ResetField(name string) error {
 		return nil
 	case workflowdata.FieldInput:
 		m.ResetInput()
+		return nil
+	case workflowdata.FieldAttempt:
+		m.ResetAttempt()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowData field %s", name)
@@ -10721,6 +10171,8 @@ type WorkflowExecutionMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int
+	inputs                *[][]uint8
+	appendinputs          [][]uint8
 	clearedFields         map[string]struct{}
 	execution             *int
 	clearedexecution      bool
@@ -10827,6 +10279,71 @@ func (m *WorkflowExecutionMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetInputs sets the "inputs" field.
+func (m *WorkflowExecutionMutation) SetInputs(u [][]uint8) {
+	m.inputs = &u
+	m.appendinputs = nil
+}
+
+// Inputs returns the value of the "inputs" field in the mutation.
+func (m *WorkflowExecutionMutation) Inputs() (r [][]uint8, exists bool) {
+	v := m.inputs
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputs returns the old "inputs" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldInputs(ctx context.Context) (v [][]uint8, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputs: %w", err)
+	}
+	return oldValue.Inputs, nil
+}
+
+// AppendInputs adds u to the "inputs" field.
+func (m *WorkflowExecutionMutation) AppendInputs(u [][]uint8) {
+	m.appendinputs = append(m.appendinputs, u...)
+}
+
+// AppendedInputs returns the list of values that were appended to the "inputs" field in this mutation.
+func (m *WorkflowExecutionMutation) AppendedInputs() ([][]uint8, bool) {
+	if len(m.appendinputs) == 0 {
+		return nil, false
+	}
+	return m.appendinputs, true
+}
+
+// ClearInputs clears the value of the "inputs" field.
+func (m *WorkflowExecutionMutation) ClearInputs() {
+	m.inputs = nil
+	m.appendinputs = nil
+	m.clearedFields[workflowexecution.FieldInputs] = struct{}{}
+}
+
+// InputsCleared returns if the "inputs" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) InputsCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldInputs]
+	return ok
+}
+
+// ResetInputs resets all changes to the "inputs" field.
+func (m *WorkflowExecutionMutation) ResetInputs() {
+	m.inputs = nil
+	m.appendinputs = nil
+	delete(m.clearedFields, workflowexecution.FieldInputs)
 }
 
 // SetExecutionID sets the "execution" edge to the Execution entity by id.
@@ -10941,7 +10458,10 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 0)
+	fields := make([]string, 0, 1)
+	if m.inputs != nil {
+		fields = append(fields, workflowexecution.FieldInputs)
+	}
 	return fields
 }
 
@@ -10949,6 +10469,10 @@ func (m *WorkflowExecutionMutation) Fields() []string {
 // return value indicates that this field was not set, or was not defined in the
 // schema.
 func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case workflowexecution.FieldInputs:
+		return m.Inputs()
+	}
 	return nil, false
 }
 
@@ -10956,6 +10480,10 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 // returned if the mutation operation is not UpdateOne, or the query to the
 // database failed.
 func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case workflowexecution.FieldInputs:
+		return m.OldInputs(ctx)
+	}
 	return nil, fmt.Errorf("unknown WorkflowExecution field %s", name)
 }
 
@@ -10964,6 +10492,13 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 // type.
 func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case workflowexecution.FieldInputs:
+		v, ok := value.([][]uint8)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputs(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecution field %s", name)
 }
@@ -10985,13 +10520,19 @@ func (m *WorkflowExecutionMutation) AddedField(name string) (ent.Value, bool) {
 // the field is not defined in the schema, or if the type mismatched the field
 // type.
 func (m *WorkflowExecutionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown WorkflowExecution numeric field %s", name)
 }
 
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *WorkflowExecutionMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(workflowexecution.FieldInputs) {
+		fields = append(fields, workflowexecution.FieldInputs)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -11004,12 +10545,22 @@ func (m *WorkflowExecutionMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *WorkflowExecutionMutation) ClearField(name string) error {
+	switch name {
+	case workflowexecution.FieldInputs:
+		m.ClearInputs()
+		return nil
+	}
 	return fmt.Errorf("unknown WorkflowExecution nullable field %s", name)
 }
 
 // ResetField resets all changes in the mutation for the field with the given name.
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowExecutionMutation) ResetField(name string) error {
+	switch name {
+	case workflowexecution.FieldInputs:
+		m.ResetInputs()
+		return nil
+	}
 	return fmt.Errorf("unknown WorkflowExecution field %s", name)
 }
 
@@ -11111,9 +10662,9 @@ type WorkflowExecutionDataMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
-	error                     *string
-	output                    *[][]uint8
-	appendoutput              [][]uint8
+	last_heartbeat            *time.Time
+	outputs                   *[][]uint8
+	appendoutputs             [][]uint8
 	clearedFields             map[string]struct{}
 	workflow_execution        *int
 	clearedworkflow_execution bool
@@ -11220,118 +10771,118 @@ func (m *WorkflowExecutionDataMutation) IDs(ctx context.Context) ([]int, error) 
 	}
 }
 
-// SetError sets the "error" field.
-func (m *WorkflowExecutionDataMutation) SetError(s string) {
-	m.error = &s
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (m *WorkflowExecutionDataMutation) SetLastHeartbeat(t time.Time) {
+	m.last_heartbeat = &t
 }
 
-// Error returns the value of the "error" field in the mutation.
-func (m *WorkflowExecutionDataMutation) Error() (r string, exists bool) {
-	v := m.error
+// LastHeartbeat returns the value of the "last_heartbeat" field in the mutation.
+func (m *WorkflowExecutionDataMutation) LastHeartbeat() (r time.Time, exists bool) {
+	v := m.last_heartbeat
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldError returns the old "error" field's value of the WorkflowExecutionData entity.
+// OldLastHeartbeat returns the old "last_heartbeat" field's value of the WorkflowExecutionData entity.
 // If the WorkflowExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionDataMutation) OldError(ctx context.Context) (v string, err error) {
+func (m *WorkflowExecutionDataMutation) OldLastHeartbeat(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldError is only allowed on UpdateOne operations")
+		return v, errors.New("OldLastHeartbeat is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldError requires an ID field in the mutation")
+		return v, errors.New("OldLastHeartbeat requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldError: %w", err)
+		return v, fmt.Errorf("querying old value for OldLastHeartbeat: %w", err)
 	}
-	return oldValue.Error, nil
+	return oldValue.LastHeartbeat, nil
 }
 
-// ClearError clears the value of the "error" field.
-func (m *WorkflowExecutionDataMutation) ClearError() {
-	m.error = nil
-	m.clearedFields[workflowexecutiondata.FieldError] = struct{}{}
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (m *WorkflowExecutionDataMutation) ClearLastHeartbeat() {
+	m.last_heartbeat = nil
+	m.clearedFields[workflowexecutiondata.FieldLastHeartbeat] = struct{}{}
 }
 
-// ErrorCleared returns if the "error" field was cleared in this mutation.
-func (m *WorkflowExecutionDataMutation) ErrorCleared() bool {
-	_, ok := m.clearedFields[workflowexecutiondata.FieldError]
+// LastHeartbeatCleared returns if the "last_heartbeat" field was cleared in this mutation.
+func (m *WorkflowExecutionDataMutation) LastHeartbeatCleared() bool {
+	_, ok := m.clearedFields[workflowexecutiondata.FieldLastHeartbeat]
 	return ok
 }
 
-// ResetError resets all changes to the "error" field.
-func (m *WorkflowExecutionDataMutation) ResetError() {
-	m.error = nil
-	delete(m.clearedFields, workflowexecutiondata.FieldError)
+// ResetLastHeartbeat resets all changes to the "last_heartbeat" field.
+func (m *WorkflowExecutionDataMutation) ResetLastHeartbeat() {
+	m.last_heartbeat = nil
+	delete(m.clearedFields, workflowexecutiondata.FieldLastHeartbeat)
 }
 
-// SetOutput sets the "output" field.
-func (m *WorkflowExecutionDataMutation) SetOutput(u [][]uint8) {
-	m.output = &u
-	m.appendoutput = nil
+// SetOutputs sets the "outputs" field.
+func (m *WorkflowExecutionDataMutation) SetOutputs(u [][]uint8) {
+	m.outputs = &u
+	m.appendoutputs = nil
 }
 
-// Output returns the value of the "output" field in the mutation.
-func (m *WorkflowExecutionDataMutation) Output() (r [][]uint8, exists bool) {
-	v := m.output
+// Outputs returns the value of the "outputs" field in the mutation.
+func (m *WorkflowExecutionDataMutation) Outputs() (r [][]uint8, exists bool) {
+	v := m.outputs
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldOutput returns the old "output" field's value of the WorkflowExecutionData entity.
+// OldOutputs returns the old "outputs" field's value of the WorkflowExecutionData entity.
 // If the WorkflowExecutionData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowExecutionDataMutation) OldOutput(ctx context.Context) (v [][]uint8, err error) {
+func (m *WorkflowExecutionDataMutation) OldOutputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldOutput is only allowed on UpdateOne operations")
+		return v, errors.New("OldOutputs is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldOutput requires an ID field in the mutation")
+		return v, errors.New("OldOutputs requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldOutput: %w", err)
+		return v, fmt.Errorf("querying old value for OldOutputs: %w", err)
 	}
-	return oldValue.Output, nil
+	return oldValue.Outputs, nil
 }
 
-// AppendOutput adds u to the "output" field.
-func (m *WorkflowExecutionDataMutation) AppendOutput(u [][]uint8) {
-	m.appendoutput = append(m.appendoutput, u...)
+// AppendOutputs adds u to the "outputs" field.
+func (m *WorkflowExecutionDataMutation) AppendOutputs(u [][]uint8) {
+	m.appendoutputs = append(m.appendoutputs, u...)
 }
 
-// AppendedOutput returns the list of values that were appended to the "output" field in this mutation.
-func (m *WorkflowExecutionDataMutation) AppendedOutput() ([][]uint8, bool) {
-	if len(m.appendoutput) == 0 {
+// AppendedOutputs returns the list of values that were appended to the "outputs" field in this mutation.
+func (m *WorkflowExecutionDataMutation) AppendedOutputs() ([][]uint8, bool) {
+	if len(m.appendoutputs) == 0 {
 		return nil, false
 	}
-	return m.appendoutput, true
+	return m.appendoutputs, true
 }
 
-// ClearOutput clears the value of the "output" field.
-func (m *WorkflowExecutionDataMutation) ClearOutput() {
-	m.output = nil
-	m.appendoutput = nil
-	m.clearedFields[workflowexecutiondata.FieldOutput] = struct{}{}
+// ClearOutputs clears the value of the "outputs" field.
+func (m *WorkflowExecutionDataMutation) ClearOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	m.clearedFields[workflowexecutiondata.FieldOutputs] = struct{}{}
 }
 
-// OutputCleared returns if the "output" field was cleared in this mutation.
-func (m *WorkflowExecutionDataMutation) OutputCleared() bool {
-	_, ok := m.clearedFields[workflowexecutiondata.FieldOutput]
+// OutputsCleared returns if the "outputs" field was cleared in this mutation.
+func (m *WorkflowExecutionDataMutation) OutputsCleared() bool {
+	_, ok := m.clearedFields[workflowexecutiondata.FieldOutputs]
 	return ok
 }
 
-// ResetOutput resets all changes to the "output" field.
-func (m *WorkflowExecutionDataMutation) ResetOutput() {
-	m.output = nil
-	m.appendoutput = nil
-	delete(m.clearedFields, workflowexecutiondata.FieldOutput)
+// ResetOutputs resets all changes to the "outputs" field.
+func (m *WorkflowExecutionDataMutation) ResetOutputs() {
+	m.outputs = nil
+	m.appendoutputs = nil
+	delete(m.clearedFields, workflowexecutiondata.FieldOutputs)
 }
 
 // SetWorkflowExecutionID sets the "workflow_execution" edge to the WorkflowExecution entity by id.
@@ -11408,11 +10959,11 @@ func (m *WorkflowExecutionDataMutation) Type() string {
 // AddedFields().
 func (m *WorkflowExecutionDataMutation) Fields() []string {
 	fields := make([]string, 0, 2)
-	if m.error != nil {
-		fields = append(fields, workflowexecutiondata.FieldError)
+	if m.last_heartbeat != nil {
+		fields = append(fields, workflowexecutiondata.FieldLastHeartbeat)
 	}
-	if m.output != nil {
-		fields = append(fields, workflowexecutiondata.FieldOutput)
+	if m.outputs != nil {
+		fields = append(fields, workflowexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -11422,10 +10973,10 @@ func (m *WorkflowExecutionDataMutation) Fields() []string {
 // schema.
 func (m *WorkflowExecutionDataMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case workflowexecutiondata.FieldError:
-		return m.Error()
-	case workflowexecutiondata.FieldOutput:
-		return m.Output()
+	case workflowexecutiondata.FieldLastHeartbeat:
+		return m.LastHeartbeat()
+	case workflowexecutiondata.FieldOutputs:
+		return m.Outputs()
 	}
 	return nil, false
 }
@@ -11435,10 +10986,10 @@ func (m *WorkflowExecutionDataMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *WorkflowExecutionDataMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case workflowexecutiondata.FieldError:
-		return m.OldError(ctx)
-	case workflowexecutiondata.FieldOutput:
-		return m.OldOutput(ctx)
+	case workflowexecutiondata.FieldLastHeartbeat:
+		return m.OldLastHeartbeat(ctx)
+	case workflowexecutiondata.FieldOutputs:
+		return m.OldOutputs(ctx)
 	}
 	return nil, fmt.Errorf("unknown WorkflowExecutionData field %s", name)
 }
@@ -11448,19 +10999,19 @@ func (m *WorkflowExecutionDataMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *WorkflowExecutionDataMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case workflowexecutiondata.FieldError:
-		v, ok := value.(string)
+	case workflowexecutiondata.FieldLastHeartbeat:
+		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetError(v)
+		m.SetLastHeartbeat(v)
 		return nil
-	case workflowexecutiondata.FieldOutput:
+	case workflowexecutiondata.FieldOutputs:
 		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetOutput(v)
+		m.SetOutputs(v)
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecutionData field %s", name)
@@ -11492,11 +11043,11 @@ func (m *WorkflowExecutionDataMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *WorkflowExecutionDataMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(workflowexecutiondata.FieldError) {
-		fields = append(fields, workflowexecutiondata.FieldError)
+	if m.FieldCleared(workflowexecutiondata.FieldLastHeartbeat) {
+		fields = append(fields, workflowexecutiondata.FieldLastHeartbeat)
 	}
-	if m.FieldCleared(workflowexecutiondata.FieldOutput) {
-		fields = append(fields, workflowexecutiondata.FieldOutput)
+	if m.FieldCleared(workflowexecutiondata.FieldOutputs) {
+		fields = append(fields, workflowexecutiondata.FieldOutputs)
 	}
 	return fields
 }
@@ -11512,11 +11063,11 @@ func (m *WorkflowExecutionDataMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *WorkflowExecutionDataMutation) ClearField(name string) error {
 	switch name {
-	case workflowexecutiondata.FieldError:
-		m.ClearError()
+	case workflowexecutiondata.FieldLastHeartbeat:
+		m.ClearLastHeartbeat()
 		return nil
-	case workflowexecutiondata.FieldOutput:
-		m.ClearOutput()
+	case workflowexecutiondata.FieldOutputs:
+		m.ClearOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecutionData nullable field %s", name)
@@ -11526,11 +11077,11 @@ func (m *WorkflowExecutionDataMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *WorkflowExecutionDataMutation) ResetField(name string) error {
 	switch name {
-	case workflowexecutiondata.FieldError:
-		m.ResetError()
+	case workflowexecutiondata.FieldLastHeartbeat:
+		m.ResetLastHeartbeat()
 		return nil
-	case workflowexecutiondata.FieldOutput:
-		m.ResetOutput()
+	case workflowexecutiondata.FieldOutputs:
+		m.ResetOutputs()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecutionData field %s", name)

@@ -53,26 +53,6 @@ func IDLTE(id int) predicate.SideEffectData {
 	return predicate.SideEffectData(sql.FieldLTE(FieldID, id))
 }
 
-// InputIsNil applies the IsNil predicate on the "input" field.
-func InputIsNil() predicate.SideEffectData {
-	return predicate.SideEffectData(sql.FieldIsNull(FieldInput))
-}
-
-// InputNotNil applies the NotNil predicate on the "input" field.
-func InputNotNil() predicate.SideEffectData {
-	return predicate.SideEffectData(sql.FieldNotNull(FieldInput))
-}
-
-// OutputIsNil applies the IsNil predicate on the "output" field.
-func OutputIsNil() predicate.SideEffectData {
-	return predicate.SideEffectData(sql.FieldIsNull(FieldOutput))
-}
-
-// OutputNotNil applies the NotNil predicate on the "output" field.
-func OutputNotNil() predicate.SideEffectData {
-	return predicate.SideEffectData(sql.FieldNotNull(FieldOutput))
-}
-
 // HasEntity applies the HasEdge predicate on the "entity" edge.
 func HasEntity() predicate.SideEffectData {
 	return predicate.SideEffectData(func(s *sql.Selector) {

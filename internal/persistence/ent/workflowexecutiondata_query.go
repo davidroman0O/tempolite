@@ -299,12 +299,12 @@ func (wedq *WorkflowExecutionDataQuery) WithWorkflowExecution(opts ...func(*Work
 // Example:
 //
 //	var v []struct {
-//		Error string `json:"error,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.WorkflowExecutionData.Query().
-//		GroupBy(workflowexecutiondata.FieldError).
+//		GroupBy(workflowexecutiondata.FieldLastHeartbeat).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (wedq *WorkflowExecutionDataQuery) GroupBy(field string, fields ...string) *WorkflowExecutionDataGroupBy {
@@ -322,11 +322,11 @@ func (wedq *WorkflowExecutionDataQuery) GroupBy(field string, fields ...string) 
 // Example:
 //
 //	var v []struct {
-//		Error string `json:"error,omitempty"`
+//		LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
 //	}
 //
 //	client.WorkflowExecutionData.Query().
-//		Select(workflowexecutiondata.FieldError).
+//		Select(workflowexecutiondata.FieldLastHeartbeat).
 //		Scan(ctx, &v)
 func (wedq *WorkflowExecutionDataQuery) Select(fields ...string) *WorkflowExecutionDataSelect {
 	wedq.ctx.Fields = append(wedq.ctx.Fields, fields...)

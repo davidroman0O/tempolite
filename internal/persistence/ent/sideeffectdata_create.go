@@ -20,18 +20,6 @@ type SideEffectDataCreate struct {
 	hooks    []Hook
 }
 
-// SetInput sets the "input" field.
-func (sedc *SideEffectDataCreate) SetInput(u [][]uint8) *SideEffectDataCreate {
-	sedc.mutation.SetInput(u)
-	return sedc
-}
-
-// SetOutput sets the "output" field.
-func (sedc *SideEffectDataCreate) SetOutput(u [][]uint8) *SideEffectDataCreate {
-	sedc.mutation.SetOutput(u)
-	return sedc
-}
-
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (sedc *SideEffectDataCreate) SetEntityID(id int) *SideEffectDataCreate {
 	sedc.mutation.SetEntityID(id)
@@ -106,14 +94,6 @@ func (sedc *SideEffectDataCreate) createSpec() (*SideEffectData, *sqlgraph.Creat
 		_node = &SideEffectData{config: sedc.config}
 		_spec = sqlgraph.NewCreateSpec(sideeffectdata.Table, sqlgraph.NewFieldSpec(sideeffectdata.FieldID, field.TypeInt))
 	)
-	if value, ok := sedc.mutation.Input(); ok {
-		_spec.SetField(sideeffectdata.FieldInput, field.TypeJSON, value)
-		_node.Input = value
-	}
-	if value, ok := sedc.mutation.Output(); ok {
-		_spec.SetField(sideeffectdata.FieldOutput, field.TypeJSON, value)
-		_node.Output = value
-	}
 	if nodes := sedc.mutation.EntityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,

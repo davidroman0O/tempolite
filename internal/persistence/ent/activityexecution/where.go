@@ -53,59 +53,14 @@ func IDLTE(id int) predicate.ActivityExecution {
 	return predicate.ActivityExecution(sql.FieldLTE(FieldID, id))
 }
 
-// Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
-func Attempt(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldEQ(FieldAttempt, v))
+// InputsIsNil applies the IsNil predicate on the "inputs" field.
+func InputsIsNil() predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldIsNull(FieldInputs))
 }
 
-// AttemptEQ applies the EQ predicate on the "attempt" field.
-func AttemptEQ(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldEQ(FieldAttempt, v))
-}
-
-// AttemptNEQ applies the NEQ predicate on the "attempt" field.
-func AttemptNEQ(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldNEQ(FieldAttempt, v))
-}
-
-// AttemptIn applies the In predicate on the "attempt" field.
-func AttemptIn(vs ...int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldIn(FieldAttempt, vs...))
-}
-
-// AttemptNotIn applies the NotIn predicate on the "attempt" field.
-func AttemptNotIn(vs ...int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldNotIn(FieldAttempt, vs...))
-}
-
-// AttemptGT applies the GT predicate on the "attempt" field.
-func AttemptGT(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldGT(FieldAttempt, v))
-}
-
-// AttemptGTE applies the GTE predicate on the "attempt" field.
-func AttemptGTE(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldGTE(FieldAttempt, v))
-}
-
-// AttemptLT applies the LT predicate on the "attempt" field.
-func AttemptLT(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldLT(FieldAttempt, v))
-}
-
-// AttemptLTE applies the LTE predicate on the "attempt" field.
-func AttemptLTE(v int) predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldLTE(FieldAttempt, v))
-}
-
-// InputIsNil applies the IsNil predicate on the "input" field.
-func InputIsNil() predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldIsNull(FieldInput))
-}
-
-// InputNotNil applies the NotNil predicate on the "input" field.
-func InputNotNil() predicate.ActivityExecution {
-	return predicate.ActivityExecution(sql.FieldNotNull(FieldInput))
+// InputsNotNil applies the NotNil predicate on the "inputs" field.
+func InputsNotNil() predicate.ActivityExecution {
+	return predicate.ActivityExecution(sql.FieldNotNull(FieldInputs))
 }
 
 // HasExecution applies the HasEdge predicate on the "execution" edge.

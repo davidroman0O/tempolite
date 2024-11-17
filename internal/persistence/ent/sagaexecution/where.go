@@ -73,16 +73,6 @@ func StepTypeNotIn(vs ...StepType) predicate.SagaExecution {
 	return predicate.SagaExecution(sql.FieldNotIn(FieldStepType, vs...))
 }
 
-// CompensationDataIsNil applies the IsNil predicate on the "compensation_data" field.
-func CompensationDataIsNil() predicate.SagaExecution {
-	return predicate.SagaExecution(sql.FieldIsNull(FieldCompensationData))
-}
-
-// CompensationDataNotNil applies the NotNil predicate on the "compensation_data" field.
-func CompensationDataNotNil() predicate.SagaExecution {
-	return predicate.SagaExecution(sql.FieldNotNull(FieldCompensationData))
-}
-
 // HasExecution applies the HasEdge predicate on the "execution" edge.
 func HasExecution() predicate.SagaExecution {
 	return predicate.SagaExecution(func(s *sql.Selector) {

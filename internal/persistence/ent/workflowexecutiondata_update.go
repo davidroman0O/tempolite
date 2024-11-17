@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -29,41 +30,41 @@ func (wedu *WorkflowExecutionDataUpdate) Where(ps ...predicate.WorkflowExecution
 	return wedu
 }
 
-// SetError sets the "error" field.
-func (wedu *WorkflowExecutionDataUpdate) SetError(s string) *WorkflowExecutionDataUpdate {
-	wedu.mutation.SetError(s)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (wedu *WorkflowExecutionDataUpdate) SetLastHeartbeat(t time.Time) *WorkflowExecutionDataUpdate {
+	wedu.mutation.SetLastHeartbeat(t)
 	return wedu
 }
 
-// SetNillableError sets the "error" field if the given value is not nil.
-func (wedu *WorkflowExecutionDataUpdate) SetNillableError(s *string) *WorkflowExecutionDataUpdate {
-	if s != nil {
-		wedu.SetError(*s)
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (wedu *WorkflowExecutionDataUpdate) SetNillableLastHeartbeat(t *time.Time) *WorkflowExecutionDataUpdate {
+	if t != nil {
+		wedu.SetLastHeartbeat(*t)
 	}
 	return wedu
 }
 
-// ClearError clears the value of the "error" field.
-func (wedu *WorkflowExecutionDataUpdate) ClearError() *WorkflowExecutionDataUpdate {
-	wedu.mutation.ClearError()
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (wedu *WorkflowExecutionDataUpdate) ClearLastHeartbeat() *WorkflowExecutionDataUpdate {
+	wedu.mutation.ClearLastHeartbeat()
 	return wedu
 }
 
-// SetOutput sets the "output" field.
-func (wedu *WorkflowExecutionDataUpdate) SetOutput(u [][]uint8) *WorkflowExecutionDataUpdate {
-	wedu.mutation.SetOutput(u)
+// SetOutputs sets the "outputs" field.
+func (wedu *WorkflowExecutionDataUpdate) SetOutputs(u [][]uint8) *WorkflowExecutionDataUpdate {
+	wedu.mutation.SetOutputs(u)
 	return wedu
 }
 
-// AppendOutput appends u to the "output" field.
-func (wedu *WorkflowExecutionDataUpdate) AppendOutput(u [][]uint8) *WorkflowExecutionDataUpdate {
-	wedu.mutation.AppendOutput(u)
+// AppendOutputs appends u to the "outputs" field.
+func (wedu *WorkflowExecutionDataUpdate) AppendOutputs(u [][]uint8) *WorkflowExecutionDataUpdate {
+	wedu.mutation.AppendOutputs(u)
 	return wedu
 }
 
-// ClearOutput clears the value of the "output" field.
-func (wedu *WorkflowExecutionDataUpdate) ClearOutput() *WorkflowExecutionDataUpdate {
-	wedu.mutation.ClearOutput()
+// ClearOutputs clears the value of the "outputs" field.
+func (wedu *WorkflowExecutionDataUpdate) ClearOutputs() *WorkflowExecutionDataUpdate {
+	wedu.mutation.ClearOutputs()
 	return wedu
 }
 
@@ -136,22 +137,22 @@ func (wedu *WorkflowExecutionDataUpdate) sqlSave(ctx context.Context) (n int, er
 			}
 		}
 	}
-	if value, ok := wedu.mutation.Error(); ok {
-		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)
+	if value, ok := wedu.mutation.LastHeartbeat(); ok {
+		_spec.SetField(workflowexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
-	if wedu.mutation.ErrorCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldError, field.TypeString)
+	if wedu.mutation.LastHeartbeatCleared() {
+		_spec.ClearField(workflowexecutiondata.FieldLastHeartbeat, field.TypeTime)
 	}
-	if value, ok := wedu.mutation.Output(); ok {
-		_spec.SetField(workflowexecutiondata.FieldOutput, field.TypeJSON, value)
+	if value, ok := wedu.mutation.Outputs(); ok {
+		_spec.SetField(workflowexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if value, ok := wedu.mutation.AppendedOutput(); ok {
+	if value, ok := wedu.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, workflowexecutiondata.FieldOutput, value)
+			sqljson.Append(u, workflowexecutiondata.FieldOutputs, value)
 		})
 	}
-	if wedu.mutation.OutputCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldOutput, field.TypeJSON)
+	if wedu.mutation.OutputsCleared() {
+		_spec.ClearField(workflowexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if wedu.mutation.WorkflowExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -202,41 +203,41 @@ type WorkflowExecutionDataUpdateOne struct {
 	mutation *WorkflowExecutionDataMutation
 }
 
-// SetError sets the "error" field.
-func (weduo *WorkflowExecutionDataUpdateOne) SetError(s string) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.SetError(s)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (weduo *WorkflowExecutionDataUpdateOne) SetLastHeartbeat(t time.Time) *WorkflowExecutionDataUpdateOne {
+	weduo.mutation.SetLastHeartbeat(t)
 	return weduo
 }
 
-// SetNillableError sets the "error" field if the given value is not nil.
-func (weduo *WorkflowExecutionDataUpdateOne) SetNillableError(s *string) *WorkflowExecutionDataUpdateOne {
-	if s != nil {
-		weduo.SetError(*s)
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (weduo *WorkflowExecutionDataUpdateOne) SetNillableLastHeartbeat(t *time.Time) *WorkflowExecutionDataUpdateOne {
+	if t != nil {
+		weduo.SetLastHeartbeat(*t)
 	}
 	return weduo
 }
 
-// ClearError clears the value of the "error" field.
-func (weduo *WorkflowExecutionDataUpdateOne) ClearError() *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.ClearError()
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (weduo *WorkflowExecutionDataUpdateOne) ClearLastHeartbeat() *WorkflowExecutionDataUpdateOne {
+	weduo.mutation.ClearLastHeartbeat()
 	return weduo
 }
 
-// SetOutput sets the "output" field.
-func (weduo *WorkflowExecutionDataUpdateOne) SetOutput(u [][]uint8) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.SetOutput(u)
+// SetOutputs sets the "outputs" field.
+func (weduo *WorkflowExecutionDataUpdateOne) SetOutputs(u [][]uint8) *WorkflowExecutionDataUpdateOne {
+	weduo.mutation.SetOutputs(u)
 	return weduo
 }
 
-// AppendOutput appends u to the "output" field.
-func (weduo *WorkflowExecutionDataUpdateOne) AppendOutput(u [][]uint8) *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.AppendOutput(u)
+// AppendOutputs appends u to the "outputs" field.
+func (weduo *WorkflowExecutionDataUpdateOne) AppendOutputs(u [][]uint8) *WorkflowExecutionDataUpdateOne {
+	weduo.mutation.AppendOutputs(u)
 	return weduo
 }
 
-// ClearOutput clears the value of the "output" field.
-func (weduo *WorkflowExecutionDataUpdateOne) ClearOutput() *WorkflowExecutionDataUpdateOne {
-	weduo.mutation.ClearOutput()
+// ClearOutputs clears the value of the "outputs" field.
+func (weduo *WorkflowExecutionDataUpdateOne) ClearOutputs() *WorkflowExecutionDataUpdateOne {
+	weduo.mutation.ClearOutputs()
 	return weduo
 }
 
@@ -339,22 +340,22 @@ func (weduo *WorkflowExecutionDataUpdateOne) sqlSave(ctx context.Context) (_node
 			}
 		}
 	}
-	if value, ok := weduo.mutation.Error(); ok {
-		_spec.SetField(workflowexecutiondata.FieldError, field.TypeString, value)
+	if value, ok := weduo.mutation.LastHeartbeat(); ok {
+		_spec.SetField(workflowexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
-	if weduo.mutation.ErrorCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldError, field.TypeString)
+	if weduo.mutation.LastHeartbeatCleared() {
+		_spec.ClearField(workflowexecutiondata.FieldLastHeartbeat, field.TypeTime)
 	}
-	if value, ok := weduo.mutation.Output(); ok {
-		_spec.SetField(workflowexecutiondata.FieldOutput, field.TypeJSON, value)
+	if value, ok := weduo.mutation.Outputs(); ok {
+		_spec.SetField(workflowexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if value, ok := weduo.mutation.AppendedOutput(); ok {
+	if value, ok := weduo.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, workflowexecutiondata.FieldOutput, value)
+			sqljson.Append(u, workflowexecutiondata.FieldOutputs, value)
 		})
 	}
-	if weduo.mutation.OutputCleared() {
-		_spec.ClearField(workflowexecutiondata.FieldOutput, field.TypeJSON)
+	if weduo.mutation.OutputsCleared() {
+		_spec.ClearField(workflowexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if weduo.mutation.WorkflowExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

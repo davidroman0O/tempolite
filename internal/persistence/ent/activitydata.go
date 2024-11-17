@@ -32,6 +32,8 @@ type ActivityData struct {
 	Input [][]uint8 `json:"input,omitempty"`
 	// Output holds the value of the "output" field.
 	Output [][]uint8 `json:"output,omitempty"`
+	// Attempt holds the value of the "attempt" field.
+	Attempt int `json:"attempt,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityDataQuery when eager-loading is set.
 	Edges                ActivityDataEdges `json:"edges"`
@@ -66,7 +68,7 @@ func (*ActivityData) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case activitydata.FieldRetryPolicy, activitydata.FieldInput, activitydata.FieldOutput:
 			values[i] = new([]byte)
-		case activitydata.FieldID, activitydata.FieldTimeout, activitydata.FieldMaxAttempts:
+		case activitydata.FieldID, activitydata.FieldTimeout, activitydata.FieldMaxAttempts, activitydata.FieldAttempt:
 			values[i] = new(sql.NullInt64)
 		case activitydata.FieldScheduledFor:
 			values[i] = new(sql.NullTime)
@@ -135,6 +137,12 @@ func (ad *ActivityData) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field output: %w", err)
 				}
 			}
+		case activitydata.FieldAttempt:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempt", values[i])
+			} else if value.Valid {
+				ad.Attempt = int(value.Int64)
+			}
 		case activitydata.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field entity_activity_data", value)
@@ -200,6 +208,9 @@ func (ad *ActivityData) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("output=")
 	builder.WriteString(fmt.Sprintf("%v", ad.Output))
+	builder.WriteString(", ")
+	builder.WriteString("attempt=")
+	builder.WriteString(fmt.Sprintf("%v", ad.Attempt))
 	builder.WriteByte(')')
 	return builder.String()
 }

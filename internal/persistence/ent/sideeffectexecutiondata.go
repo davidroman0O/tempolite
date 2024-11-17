@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -19,12 +18,8 @@ type SideEffectExecutionData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// EffectTime holds the value of the "effect_time" field.
-	EffectTime *time.Time `json:"effect_time,omitempty"`
-	// EffectMetadata holds the value of the "effect_metadata" field.
-	EffectMetadata []uint8 `json:"effect_metadata,omitempty"`
-	// ExecutionContext holds the value of the "execution_context" field.
-	ExecutionContext []uint8 `json:"execution_context,omitempty"`
+	// Outputs holds the value of the "outputs" field.
+	Outputs [][]uint8 `json:"outputs,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SideEffectExecutionDataQuery when eager-loading is set.
 	Edges                                SideEffectExecutionDataEdges `json:"edges"`
@@ -57,12 +52,10 @@ func (*SideEffectExecutionData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sideeffectexecutiondata.FieldEffectMetadata, sideeffectexecutiondata.FieldExecutionContext:
+		case sideeffectexecutiondata.FieldOutputs:
 			values[i] = new([]byte)
 		case sideeffectexecutiondata.FieldID:
 			values[i] = new(sql.NullInt64)
-		case sideeffectexecutiondata.FieldEffectTime:
-			values[i] = new(sql.NullTime)
 		case sideeffectexecutiondata.ForeignKeys[0]: // side_effect_execution_execution_data
 			values[i] = new(sql.NullInt64)
 		default:
@@ -86,27 +79,12 @@ func (seed *SideEffectExecutionData) assignValues(columns []string, values []any
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			seed.ID = int(value.Int64)
-		case sideeffectexecutiondata.FieldEffectTime:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field effect_time", values[i])
-			} else if value.Valid {
-				seed.EffectTime = new(time.Time)
-				*seed.EffectTime = value.Time
-			}
-		case sideeffectexecutiondata.FieldEffectMetadata:
+		case sideeffectexecutiondata.FieldOutputs:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field effect_metadata", values[i])
+				return fmt.Errorf("unexpected type %T for field outputs", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &seed.EffectMetadata); err != nil {
-					return fmt.Errorf("unmarshal field effect_metadata: %w", err)
-				}
-			}
-		case sideeffectexecutiondata.FieldExecutionContext:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field execution_context", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &seed.ExecutionContext); err != nil {
-					return fmt.Errorf("unmarshal field execution_context: %w", err)
+				if err := json.Unmarshal(*value, &seed.Outputs); err != nil {
+					return fmt.Errorf("unmarshal field outputs: %w", err)
 				}
 			}
 		case sideeffectexecutiondata.ForeignKeys[0]:
@@ -157,16 +135,8 @@ func (seed *SideEffectExecutionData) String() string {
 	var builder strings.Builder
 	builder.WriteString("SideEffectExecutionData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", seed.ID))
-	if v := seed.EffectTime; v != nil {
-		builder.WriteString("effect_time=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	builder.WriteString("effect_metadata=")
-	builder.WriteString(fmt.Sprintf("%v", seed.EffectMetadata))
-	builder.WriteString(", ")
-	builder.WriteString("execution_context=")
-	builder.WriteString(fmt.Sprintf("%v", seed.ExecutionContext))
+	builder.WriteString("outputs=")
+	builder.WriteString(fmt.Sprintf("%v", seed.Outputs))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -3,8 +3,6 @@
 package sideeffectexecutiondata
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -55,79 +53,14 @@ func IDLTE(id int) predicate.SideEffectExecutionData {
 	return predicate.SideEffectExecutionData(sql.FieldLTE(FieldID, id))
 }
 
-// EffectTime applies equality check predicate on the "effect_time" field. It's identical to EffectTimeEQ.
-func EffectTime(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldEQ(FieldEffectTime, v))
+// OutputsIsNil applies the IsNil predicate on the "outputs" field.
+func OutputsIsNil() predicate.SideEffectExecutionData {
+	return predicate.SideEffectExecutionData(sql.FieldIsNull(FieldOutputs))
 }
 
-// EffectTimeEQ applies the EQ predicate on the "effect_time" field.
-func EffectTimeEQ(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldEQ(FieldEffectTime, v))
-}
-
-// EffectTimeNEQ applies the NEQ predicate on the "effect_time" field.
-func EffectTimeNEQ(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldNEQ(FieldEffectTime, v))
-}
-
-// EffectTimeIn applies the In predicate on the "effect_time" field.
-func EffectTimeIn(vs ...time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldIn(FieldEffectTime, vs...))
-}
-
-// EffectTimeNotIn applies the NotIn predicate on the "effect_time" field.
-func EffectTimeNotIn(vs ...time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldNotIn(FieldEffectTime, vs...))
-}
-
-// EffectTimeGT applies the GT predicate on the "effect_time" field.
-func EffectTimeGT(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldGT(FieldEffectTime, v))
-}
-
-// EffectTimeGTE applies the GTE predicate on the "effect_time" field.
-func EffectTimeGTE(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldGTE(FieldEffectTime, v))
-}
-
-// EffectTimeLT applies the LT predicate on the "effect_time" field.
-func EffectTimeLT(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldLT(FieldEffectTime, v))
-}
-
-// EffectTimeLTE applies the LTE predicate on the "effect_time" field.
-func EffectTimeLTE(v time.Time) predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldLTE(FieldEffectTime, v))
-}
-
-// EffectTimeIsNil applies the IsNil predicate on the "effect_time" field.
-func EffectTimeIsNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldIsNull(FieldEffectTime))
-}
-
-// EffectTimeNotNil applies the NotNil predicate on the "effect_time" field.
-func EffectTimeNotNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldNotNull(FieldEffectTime))
-}
-
-// EffectMetadataIsNil applies the IsNil predicate on the "effect_metadata" field.
-func EffectMetadataIsNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldIsNull(FieldEffectMetadata))
-}
-
-// EffectMetadataNotNil applies the NotNil predicate on the "effect_metadata" field.
-func EffectMetadataNotNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldNotNull(FieldEffectMetadata))
-}
-
-// ExecutionContextIsNil applies the IsNil predicate on the "execution_context" field.
-func ExecutionContextIsNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldIsNull(FieldExecutionContext))
-}
-
-// ExecutionContextNotNil applies the NotNil predicate on the "execution_context" field.
-func ExecutionContextNotNil() predicate.SideEffectExecutionData {
-	return predicate.SideEffectExecutionData(sql.FieldNotNull(FieldExecutionContext))
+// OutputsNotNil applies the NotNil predicate on the "outputs" field.
+func OutputsNotNil() predicate.SideEffectExecutionData {
+	return predicate.SideEffectExecutionData(sql.FieldNotNull(FieldOutputs))
 }
 
 // HasSideEffectExecution applies the HasEdge predicate on the "side_effect_execution" edge.

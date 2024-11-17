@@ -12,10 +12,6 @@ const (
 	Label = "side_effect_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldInput holds the string denoting the input field in the database.
-	FieldInput = "input"
-	// FieldOutput holds the string denoting the output field in the database.
-	FieldOutput = "output"
 	// EdgeEntity holds the string denoting the entity edge name in mutations.
 	EdgeEntity = "entity"
 	// Table holds the table name of the sideeffectdata in the database.
@@ -32,8 +28,6 @@ const (
 // Columns holds all SQL columns for sideeffectdata fields.
 var Columns = []string{
 	FieldID,
-	FieldInput,
-	FieldOutput,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "side_effect_data"

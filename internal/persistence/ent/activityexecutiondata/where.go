@@ -60,16 +60,6 @@ func LastHeartbeat(v time.Time) predicate.ActivityExecutionData {
 	return predicate.ActivityExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
 }
 
-// HeartbeatsIsNil applies the IsNil predicate on the "heartbeats" field.
-func HeartbeatsIsNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldIsNull(FieldHeartbeats))
-}
-
-// HeartbeatsNotNil applies the NotNil predicate on the "heartbeats" field.
-func HeartbeatsNotNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldNotNull(FieldHeartbeats))
-}
-
 // LastHeartbeatEQ applies the EQ predicate on the "last_heartbeat" field.
 func LastHeartbeatEQ(v time.Time) predicate.ActivityExecutionData {
 	return predicate.ActivityExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
@@ -120,24 +110,14 @@ func LastHeartbeatNotNil() predicate.ActivityExecutionData {
 	return predicate.ActivityExecutionData(sql.FieldNotNull(FieldLastHeartbeat))
 }
 
-// ProgressIsNil applies the IsNil predicate on the "progress" field.
-func ProgressIsNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldIsNull(FieldProgress))
+// OutputsIsNil applies the IsNil predicate on the "outputs" field.
+func OutputsIsNil() predicate.ActivityExecutionData {
+	return predicate.ActivityExecutionData(sql.FieldIsNull(FieldOutputs))
 }
 
-// ProgressNotNil applies the NotNil predicate on the "progress" field.
-func ProgressNotNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldNotNull(FieldProgress))
-}
-
-// ExecutionDetailsIsNil applies the IsNil predicate on the "execution_details" field.
-func ExecutionDetailsIsNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldIsNull(FieldExecutionDetails))
-}
-
-// ExecutionDetailsNotNil applies the NotNil predicate on the "execution_details" field.
-func ExecutionDetailsNotNil() predicate.ActivityExecutionData {
-	return predicate.ActivityExecutionData(sql.FieldNotNull(FieldExecutionDetails))
+// OutputsNotNil applies the NotNil predicate on the "outputs" field.
+func OutputsNotNil() predicate.ActivityExecutionData {
+	return predicate.ActivityExecutionData(sql.FieldNotNull(FieldOutputs))
 }
 
 // HasActivityExecution applies the HasEdge predicate on the "activity_execution" edge.

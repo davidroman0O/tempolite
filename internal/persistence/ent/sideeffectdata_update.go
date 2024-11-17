@@ -9,7 +9,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/entity"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -26,42 +25,6 @@ type SideEffectDataUpdate struct {
 // Where appends a list predicates to the SideEffectDataUpdate builder.
 func (sedu *SideEffectDataUpdate) Where(ps ...predicate.SideEffectData) *SideEffectDataUpdate {
 	sedu.mutation.Where(ps...)
-	return sedu
-}
-
-// SetInput sets the "input" field.
-func (sedu *SideEffectDataUpdate) SetInput(u [][]uint8) *SideEffectDataUpdate {
-	sedu.mutation.SetInput(u)
-	return sedu
-}
-
-// AppendInput appends u to the "input" field.
-func (sedu *SideEffectDataUpdate) AppendInput(u [][]uint8) *SideEffectDataUpdate {
-	sedu.mutation.AppendInput(u)
-	return sedu
-}
-
-// ClearInput clears the value of the "input" field.
-func (sedu *SideEffectDataUpdate) ClearInput() *SideEffectDataUpdate {
-	sedu.mutation.ClearInput()
-	return sedu
-}
-
-// SetOutput sets the "output" field.
-func (sedu *SideEffectDataUpdate) SetOutput(u [][]uint8) *SideEffectDataUpdate {
-	sedu.mutation.SetOutput(u)
-	return sedu
-}
-
-// AppendOutput appends u to the "output" field.
-func (sedu *SideEffectDataUpdate) AppendOutput(u [][]uint8) *SideEffectDataUpdate {
-	sedu.mutation.AppendOutput(u)
-	return sedu
-}
-
-// ClearOutput clears the value of the "output" field.
-func (sedu *SideEffectDataUpdate) ClearOutput() *SideEffectDataUpdate {
-	sedu.mutation.ClearOutput()
 	return sedu
 }
 
@@ -134,28 +97,6 @@ func (sedu *SideEffectDataUpdate) sqlSave(ctx context.Context) (n int, err error
 			}
 		}
 	}
-	if value, ok := sedu.mutation.Input(); ok {
-		_spec.SetField(sideeffectdata.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := sedu.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectdata.FieldInput, value)
-		})
-	}
-	if sedu.mutation.InputCleared() {
-		_spec.ClearField(sideeffectdata.FieldInput, field.TypeJSON)
-	}
-	if value, ok := sedu.mutation.Output(); ok {
-		_spec.SetField(sideeffectdata.FieldOutput, field.TypeJSON, value)
-	}
-	if value, ok := sedu.mutation.AppendedOutput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectdata.FieldOutput, value)
-		})
-	}
-	if sedu.mutation.OutputCleared() {
-		_spec.ClearField(sideeffectdata.FieldOutput, field.TypeJSON)
-	}
 	if sedu.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
@@ -203,42 +144,6 @@ type SideEffectDataUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *SideEffectDataMutation
-}
-
-// SetInput sets the "input" field.
-func (seduo *SideEffectDataUpdateOne) SetInput(u [][]uint8) *SideEffectDataUpdateOne {
-	seduo.mutation.SetInput(u)
-	return seduo
-}
-
-// AppendInput appends u to the "input" field.
-func (seduo *SideEffectDataUpdateOne) AppendInput(u [][]uint8) *SideEffectDataUpdateOne {
-	seduo.mutation.AppendInput(u)
-	return seduo
-}
-
-// ClearInput clears the value of the "input" field.
-func (seduo *SideEffectDataUpdateOne) ClearInput() *SideEffectDataUpdateOne {
-	seduo.mutation.ClearInput()
-	return seduo
-}
-
-// SetOutput sets the "output" field.
-func (seduo *SideEffectDataUpdateOne) SetOutput(u [][]uint8) *SideEffectDataUpdateOne {
-	seduo.mutation.SetOutput(u)
-	return seduo
-}
-
-// AppendOutput appends u to the "output" field.
-func (seduo *SideEffectDataUpdateOne) AppendOutput(u [][]uint8) *SideEffectDataUpdateOne {
-	seduo.mutation.AppendOutput(u)
-	return seduo
-}
-
-// ClearOutput clears the value of the "output" field.
-func (seduo *SideEffectDataUpdateOne) ClearOutput() *SideEffectDataUpdateOne {
-	seduo.mutation.ClearOutput()
-	return seduo
 }
 
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
@@ -339,28 +244,6 @@ func (seduo *SideEffectDataUpdateOne) sqlSave(ctx context.Context) (_node *SideE
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := seduo.mutation.Input(); ok {
-		_spec.SetField(sideeffectdata.FieldInput, field.TypeJSON, value)
-	}
-	if value, ok := seduo.mutation.AppendedInput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectdata.FieldInput, value)
-		})
-	}
-	if seduo.mutation.InputCleared() {
-		_spec.ClearField(sideeffectdata.FieldInput, field.TypeJSON)
-	}
-	if value, ok := seduo.mutation.Output(); ok {
-		_spec.SetField(sideeffectdata.FieldOutput, field.TypeJSON, value)
-	}
-	if value, ok := seduo.mutation.AppendedOutput(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sideeffectdata.FieldOutput, value)
-		})
-	}
-	if seduo.mutation.OutputCleared() {
-		_spec.ClearField(sideeffectdata.FieldOutput, field.TypeJSON)
 	}
 	if seduo.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{

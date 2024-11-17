@@ -30,24 +30,6 @@ func (aedu *ActivityExecutionDataUpdate) Where(ps ...predicate.ActivityExecution
 	return aedu
 }
 
-// SetHeartbeats sets the "heartbeats" field.
-func (aedu *ActivityExecutionDataUpdate) SetHeartbeats(u [][]uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.SetHeartbeats(u)
-	return aedu
-}
-
-// AppendHeartbeats appends u to the "heartbeats" field.
-func (aedu *ActivityExecutionDataUpdate) AppendHeartbeats(u [][]uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.AppendHeartbeats(u)
-	return aedu
-}
-
-// ClearHeartbeats clears the value of the "heartbeats" field.
-func (aedu *ActivityExecutionDataUpdate) ClearHeartbeats() *ActivityExecutionDataUpdate {
-	aedu.mutation.ClearHeartbeats()
-	return aedu
-}
-
 // SetLastHeartbeat sets the "last_heartbeat" field.
 func (aedu *ActivityExecutionDataUpdate) SetLastHeartbeat(t time.Time) *ActivityExecutionDataUpdate {
 	aedu.mutation.SetLastHeartbeat(t)
@@ -68,39 +50,21 @@ func (aedu *ActivityExecutionDataUpdate) ClearLastHeartbeat() *ActivityExecution
 	return aedu
 }
 
-// SetProgress sets the "progress" field.
-func (aedu *ActivityExecutionDataUpdate) SetProgress(u []uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.SetProgress(u)
+// SetOutputs sets the "outputs" field.
+func (aedu *ActivityExecutionDataUpdate) SetOutputs(u [][]uint8) *ActivityExecutionDataUpdate {
+	aedu.mutation.SetOutputs(u)
 	return aedu
 }
 
-// AppendProgress appends u to the "progress" field.
-func (aedu *ActivityExecutionDataUpdate) AppendProgress(u []uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.AppendProgress(u)
+// AppendOutputs appends u to the "outputs" field.
+func (aedu *ActivityExecutionDataUpdate) AppendOutputs(u [][]uint8) *ActivityExecutionDataUpdate {
+	aedu.mutation.AppendOutputs(u)
 	return aedu
 }
 
-// ClearProgress clears the value of the "progress" field.
-func (aedu *ActivityExecutionDataUpdate) ClearProgress() *ActivityExecutionDataUpdate {
-	aedu.mutation.ClearProgress()
-	return aedu
-}
-
-// SetExecutionDetails sets the "execution_details" field.
-func (aedu *ActivityExecutionDataUpdate) SetExecutionDetails(u []uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.SetExecutionDetails(u)
-	return aedu
-}
-
-// AppendExecutionDetails appends u to the "execution_details" field.
-func (aedu *ActivityExecutionDataUpdate) AppendExecutionDetails(u []uint8) *ActivityExecutionDataUpdate {
-	aedu.mutation.AppendExecutionDetails(u)
-	return aedu
-}
-
-// ClearExecutionDetails clears the value of the "execution_details" field.
-func (aedu *ActivityExecutionDataUpdate) ClearExecutionDetails() *ActivityExecutionDataUpdate {
-	aedu.mutation.ClearExecutionDetails()
+// ClearOutputs clears the value of the "outputs" field.
+func (aedu *ActivityExecutionDataUpdate) ClearOutputs() *ActivityExecutionDataUpdate {
+	aedu.mutation.ClearOutputs()
 	return aedu
 }
 
@@ -173,44 +137,22 @@ func (aedu *ActivityExecutionDataUpdate) sqlSave(ctx context.Context) (n int, er
 			}
 		}
 	}
-	if value, ok := aedu.mutation.Heartbeats(); ok {
-		_spec.SetField(activityexecutiondata.FieldHeartbeats, field.TypeJSON, value)
-	}
-	if value, ok := aedu.mutation.AppendedHeartbeats(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldHeartbeats, value)
-		})
-	}
-	if aedu.mutation.HeartbeatsCleared() {
-		_spec.ClearField(activityexecutiondata.FieldHeartbeats, field.TypeJSON)
-	}
 	if value, ok := aedu.mutation.LastHeartbeat(); ok {
 		_spec.SetField(activityexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
 	if aedu.mutation.LastHeartbeatCleared() {
 		_spec.ClearField(activityexecutiondata.FieldLastHeartbeat, field.TypeTime)
 	}
-	if value, ok := aedu.mutation.Progress(); ok {
-		_spec.SetField(activityexecutiondata.FieldProgress, field.TypeJSON, value)
+	if value, ok := aedu.mutation.Outputs(); ok {
+		_spec.SetField(activityexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if value, ok := aedu.mutation.AppendedProgress(); ok {
+	if value, ok := aedu.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldProgress, value)
+			sqljson.Append(u, activityexecutiondata.FieldOutputs, value)
 		})
 	}
-	if aedu.mutation.ProgressCleared() {
-		_spec.ClearField(activityexecutiondata.FieldProgress, field.TypeJSON)
-	}
-	if value, ok := aedu.mutation.ExecutionDetails(); ok {
-		_spec.SetField(activityexecutiondata.FieldExecutionDetails, field.TypeJSON, value)
-	}
-	if value, ok := aedu.mutation.AppendedExecutionDetails(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldExecutionDetails, value)
-		})
-	}
-	if aedu.mutation.ExecutionDetailsCleared() {
-		_spec.ClearField(activityexecutiondata.FieldExecutionDetails, field.TypeJSON)
+	if aedu.mutation.OutputsCleared() {
+		_spec.ClearField(activityexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if aedu.mutation.ActivityExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -261,24 +203,6 @@ type ActivityExecutionDataUpdateOne struct {
 	mutation *ActivityExecutionDataMutation
 }
 
-// SetHeartbeats sets the "heartbeats" field.
-func (aeduo *ActivityExecutionDataUpdateOne) SetHeartbeats(u [][]uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.SetHeartbeats(u)
-	return aeduo
-}
-
-// AppendHeartbeats appends u to the "heartbeats" field.
-func (aeduo *ActivityExecutionDataUpdateOne) AppendHeartbeats(u [][]uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.AppendHeartbeats(u)
-	return aeduo
-}
-
-// ClearHeartbeats clears the value of the "heartbeats" field.
-func (aeduo *ActivityExecutionDataUpdateOne) ClearHeartbeats() *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.ClearHeartbeats()
-	return aeduo
-}
-
 // SetLastHeartbeat sets the "last_heartbeat" field.
 func (aeduo *ActivityExecutionDataUpdateOne) SetLastHeartbeat(t time.Time) *ActivityExecutionDataUpdateOne {
 	aeduo.mutation.SetLastHeartbeat(t)
@@ -299,39 +223,21 @@ func (aeduo *ActivityExecutionDataUpdateOne) ClearLastHeartbeat() *ActivityExecu
 	return aeduo
 }
 
-// SetProgress sets the "progress" field.
-func (aeduo *ActivityExecutionDataUpdateOne) SetProgress(u []uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.SetProgress(u)
+// SetOutputs sets the "outputs" field.
+func (aeduo *ActivityExecutionDataUpdateOne) SetOutputs(u [][]uint8) *ActivityExecutionDataUpdateOne {
+	aeduo.mutation.SetOutputs(u)
 	return aeduo
 }
 
-// AppendProgress appends u to the "progress" field.
-func (aeduo *ActivityExecutionDataUpdateOne) AppendProgress(u []uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.AppendProgress(u)
+// AppendOutputs appends u to the "outputs" field.
+func (aeduo *ActivityExecutionDataUpdateOne) AppendOutputs(u [][]uint8) *ActivityExecutionDataUpdateOne {
+	aeduo.mutation.AppendOutputs(u)
 	return aeduo
 }
 
-// ClearProgress clears the value of the "progress" field.
-func (aeduo *ActivityExecutionDataUpdateOne) ClearProgress() *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.ClearProgress()
-	return aeduo
-}
-
-// SetExecutionDetails sets the "execution_details" field.
-func (aeduo *ActivityExecutionDataUpdateOne) SetExecutionDetails(u []uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.SetExecutionDetails(u)
-	return aeduo
-}
-
-// AppendExecutionDetails appends u to the "execution_details" field.
-func (aeduo *ActivityExecutionDataUpdateOne) AppendExecutionDetails(u []uint8) *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.AppendExecutionDetails(u)
-	return aeduo
-}
-
-// ClearExecutionDetails clears the value of the "execution_details" field.
-func (aeduo *ActivityExecutionDataUpdateOne) ClearExecutionDetails() *ActivityExecutionDataUpdateOne {
-	aeduo.mutation.ClearExecutionDetails()
+// ClearOutputs clears the value of the "outputs" field.
+func (aeduo *ActivityExecutionDataUpdateOne) ClearOutputs() *ActivityExecutionDataUpdateOne {
+	aeduo.mutation.ClearOutputs()
 	return aeduo
 }
 
@@ -434,44 +340,22 @@ func (aeduo *ActivityExecutionDataUpdateOne) sqlSave(ctx context.Context) (_node
 			}
 		}
 	}
-	if value, ok := aeduo.mutation.Heartbeats(); ok {
-		_spec.SetField(activityexecutiondata.FieldHeartbeats, field.TypeJSON, value)
-	}
-	if value, ok := aeduo.mutation.AppendedHeartbeats(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldHeartbeats, value)
-		})
-	}
-	if aeduo.mutation.HeartbeatsCleared() {
-		_spec.ClearField(activityexecutiondata.FieldHeartbeats, field.TypeJSON)
-	}
 	if value, ok := aeduo.mutation.LastHeartbeat(); ok {
 		_spec.SetField(activityexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
 	if aeduo.mutation.LastHeartbeatCleared() {
 		_spec.ClearField(activityexecutiondata.FieldLastHeartbeat, field.TypeTime)
 	}
-	if value, ok := aeduo.mutation.Progress(); ok {
-		_spec.SetField(activityexecutiondata.FieldProgress, field.TypeJSON, value)
+	if value, ok := aeduo.mutation.Outputs(); ok {
+		_spec.SetField(activityexecutiondata.FieldOutputs, field.TypeJSON, value)
 	}
-	if value, ok := aeduo.mutation.AppendedProgress(); ok {
+	if value, ok := aeduo.mutation.AppendedOutputs(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldProgress, value)
+			sqljson.Append(u, activityexecutiondata.FieldOutputs, value)
 		})
 	}
-	if aeduo.mutation.ProgressCleared() {
-		_spec.ClearField(activityexecutiondata.FieldProgress, field.TypeJSON)
-	}
-	if value, ok := aeduo.mutation.ExecutionDetails(); ok {
-		_spec.SetField(activityexecutiondata.FieldExecutionDetails, field.TypeJSON, value)
-	}
-	if value, ok := aeduo.mutation.AppendedExecutionDetails(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, activityexecutiondata.FieldExecutionDetails, value)
-		})
-	}
-	if aeduo.mutation.ExecutionDetailsCleared() {
-		_spec.ClearField(activityexecutiondata.FieldExecutionDetails, field.TypeJSON)
+	if aeduo.mutation.OutputsCleared() {
+		_spec.ClearField(activityexecutiondata.FieldOutputs, field.TypeJSON)
 	}
 	if aeduo.mutation.ActivityExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

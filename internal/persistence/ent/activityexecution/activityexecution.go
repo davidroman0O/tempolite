@@ -12,10 +12,8 @@ const (
 	Label = "activity_execution"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldAttempt holds the string denoting the attempt field in the database.
-	FieldAttempt = "attempt"
-	// FieldInput holds the string denoting the input field in the database.
-	FieldInput = "input"
+	// FieldInputs holds the string denoting the inputs field in the database.
+	FieldInputs = "inputs"
 	// EdgeExecution holds the string denoting the execution edge name in mutations.
 	EdgeExecution = "execution"
 	// EdgeExecutionData holds the string denoting the execution_data edge name in mutations.
@@ -41,8 +39,7 @@ const (
 // Columns holds all SQL columns for activityexecution fields.
 var Columns = []string{
 	FieldID,
-	FieldAttempt,
-	FieldInput,
+	FieldInputs,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "activity_executions"
@@ -66,22 +63,12 @@ func ValidColumn(column string) bool {
 	return false
 }
 
-var (
-	// DefaultAttempt holds the default value on creation for the "attempt" field.
-	DefaultAttempt int
-)
-
 // OrderOption defines the ordering options for the ActivityExecution queries.
 type OrderOption func(*sql.Selector)
 
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByAttempt orders the results by the attempt field.
-func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
 }
 
 // ByExecutionField orders the results by execution field.

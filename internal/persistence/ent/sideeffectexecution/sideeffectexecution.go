@@ -12,8 +12,6 @@ const (
 	Label = "side_effect_execution"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldResult holds the string denoting the result field in the database.
-	FieldResult = "result"
 	// EdgeExecution holds the string denoting the execution edge name in mutations.
 	EdgeExecution = "execution"
 	// EdgeExecutionData holds the string denoting the execution_data edge name in mutations.
@@ -39,7 +37,6 @@ const (
 // Columns holds all SQL columns for sideeffectexecution fields.
 var Columns = []string{
 	FieldID,
-	FieldResult,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "side_effect_executions"

@@ -53,16 +53,6 @@ func IDLTE(id int) predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(sql.FieldLTE(FieldID, id))
 }
 
-// ResultIsNil applies the IsNil predicate on the "result" field.
-func ResultIsNil() predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldIsNull(FieldResult))
-}
-
-// ResultNotNil applies the NotNil predicate on the "result" field.
-func ResultNotNil() predicate.SideEffectExecution {
-	return predicate.SideEffectExecution(sql.FieldNotNull(FieldResult))
-}
-
 // HasExecution applies the HasEdge predicate on the "execution" edge.
 func HasExecution() predicate.SideEffectExecution {
 	return predicate.SideEffectExecution(func(s *sql.Selector) {

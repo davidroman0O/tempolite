@@ -32,6 +32,8 @@ type Execution struct {
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status execution.Status `json:"status,omitempty"`
+	// Error holds the value of the "error" field.
+	Error string `json:"error,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ExecutionQuery when eager-loading is set.
 	Edges             ExecutionEdges `json:"edges"`
@@ -118,7 +120,7 @@ func (*Execution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case execution.FieldID:
 			values[i] = new(sql.NullInt64)
-		case execution.FieldStatus:
+		case execution.FieldStatus, execution.FieldError:
 			values[i] = new(sql.NullString)
 		case execution.FieldCreatedAt, execution.FieldUpdatedAt, execution.FieldStartedAt, execution.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -175,6 +177,12 @@ func (e *Execution) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				e.Status = execution.Status(value.String)
+			}
+		case execution.FieldError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error", values[i])
+			} else if value.Valid {
+				e.Error = value.String
 			}
 		case execution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -260,6 +268,9 @@ func (e *Execution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", e.Status))
+	builder.WriteString(", ")
+	builder.WriteString("error=")
+	builder.WriteString(e.Error)
 	builder.WriteByte(')')
 	return builder.String()
 }

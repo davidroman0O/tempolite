@@ -55,79 +55,84 @@ func IDLTE(id int) predicate.SagaExecutionData {
 	return predicate.SagaExecutionData(sql.FieldLTE(FieldID, id))
 }
 
-// LastTransaction applies equality check predicate on the "last_transaction" field. It's identical to LastTransactionEQ.
-func LastTransaction(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldEQ(FieldLastTransaction, v))
+// LastHeartbeat applies equality check predicate on the "last_heartbeat" field. It's identical to LastHeartbeatEQ.
+func LastHeartbeat(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
 }
 
-// TransactionHistoryIsNil applies the IsNil predicate on the "transaction_history" field.
-func TransactionHistoryIsNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldIsNull(FieldTransactionHistory))
+// HasOutput applies equality check predicate on the "hasOutput" field. It's identical to HasOutputEQ.
+func HasOutput(v bool) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldEQ(FieldHasOutput, v))
 }
 
-// TransactionHistoryNotNil applies the NotNil predicate on the "transaction_history" field.
-func TransactionHistoryNotNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldNotNull(FieldTransactionHistory))
+// LastHeartbeatEQ applies the EQ predicate on the "last_heartbeat" field.
+func LastHeartbeatEQ(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldEQ(FieldLastHeartbeat, v))
 }
 
-// CompensationHistoryIsNil applies the IsNil predicate on the "compensation_history" field.
-func CompensationHistoryIsNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldIsNull(FieldCompensationHistory))
+// LastHeartbeatNEQ applies the NEQ predicate on the "last_heartbeat" field.
+func LastHeartbeatNEQ(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldNEQ(FieldLastHeartbeat, v))
 }
 
-// CompensationHistoryNotNil applies the NotNil predicate on the "compensation_history" field.
-func CompensationHistoryNotNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldNotNull(FieldCompensationHistory))
+// LastHeartbeatIn applies the In predicate on the "last_heartbeat" field.
+func LastHeartbeatIn(vs ...time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldIn(FieldLastHeartbeat, vs...))
 }
 
-// LastTransactionEQ applies the EQ predicate on the "last_transaction" field.
-func LastTransactionEQ(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldEQ(FieldLastTransaction, v))
+// LastHeartbeatNotIn applies the NotIn predicate on the "last_heartbeat" field.
+func LastHeartbeatNotIn(vs ...time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldNotIn(FieldLastHeartbeat, vs...))
 }
 
-// LastTransactionNEQ applies the NEQ predicate on the "last_transaction" field.
-func LastTransactionNEQ(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldNEQ(FieldLastTransaction, v))
+// LastHeartbeatGT applies the GT predicate on the "last_heartbeat" field.
+func LastHeartbeatGT(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldGT(FieldLastHeartbeat, v))
 }
 
-// LastTransactionIn applies the In predicate on the "last_transaction" field.
-func LastTransactionIn(vs ...time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldIn(FieldLastTransaction, vs...))
+// LastHeartbeatGTE applies the GTE predicate on the "last_heartbeat" field.
+func LastHeartbeatGTE(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldGTE(FieldLastHeartbeat, v))
 }
 
-// LastTransactionNotIn applies the NotIn predicate on the "last_transaction" field.
-func LastTransactionNotIn(vs ...time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldNotIn(FieldLastTransaction, vs...))
+// LastHeartbeatLT applies the LT predicate on the "last_heartbeat" field.
+func LastHeartbeatLT(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldLT(FieldLastHeartbeat, v))
 }
 
-// LastTransactionGT applies the GT predicate on the "last_transaction" field.
-func LastTransactionGT(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldGT(FieldLastTransaction, v))
+// LastHeartbeatLTE applies the LTE predicate on the "last_heartbeat" field.
+func LastHeartbeatLTE(v time.Time) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldLTE(FieldLastHeartbeat, v))
 }
 
-// LastTransactionGTE applies the GTE predicate on the "last_transaction" field.
-func LastTransactionGTE(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldGTE(FieldLastTransaction, v))
+// LastHeartbeatIsNil applies the IsNil predicate on the "last_heartbeat" field.
+func LastHeartbeatIsNil() predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldIsNull(FieldLastHeartbeat))
 }
 
-// LastTransactionLT applies the LT predicate on the "last_transaction" field.
-func LastTransactionLT(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldLT(FieldLastTransaction, v))
+// LastHeartbeatNotNil applies the NotNil predicate on the "last_heartbeat" field.
+func LastHeartbeatNotNil() predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldNotNull(FieldLastHeartbeat))
 }
 
-// LastTransactionLTE applies the LTE predicate on the "last_transaction" field.
-func LastTransactionLTE(v time.Time) predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldLTE(FieldLastTransaction, v))
+// OutputIsNil applies the IsNil predicate on the "output" field.
+func OutputIsNil() predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldIsNull(FieldOutput))
 }
 
-// LastTransactionIsNil applies the IsNil predicate on the "last_transaction" field.
-func LastTransactionIsNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldIsNull(FieldLastTransaction))
+// OutputNotNil applies the NotNil predicate on the "output" field.
+func OutputNotNil() predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldNotNull(FieldOutput))
 }
 
-// LastTransactionNotNil applies the NotNil predicate on the "last_transaction" field.
-func LastTransactionNotNil() predicate.SagaExecutionData {
-	return predicate.SagaExecutionData(sql.FieldNotNull(FieldLastTransaction))
+// HasOutputEQ applies the EQ predicate on the "hasOutput" field.
+func HasOutputEQ(v bool) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldEQ(FieldHasOutput, v))
+}
+
+// HasOutputNEQ applies the NEQ predicate on the "hasOutput" field.
+func HasOutputNEQ(v bool) predicate.SagaExecutionData {
+	return predicate.SagaExecutionData(sql.FieldNEQ(FieldHasOutput, v))
 }
 
 // HasSagaExecution applies the HasEdge predicate on the "saga_execution" edge.

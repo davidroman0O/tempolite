@@ -21,12 +21,6 @@ type SideEffectExecutionCreate struct {
 	hooks    []Hook
 }
 
-// SetResult sets the "result" field.
-func (seec *SideEffectExecutionCreate) SetResult(u []uint8) *SideEffectExecutionCreate {
-	seec.mutation.SetResult(u)
-	return seec
-}
-
 // SetExecutionID sets the "execution" edge to the Execution entity by ID.
 func (seec *SideEffectExecutionCreate) SetExecutionID(id int) *SideEffectExecutionCreate {
 	seec.mutation.SetExecutionID(id)
@@ -120,10 +114,6 @@ func (seec *SideEffectExecutionCreate) createSpec() (*SideEffectExecution, *sqlg
 		_node = &SideEffectExecution{config: seec.config}
 		_spec = sqlgraph.NewCreateSpec(sideeffectexecution.Table, sqlgraph.NewFieldSpec(sideeffectexecution.FieldID, field.TypeInt))
 	)
-	if value, ok := seec.mutation.Result(); ok {
-		_spec.SetField(sideeffectexecution.FieldResult, field.TypeJSON, value)
-		_node.Result = value
-	}
 	if nodes := seec.mutation.ExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,

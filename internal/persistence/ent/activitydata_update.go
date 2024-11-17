@@ -141,6 +141,27 @@ func (adu *ActivityDataUpdate) ClearOutput() *ActivityDataUpdate {
 	return adu
 }
 
+// SetAttempt sets the "attempt" field.
+func (adu *ActivityDataUpdate) SetAttempt(i int) *ActivityDataUpdate {
+	adu.mutation.ResetAttempt()
+	adu.mutation.SetAttempt(i)
+	return adu
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (adu *ActivityDataUpdate) SetNillableAttempt(i *int) *ActivityDataUpdate {
+	if i != nil {
+		adu.SetAttempt(*i)
+	}
+	return adu
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (adu *ActivityDataUpdate) AddAttempt(i int) *ActivityDataUpdate {
+	adu.mutation.AddAttempt(i)
+	return adu
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (adu *ActivityDataUpdate) SetEntityID(id int) *ActivityDataUpdate {
 	adu.mutation.SetEntityID(id)
@@ -255,6 +276,12 @@ func (adu *ActivityDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if adu.mutation.OutputCleared() {
 		_spec.ClearField(activitydata.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := adu.mutation.Attempt(); ok {
+		_spec.SetField(activitydata.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := adu.mutation.AddedAttempt(); ok {
+		_spec.AddField(activitydata.FieldAttempt, field.TypeInt, value)
 	}
 	if adu.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -415,6 +442,27 @@ func (aduo *ActivityDataUpdateOne) ClearOutput() *ActivityDataUpdateOne {
 	return aduo
 }
 
+// SetAttempt sets the "attempt" field.
+func (aduo *ActivityDataUpdateOne) SetAttempt(i int) *ActivityDataUpdateOne {
+	aduo.mutation.ResetAttempt()
+	aduo.mutation.SetAttempt(i)
+	return aduo
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (aduo *ActivityDataUpdateOne) SetNillableAttempt(i *int) *ActivityDataUpdateOne {
+	if i != nil {
+		aduo.SetAttempt(*i)
+	}
+	return aduo
+}
+
+// AddAttempt adds i to the "attempt" field.
+func (aduo *ActivityDataUpdateOne) AddAttempt(i int) *ActivityDataUpdateOne {
+	aduo.mutation.AddAttempt(i)
+	return aduo
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (aduo *ActivityDataUpdateOne) SetEntityID(id int) *ActivityDataUpdateOne {
 	aduo.mutation.SetEntityID(id)
@@ -559,6 +607,12 @@ func (aduo *ActivityDataUpdateOne) sqlSave(ctx context.Context) (_node *Activity
 	}
 	if aduo.mutation.OutputCleared() {
 		_spec.ClearField(activitydata.FieldOutput, field.TypeJSON)
+	}
+	if value, ok := aduo.mutation.Attempt(); ok {
+		_spec.SetField(activitydata.FieldAttempt, field.TypeInt, value)
+	}
+	if value, ok := aduo.mutation.AddedAttempt(); ok {
+		_spec.AddField(activitydata.FieldAttempt, field.TypeInt, value)
 	}
 	if aduo.mutation.EntityCleared() {
 		edge := &sqlgraph.EdgeSpec{

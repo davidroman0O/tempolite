@@ -30,59 +30,55 @@ func (sedu *SagaExecutionDataUpdate) Where(ps ...predicate.SagaExecutionData) *S
 	return sedu
 }
 
-// SetTransactionHistory sets the "transaction_history" field.
-func (sedu *SagaExecutionDataUpdate) SetTransactionHistory(u [][]uint8) *SagaExecutionDataUpdate {
-	sedu.mutation.SetTransactionHistory(u)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (sedu *SagaExecutionDataUpdate) SetLastHeartbeat(t time.Time) *SagaExecutionDataUpdate {
+	sedu.mutation.SetLastHeartbeat(t)
 	return sedu
 }
 
-// AppendTransactionHistory appends u to the "transaction_history" field.
-func (sedu *SagaExecutionDataUpdate) AppendTransactionHistory(u [][]uint8) *SagaExecutionDataUpdate {
-	sedu.mutation.AppendTransactionHistory(u)
-	return sedu
-}
-
-// ClearTransactionHistory clears the value of the "transaction_history" field.
-func (sedu *SagaExecutionDataUpdate) ClearTransactionHistory() *SagaExecutionDataUpdate {
-	sedu.mutation.ClearTransactionHistory()
-	return sedu
-}
-
-// SetCompensationHistory sets the "compensation_history" field.
-func (sedu *SagaExecutionDataUpdate) SetCompensationHistory(u [][]uint8) *SagaExecutionDataUpdate {
-	sedu.mutation.SetCompensationHistory(u)
-	return sedu
-}
-
-// AppendCompensationHistory appends u to the "compensation_history" field.
-func (sedu *SagaExecutionDataUpdate) AppendCompensationHistory(u [][]uint8) *SagaExecutionDataUpdate {
-	sedu.mutation.AppendCompensationHistory(u)
-	return sedu
-}
-
-// ClearCompensationHistory clears the value of the "compensation_history" field.
-func (sedu *SagaExecutionDataUpdate) ClearCompensationHistory() *SagaExecutionDataUpdate {
-	sedu.mutation.ClearCompensationHistory()
-	return sedu
-}
-
-// SetLastTransaction sets the "last_transaction" field.
-func (sedu *SagaExecutionDataUpdate) SetLastTransaction(t time.Time) *SagaExecutionDataUpdate {
-	sedu.mutation.SetLastTransaction(t)
-	return sedu
-}
-
-// SetNillableLastTransaction sets the "last_transaction" field if the given value is not nil.
-func (sedu *SagaExecutionDataUpdate) SetNillableLastTransaction(t *time.Time) *SagaExecutionDataUpdate {
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (sedu *SagaExecutionDataUpdate) SetNillableLastHeartbeat(t *time.Time) *SagaExecutionDataUpdate {
 	if t != nil {
-		sedu.SetLastTransaction(*t)
+		sedu.SetLastHeartbeat(*t)
 	}
 	return sedu
 }
 
-// ClearLastTransaction clears the value of the "last_transaction" field.
-func (sedu *SagaExecutionDataUpdate) ClearLastTransaction() *SagaExecutionDataUpdate {
-	sedu.mutation.ClearLastTransaction()
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (sedu *SagaExecutionDataUpdate) ClearLastHeartbeat() *SagaExecutionDataUpdate {
+	sedu.mutation.ClearLastHeartbeat()
+	return sedu
+}
+
+// SetOutput sets the "output" field.
+func (sedu *SagaExecutionDataUpdate) SetOutput(u [][]uint8) *SagaExecutionDataUpdate {
+	sedu.mutation.SetOutput(u)
+	return sedu
+}
+
+// AppendOutput appends u to the "output" field.
+func (sedu *SagaExecutionDataUpdate) AppendOutput(u [][]uint8) *SagaExecutionDataUpdate {
+	sedu.mutation.AppendOutput(u)
+	return sedu
+}
+
+// ClearOutput clears the value of the "output" field.
+func (sedu *SagaExecutionDataUpdate) ClearOutput() *SagaExecutionDataUpdate {
+	sedu.mutation.ClearOutput()
+	return sedu
+}
+
+// SetHasOutput sets the "hasOutput" field.
+func (sedu *SagaExecutionDataUpdate) SetHasOutput(b bool) *SagaExecutionDataUpdate {
+	sedu.mutation.SetHasOutput(b)
+	return sedu
+}
+
+// SetNillableHasOutput sets the "hasOutput" field if the given value is not nil.
+func (sedu *SagaExecutionDataUpdate) SetNillableHasOutput(b *bool) *SagaExecutionDataUpdate {
+	if b != nil {
+		sedu.SetHasOutput(*b)
+	}
 	return sedu
 }
 
@@ -155,33 +151,25 @@ func (sedu *SagaExecutionDataUpdate) sqlSave(ctx context.Context) (n int, err er
 			}
 		}
 	}
-	if value, ok := sedu.mutation.TransactionHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldTransactionHistory, field.TypeJSON, value)
+	if value, ok := sedu.mutation.LastHeartbeat(); ok {
+		_spec.SetField(sagaexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
-	if value, ok := sedu.mutation.AppendedTransactionHistory(); ok {
+	if sedu.mutation.LastHeartbeatCleared() {
+		_spec.ClearField(sagaexecutiondata.FieldLastHeartbeat, field.TypeTime)
+	}
+	if value, ok := sedu.mutation.Output(); ok {
+		_spec.SetField(sagaexecutiondata.FieldOutput, field.TypeJSON, value)
+	}
+	if value, ok := sedu.mutation.AppendedOutput(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecutiondata.FieldTransactionHistory, value)
+			sqljson.Append(u, sagaexecutiondata.FieldOutput, value)
 		})
 	}
-	if sedu.mutation.TransactionHistoryCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldTransactionHistory, field.TypeJSON)
+	if sedu.mutation.OutputCleared() {
+		_spec.ClearField(sagaexecutiondata.FieldOutput, field.TypeJSON)
 	}
-	if value, ok := sedu.mutation.CompensationHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldCompensationHistory, field.TypeJSON, value)
-	}
-	if value, ok := sedu.mutation.AppendedCompensationHistory(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecutiondata.FieldCompensationHistory, value)
-		})
-	}
-	if sedu.mutation.CompensationHistoryCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldCompensationHistory, field.TypeJSON)
-	}
-	if value, ok := sedu.mutation.LastTransaction(); ok {
-		_spec.SetField(sagaexecutiondata.FieldLastTransaction, field.TypeTime, value)
-	}
-	if sedu.mutation.LastTransactionCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldLastTransaction, field.TypeTime)
+	if value, ok := sedu.mutation.HasOutput(); ok {
+		_spec.SetField(sagaexecutiondata.FieldHasOutput, field.TypeBool, value)
 	}
 	if sedu.mutation.SagaExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -232,59 +220,55 @@ type SagaExecutionDataUpdateOne struct {
 	mutation *SagaExecutionDataMutation
 }
 
-// SetTransactionHistory sets the "transaction_history" field.
-func (seduo *SagaExecutionDataUpdateOne) SetTransactionHistory(u [][]uint8) *SagaExecutionDataUpdateOne {
-	seduo.mutation.SetTransactionHistory(u)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (seduo *SagaExecutionDataUpdateOne) SetLastHeartbeat(t time.Time) *SagaExecutionDataUpdateOne {
+	seduo.mutation.SetLastHeartbeat(t)
 	return seduo
 }
 
-// AppendTransactionHistory appends u to the "transaction_history" field.
-func (seduo *SagaExecutionDataUpdateOne) AppendTransactionHistory(u [][]uint8) *SagaExecutionDataUpdateOne {
-	seduo.mutation.AppendTransactionHistory(u)
-	return seduo
-}
-
-// ClearTransactionHistory clears the value of the "transaction_history" field.
-func (seduo *SagaExecutionDataUpdateOne) ClearTransactionHistory() *SagaExecutionDataUpdateOne {
-	seduo.mutation.ClearTransactionHistory()
-	return seduo
-}
-
-// SetCompensationHistory sets the "compensation_history" field.
-func (seduo *SagaExecutionDataUpdateOne) SetCompensationHistory(u [][]uint8) *SagaExecutionDataUpdateOne {
-	seduo.mutation.SetCompensationHistory(u)
-	return seduo
-}
-
-// AppendCompensationHistory appends u to the "compensation_history" field.
-func (seduo *SagaExecutionDataUpdateOne) AppendCompensationHistory(u [][]uint8) *SagaExecutionDataUpdateOne {
-	seduo.mutation.AppendCompensationHistory(u)
-	return seduo
-}
-
-// ClearCompensationHistory clears the value of the "compensation_history" field.
-func (seduo *SagaExecutionDataUpdateOne) ClearCompensationHistory() *SagaExecutionDataUpdateOne {
-	seduo.mutation.ClearCompensationHistory()
-	return seduo
-}
-
-// SetLastTransaction sets the "last_transaction" field.
-func (seduo *SagaExecutionDataUpdateOne) SetLastTransaction(t time.Time) *SagaExecutionDataUpdateOne {
-	seduo.mutation.SetLastTransaction(t)
-	return seduo
-}
-
-// SetNillableLastTransaction sets the "last_transaction" field if the given value is not nil.
-func (seduo *SagaExecutionDataUpdateOne) SetNillableLastTransaction(t *time.Time) *SagaExecutionDataUpdateOne {
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (seduo *SagaExecutionDataUpdateOne) SetNillableLastHeartbeat(t *time.Time) *SagaExecutionDataUpdateOne {
 	if t != nil {
-		seduo.SetLastTransaction(*t)
+		seduo.SetLastHeartbeat(*t)
 	}
 	return seduo
 }
 
-// ClearLastTransaction clears the value of the "last_transaction" field.
-func (seduo *SagaExecutionDataUpdateOne) ClearLastTransaction() *SagaExecutionDataUpdateOne {
-	seduo.mutation.ClearLastTransaction()
+// ClearLastHeartbeat clears the value of the "last_heartbeat" field.
+func (seduo *SagaExecutionDataUpdateOne) ClearLastHeartbeat() *SagaExecutionDataUpdateOne {
+	seduo.mutation.ClearLastHeartbeat()
+	return seduo
+}
+
+// SetOutput sets the "output" field.
+func (seduo *SagaExecutionDataUpdateOne) SetOutput(u [][]uint8) *SagaExecutionDataUpdateOne {
+	seduo.mutation.SetOutput(u)
+	return seduo
+}
+
+// AppendOutput appends u to the "output" field.
+func (seduo *SagaExecutionDataUpdateOne) AppendOutput(u [][]uint8) *SagaExecutionDataUpdateOne {
+	seduo.mutation.AppendOutput(u)
+	return seduo
+}
+
+// ClearOutput clears the value of the "output" field.
+func (seduo *SagaExecutionDataUpdateOne) ClearOutput() *SagaExecutionDataUpdateOne {
+	seduo.mutation.ClearOutput()
+	return seduo
+}
+
+// SetHasOutput sets the "hasOutput" field.
+func (seduo *SagaExecutionDataUpdateOne) SetHasOutput(b bool) *SagaExecutionDataUpdateOne {
+	seduo.mutation.SetHasOutput(b)
+	return seduo
+}
+
+// SetNillableHasOutput sets the "hasOutput" field if the given value is not nil.
+func (seduo *SagaExecutionDataUpdateOne) SetNillableHasOutput(b *bool) *SagaExecutionDataUpdateOne {
+	if b != nil {
+		seduo.SetHasOutput(*b)
+	}
 	return seduo
 }
 
@@ -387,33 +371,25 @@ func (seduo *SagaExecutionDataUpdateOne) sqlSave(ctx context.Context) (_node *Sa
 			}
 		}
 	}
-	if value, ok := seduo.mutation.TransactionHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldTransactionHistory, field.TypeJSON, value)
+	if value, ok := seduo.mutation.LastHeartbeat(); ok {
+		_spec.SetField(sagaexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
 	}
-	if value, ok := seduo.mutation.AppendedTransactionHistory(); ok {
+	if seduo.mutation.LastHeartbeatCleared() {
+		_spec.ClearField(sagaexecutiondata.FieldLastHeartbeat, field.TypeTime)
+	}
+	if value, ok := seduo.mutation.Output(); ok {
+		_spec.SetField(sagaexecutiondata.FieldOutput, field.TypeJSON, value)
+	}
+	if value, ok := seduo.mutation.AppendedOutput(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecutiondata.FieldTransactionHistory, value)
+			sqljson.Append(u, sagaexecutiondata.FieldOutput, value)
 		})
 	}
-	if seduo.mutation.TransactionHistoryCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldTransactionHistory, field.TypeJSON)
+	if seduo.mutation.OutputCleared() {
+		_spec.ClearField(sagaexecutiondata.FieldOutput, field.TypeJSON)
 	}
-	if value, ok := seduo.mutation.CompensationHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldCompensationHistory, field.TypeJSON, value)
-	}
-	if value, ok := seduo.mutation.AppendedCompensationHistory(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecutiondata.FieldCompensationHistory, value)
-		})
-	}
-	if seduo.mutation.CompensationHistoryCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldCompensationHistory, field.TypeJSON)
-	}
-	if value, ok := seduo.mutation.LastTransaction(); ok {
-		_spec.SetField(sagaexecutiondata.FieldLastTransaction, field.TypeTime, value)
-	}
-	if seduo.mutation.LastTransactionCleared() {
-		_spec.ClearField(sagaexecutiondata.FieldLastTransaction, field.TypeTime)
+	if value, ok := seduo.mutation.HasOutput(); ok {
+		_spec.SetField(sagaexecutiondata.FieldHasOutput, field.TypeBool, value)
 	}
 	if seduo.mutation.SagaExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

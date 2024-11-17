@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -26,6 +27,24 @@ type WorkflowExecutionUpdate struct {
 // Where appends a list predicates to the WorkflowExecutionUpdate builder.
 func (weu *WorkflowExecutionUpdate) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionUpdate {
 	weu.mutation.Where(ps...)
+	return weu
+}
+
+// SetInputs sets the "inputs" field.
+func (weu *WorkflowExecutionUpdate) SetInputs(u [][]uint8) *WorkflowExecutionUpdate {
+	weu.mutation.SetInputs(u)
+	return weu
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (weu *WorkflowExecutionUpdate) AppendInputs(u [][]uint8) *WorkflowExecutionUpdate {
+	weu.mutation.AppendInputs(u)
+	return weu
+}
+
+// ClearInputs clears the value of the "inputs" field.
+func (weu *WorkflowExecutionUpdate) ClearInputs() *WorkflowExecutionUpdate {
+	weu.mutation.ClearInputs()
 	return weu
 }
 
@@ -123,6 +142,17 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 			}
 		}
 	}
+	if value, ok := weu.mutation.Inputs(); ok {
+		_spec.SetField(workflowexecution.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := weu.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, workflowexecution.FieldInputs, value)
+		})
+	}
+	if weu.mutation.InputsCleared() {
+		_spec.ClearField(workflowexecution.FieldInputs, field.TypeJSON)
+	}
 	if weu.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
@@ -199,6 +229,24 @@ type WorkflowExecutionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowExecutionMutation
+}
+
+// SetInputs sets the "inputs" field.
+func (weuo *WorkflowExecutionUpdateOne) SetInputs(u [][]uint8) *WorkflowExecutionUpdateOne {
+	weuo.mutation.SetInputs(u)
+	return weuo
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (weuo *WorkflowExecutionUpdateOne) AppendInputs(u [][]uint8) *WorkflowExecutionUpdateOne {
+	weuo.mutation.AppendInputs(u)
+	return weuo
+}
+
+// ClearInputs clears the value of the "inputs" field.
+func (weuo *WorkflowExecutionUpdateOne) ClearInputs() *WorkflowExecutionUpdateOne {
+	weuo.mutation.ClearInputs()
+	return weuo
 }
 
 // SetExecutionID sets the "execution" edge to the Execution entity by ID.
@@ -324,6 +372,17 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := weuo.mutation.Inputs(); ok {
+		_spec.SetField(workflowexecution.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := weuo.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, workflowexecution.FieldInputs, value)
+		})
+	}
+	if weuo.mutation.InputsCleared() {
+		_spec.ClearField(workflowexecution.FieldInputs, field.TypeJSON)
 	}
 	if weuo.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -9,7 +9,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/execution"
 	"github.com/davidroman0O/tempolite/internal/persistence/ent/predicate"
@@ -41,24 +40,6 @@ func (seu *SagaExecutionUpdate) SetNillableStepType(st *sagaexecution.StepType) 
 	if st != nil {
 		seu.SetStepType(*st)
 	}
-	return seu
-}
-
-// SetCompensationData sets the "compensation_data" field.
-func (seu *SagaExecutionUpdate) SetCompensationData(u []uint8) *SagaExecutionUpdate {
-	seu.mutation.SetCompensationData(u)
-	return seu
-}
-
-// AppendCompensationData appends u to the "compensation_data" field.
-func (seu *SagaExecutionUpdate) AppendCompensationData(u []uint8) *SagaExecutionUpdate {
-	seu.mutation.AppendCompensationData(u)
-	return seu
-}
-
-// ClearCompensationData clears the value of the "compensation_data" field.
-func (seu *SagaExecutionUpdate) ClearCompensationData() *SagaExecutionUpdate {
-	seu.mutation.ClearCompensationData()
 	return seu
 }
 
@@ -164,17 +145,6 @@ func (seu *SagaExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) 
 	if value, ok := seu.mutation.StepType(); ok {
 		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
 	}
-	if value, ok := seu.mutation.CompensationData(); ok {
-		_spec.SetField(sagaexecution.FieldCompensationData, field.TypeJSON, value)
-	}
-	if value, ok := seu.mutation.AppendedCompensationData(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecution.FieldCompensationData, value)
-		})
-	}
-	if seu.mutation.CompensationDataCleared() {
-		_spec.ClearField(sagaexecution.FieldCompensationData, field.TypeJSON)
-	}
 	if seu.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
@@ -264,24 +234,6 @@ func (seuo *SagaExecutionUpdateOne) SetNillableStepType(st *sagaexecution.StepTy
 	if st != nil {
 		seuo.SetStepType(*st)
 	}
-	return seuo
-}
-
-// SetCompensationData sets the "compensation_data" field.
-func (seuo *SagaExecutionUpdateOne) SetCompensationData(u []uint8) *SagaExecutionUpdateOne {
-	seuo.mutation.SetCompensationData(u)
-	return seuo
-}
-
-// AppendCompensationData appends u to the "compensation_data" field.
-func (seuo *SagaExecutionUpdateOne) AppendCompensationData(u []uint8) *SagaExecutionUpdateOne {
-	seuo.mutation.AppendCompensationData(u)
-	return seuo
-}
-
-// ClearCompensationData clears the value of the "compensation_data" field.
-func (seuo *SagaExecutionUpdateOne) ClearCompensationData() *SagaExecutionUpdateOne {
-	seuo.mutation.ClearCompensationData()
 	return seuo
 }
 
@@ -416,17 +368,6 @@ func (seuo *SagaExecutionUpdateOne) sqlSave(ctx context.Context) (_node *SagaExe
 	}
 	if value, ok := seuo.mutation.StepType(); ok {
 		_spec.SetField(sagaexecution.FieldStepType, field.TypeEnum, value)
-	}
-	if value, ok := seuo.mutation.CompensationData(); ok {
-		_spec.SetField(sagaexecution.FieldCompensationData, field.TypeJSON, value)
-	}
-	if value, ok := seuo.mutation.AppendedCompensationData(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, sagaexecution.FieldCompensationData, value)
-		})
-	}
-	if seuo.mutation.CompensationDataCleared() {
-		_spec.ClearField(sagaexecution.FieldCompensationData, field.TypeJSON)
 	}
 	if seuo.mutation.ExecutionCleared() {
 		edge := &sqlgraph.EdgeSpec{

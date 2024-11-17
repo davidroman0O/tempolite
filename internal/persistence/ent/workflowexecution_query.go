@@ -332,6 +332,18 @@ func (weq *WorkflowExecutionQuery) WithExecutionData(opts ...func(*WorkflowExecu
 
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
+//
+// Example:
+//
+//	var v []struct {
+//		Inputs [][]uint8 `json:"inputs,omitempty"`
+//		Count int `json:"count,omitempty"`
+//	}
+//
+//	client.WorkflowExecution.Query().
+//		GroupBy(workflowexecution.FieldInputs).
+//		Aggregate(ent.Count()).
+//		Scan(ctx, &v)
 func (weq *WorkflowExecutionQuery) GroupBy(field string, fields ...string) *WorkflowExecutionGroupBy {
 	weq.ctx.Fields = append([]string{field}, fields...)
 	grbuild := &WorkflowExecutionGroupBy{build: weq}
@@ -343,6 +355,16 @@ func (weq *WorkflowExecutionQuery) GroupBy(field string, fields ...string) *Work
 
 // Select allows the selection one or more fields/columns for the given query,
 // instead of selecting all fields in the entity.
+//
+// Example:
+//
+//	var v []struct {
+//		Inputs [][]uint8 `json:"inputs,omitempty"`
+//	}
+//
+//	client.WorkflowExecution.Query().
+//		Select(workflowexecution.FieldInputs).
+//		Scan(ctx, &v)
 func (weq *WorkflowExecutionQuery) Select(fields ...string) *WorkflowExecutionSelect {
 	weq.ctx.Fields = append(weq.ctx.Fields, fields...)
 	sbuild := &WorkflowExecutionSelect{WorkflowExecutionQuery: weq}

@@ -19,14 +19,10 @@ type ActivityExecutionData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// Heartbeats holds the value of the "heartbeats" field.
-	Heartbeats [][]uint8 `json:"heartbeats,omitempty"`
 	// LastHeartbeat holds the value of the "last_heartbeat" field.
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	// Progress holds the value of the "progress" field.
-	Progress []uint8 `json:"progress,omitempty"`
-	// ExecutionDetails holds the value of the "execution_details" field.
-	ExecutionDetails []uint8 `json:"execution_details,omitempty"`
+	// Outputs holds the value of the "outputs" field.
+	Outputs [][]uint8 `json:"outputs,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ActivityExecutionDataQuery when eager-loading is set.
 	Edges                             ActivityExecutionDataEdges `json:"edges"`
@@ -59,7 +55,7 @@ func (*ActivityExecutionData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case activityexecutiondata.FieldHeartbeats, activityexecutiondata.FieldProgress, activityexecutiondata.FieldExecutionDetails:
+		case activityexecutiondata.FieldOutputs:
 			values[i] = new([]byte)
 		case activityexecutiondata.FieldID:
 			values[i] = new(sql.NullInt64)
@@ -88,14 +84,6 @@ func (aed *ActivityExecutionData) assignValues(columns []string, values []any) e
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			aed.ID = int(value.Int64)
-		case activityexecutiondata.FieldHeartbeats:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field heartbeats", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &aed.Heartbeats); err != nil {
-					return fmt.Errorf("unmarshal field heartbeats: %w", err)
-				}
-			}
 		case activityexecutiondata.FieldLastHeartbeat:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field last_heartbeat", values[i])
@@ -103,20 +91,12 @@ func (aed *ActivityExecutionData) assignValues(columns []string, values []any) e
 				aed.LastHeartbeat = new(time.Time)
 				*aed.LastHeartbeat = value.Time
 			}
-		case activityexecutiondata.FieldProgress:
+		case activityexecutiondata.FieldOutputs:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field progress", values[i])
+				return fmt.Errorf("unexpected type %T for field outputs", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &aed.Progress); err != nil {
-					return fmt.Errorf("unmarshal field progress: %w", err)
-				}
-			}
-		case activityexecutiondata.FieldExecutionDetails:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field execution_details", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &aed.ExecutionDetails); err != nil {
-					return fmt.Errorf("unmarshal field execution_details: %w", err)
+				if err := json.Unmarshal(*value, &aed.Outputs); err != nil {
+					return fmt.Errorf("unmarshal field outputs: %w", err)
 				}
 			}
 		case activityexecutiondata.ForeignKeys[0]:
@@ -167,19 +147,13 @@ func (aed *ActivityExecutionData) String() string {
 	var builder strings.Builder
 	builder.WriteString("ActivityExecutionData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", aed.ID))
-	builder.WriteString("heartbeats=")
-	builder.WriteString(fmt.Sprintf("%v", aed.Heartbeats))
-	builder.WriteString(", ")
 	if v := aed.LastHeartbeat; v != nil {
 		builder.WriteString("last_heartbeat=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("progress=")
-	builder.WriteString(fmt.Sprintf("%v", aed.Progress))
-	builder.WriteString(", ")
-	builder.WriteString("execution_details=")
-	builder.WriteString(fmt.Sprintf("%v", aed.ExecutionDetails))
+	builder.WriteString("outputs=")
+	builder.WriteString(fmt.Sprintf("%v", aed.Outputs))
 	builder.WriteByte(')')
 	return builder.String()
 }

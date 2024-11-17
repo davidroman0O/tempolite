@@ -16,8 +16,6 @@ const (
 	FieldID = "id"
 	// FieldStepType holds the string denoting the step_type field in the database.
 	FieldStepType = "step_type"
-	// FieldCompensationData holds the string denoting the compensation_data field in the database.
-	FieldCompensationData = "compensation_data"
 	// EdgeExecution holds the string denoting the execution edge name in mutations.
 	EdgeExecution = "execution"
 	// EdgeExecutionData holds the string denoting the execution_data edge name in mutations.
@@ -44,7 +42,6 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldStepType,
-	FieldCompensationData,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "saga_executions"

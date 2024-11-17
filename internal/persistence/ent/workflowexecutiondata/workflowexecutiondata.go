@@ -12,10 +12,10 @@ const (
 	Label = "workflow_execution_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldError holds the string denoting the error field in the database.
-	FieldError = "error"
-	// FieldOutput holds the string denoting the output field in the database.
-	FieldOutput = "output"
+	// FieldLastHeartbeat holds the string denoting the last_heartbeat field in the database.
+	FieldLastHeartbeat = "last_heartbeat"
+	// FieldOutputs holds the string denoting the outputs field in the database.
+	FieldOutputs = "outputs"
 	// EdgeWorkflowExecution holds the string denoting the workflow_execution edge name in mutations.
 	EdgeWorkflowExecution = "workflow_execution"
 	// Table holds the table name of the workflowexecutiondata in the database.
@@ -32,8 +32,8 @@ const (
 // Columns holds all SQL columns for workflowexecutiondata fields.
 var Columns = []string{
 	FieldID,
-	FieldError,
-	FieldOutput,
+	FieldLastHeartbeat,
+	FieldOutputs,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "workflow_execution_data"
@@ -65,9 +65,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByError orders the results by the error field.
-func ByError(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldError, opts...).ToFunc()
+// ByLastHeartbeat orders the results by the last_heartbeat field.
+func ByLastHeartbeat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastHeartbeat, opts...).ToFunc()
 }
 
 // ByWorkflowExecutionField orders the results by workflow_execution field.

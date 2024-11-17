@@ -12,14 +12,10 @@ const (
 	Label = "activity_execution_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldHeartbeats holds the string denoting the heartbeats field in the database.
-	FieldHeartbeats = "heartbeats"
 	// FieldLastHeartbeat holds the string denoting the last_heartbeat field in the database.
 	FieldLastHeartbeat = "last_heartbeat"
-	// FieldProgress holds the string denoting the progress field in the database.
-	FieldProgress = "progress"
-	// FieldExecutionDetails holds the string denoting the execution_details field in the database.
-	FieldExecutionDetails = "execution_details"
+	// FieldOutputs holds the string denoting the outputs field in the database.
+	FieldOutputs = "outputs"
 	// EdgeActivityExecution holds the string denoting the activity_execution edge name in mutations.
 	EdgeActivityExecution = "activity_execution"
 	// Table holds the table name of the activityexecutiondata in the database.
@@ -36,10 +32,8 @@ const (
 // Columns holds all SQL columns for activityexecutiondata fields.
 var Columns = []string{
 	FieldID,
-	FieldHeartbeats,
 	FieldLastHeartbeat,
-	FieldProgress,
-	FieldExecutionDetails,
+	FieldOutputs,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "activity_execution_data"

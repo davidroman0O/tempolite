@@ -19,12 +19,12 @@ type SagaExecutionData struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// TransactionHistory holds the value of the "transaction_history" field.
-	TransactionHistory [][]uint8 `json:"transaction_history,omitempty"`
-	// CompensationHistory holds the value of the "compensation_history" field.
-	CompensationHistory [][]uint8 `json:"compensation_history,omitempty"`
-	// LastTransaction holds the value of the "last_transaction" field.
-	LastTransaction *time.Time `json:"last_transaction,omitempty"`
+	// LastHeartbeat holds the value of the "last_heartbeat" field.
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	// Output holds the value of the "output" field.
+	Output [][]uint8 `json:"output,omitempty"`
+	// HasOutput holds the value of the "hasOutput" field.
+	HasOutput bool `json:"hasOutput,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SagaExecutionDataQuery when eager-loading is set.
 	Edges                         SagaExecutionDataEdges `json:"edges"`
@@ -57,11 +57,13 @@ func (*SagaExecutionData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sagaexecutiondata.FieldTransactionHistory, sagaexecutiondata.FieldCompensationHistory:
+		case sagaexecutiondata.FieldOutput:
 			values[i] = new([]byte)
+		case sagaexecutiondata.FieldHasOutput:
+			values[i] = new(sql.NullBool)
 		case sagaexecutiondata.FieldID:
 			values[i] = new(sql.NullInt64)
-		case sagaexecutiondata.FieldLastTransaction:
+		case sagaexecutiondata.FieldLastHeartbeat:
 			values[i] = new(sql.NullTime)
 		case sagaexecutiondata.ForeignKeys[0]: // saga_execution_execution_data
 			values[i] = new(sql.NullInt64)
@@ -86,28 +88,26 @@ func (sed *SagaExecutionData) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			sed.ID = int(value.Int64)
-		case sagaexecutiondata.FieldTransactionHistory:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field transaction_history", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sed.TransactionHistory); err != nil {
-					return fmt.Errorf("unmarshal field transaction_history: %w", err)
-				}
-			}
-		case sagaexecutiondata.FieldCompensationHistory:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field compensation_history", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sed.CompensationHistory); err != nil {
-					return fmt.Errorf("unmarshal field compensation_history: %w", err)
-				}
-			}
-		case sagaexecutiondata.FieldLastTransaction:
+		case sagaexecutiondata.FieldLastHeartbeat:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field last_transaction", values[i])
+				return fmt.Errorf("unexpected type %T for field last_heartbeat", values[i])
 			} else if value.Valid {
-				sed.LastTransaction = new(time.Time)
-				*sed.LastTransaction = value.Time
+				sed.LastHeartbeat = new(time.Time)
+				*sed.LastHeartbeat = value.Time
+			}
+		case sagaexecutiondata.FieldOutput:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field output", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &sed.Output); err != nil {
+					return fmt.Errorf("unmarshal field output: %w", err)
+				}
+			}
+		case sagaexecutiondata.FieldHasOutput:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field hasOutput", values[i])
+			} else if value.Valid {
+				sed.HasOutput = value.Bool
 			}
 		case sagaexecutiondata.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -157,16 +157,16 @@ func (sed *SagaExecutionData) String() string {
 	var builder strings.Builder
 	builder.WriteString("SagaExecutionData(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", sed.ID))
-	builder.WriteString("transaction_history=")
-	builder.WriteString(fmt.Sprintf("%v", sed.TransactionHistory))
-	builder.WriteString(", ")
-	builder.WriteString("compensation_history=")
-	builder.WriteString(fmt.Sprintf("%v", sed.CompensationHistory))
-	builder.WriteString(", ")
-	if v := sed.LastTransaction; v != nil {
-		builder.WriteString("last_transaction=")
+	if v := sed.LastHeartbeat; v != nil {
+		builder.WriteString("last_heartbeat=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("output=")
+	builder.WriteString(fmt.Sprintf("%v", sed.Output))
+	builder.WriteString(", ")
+	builder.WriteString("hasOutput=")
+	builder.WriteString(fmt.Sprintf("%v", sed.HasOutput))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -21,28 +21,36 @@ type SagaExecutionDataCreate struct {
 	hooks    []Hook
 }
 
-// SetTransactionHistory sets the "transaction_history" field.
-func (sedc *SagaExecutionDataCreate) SetTransactionHistory(u [][]uint8) *SagaExecutionDataCreate {
-	sedc.mutation.SetTransactionHistory(u)
+// SetLastHeartbeat sets the "last_heartbeat" field.
+func (sedc *SagaExecutionDataCreate) SetLastHeartbeat(t time.Time) *SagaExecutionDataCreate {
+	sedc.mutation.SetLastHeartbeat(t)
 	return sedc
 }
 
-// SetCompensationHistory sets the "compensation_history" field.
-func (sedc *SagaExecutionDataCreate) SetCompensationHistory(u [][]uint8) *SagaExecutionDataCreate {
-	sedc.mutation.SetCompensationHistory(u)
-	return sedc
-}
-
-// SetLastTransaction sets the "last_transaction" field.
-func (sedc *SagaExecutionDataCreate) SetLastTransaction(t time.Time) *SagaExecutionDataCreate {
-	sedc.mutation.SetLastTransaction(t)
-	return sedc
-}
-
-// SetNillableLastTransaction sets the "last_transaction" field if the given value is not nil.
-func (sedc *SagaExecutionDataCreate) SetNillableLastTransaction(t *time.Time) *SagaExecutionDataCreate {
+// SetNillableLastHeartbeat sets the "last_heartbeat" field if the given value is not nil.
+func (sedc *SagaExecutionDataCreate) SetNillableLastHeartbeat(t *time.Time) *SagaExecutionDataCreate {
 	if t != nil {
-		sedc.SetLastTransaction(*t)
+		sedc.SetLastHeartbeat(*t)
+	}
+	return sedc
+}
+
+// SetOutput sets the "output" field.
+func (sedc *SagaExecutionDataCreate) SetOutput(u [][]uint8) *SagaExecutionDataCreate {
+	sedc.mutation.SetOutput(u)
+	return sedc
+}
+
+// SetHasOutput sets the "hasOutput" field.
+func (sedc *SagaExecutionDataCreate) SetHasOutput(b bool) *SagaExecutionDataCreate {
+	sedc.mutation.SetHasOutput(b)
+	return sedc
+}
+
+// SetNillableHasOutput sets the "hasOutput" field if the given value is not nil.
+func (sedc *SagaExecutionDataCreate) SetNillableHasOutput(b *bool) *SagaExecutionDataCreate {
+	if b != nil {
+		sedc.SetHasOutput(*b)
 	}
 	return sedc
 }
@@ -65,6 +73,7 @@ func (sedc *SagaExecutionDataCreate) Mutation() *SagaExecutionDataMutation {
 
 // Save creates the SagaExecutionData in the database.
 func (sedc *SagaExecutionDataCreate) Save(ctx context.Context) (*SagaExecutionData, error) {
+	sedc.defaults()
 	return withHooks(ctx, sedc.sqlSave, sedc.mutation, sedc.hooks)
 }
 
@@ -90,8 +99,19 @@ func (sedc *SagaExecutionDataCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (sedc *SagaExecutionDataCreate) defaults() {
+	if _, ok := sedc.mutation.HasOutput(); !ok {
+		v := sagaexecutiondata.DefaultHasOutput
+		sedc.mutation.SetHasOutput(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (sedc *SagaExecutionDataCreate) check() error {
+	if _, ok := sedc.mutation.HasOutput(); !ok {
+		return &ValidationError{Name: "hasOutput", err: errors.New(`ent: missing required field "SagaExecutionData.hasOutput"`)}
+	}
 	if len(sedc.mutation.SagaExecutionIDs()) == 0 {
 		return &ValidationError{Name: "saga_execution", err: errors.New(`ent: missing required edge "SagaExecutionData.saga_execution"`)}
 	}
@@ -121,17 +141,17 @@ func (sedc *SagaExecutionDataCreate) createSpec() (*SagaExecutionData, *sqlgraph
 		_node = &SagaExecutionData{config: sedc.config}
 		_spec = sqlgraph.NewCreateSpec(sagaexecutiondata.Table, sqlgraph.NewFieldSpec(sagaexecutiondata.FieldID, field.TypeInt))
 	)
-	if value, ok := sedc.mutation.TransactionHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldTransactionHistory, field.TypeJSON, value)
-		_node.TransactionHistory = value
+	if value, ok := sedc.mutation.LastHeartbeat(); ok {
+		_spec.SetField(sagaexecutiondata.FieldLastHeartbeat, field.TypeTime, value)
+		_node.LastHeartbeat = &value
 	}
-	if value, ok := sedc.mutation.CompensationHistory(); ok {
-		_spec.SetField(sagaexecutiondata.FieldCompensationHistory, field.TypeJSON, value)
-		_node.CompensationHistory = value
+	if value, ok := sedc.mutation.Output(); ok {
+		_spec.SetField(sagaexecutiondata.FieldOutput, field.TypeJSON, value)
+		_node.Output = value
 	}
-	if value, ok := sedc.mutation.LastTransaction(); ok {
-		_spec.SetField(sagaexecutiondata.FieldLastTransaction, field.TypeTime, value)
-		_node.LastTransaction = &value
+	if value, ok := sedc.mutation.HasOutput(); ok {
+		_spec.SetField(sagaexecutiondata.FieldHasOutput, field.TypeBool, value)
+		_node.HasOutput = value
 	}
 	if nodes := sedc.mutation.SagaExecutionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -171,6 +191,7 @@ func (sedcb *SagaExecutionDataCreateBulk) Save(ctx context.Context) ([]*SagaExec
 	for i := range sedcb.builders {
 		func(i int, root context.Context) {
 			builder := sedcb.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SagaExecutionDataMutation)
 				if !ok {

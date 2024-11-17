@@ -12,12 +12,12 @@ const (
 	Label = "saga_execution_data"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTransactionHistory holds the string denoting the transaction_history field in the database.
-	FieldTransactionHistory = "transaction_history"
-	// FieldCompensationHistory holds the string denoting the compensation_history field in the database.
-	FieldCompensationHistory = "compensation_history"
-	// FieldLastTransaction holds the string denoting the last_transaction field in the database.
-	FieldLastTransaction = "last_transaction"
+	// FieldLastHeartbeat holds the string denoting the last_heartbeat field in the database.
+	FieldLastHeartbeat = "last_heartbeat"
+	// FieldOutput holds the string denoting the output field in the database.
+	FieldOutput = "output"
+	// FieldHasOutput holds the string denoting the hasoutput field in the database.
+	FieldHasOutput = "has_output"
 	// EdgeSagaExecution holds the string denoting the saga_execution edge name in mutations.
 	EdgeSagaExecution = "saga_execution"
 	// Table holds the table name of the sagaexecutiondata in the database.
@@ -34,9 +34,9 @@ const (
 // Columns holds all SQL columns for sagaexecutiondata fields.
 var Columns = []string{
 	FieldID,
-	FieldTransactionHistory,
-	FieldCompensationHistory,
-	FieldLastTransaction,
+	FieldLastHeartbeat,
+	FieldOutput,
+	FieldHasOutput,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "saga_execution_data"
@@ -60,6 +60,11 @@ func ValidColumn(column string) bool {
 	return false
 }
 
+var (
+	// DefaultHasOutput holds the default value on creation for the "hasOutput" field.
+	DefaultHasOutput bool
+)
+
 // OrderOption defines the ordering options for the SagaExecutionData queries.
 type OrderOption func(*sql.Selector)
 
@@ -68,9 +73,14 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByLastTransaction orders the results by the last_transaction field.
-func ByLastTransaction(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLastTransaction, opts...).ToFunc()
+// ByLastHeartbeat orders the results by the last_heartbeat field.
+func ByLastHeartbeat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastHeartbeat, opts...).ToFunc()
+}
+
+// ByHasOutput orders the results by the hasOutput field.
+func ByHasOutput(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHasOutput, opts...).ToFunc()
 }
 
 // BySagaExecutionField orders the results by saga_execution field.

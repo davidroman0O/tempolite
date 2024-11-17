@@ -81,6 +81,20 @@ func (wdc *WorkflowDataCreate) SetInput(u [][]uint8) *WorkflowDataCreate {
 	return wdc
 }
 
+// SetAttempt sets the "attempt" field.
+func (wdc *WorkflowDataCreate) SetAttempt(i int) *WorkflowDataCreate {
+	wdc.mutation.SetAttempt(i)
+	return wdc
+}
+
+// SetNillableAttempt sets the "attempt" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillableAttempt(i *int) *WorkflowDataCreate {
+	if i != nil {
+		wdc.SetAttempt(*i)
+	}
+	return wdc
+}
+
 // SetEntityID sets the "entity" edge to the Entity entity by ID.
 func (wdc *WorkflowDataCreate) SetEntityID(id int) *WorkflowDataCreate {
 	wdc.mutation.SetEntityID(id)
@@ -143,6 +157,10 @@ func (wdc *WorkflowDataCreate) defaults() {
 		v := workflowdata.DefaultRetryPolicy
 		wdc.mutation.SetRetryPolicy(v)
 	}
+	if _, ok := wdc.mutation.Attempt(); !ok {
+		v := workflowdata.DefaultAttempt
+		wdc.mutation.SetAttempt(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -158,6 +176,9 @@ func (wdc *WorkflowDataCreate) check() error {
 	}
 	if _, ok := wdc.mutation.RetryPolicy(); !ok {
 		return &ValidationError{Name: "retry_policy", err: errors.New(`ent: missing required field "WorkflowData.retry_policy"`)}
+	}
+	if _, ok := wdc.mutation.Attempt(); !ok {
+		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "WorkflowData.attempt"`)}
 	}
 	if len(wdc.mutation.EntityIDs()) == 0 {
 		return &ValidationError{Name: "entity", err: errors.New(`ent: missing required edge "WorkflowData.entity"`)}
@@ -211,6 +232,10 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 	if value, ok := wdc.mutation.Input(); ok {
 		_spec.SetField(workflowdata.FieldInput, field.TypeJSON, value)
 		_node.Input = value
+	}
+	if value, ok := wdc.mutation.Attempt(); ok {
+		_spec.SetField(workflowdata.FieldAttempt, field.TypeInt, value)
+		_node.Attempt = value
 	}
 	if nodes := wdc.mutation.EntityIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

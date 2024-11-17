@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -15,9 +16,11 @@ import (
 
 // WorkflowExecution is the model entity for the WorkflowExecution schema.
 type WorkflowExecution struct {
-	config
+	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Inputs holds the value of the "inputs" field.
+	Inputs [][]uint8 `json:"inputs,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the WorkflowExecutionQuery when eager-loading is set.
 	Edges                        WorkflowExecutionEdges `json:"edges"`
@@ -63,6 +66,8 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case workflowexecution.FieldInputs:
+			values[i] = new([]byte)
 		case workflowexecution.FieldID:
 			values[i] = new(sql.NullInt64)
 		case workflowexecution.ForeignKeys[0]: // execution_workflow_execution
@@ -88,6 +93,14 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			we.ID = int(value.Int64)
+		case workflowexecution.FieldInputs:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field inputs", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &we.Inputs); err != nil {
+					return fmt.Errorf("unmarshal field inputs: %w", err)
+				}
+			}
 		case workflowexecution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field execution_workflow_execution", value)
@@ -140,7 +153,9 @@ func (we *WorkflowExecution) Unwrap() *WorkflowExecution {
 func (we *WorkflowExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("WorkflowExecution(")
-	builder.WriteString(fmt.Sprintf("id=%v", we.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", we.ID))
+	builder.WriteString("inputs=")
+	builder.WriteString(fmt.Sprintf("%v", we.Inputs))
 	builder.WriteByte(')')
 	return builder.String()
 }

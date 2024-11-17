@@ -70,6 +70,11 @@ func ScheduledFor(v time.Time) predicate.ActivityData {
 	return predicate.ActivityData(sql.FieldEQ(FieldScheduledFor, v))
 }
 
+// Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
+func Attempt(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldEQ(FieldAttempt, v))
+}
+
 // TimeoutEQ applies the EQ predicate on the "timeout" field.
 func TimeoutEQ(v int64) predicate.ActivityData {
 	return predicate.ActivityData(sql.FieldEQ(FieldTimeout, v))
@@ -228,6 +233,46 @@ func OutputIsNil() predicate.ActivityData {
 // OutputNotNil applies the NotNil predicate on the "output" field.
 func OutputNotNil() predicate.ActivityData {
 	return predicate.ActivityData(sql.FieldNotNull(FieldOutput))
+}
+
+// AttemptEQ applies the EQ predicate on the "attempt" field.
+func AttemptEQ(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldEQ(FieldAttempt, v))
+}
+
+// AttemptNEQ applies the NEQ predicate on the "attempt" field.
+func AttemptNEQ(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldNEQ(FieldAttempt, v))
+}
+
+// AttemptIn applies the In predicate on the "attempt" field.
+func AttemptIn(vs ...int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldIn(FieldAttempt, vs...))
+}
+
+// AttemptNotIn applies the NotIn predicate on the "attempt" field.
+func AttemptNotIn(vs ...int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldNotIn(FieldAttempt, vs...))
+}
+
+// AttemptGT applies the GT predicate on the "attempt" field.
+func AttemptGT(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldGT(FieldAttempt, v))
+}
+
+// AttemptGTE applies the GTE predicate on the "attempt" field.
+func AttemptGTE(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldGTE(FieldAttempt, v))
+}
+
+// AttemptLT applies the LT predicate on the "attempt" field.
+func AttemptLT(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldLT(FieldAttempt, v))
+}
+
+// AttemptLTE applies the LTE predicate on the "attempt" field.
+func AttemptLTE(v int) predicate.ActivityData {
+	return predicate.ActivityData(sql.FieldLTE(FieldAttempt, v))
 }
 
 // HasEntity applies the HasEdge predicate on the "entity" edge.

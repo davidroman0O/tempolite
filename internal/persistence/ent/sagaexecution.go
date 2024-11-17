@@ -3,7 +3,6 @@
 package ent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -21,8 +20,6 @@ type SagaExecution struct {
 	ID int `json:"id,omitempty"`
 	// StepType holds the value of the "step_type" field.
 	StepType sagaexecution.StepType `json:"step_type,omitempty"`
-	// CompensationData holds the value of the "compensation_data" field.
-	CompensationData []uint8 `json:"compensation_data,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SagaExecutionQuery when eager-loading is set.
 	Edges                    SagaExecutionEdges `json:"edges"`
@@ -68,8 +65,6 @@ func (*SagaExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sagaexecution.FieldCompensationData:
-			values[i] = new([]byte)
 		case sagaexecution.FieldID:
 			values[i] = new(sql.NullInt64)
 		case sagaexecution.FieldStepType:
@@ -102,14 +97,6 @@ func (se *SagaExecution) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field step_type", values[i])
 			} else if value.Valid {
 				se.StepType = sagaexecution.StepType(value.String)
-			}
-		case sagaexecution.FieldCompensationData:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field compensation_data", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &se.CompensationData); err != nil {
-					return fmt.Errorf("unmarshal field compensation_data: %w", err)
-				}
 			}
 		case sagaexecution.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -166,9 +153,6 @@ func (se *SagaExecution) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", se.ID))
 	builder.WriteString("step_type=")
 	builder.WriteString(fmt.Sprintf("%v", se.StepType))
-	builder.WriteString(", ")
-	builder.WriteString("compensation_data=")
-	builder.WriteString(fmt.Sprintf("%v", se.CompensationData))
 	builder.WriteByte(')')
 	return builder.String()
 }
