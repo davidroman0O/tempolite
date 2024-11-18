@@ -452,6 +452,43 @@ func TestOrchestratorWorkflowRetryPolicy(t *testing.T) {
 	o.Wait()
 }
 
+func TestOrchestratorWorkflowRetryPolicyFailure(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	executed := 0
+
+	workflow := func(ctx WorkflowContext) error {
+		executed++
+		return errors.New("intentional failure")
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	o := NewOrchestrator(ctx, database, register)
+
+	future := o.Execute(workflow, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:     3,
+			InitialInterval: 1 * time.Second,
+		},
+	})
+
+	t.Log("Waiting for workflow to complete")
+	if err := future.Get(); err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+
+	if executed != 3 {
+		t.Fatalf("Expected 3 executions, got %d", executed)
+	}
+
+	t.Log("Orchestrator workflow completed successfully")
+	o.Wait()
+}
+
 func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
 
 	database := NewDefaultDatabase()
