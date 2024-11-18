@@ -184,6 +184,9 @@ func (o *Orchestrator) IsPaused() bool {
 }
 
 func (o *Orchestrator) Resume(entityID int) *Future {
+
+	// Resuming isn't retrying! We need to create a new execution to the entity while avoiding increasing the attempt count.
+
 	o.pausedMu.Lock()
 	o.paused = false
 	o.pausedMu.Unlock()
