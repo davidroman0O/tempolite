@@ -25,7 +25,7 @@ func TestOrchestratorWorkflow(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	if err := future.Get(); err != nil {
@@ -64,7 +64,7 @@ func TestOrchestratorSubWorkflow(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	if err := future.Get(); err != nil {
@@ -103,7 +103,7 @@ func TestOrchestratorWorkflowActivity(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	if err := future.Get(); err != nil {
@@ -208,7 +208,7 @@ func TestOrchestratorWorkflowSaga(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	if err := future.Get(); err != nil {
@@ -276,7 +276,7 @@ func TestOrchestratorSagaCompensation(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	err := future.Get()
@@ -323,7 +323,7 @@ func TestOrchestratorWorkflowSideEffect(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	if err := future.Get(); err != nil {
@@ -362,7 +362,7 @@ func TestOrchestratorRetryFailureWorkflow(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, nil)
+	future := o.Execute(workflow, nil)
 
 	t.Log("Waiting for workflow to complete")
 	shouldHaveFailed := false
@@ -432,7 +432,7 @@ func TestOrchestratorWorkflowRetryPolicy(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, &WorkflowOptions{
+	future := o.Execute(workflow, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts: 4,
 		},
@@ -449,5 +449,41 @@ func TestOrchestratorWorkflowRetryPolicy(t *testing.T) {
 
 	t.Log("Orchestrator workflow completed successfully")
 	o.Wait()
+}
 
+func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	executed := 0
+
+	workflow := func(ctx WorkflowContext) error {
+		executed++
+		if executed < 3 {
+			fmt.Println("Continue as new", executed)
+			return ctx.ContinueAsNew(nil)
+		}
+		return nil
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	o := NewOrchestrator(ctx, database, register)
+
+	future := o.Execute(workflow, nil)
+
+	t.Log("Waiting for workflow to complete")
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	o.Wait() // you have to wait before checking the executed count (duuuh)
+
+	if executed != 3 {
+		t.Fatalf("Expected 3 executions, got %d", executed)
+	}
+
+	t.Log("Orchestrator workflow completed successfully")
 }

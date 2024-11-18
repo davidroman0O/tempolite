@@ -22,7 +22,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *QueueTask) error {
 	}
 
 	// Execute the workflow using the orchestrator
-	future := w.orchestrator.Workflow(handler.Handler, task.options, task.args...)
+	future := w.orchestrator.Execute(handler.Handler, task.options, task.args...)
 
 	// Watch for context cancellation
 	done := make(chan struct{})

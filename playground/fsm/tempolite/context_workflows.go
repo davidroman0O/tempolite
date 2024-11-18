@@ -231,10 +231,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 }
 
 // ContinueAsNew allows a workflow to continue as new with the given function and arguments.
-func (ctx WorkflowContext) ContinueAsNew(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) error {
+func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...interface{}) error {
 	return &ContinueAsNewError{
-		WorkflowFunc: workflowFunc,
-		Options:      options,
-		Args:         args,
+		Options: options,
+		Args:    args,
 	}
 }

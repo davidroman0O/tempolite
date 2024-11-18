@@ -122,7 +122,7 @@ func ProcessOrderWorkflow(ctx tempolite.WorkflowContext, orderID int) (int, erro
 	if !continueAsNewCalled.Load() {
 		continueAsNewCalled.Store(true)
 		log.Printf("Using ContinueAsNew to restart workflow")
-		err := ctx.ContinueAsNew(ProcessOrderWorkflow, nil, orderID*2)
+		err := ctx.ContinueAsNew(nil, orderID*2)
 		if err != nil {
 			return -1, err
 		}

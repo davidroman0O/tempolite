@@ -371,9 +371,8 @@ var ErrPaused = errors.New("execution paused")
 
 // ContinueAsNewError indicates that the workflow should restart with new inputs.
 type ContinueAsNewError struct {
-	WorkflowFunc interface{}
-	Options      *WorkflowOptions
-	Args         []interface{}
+	Options *WorkflowOptions
+	Args    []interface{}
 }
 
 func (e *ContinueAsNewError) Error() string {

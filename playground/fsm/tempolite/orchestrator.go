@@ -42,7 +42,7 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orch
 	return o
 }
 
-func (o *Orchestrator) Workflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	handler, err := o.registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
 		log.Printf("Error registering workflow: %v", err)

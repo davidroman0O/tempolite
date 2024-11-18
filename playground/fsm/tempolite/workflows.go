@@ -316,15 +316,10 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 	if wi.continueAsNew != nil {
 		// Handle ContinueAsNew
 		o := wi.orchestrator
-		newHandler, err := o.registry.RegisterWorkflow(wi.continueAsNew.WorkflowFunc)
-		if err != nil {
-			log.Printf("Error registering workflow in ContinueAsNew: %v", err)
-			wi.err = err
-			if wi.future != nil {
-				wi.future.setError(wi.err)
-			}
-			return nil
-		}
+
+		// Use the existing handler instead of registering a new one
+		handler := wi.handler
+
 		// Convert inputs to [][]byte
 		inputBytes, err := convertInputsForSerialization(wi.continueAsNew.Args)
 		if err != nil {
@@ -385,7 +380,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		// Create a new Entity without ID (database assigns it)
 		newEntity := &Entity{
 			StepID:       wi.entity.StepID, // Use the same stepID
-			HandlerName:  newHandler.HandlerName,
+			HandlerName:  handler.HandlerName,
 			Status:       StatusPending,
 			Type:         EntityTypeWorkflow,
 			RunID:        wi.entity.RunID, // Share the same RunID
@@ -394,7 +389,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			WorkflowData: workflowData,
 			RetryPolicy:  internalRetryPolicy,
 			RetryState:   retryState,
-			HandlerInfo:  &newHandler,
+			HandlerInfo:  &handler,
 			Paused:       false,
 			Resumable:    false,
 		}
@@ -404,7 +399,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		// Create a new WorkflowInstance
 		newInstance := &WorkflowInstance{
 			stepID:            wi.stepID,
-			handler:           newHandler,
+			handler:           handler, // Use existing handler
 			input:             wi.continueAsNew.Args,
 			ctx:               o.ctx,
 			orchestrator:      o,

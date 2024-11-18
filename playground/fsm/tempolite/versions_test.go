@@ -35,7 +35,7 @@ func TestOrchestratorVersionWorkflows(t *testing.T) {
 
 	o := NewOrchestrator(ctx, database, register)
 
-	future := o.Workflow(workflow, &WorkflowOptions{
+	future := o.Execute(workflow, &WorkflowOptions{
 		VersionOverrides: map[string]int{
 			"featureA": 1,
 		},
