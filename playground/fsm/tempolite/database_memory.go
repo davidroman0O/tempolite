@@ -96,6 +96,19 @@ func (db *DefaultDatabase) GetHierarchy(parentID, childID int) *Hierarchy {
 	return nil
 }
 
+func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) []*Hierarchy {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Hierarchy
+	for _, h := range db.hierarchies {
+		if h.ChildEntityID == childEntityID {
+			result = append(result, h)
+		}
+	}
+	return result
+}
+
 // Entity methods
 func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
 	db.mu.Lock()

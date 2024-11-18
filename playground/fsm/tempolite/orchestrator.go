@@ -188,6 +188,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	o.paused = false
 	o.pausedMu.Unlock()
 
+	// Create new context
 	ctx, cancel := context.WithCancel(context.Background())
 	o.ctx = ctx
 	o.cancel = cancel
@@ -202,17 +203,26 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	// Set the runID from the entity
 	o.runID = entity.RunID
 
-	// Update the entity's paused state
+	// Update the entity state
 	entity.Paused = false
+	entity.Status = StatusPending
 	entity.Resumable = true
 	o.db.UpdateEntity(entity)
 
-	// Update Run status to Running
+	// Update Run status
 	run := o.db.GetRun(o.runID)
 	if run != nil {
-		run.Status = string(StatusRunning)
+		run.Status = string(StatusPending)
 		run.UpdatedAt = time.Now()
 		o.db.UpdateRun(run)
+	}
+
+	// Get parent execution if this is a sub-workflow
+	var parentExecID, parentEntityID int
+	hierarchies := o.db.GetHierarchiesByChildEntity(entityID)
+	if len(hierarchies) > 0 {
+		parentExecID = hierarchies[0].ParentExecutionID
+		parentEntityID = hierarchies[0].ParentEntityID
 	}
 
 	// Retrieve the handler
@@ -230,19 +240,21 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 		return NewFuture(0)
 	}
 
-	// Create a new WorkflowInstance
+	// Create a new WorkflowInstance with parent info
 	instance := &WorkflowInstance{
-		stepID:         entity.StepID,
-		handler:        handler,
-		input:          inputs,
-		ctx:            o.ctx,
-		orchestrator:   o,
-		workflowID:     entity.ID,
-		entity:         entity,
-		options:        nil, // Adjust options as needed
-		entityID:       entity.ID,
-		parentEntityID: 0,
-		parentStepID:   "",
+		stepID:       entity.StepID,
+		handler:      handler,
+		input:        inputs,
+		ctx:          ctx,
+		orchestrator: o,
+		workflowID:   entity.ID,
+		entity:       entity,
+		// TODO: might need to find them back tho
+		options:           nil,
+		entityID:          entity.ID,
+		parentExecutionID: parentExecID,
+		parentEntityID:    parentEntityID,
+		parentStepID:      entity.StepID,
 	}
 
 	future := NewFuture(entity.ID)
@@ -290,10 +302,20 @@ func (o *Orchestrator) Wait() {
 		return
 	}
 
+	lastLogTime := time.Now()
 	// Wait for root workflow to complete
 	for {
+		// not initialized yet
+		if o.rootWf.fsm == nil {
+			continue
+		}
 		state := o.rootWf.fsm.MustState()
-		log.Printf("Root Workflow FSM state: %s", state)
+		// Log the state every 500ms
+		currentTime := time.Now()
+		if currentTime.Sub(lastLogTime) >= 500*time.Millisecond {
+			log.Printf("Root Workflow FSM state: %s", state)
+			lastLogTime = currentTime
+		}
 		if state == StateCompleted || state == StateFailed {
 			break
 		}

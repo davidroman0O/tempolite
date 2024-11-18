@@ -84,13 +84,13 @@ func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupporte
 func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
-		future := NewFuture(0)
+		future := NewFuture(ctx.workflowID)
 		future.setError(err)
 		return future
 	}
 
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
-	future := NewFuture(0)
+	future := NewFuture(ctx.workflowID)
 
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeWorkflow)

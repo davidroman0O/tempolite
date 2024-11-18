@@ -14,6 +14,7 @@ type Database interface {
 	// Hierarchy methods
 	AddHierarchy(hierarchy *Hierarchy)
 	GetHierarchy(parentID, childID int) *Hierarchy
+	GetHierarchiesByChildEntity(childEntityID int) []*Hierarchy
 
 	// Entity methods
 	AddEntity(entity *Entity) *Entity

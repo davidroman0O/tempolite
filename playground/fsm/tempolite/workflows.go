@@ -58,11 +58,16 @@ func (wi *WorkflowInstance) Start() {
 		OnEntry(wi.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
-	// Start the FSM
-	go wi.fsm.Fire(TriggerStart)
+	go func() {
+		log.Printf("Starting workflow: %s (Entity ID: %d)", wi.stepID, wi.entity.ID)
+		if err := wi.fsm.Fire(TriggerStart); err != nil {
+			log.Printf("Error starting workflow: %v", err)
+		}
+	}()
 }
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
+	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWorkflow called", wi.stepID, wi.entity.ID)
 	wi.executeWithRetry()
 	return nil
 }
@@ -73,6 +78,8 @@ func (wi *WorkflowInstance) executeWithRetry() {
 	var initialInterval time.Duration
 	var backoffCoefficient float64
 	var maxInterval time.Duration
+
+	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWithRetry called", wi.stepID, wi.entity.ID)
 
 	if wi.entity.RetryPolicy != nil {
 		rp := wi.entity.RetryPolicy
@@ -88,7 +95,11 @@ func (wi *WorkflowInstance) executeWithRetry() {
 		maxInterval = 5 * time.Minute
 	}
 
-	for attempt = wi.entity.RetryState.Attempts + 1; attempt <= maxAttempts; attempt++ {
+	// Somehow we need to also check if `wi.entity.Resumable` is true and allow to pass that for loop
+	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWithRetry maxAttempts: %d, initialInterval: %v, backoffCoefficient: %f, maxInterval: %v", wi.stepID, wi.entity.ID, maxAttempts, initialInterval, backoffCoefficient, maxInterval)
+	attempt = wi.entity.RetryState.Attempts + 1
+
+	for {
 		if wi.orchestrator.IsPaused() {
 			log.Printf("WorkflowInstance %s is paused", wi.stepID)
 			wi.entity.Status = StatusPaused
@@ -98,11 +109,22 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			return
 		}
 
-		// Update RetryState
-		wi.entity.RetryState.Attempts = attempt
+		// Check if maximum attempts have been reached and not resumable
+		if attempt > maxAttempts && !wi.entity.Resumable {
+			wi.entity.Status = StatusFailed
+			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.fsm.Fire(TriggerFail)
+			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt-1)
+			return
+		}
+
+		// Update RetryState without changing attempts values beyond maxAttempts
+		if attempt <= maxAttempts {
+			wi.entity.RetryState.Attempts = attempt
+		}
 		wi.orchestrator.db.UpdateEntity(wi.entity)
 
-		// Create Execution without ID
+		// Create Execution
 		execution := &Execution{
 			EntityID:  wi.entity.ID,
 			Status:    ExecutionStatusRunning,
@@ -112,15 +134,12 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 			Entity:    wi.entity,
 		}
-		// Add execution to database, which assigns the ID
 		execution = wi.orchestrator.db.AddExecution(execution)
 		wi.entity.Executions = append(wi.entity.Executions, execution)
-		executionID := execution.ID
-		wi.executionID = executionID // Store execution ID
+		wi.executionID = execution.ID
 		wi.execution = execution
 
-		// Now that we have executionID, we can create the hierarchy
-		// But only if parentExecutionID is available (non-zero)
+		// Create hierarchy if parentExecutionID is available
 		if wi.parentExecutionID != 0 {
 			hierarchy := &Hierarchy{
 				RunID:             wi.orchestrator.runID,
@@ -136,7 +155,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.AddHierarchy(hierarchy)
 		}
 
-		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entity.ID, executionID)
+		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entity.ID, wi.executionID)
 
 		err := wi.runWorkflow(execution)
 		if errors.Is(err, ErrPaused) {
@@ -144,6 +163,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.entity.Paused = true
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerPause)
+			log.Printf("WorkflowInstance %s is paused post-runWorkflow", wi.stepID)
 			return
 		}
 		if err == nil {
@@ -155,6 +175,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.UpdateExecution(execution)
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerComplete)
+			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) completed successfully", wi.stepID, wi.entity.ID, wi.executionID)
 			return
 		} else {
 			execution.Status = ExecutionStatusFailed
@@ -163,24 +184,32 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			execution.Error = err.Error()
 			wi.err = err
 			wi.orchestrator.db.UpdateExecution(execution)
-			if attempt < maxAttempts {
 
-				// Calculate next interval
-				nextInterval := time.Duration(float64(initialInterval) * math.Pow(backoffCoefficient, float64(attempt-1)))
-				if nextInterval > maxInterval {
-					nextInterval = maxInterval
-				}
-				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.entity.ID, executionID, attempt+1, maxAttempts, nextInterval)
+			// Calculate next interval
+			nextInterval := time.Duration(float64(initialInterval) * math.Pow(backoffCoefficient, float64(attempt-1)))
+			if nextInterval > maxInterval {
+				nextInterval = maxInterval
+			}
+
+			if attempt < maxAttempts || wi.entity.Resumable {
+				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.entity.ID, wi.executionID, attempt+1, maxAttempts, nextInterval)
 				time.Sleep(nextInterval)
 			} else {
-				// Max attempts reached
+				// Max attempts reached and not resumable
 				wi.entity.Status = StatusFailed
 				wi.orchestrator.db.UpdateEntity(wi.entity)
 				wi.fsm.Fire(TriggerFail)
+				log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt)
 				return
 			}
 		}
+
+		// Increment attempt only if less than maxAttempts
+		if attempt < maxAttempts {
+			attempt++
+		}
 	}
+	log.Printf("Workflow %s (Entity ID: %d) completed", wi.stepID, wi.entity.ID)
 }
 
 func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestOrchestratorWorkflow(t *testing.T) {
@@ -483,6 +484,69 @@ func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
 
 	if executed != 3 {
 		t.Fatalf("Expected 3 executions, got %d", executed)
+	}
+
+	t.Log("Orchestrator workflow completed successfully")
+}
+
+func TestOrchestratorWorkflowPauseResume(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	executed := 0
+
+	subWorkflow := func(ctx WorkflowContext) error {
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	workflow := func(ctx WorkflowContext) error {
+		executed++
+		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub2", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub3", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	o := NewOrchestrator(ctx, database, register)
+
+	future := o.Execute(workflow, nil)
+
+	go func() {
+		<-time.After(2 * time.Second)
+		o.Pause()
+		fmt.Println("Pausing orchestrator, 2s")
+		<-time.After(2 * time.Second)
+		fmt.Println("Resuming orchestrator")
+		o.Resume(future.WorkflowID())
+	}()
+
+	t.Log("Waiting for workflow to complete")
+	if err := future.Get(); err != nil {
+		if errors.Is(err, ErrPaused) {
+			fmt.Println("Workflow paused")
+		} else {
+			t.Fatal(err)
+		}
+	}
+	t.Log("Workflow future came back after pause")
+
+	<-time.After(2 * time.Second)
+
+	o.Wait() // you have to wait before checking the executed count (duuuh)
+
+	if executed != 2 {
+		t.Fatalf("Expected 2 executions, got %d", executed)
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
