@@ -173,7 +173,6 @@ func (o *Orchestrator) Pause() {
 	o.pausedMu.Lock()
 	defer o.pausedMu.Unlock()
 	o.paused = true
-	o.cancel()
 	log.Printf("Orchestrator paused")
 }
 
@@ -297,12 +296,12 @@ func (o *Orchestrator) addSideEffectInstance(sei *SideEffectInstance) {
 	o.sideEffectsMu.Unlock()
 }
 
-func (o *Orchestrator) Wait() {
+func (o *Orchestrator) Wait() error {
 	log.Printf("Orchestrator.Wait called")
 
 	if o.rootWf == nil {
 		log.Printf("No root workflow to execute")
-		return
+		return fmt.Errorf("no root workflow to execute")
 	}
 
 	lastLogTime := time.Now()
@@ -326,7 +325,7 @@ func (o *Orchestrator) Wait() {
 		case <-o.ctx.Done():
 			log.Printf("Context cancelled: %v", o.ctx.Err())
 			o.rootWf.fsm.Fire(TriggerFail)
-			return
+			return o.ctx.Err()
 		default:
 			// tbf i don't know yet which one
 			// time.Sleep(5 * time.Millisecond)
@@ -341,13 +340,13 @@ func (o *Orchestrator) Wait() {
 	entity := o.db.GetEntity(o.rootWf.entityID)
 	if entity == nil {
 		log.Printf("Could not find root workflow entity")
-		return
+		return fmt.Errorf("could not find root workflow entity")
 	}
 
 	latestExecution := o.db.GetLatestExecution(entity.ID)
 	if latestExecution == nil {
 		log.Printf("Could not find latest execution for root workflow")
-		return
+		return fmt.Errorf("could not find latest execution for root workflow")
 	}
 
 	switch entity.Status {
@@ -370,6 +369,7 @@ func (o *Orchestrator) Wait() {
 	default:
 		fmt.Printf("Root workflow ended with status: %s\n", entity.Status)
 	}
+	return nil
 }
 
 // Retry retries a failed root workflow by creating a new entity and execution.
@@ -488,4 +488,24 @@ func (o *Orchestrator) executeSaga(ctx WorkflowContext, stepID string, saga *Sag
 	sagaInstance.Start()
 
 	return sagaInfo
+}
+
+func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
+	entity := o.db.GetEntity(id)
+	if entity == nil {
+		return nil, fmt.Errorf("workflow entity not found with ID: %d", id)
+	}
+
+	run := o.db.GetRun(entity.RunID)
+
+	info := &WorkflowInfo{
+		EntityID: entity.ID,
+		Status:   entity.Status,
+		Run: &RunInfo{
+			RunID:  entity.RunID,
+			Status: run.Status,
+		},
+	}
+
+	return info, nil
 }

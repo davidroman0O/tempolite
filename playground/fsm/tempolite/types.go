@@ -190,6 +190,17 @@ type SideEffectExecutionData struct {
 	Outputs [][]byte `json:"outputs,omitempty"`
 }
 
+type RunInfo struct {
+	RunID  int
+	Status string
+}
+
+type WorkflowInfo struct {
+	EntityID int
+	Status   EntityStatus
+	Run      *RunInfo
+}
+
 // Serialization functions
 
 func convertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {

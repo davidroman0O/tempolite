@@ -39,6 +39,15 @@ func TestOrchestratorWorkflow(t *testing.T) {
 
 	t.Log("Orchestrator workflow completed successfully")
 	o.Wait()
+
+	info, err := o.GetWorkflow(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if info.Status != StatusCompleted {
+		t.Fatalf("Expected workflow to be completed, got %s", info.Status)
+	}
 }
 
 func TestOrchestratorSubWorkflow(t *testing.T) {
@@ -580,11 +589,22 @@ func TestOrchestratorWorkflowPauseResume(t *testing.T) {
 
 	<-time.After(2 * time.Second)
 
-	o.Wait() // you have to wait before checking the executed count (duuuh)
+	if err := o.Wait(); err != nil {
+		t.Fatal(err)
+	} // you have to wait before checking the executed count (duuuh)
 
 	if executed != 2 {
 		t.Fatalf("Expected 2 executions, got %d", executed)
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
+
+	info, err := o.GetWorkflow(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Status != StatusCompleted {
+		t.Fatalf("Expected workflow to be completed, got %s", info.Status)
+	}
+	fmt.Println("Workflow info", info)
 }
