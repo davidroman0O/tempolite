@@ -28,7 +28,7 @@ func (f *DatabaseFuture) setEntityID(entityID int) {
 	f.entityID = entityID
 }
 
-func (f *DatabaseFuture) setErr(err error) {
+func (f *DatabaseFuture) setError(err error) {
 	f.err = err
 }
 

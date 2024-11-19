@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -75,6 +76,7 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 	queue := &Queue{
 		Name: config.Name,
 	}
+
 	queue = t.database.AddQueue(queue)
 
 	// Create queue manager
@@ -110,29 +112,24 @@ func (t *Tempolite) ExecuteWorkflow(queueName string, workflowFunc interface{}, 
 
 	if !exists {
 		f := NewDatabaseFuture(t.ctx, t.database)
-		f.setErr(fmt.Errorf("queue %s does not exist", queueName))
+		f.setError(fmt.Errorf("queue %s does not exist", queueName))
 		return f
 	}
 
-	// Create orchestrator instance for entity creation
-	orchestrator := NewOrchestrator(t.ctx, t.database, t.registry)
-
-	// Prepare workflow entity
-	entity, err := orchestrator.prepareWorkflowEntity(workflowFunc, options, args)
-	if err != nil {
-		f := NewDatabaseFuture(t.ctx, t.database)
-		f.setErr(err)
-		return f
-	}
-
-	// Create database-watching future
 	future := NewDatabaseFuture(t.ctx, t.database)
-	future.setEntityID(entity.ID)
 
-	if err := qm.ExecuteDatabaseWorkflow(entity.ID); err != nil {
-		future.setErr(err)
+	id, err := qm.CreateWorkflow(workflowFunc, options, args...)
+	if err != nil {
+		future.setError(err)
 		return future
 	}
+
+	if err := qm.ExecuteDatabaseWorkflow(id); err != nil {
+		future.setError(err)
+		return future
+	}
+
+	future.setEntityID(id)
 
 	return future
 }
@@ -174,20 +171,34 @@ func (t *Tempolite) GetQueueInfo(queueName string) (*QueueInfo, error) {
 }
 
 func (t *Tempolite) Wait() error {
+	var err error
 	shutdown := errgroup.Group{}
 
 	for _, qm := range t.queues {
 		qm := qm
 		shutdown.Go(func() error {
-			return qm.Wait()
+			fmt.Println("Waiting for queue", qm.name)
+			defer fmt.Println("Queue", qm.name, "shutdown complete")
+			// Ignore context.Canceled during wait
+			if err := qm.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+				return err
+			}
+			return nil
 		})
 	}
 
-	if err := shutdown.Wait(); err != nil {
+	if err = shutdown.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return errors.Join(err, fmt.Errorf("failed to wait for queues"))
 	}
+	fmt.Println("All queues shutdown complete")
 
-	<-t.ctx.Done()
+	select {
+	case <-t.ctx.Done():
+		if !errors.Is(t.ctx.Err(), context.Canceled) {
+			return t.ctx.Err()
+		}
+	default:
+	}
 
 	return nil
 }
@@ -196,19 +207,55 @@ func (t *Tempolite) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.cancel()
-
+	// Start graceful shutdown
 	var errs []error
 	for name, qm := range t.queues {
 		if err := qm.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close queue %s: %w", name, err))
+			// Only append non-context-canceled errors
+			if !errors.Is(err, context.Canceled) {
+				errs = append(errs, fmt.Errorf("failed to close queue %s: %w", name, err))
+			}
 		}
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("errors closing queues: %v", errs)
+	// Set up grace period in background
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		shutdown := errgroup.Group{}
+		// wait for them to close
+		for _, qm := range t.queues {
+			qm := qm
+			shutdown.Go(func() error {
+				fmt.Println("Waiting for queue", qm.name)
+				defer fmt.Println("Queue", qm.name, "shutdown complete")
+				err := qm.Wait()
+				if err != nil && !errors.Is(err, context.Canceled) {
+					return err
+				}
+				return nil
+			})
+		}
+
+		if err := shutdown.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+			errs = append(errs, fmt.Errorf("failed to wait for queues: %w", err))
+		}
+	}()
+
+	// Wait for either grace period or clean shutdown
+	select {
+	case <-done:
+		fmt.Println("Clean shutdown completed")
+	case <-time.After(5 * time.Second):
+		fmt.Println("Grace period expired, forcing shutdown")
+		t.cancel()
 	}
 
+	// Only return error if we have non-context-canceled errors
+	if len(errs) > 0 {
+		return fmt.Errorf("errors during shutdown: %v", errs)
+	}
 	return nil
 }
 

@@ -256,7 +256,10 @@ func (qm *QueueManager) GetInfo() *QueueInfo {
 }
 
 func (qm *QueueManager) Close() error {
-	qm.cancel()
+	go func() {
+		<-time.After(5 * time.Second) // grace period
+		qm.cancel()
+	}()
 	return qm.pool.Close()
 }
 
