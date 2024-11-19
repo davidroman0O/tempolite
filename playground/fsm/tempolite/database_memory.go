@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -160,6 +161,27 @@ func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parent
 		}
 	}
 	return nil
+}
+
+func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) []*Entity {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Entity
+	for _, entity := range db.entities {
+		if entity.Type == EntityTypeWorkflow &&
+			entity.Status == StatusPending &&
+			entity.QueueID == queueID {
+			result = append(result, entity)
+		}
+	}
+
+	// Sort by creation time
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+
+	return result
 }
 
 // Execution methods

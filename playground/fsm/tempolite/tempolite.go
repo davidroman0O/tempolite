@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davidroman0O/retrypool"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -83,6 +84,8 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 	manager := newQueueManager(t.ctx, config.Name, config.WorkerCount, t.registry, t.database)
 	t.queues[config.Name] = manager
 
+	go manager.Start() // starts the pulling
+
 	return nil
 }
 
@@ -100,11 +103,17 @@ func (t *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 
 // Workflow executes a workflow on the default queue
 func (t *Tempolite) Workflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
-	return t.ExecuteWorkflow(t.defaultQ, workflowFunc, options, args...)
+	return t.executeWorkflow(t.defaultQ, workflowFunc, options, args...)
 }
 
-// ExecuteWorkflow executes a workflow on a specific queue
-func (t *Tempolite) ExecuteWorkflow(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
+// executeWorkflow executes a workflow on a specific queue
+func (t *Tempolite) executeWorkflow(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
+
+	// probably asked to execute on another queue
+	if options != nil && options.Queue != "" {
+		queueName = options.Queue
+	}
+
 	// Verify queue exists
 	t.mu.RLock()
 	qm, exists := t.queues[queueName]
@@ -124,7 +133,9 @@ func (t *Tempolite) ExecuteWorkflow(queueName string, workflowFunc interface{}, 
 		return future
 	}
 
-	if err := qm.ExecuteDatabaseWorkflow(id); err != nil {
+	processed := retrypool.NewProcessedNotification()
+
+	if err := qm.ExecuteDatabaseWorkflow(id, processed); err != nil {
 		future.setError(err)
 		return future
 	}

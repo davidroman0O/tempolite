@@ -25,6 +25,7 @@ type WorkflowExecutionData struct {
 
 // WorkflowOptions provides options for workflows, including retry policies and version overrides.
 type WorkflowOptions struct {
+	Queue            string
 	RetryPolicy      *RetryPolicy
 	VersionOverrides map[string]int // Map of changeID to forced version
 }
@@ -187,6 +188,41 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	// Create RetryState
 	retryState := &RetryState{Attempts: 0}
+
+	// Check for queue routing
+	if options != nil && options.Queue != "" {
+		// Find or get queue by name
+		queue := ctx.orchestrator.db.GetQueueByName(options.Queue)
+		if queue == nil {
+			err := fmt.Errorf("queue %s not found", options.Queue)
+			future.setError(err)
+			return future
+		}
+
+		// Create a new Entity with queue assignment
+		entity = &Entity{
+			StepID:       stepID,
+			HandlerName:  handler.HandlerName,
+			Status:       StatusPending,
+			Type:         EntityTypeWorkflow,
+			RunID:        ctx.orchestrator.runID,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+			WorkflowData: workflowData,
+			RetryPolicy:  internalRetryPolicy,
+			RetryState:   retryState,
+			HandlerInfo:  &handler,
+			Paused:       false,
+			Resumable:    false,
+			QueueID:      queue.ID,
+			Queue:        queue,
+		}
+
+		// Add the entity to the database
+		entity = ctx.orchestrator.db.AddEntity(entity)
+		future.setEntityID(entity.ID)
+		return future
+	}
 
 	// Create a new Entity without ID (database assigns it)
 	entity = &Entity{

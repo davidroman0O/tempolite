@@ -47,11 +47,14 @@ type QueueInfo struct {
 
 // QueueWorker represents a worker in a queue
 type QueueWorker struct {
+	queueName    string
 	orchestrator *Orchestrator
 	ctx          context.Context
 }
 
 func (w *QueueWorker) Run(ctx context.Context, task *QueueTask) error {
+
+	fmt.Println("\t workflow started on queue", w.queueName)
 
 	// Now execute the workflow using our existing orchestrator
 	ftre, err := w.orchestrator.ExecuteWithEntity(task.entityID)
@@ -98,6 +101,7 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 	}
 
 	qm.pool = qm.createWorkerPool(workerCount)
+
 	return qm
 }
 
@@ -107,6 +111,7 @@ func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] 
 		workers[i] = &QueueWorker{
 			orchestrator: NewOrchestrator(qm.ctx, qm.database, qm.registry),
 			ctx:          qm.ctx,
+			queueName:    qm.name,
 		}
 	}
 	return retrypool.New(qm.ctx, workers, []retrypool.Option[*QueueTask]{
@@ -114,6 +119,77 @@ func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] 
 		retrypool.WithLogLevel[*QueueTask](logs.LevelDebug),
 		retrypool.WithOnTaskFailure[*QueueTask](qm.handleTaskFailure),
 	}...)
+}
+
+// Starts the automatic queue pulling process
+func (qm *QueueManager) Start() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-qm.ctx.Done():
+			return
+		case <-ticker.C:
+			qm.checkAndProcessPending()
+		}
+	}
+}
+
+func (qm *QueueManager) checkAndProcessPending() {
+	// Get current queue state
+	info := qm.GetInfo()
+	availableSlots := info.WorkerCount - info.ProcessingTasks
+
+	if availableSlots <= 0 {
+		return
+	}
+
+	// Get queue first
+	queue := qm.database.GetQueueByName(qm.name)
+	if queue == nil {
+		return
+	}
+
+	// Find pending workflows for this queue
+	pendingEntities := qm.database.FindPendingWorkflowsByQueue(queue.ID)
+	if len(pendingEntities) == 0 {
+		return
+	}
+
+	for i := 0; i < min(availableSlots, len(pendingEntities)); i++ {
+		entity := pendingEntities[i]
+
+		// Recheck entity state from database
+		freshEntity := qm.database.GetEntity(entity.ID)
+		if freshEntity == nil || freshEntity.Status != StatusPending {
+			continue
+		}
+
+		// Update status atomically
+		freshEntity.Status = StatusQueued
+		qm.database.UpdateEntity(freshEntity)
+
+		// Only use BeingProcessed notification
+		processed := retrypool.NewProcessedNotification()
+
+		if err := qm.ExecuteDatabaseWorkflow(freshEntity.ID, processed); err != nil {
+			log.Printf("Failed to execute workflow %d on queue %s: %v",
+				freshEntity.ID, qm.name, err)
+			// Reset status if execution failed
+			freshEntity.Status = StatusPending
+			qm.database.UpdateEntity(freshEntity)
+			continue
+		}
+
+		// Wait for processing to start before continuing
+		select {
+		case <-processed:
+			// Processing started
+		case <-qm.ctx.Done():
+			return
+		}
+	}
 }
 
 func (qm *QueueManager) ExecuteRuntimeWorkflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
@@ -165,7 +241,7 @@ func (am *QueueManager) CreateWorkflow(workflowFunc interface{}, options *Workfl
 	return entity.ID, nil
 }
 
-func (qm *QueueManager) ExecuteDatabaseWorkflow(id int) error {
+func (qm *QueueManager) ExecuteDatabaseWorkflow(id int, processed chan struct{}) error {
 	// Verify entity exists and is ready for execution
 	entity := qm.database.GetEntity(id)
 	if entity == nil {
@@ -197,7 +273,7 @@ func (qm *QueueManager) ExecuteDatabaseWorkflow(id int) error {
 	}
 
 	// Submit to worker pool
-	if err := qm.pool.Submit(task); err != nil {
+	if err := qm.pool.Submit(task, retrypool.WithBeingProcessed[*QueueTask](processed)); err != nil {
 		return fmt.Errorf("failed to submit entity %d to queue %s: %w", id, qm.name, err)
 	}
 

@@ -3,6 +3,8 @@ package tempolite
 import (
 	"context"
 	"testing"
+
+	"github.com/davidroman0O/retrypool"
 )
 
 func TestQueue(t *testing.T) {
@@ -64,9 +66,14 @@ func TestQueueWorkflowDb(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := qm.ExecuteDatabaseWorkflow(id); err != nil {
+	processed := retrypool.NewProcessedNotification()
+	if err := qm.ExecuteDatabaseWorkflow(id, processed); err != nil {
 		t.Fatal(err)
 	}
+
+	t.Log("Waiting for being processed")
+	<-processed
+	t.Log("Processed")
 
 	future := NewDatabaseFuture(ctx, database)
 	future.setEntityID(id)
@@ -144,9 +151,14 @@ func TestQueueWorkflowDbActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := qm.ExecuteDatabaseWorkflow(id); err != nil {
+	processed := retrypool.NewProcessedNotification()
+	if err := qm.ExecuteDatabaseWorkflow(id, processed); err != nil {
 		t.Fatal(err)
 	}
+
+	t.Log("Waiting for being processed")
+	<-processed
+	t.Log("Processed")
 
 	future := NewDatabaseFuture(ctx, database)
 	future.setEntityID(id)

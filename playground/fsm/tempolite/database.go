@@ -22,6 +22,7 @@ type Database interface {
 	UpdateEntity(entity *Entity)
 	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) *Entity
 	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) *Entity
+	FindPendingWorkflowsByQueue(queueID int) []*Entity
 
 	// Execution methods
 	AddExecution(execution *Execution) *Execution

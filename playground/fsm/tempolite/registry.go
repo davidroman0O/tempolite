@@ -41,6 +41,7 @@ func NewRegistry() *Registry {
 	}
 }
 
+// TODO: add description schema so later features
 func (r *Registry) RegisterWorkflow(workflowFunc interface{}) (HandlerInfo, error) {
 	funcName := getFunctionName(workflowFunc)
 	r.mu.Lock()
