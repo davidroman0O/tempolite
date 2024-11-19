@@ -190,7 +190,7 @@ func main() {
 	defer cancel()
 
 	// Initialize engine with multiple queues
-	engine := tempolite.New(
+	engine, _ := tempolite.New(
 		ctx,
 		tempolite.NewDefaultDatabase(),
 		tempolite.WithQueue(tempolite.QueueConfig{
@@ -219,11 +219,11 @@ func main() {
 	// Test scenario 1: Normal execution across queues
 	log.Printf("=== Scenario 1: Normal execution ===")
 	queues := []string{"default", "high-priority", "low-priority"}
-	futures := make([]*tempolite.Future, 0)
+	futures := make([]*tempolite.RuntimeFuture, 0)
 
 	for i := 0; i < 2; i++ {
 		for _, queueName := range queues {
-			var future *tempolite.Future
+			var future *tempolite.RuntimeFuture
 			if queueName == "default" {
 				future = engine.Workflow(ProcessOrderWorkflow, nil, i+1)
 			} else {

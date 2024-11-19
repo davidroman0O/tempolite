@@ -42,15 +42,22 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orch
 	return o
 }
 
-func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+// prepareWorkflowEntity creates the necessary database records for a new workflow
+func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*Entity, error) {
+	// Register workflow if needed
 	handler, err := o.registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
-		log.Printf("Error registering workflow: %v", err)
-		return NewFuture(0)
+		return nil, fmt.Errorf("failed to register workflow: %w", err)
 	}
 
+	// Convert inputs for storage
+	inputBytes, err := convertInputsForSerialization(args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize inputs: %w", err)
+	}
+
+	// Create or get Run
 	if o.runID == 0 {
-		// Create a new Run
 		run := &Run{
 			Status:    string(StatusPending),
 			CreatedAt: time.Now(),
@@ -60,49 +67,19 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 		o.runID = run.ID
 	}
 
-	// Update Run status to Running
-	run := o.db.GetRun(o.runID)
-	if run != nil {
-		run.Status = string(StatusRunning)
-		run.UpdatedAt = time.Now()
-		o.db.UpdateRun(run)
-	}
-
-	// Convert inputs to [][]byte
-	inputBytes, err := convertInputsForSerialization(args)
-	if err != nil {
-		log.Printf("Error converting inputs: %v", err)
-		return NewFuture(0)
-	}
-
-	// Convert API RetryPolicy to internal retry policy
-	var internalRetryPolicy *retryPolicyInternal
-
-	// Handle options and defaults
+	// Convert retry policy if provided
+	var retryPolicy *retryPolicyInternal
 	if options != nil && options.RetryPolicy != nil {
 		rp := options.RetryPolicy
-		// Fill default values if zero
-		if rp.MaxAttempts == 0 {
-			rp.MaxAttempts = 1
-		}
-		if rp.InitialInterval == 0 {
-			rp.InitialInterval = time.Second
-		}
-		if rp.BackoffCoefficient == 0 {
-			rp.BackoffCoefficient = 2.0
-		}
-		if rp.MaxInterval == 0 {
-			rp.MaxInterval = 5 * time.Minute
-		}
-		internalRetryPolicy = &retryPolicyInternal{
+		retryPolicy = &retryPolicyInternal{
 			MaxAttempts:        rp.MaxAttempts,
 			InitialInterval:    rp.InitialInterval.Nanoseconds(),
 			BackoffCoefficient: rp.BackoffCoefficient,
 			MaxInterval:        rp.MaxInterval.Nanoseconds(),
 		}
 	} else {
-		// Default RetryPolicy
-		internalRetryPolicy = &retryPolicyInternal{
+		// Default retry policy
+		retryPolicy = &retryPolicyInternal{
 			MaxAttempts:        1,
 			InitialInterval:    time.Second.Nanoseconds(),
 			BackoffCoefficient: 2.0,
@@ -110,61 +87,123 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 		}
 	}
 
-	// Create WorkflowData
-	workflowData := &WorkflowData{
-		Duration:  "",
-		Paused:    false,
-		Resumable: false,
-		Input:     inputBytes,
-		Attempt:   1,
-	}
-
-	// Create RetryState
-	retryState := &RetryState{Attempts: 0}
-
-	// Create a new Entity without ID (database assigns it)
+	// Create Entity
 	entity := &Entity{
-		StepID:       "root",
-		HandlerName:  handler.HandlerName,
-		Status:       StatusPending,
-		Type:         EntityTypeWorkflow,
-		RunID:        o.runID,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		WorkflowData: workflowData,
-		RetryPolicy:  internalRetryPolicy,
-		RetryState:   retryState,
-		HandlerInfo:  &handler,
-		Paused:       false,
-		Resumable:    false,
+		StepID:      "root",
+		HandlerName: handler.HandlerName,
+		Status:      StatusPending,
+		Type:        EntityTypeWorkflow,
+		RunID:       o.runID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+		WorkflowData: &WorkflowData{
+			Input:     inputBytes,
+			Attempt:   1,
+			Paused:    false,
+			Resumable: false,
+		},
+		HandlerInfo: &handler,
+		RetryState: &RetryState{
+			Attempts: 0,
+		},
+		RetryPolicy: retryPolicy,
 	}
-	// Add the entity to the database, which assigns the ID
+
+	// Add entity to database
 	entity = o.db.AddEntity(entity)
 
-	// Create a new WorkflowInstance
-	instance := &WorkflowInstance{
-		stepID:            "root",
-		handler:           handler,
-		input:             args,
-		ctx:               o.ctx,
-		orchestrator:      o,
-		workflowID:        entity.ID,
-		options:           options,
-		entity:            entity,
-		entityID:          entity.ID, // Store entity ID
-		parentExecutionID: 0,         // Root has no parent execution
-		parentEntityID:    0,         // Root has no parent entity
-		parentStepID:      "",        // Root has no parent step
+	// // Create initial execution
+	// execution := &Execution{
+	// 	EntityID:  entity.ID,
+	// 	Status:    ExecutionStatusPending,
+	// 	Attempt:   1,
+	// 	StartedAt: time.Now(),
+	// 	CreatedAt: time.Now(),
+	// 	UpdatedAt: time.Now(),
+	// 	Entity:    entity,
+	// }
+	// o.db.AddExecution(execution)
+
+	return entity, nil
+}
+
+// ExecuteWithEntity starts a workflow using an existing entity ID
+func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
+	// Get the entity and verify it exists
+	entity := o.db.GetEntity(entityID)
+	if entity == nil {
+		return nil, fmt.Errorf("entity not found: %d", entityID)
 	}
 
-	future := NewFuture(entity.ID)
+	// Verify it's a workflow
+	if entity.Type != EntityTypeWorkflow {
+		return nil, fmt.Errorf("entity %d is not a workflow", entityID)
+	}
+
+	// Get handler info
+	handler := entity.HandlerInfo
+	if handler == nil {
+		return nil, fmt.Errorf("no handler info for entity %d", entityID)
+	}
+
+	// Convert inputs
+	inputs, err := convertInputsFromSerialization(*handler, entity.WorkflowData.Input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert inputs: %w", err)
+	}
+
+	// Create workflow instance
+	instance := &WorkflowInstance{
+		stepID:       entity.StepID,
+		handler:      *handler,
+		input:        inputs,
+		ctx:          o.ctx,
+		orchestrator: o,
+		workflowID:   entity.ID,
+		entity:       entity,
+		entityID:     entity.ID,
+	}
+
+	// If this is a sub-workflow, set parent info from hierarchies
+	hierarchies := o.db.GetHierarchiesByChildEntity(entityID)
+	if len(hierarchies) > 0 {
+		h := hierarchies[0]
+		instance.parentExecutionID = h.ParentExecutionID
+		instance.parentEntityID = h.ParentEntityID
+		instance.parentStepID = h.ParentStepID
+	}
+
+	// Create Future and start instance
+	future := NewRuntimeFuture()
+	future.setEntityID(entity.ID)
 	instance.future = future
 
-	// Store the root workflow instance
+	// very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
 
-	// Start the instance
+	o.addWorkflowInstance(instance)
 	instance.Start()
+
+	return future, nil
+}
+
+func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
+	// Create entity and related records
+	entity, err := o.prepareWorkflowEntity(workflowFunc, options, args)
+	if err != nil {
+		future := NewRuntimeFuture()
+		future.setError(err)
+		return future
+	}
+
+	// Execute using the entity
+	future, err := o.ExecuteWithEntity(entity.ID)
+	if err != nil {
+		f := NewRuntimeFuture()
+		f.setEntityID(entity.ID)
+		f.setError(err)
+		return f
+	}
 
 	return future
 }
@@ -182,9 +221,11 @@ func (o *Orchestrator) IsPaused() bool {
 	return o.paused
 }
 
-func (o *Orchestrator) Resume(entityID int) *Future {
+func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 
 	// Resuming isn't retrying! We need to create a new execution to the entity while avoiding increasing the attempt count.
+
+	future := NewRuntimeFuture()
 
 	o.pausedMu.Lock()
 	o.paused = false
@@ -199,7 +240,8 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	entity := o.db.GetEntity(entityID)
 	if entity == nil {
 		log.Printf("No workflow found with ID: %d", entityID)
-		return NewFuture(0)
+		future.setError(fmt.Errorf("no workflow found with ID: %d", entityID))
+		return future
 	}
 
 	// Set the runID from the entity
@@ -231,7 +273,8 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	handlerInfo := entity.HandlerInfo
 	if handlerInfo == nil {
 		log.Printf("No handler info found for workflow: %s", entity.HandlerName)
-		return NewFuture(0)
+		future.setError(fmt.Errorf("no handler info found for workflow: %s", entity.HandlerName))
+		return future
 	}
 	handler := *handlerInfo
 
@@ -239,7 +282,8 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 	inputs, err := convertInputsFromSerialization(handler, entity.WorkflowData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
-		return NewFuture(0)
+		future.setError(err)
+		return future
 	}
 
 	// Create a new WorkflowInstance with parent info
@@ -259,7 +303,7 @@ func (o *Orchestrator) Resume(entityID int) *Future {
 		parentStepID:      entity.StepID,
 	}
 
-	future := NewFuture(entity.ID)
+	future.setEntityID(entity.ID)
 	instance.future = future
 
 	// Store the root workflow instance
@@ -373,12 +417,17 @@ func (o *Orchestrator) Wait() error {
 }
 
 // Retry retries a failed root workflow by creating a new entity and execution.
-func (o *Orchestrator) Retry(workflowID int) *Future {
+func (o *Orchestrator) Retry(workflowID int) *RuntimeFuture {
+
+	future := NewRuntimeFuture()
+	future.setEntityID(workflowID)
+
 	// Retrieve the workflow entity
 	entity := o.db.GetEntity(workflowID)
 	if entity == nil {
 		log.Printf("No workflow found with ID: %d", workflowID)
-		return NewFuture(0)
+		future.setError(fmt.Errorf("no workflow found with ID: %d", workflowID))
+		return future
 	}
 
 	// Set the runID from the entity
@@ -388,7 +437,8 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 	inputs, err := convertInputsFromSerialization(*entity.HandlerInfo, entity.WorkflowData.Input)
 	if err != nil {
 		log.Printf("Error converting inputs from serialization: %v", err)
-		return NewFuture(0)
+		future.setError(err)
+		return future
 	}
 
 	// Create a new WorkflowData
@@ -437,7 +487,6 @@ func (o *Orchestrator) Retry(workflowID int) *Future {
 		parentStepID:      "",
 	}
 
-	future := NewFuture(newEntity.ID)
 	instance.future = future
 
 	// Store the root workflow instance
@@ -508,4 +557,51 @@ func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
 	}
 
 	return info, nil
+}
+
+// WaitForContinuations waits for all continuations of a workflow to complete
+// In orchestrator.go
+func (o *Orchestrator) WaitForContinuations(originalID int) error {
+	log.Printf("Waiting for all continuations starting from workflow %d", originalID)
+
+	currentID := originalID
+
+	for {
+		// Wait for current workflow
+		state := o.rootWf.fsm.MustState()
+		for state != StateCompleted && state != StateFailed {
+			select {
+			case <-o.ctx.Done():
+				return o.ctx.Err()
+			default:
+				runtime.Gosched()
+			}
+			state = o.rootWf.fsm.MustState()
+		}
+
+		// Check if this workflow initiated a continuation
+		entity := o.db.GetEntity(currentID)
+		if entity == nil {
+			return fmt.Errorf("entity not found: %d", currentID)
+		}
+
+		latestExecution := o.db.GetLatestExecution(currentID)
+		if latestExecution == nil {
+			return fmt.Errorf("no execution found for entity: %d", currentID)
+		}
+
+		if latestExecution.Status == ExecutionStatusCompleted {
+			// Look for any child workflow that was created via ContinueAsNew
+			children := o.db.GetChildEntityByParentEntityIDAndStepIDAndType(currentID, "root", EntityTypeWorkflow)
+			if children == nil {
+				// No more continuations, we're done
+				log.Printf("No more continuations found after workflow %d", currentID)
+				return nil
+			}
+			currentID = children.ID
+			log.Printf("Found continuation: workflow %d", currentID)
+		} else if latestExecution.Status == ExecutionStatusFailed {
+			return fmt.Errorf("workflow %d failed", currentID)
+		}
+	}
 }

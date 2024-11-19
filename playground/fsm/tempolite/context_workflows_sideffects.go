@@ -9,16 +9,18 @@ import (
 )
 
 // SideEffect executes a side effect function
-func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) *Future {
+func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) *RuntimeFuture {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
-		future := NewFuture(0)
+		future := NewRuntimeFuture()
+		future.setEntityID(ctx.workflowID)
 		future.setError(err)
 		return future
 	}
 
 	log.Printf("WorkflowContext.SideEffect called with stepID: %s", stepID)
-	future := NewFuture(0)
+	future := NewRuntimeFuture()
+	future.setEntityID(ctx.workflowID)
 
 	// Get the return type of the sideEffectFunc
 	sideEffectFuncType := reflect.TypeOf(sideEffectFunc)

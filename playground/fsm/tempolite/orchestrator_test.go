@@ -526,6 +526,12 @@ func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The original future will ends because of the ContinueAsNew, it will be a new workflow, the current future won't follow it
+	// So we need to wait for all continuations
+	if err := o.WaitForContinuations(future.WorkflowID()); err != nil {
+		t.Fatal(err)
+	}
+
 	o.Wait() // you have to wait before checking the executed count (duuuh)
 
 	if executed != 3 {

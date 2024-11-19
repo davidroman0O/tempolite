@@ -8,16 +8,16 @@ import (
 )
 
 // Activity creates an activity.
-func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *Future {
+func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *RuntimeFuture {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
-		future := NewFuture(0)
+		future := NewRuntimeFuture()
 		future.setError(err)
 		return future
 	}
 
 	log.Printf("WorkflowContext.Activity called with stepID: %s, activityFunc: %v, args: %v", stepID, getFunctionName(activityFunc), args)
-	future := NewFuture(0)
+	future := NewRuntimeFuture()
 
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeActivity)
@@ -26,6 +26,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		if handlerInfo == nil {
 			err := fmt.Errorf("handler not found for activity: %s", entity.HandlerName)
 			log.Printf("Error: %v", err)
+			future.setEntityID(entity.ID)
 			future.setError(err)
 			return future
 		}
@@ -35,6 +36,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Outputs)
 			if err != nil {
 				log.Printf("Error deserializing outputs: %v", err)
+				future.setEntityID(entity.ID)
 				future.setError(err)
 				return future
 			}
@@ -43,6 +45,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		}
 		if latestExecution != nil && latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
 			log.Printf("Activity %s has failed execution with error: %s", stepID, latestExecution.Error)
+			future.setEntityID(entity.ID)
 			future.setError(errors.New(latestExecution.Error))
 			return future
 		}
@@ -131,6 +134,8 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	// Add the entity to the database, which assigns the ID
 	entity = ctx.orchestrator.db.AddEntity(entity)
 	future.workflowID = entity.ID
+
+	future.setEntityID(entity.ID)
 
 	// Prepare to create the activity instance
 	activityInstance := &ActivityInstance{

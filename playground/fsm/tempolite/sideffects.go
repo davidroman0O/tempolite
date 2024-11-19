@@ -19,7 +19,7 @@ type SideEffectInstance struct {
 	results           []interface{}
 	err               error
 	fsm               *stateless.StateMachine
-	future            *Future
+	future            *RuntimeFuture
 	ctx               context.Context
 	orchestrator      *Orchestrator
 	workflowID        int

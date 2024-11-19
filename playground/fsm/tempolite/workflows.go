@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/qmuntal/stateless"
@@ -20,7 +21,7 @@ type WorkflowInstance struct {
 	results           []interface{}
 	err               error
 	fsm               *stateless.StateMachine
-	future            *Future
+	future            *RuntimeFuture
 	ctx               context.Context
 	orchestrator      *Orchestrator
 	workflowID        int
@@ -256,6 +257,12 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 	defer func() {
 		if r := recover(); r != nil {
+			// Capture the stack trace
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+			fmt.Println(stackTrace)
+
 			log.Printf("Panic in workflow: %v", r)
 			wi.err = fmt.Errorf("panic: %v", r)
 		}
@@ -468,6 +475,14 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 				run.UpdatedAt = time.Now()
 				wi.orchestrator.db.UpdateRun(run)
 			}
+			wi.entity.Status = StatusCompleted
+			wi.entity.UpdatedAt = time.Now()
+			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.execution.Status = ExecutionStatusCompleted
+			wi.execution.UpdatedAt = time.Now()
+			wi.orchestrator.db.UpdateExecution(wi.execution)
+			fmt.Println("Entity ", wi.entity.ID, " completed")
+			fmt.Println("Execution ", wi.execution.ID, " completed")
 		}
 	}
 	return nil

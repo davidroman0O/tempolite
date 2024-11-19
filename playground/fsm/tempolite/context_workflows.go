@@ -81,16 +81,18 @@ func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupporte
 }
 
 // Workflow creates a sub-workflow.
-func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
-		future := NewFuture(ctx.workflowID)
+		future := NewRuntimeFuture()
+		future.setEntityID(ctx.workflowID)
 		future.setError(err)
 		return future
 	}
 
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
-	future := NewFuture(ctx.workflowID)
+	future := NewRuntimeFuture()
+	future.setEntityID(ctx.workflowID)
 
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeWorkflow)

@@ -3,8 +3,6 @@ package tempolite
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"log"
 	"reflect"
 	"time"
 
@@ -291,86 +289,6 @@ func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutp
 	}
 
 	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
-}
-
-// Future represents an asynchronous result.
-type Future struct {
-	results    []interface{}
-	err        error
-	done       chan struct{}
-	workflowID int
-}
-
-func (f *Future) WorkflowID() int {
-	return f.workflowID
-}
-
-func NewFuture(workflowID int) *Future {
-	return &Future{
-		done:       make(chan struct{}),
-		workflowID: workflowID,
-	}
-}
-
-func (f *Future) Get(out ...interface{}) error {
-	<-f.done
-	if f.err != nil {
-		return f.err
-	}
-
-	if len(out) == 0 {
-		return nil
-	}
-
-	// Handle the case where we have a single result
-	if len(f.results) == 1 && len(out) == 1 {
-		val := reflect.ValueOf(out[0])
-		if val.Kind() != reflect.Ptr {
-			return fmt.Errorf("output parameter must be a pointer")
-		}
-		val = val.Elem()
-
-		result := reflect.ValueOf(f.results[0])
-		if !result.Type().AssignableTo(val.Type()) {
-			return fmt.Errorf("cannot assign type %v to %v", result.Type(), val.Type())
-		}
-
-		val.Set(result)
-		return nil
-	}
-
-	if len(out) > len(f.results) {
-		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results))
-	}
-
-	for i := 0; i < len(out); i++ {
-		val := reflect.ValueOf(out[i])
-		if val.Kind() != reflect.Ptr {
-			return fmt.Errorf("output parameter %d must be a pointer", i)
-		}
-		val = val.Elem()
-
-		result := reflect.ValueOf(f.results[i])
-		if !result.Type().AssignableTo(val.Type()) {
-			return fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i)
-		}
-
-		val.Set(result)
-	}
-
-	return nil
-}
-
-func (f *Future) setResult(results []interface{}) {
-	log.Printf("Future.setResult called with results: %v", results)
-	f.results = results
-	close(f.done)
-}
-
-func (f *Future) setError(err error) {
-	log.Printf("Future.setError called with error: %v", err)
-	f.err = err
-	close(f.done)
 }
 
 // ActivityOptions provides options for activities, including retry policies.

@@ -29,7 +29,7 @@ type QueueConfig struct {
 // TempoliteOption is a function type for configuring Tempolite
 type TempoliteOption func(*Tempolite)
 
-func New(ctx context.Context, db Database, options ...TempoliteOption) *Tempolite {
+func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Tempolite{
 		registry: NewRegistry(),
@@ -53,12 +53,12 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) *Tempolit
 			WorkerCount: 1,
 		}); err != nil {
 			t.mu.Unlock()
-			panic(fmt.Sprintf("failed to create default queue: %v", err))
+			return nil, err
 		}
 	}
 	t.mu.Unlock()
 
-	return t
+	return t, nil
 }
 
 // createQueueLocked creates a queue while holding the lock
@@ -97,23 +97,44 @@ func (t *Tempolite) RegisterWorkflow(workflowFunc interface{}) error {
 }
 
 // Workflow executes a workflow on the default queue
-func (t *Tempolite) Workflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+func (t *Tempolite) Workflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
 	return t.ExecuteWorkflow(t.defaultQ, workflowFunc, options, args...)
 }
 
 // ExecuteWorkflow executes a workflow on a specific queue
-func (t *Tempolite) ExecuteWorkflow(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *Future {
+func (t *Tempolite) ExecuteWorkflow(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
+	// Verify queue exists
 	t.mu.RLock()
 	qm, exists := t.queues[queueName]
 	t.mu.RUnlock()
 
 	if !exists {
-		f := NewFuture(0)
-		f.setError(fmt.Errorf("queue %s does not exist", queueName))
+		f := NewDatabaseFuture(t.ctx, t.database)
+		f.setErr(fmt.Errorf("queue %s does not exist", queueName))
 		return f
 	}
 
-	return qm.ExecuteWorkflow(workflowFunc, options, args...)
+	// Create orchestrator instance for entity creation
+	orchestrator := NewOrchestrator(t.ctx, t.database, t.registry)
+
+	// Prepare workflow entity
+	entity, err := orchestrator.prepareWorkflowEntity(workflowFunc, options, args)
+	if err != nil {
+		f := NewDatabaseFuture(t.ctx, t.database)
+		f.setErr(err)
+		return f
+	}
+
+	// Create database-watching future
+	future := NewDatabaseFuture(t.ctx, t.database)
+	future.setEntityID(entity.ID)
+
+	if err := qm.ExecuteDatabaseWorkflow(entity.ID); err != nil {
+		future.setErr(err)
+		return future
+	}
+
+	return future
 }
 
 func (t *Tempolite) AddQueueWorkers(queueName string, count int) error {
