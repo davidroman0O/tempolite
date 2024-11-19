@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+type Future interface {
+	Get(out ...interface{}) error
+	setEntityID(entityID int)
+	setError(err error)
+	setResult(results []interface{})
+}
+
 type DatabaseFuture struct {
 	ctx      context.Context
 	entityID int
@@ -53,6 +60,10 @@ func (f *DatabaseFuture) Get(out ...interface{}) error {
 			continue
 		}
 	}
+}
+
+func (f *DatabaseFuture) setResult(results []interface{}) {
+	f.results = results
 }
 
 func (f *DatabaseFuture) handleResults(out ...interface{}) error {
@@ -133,6 +144,9 @@ func (f *DatabaseFuture) checkCompletion() bool {
 		} else {
 			f.err = errors.New("workflow failed with no error details")
 		}
+		return true
+	case StatusPaused:
+		f.err = ErrPaused
 		return true
 	case StatusCancelled:
 		f.err = errors.New("workflow was cancelled")

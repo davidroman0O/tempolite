@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davidroman0O/retrypool"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -133,12 +132,7 @@ func (t *Tempolite) executeWorkflow(queueName string, workflowFunc interface{}, 
 		return future
 	}
 
-	processed := retrypool.NewProcessedNotification()
-
-	if err := qm.ExecuteDatabaseWorkflow(id, processed); err != nil {
-		future.setError(err)
-		return future
-	}
+	// We don't need to manage execution on Tempolite layer since it has to go through a pulling
 
 	future.setEntityID(id)
 

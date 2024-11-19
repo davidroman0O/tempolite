@@ -21,7 +21,7 @@ type WorkflowInstance struct {
 	results           []interface{}
 	err               error
 	fsm               *stateless.StateMachine
-	future            *RuntimeFuture
+	future            Future
 	ctx               context.Context
 	orchestrator      *Orchestrator
 	workflowID        int

@@ -19,7 +19,7 @@ type DefaultDatabase struct {
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
-	return &DefaultDatabase{
+	db := &DefaultDatabase{
 		runs:        make(map[int]*Run),
 		versions:    make(map[int]*Version),
 		entities:    make(map[int]*Entity),
@@ -27,6 +27,14 @@ func NewDefaultDatabase() *DefaultDatabase {
 		queues:      make(map[int]*Queue),
 		hierarchies: []*Hierarchy{},
 	}
+	db.queues[1] = &Queue{
+		ID:        1,
+		Name:      "default",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Entities:  []*Entity{},
+	}
+	return db
 }
 
 var (

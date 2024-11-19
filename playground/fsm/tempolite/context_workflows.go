@@ -82,18 +82,17 @@ func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupporte
 }
 
 // Workflow creates a sub-workflow.
-func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
+func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
-		future := NewRuntimeFuture()
+		future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 		future.setEntityID(ctx.workflowID)
 		future.setError(err)
 		return future
 	}
 
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
-	future := NewRuntimeFuture()
-	future.setEntityID(ctx.workflowID)
+	future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 
 	// Check if result already exists in the database
 	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeWorkflow)
@@ -220,7 +219,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 		// Add the entity to the database
 		entity = ctx.orchestrator.db.AddEntity(entity)
-		future.setEntityID(entity.ID)
+		future.setEntityID(entity.ID) // track that one
 		return future
 	}
 
@@ -240,9 +239,10 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		Paused:       false,
 		Resumable:    false,
 	}
+
 	// Add the entity to the database, which assigns the ID
 	entity = ctx.orchestrator.db.AddEntity(entity)
-	future.workflowID = entity.ID
+	future.setEntityID(entity.ID) // track that one
 
 	// Prepare to create the sub-workflow instance
 	subWorkflowInstance := &WorkflowInstance{

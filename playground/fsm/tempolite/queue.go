@@ -154,8 +154,11 @@ func (qm *QueueManager) checkAndProcessPending() {
 	// Find pending workflows for this queue
 	pendingEntities := qm.database.FindPendingWorkflowsByQueue(queue.ID)
 	if len(pendingEntities) == 0 {
+		// fmt.Println("Queue", qm.name, "has no pending tasks", info.PendingTasks, "pending tasks and", availableSlots, "available slots")
 		return
 	}
+
+	// fmt.Println("Queue", qm.name, "has", info.PendingTasks, "pending tasks and", availableSlots, "available slots and", len(pendingEntities), "pending entities")
 
 	for i := 0; i < min(availableSlots, len(pendingEntities)); i++ {
 		entity := pendingEntities[i]
@@ -166,19 +169,12 @@ func (qm *QueueManager) checkAndProcessPending() {
 			continue
 		}
 
-		// Update status atomically
-		freshEntity.Status = StatusQueued
-		qm.database.UpdateEntity(freshEntity)
-
 		// Only use BeingProcessed notification
 		processed := retrypool.NewProcessedNotification()
 
 		if err := qm.ExecuteDatabaseWorkflow(freshEntity.ID, processed); err != nil {
 			log.Printf("Failed to execute workflow %d on queue %s: %v",
 				freshEntity.ID, qm.name, err)
-			// Reset status if execution failed
-			freshEntity.Status = StatusPending
-			qm.database.UpdateEntity(freshEntity)
 			continue
 		}
 

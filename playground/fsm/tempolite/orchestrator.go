@@ -87,6 +87,17 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 		}
 	}
 
+	queueName := "default"
+
+	if options != nil && options.Queue != "" {
+		queueName = options.Queue
+	}
+
+	queue := o.db.GetQueueByName(queueName)
+	if queue == nil {
+		return nil, fmt.Errorf("queue %s not found", queueName)
+	}
+
 	// Create Entity
 	entity := &Entity{
 		StepID:      "root",
@@ -96,6 +107,8 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 		RunID:       o.runID,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
+		QueueID:     queue.ID,
+		Queue:       queue,
 		WorkflowData: &WorkflowData{
 			Input:     inputBytes,
 			Attempt:   1,
