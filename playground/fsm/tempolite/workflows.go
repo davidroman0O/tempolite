@@ -59,6 +59,8 @@ func (wi *WorkflowInstance) Start() {
 		OnEntry(wi.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
+	fmt.Println("Starting workflow: ", wi.stepID, wi.entity.ID, wi.entity.Status)
+
 	go func() {
 		log.Printf("Starting workflow: %s (Entity ID: %d)", wi.stepID, wi.entity.ID)
 		if err := wi.fsm.Fire(TriggerStart); err != nil {

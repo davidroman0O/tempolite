@@ -190,3 +190,66 @@ func TestTempoliteCrossQueueWorkflow(t *testing.T) {
 		t.Fatalf("failed to wait for engine: %v", err)
 	}
 }
+
+func TestTempoliteCrossQueueWorkflowActivity(t *testing.T) {
+	database := NewDefaultDatabase()
+	ctx := context.Background()
+
+	activity := func(ctx ActivityContext) error {
+		t.Log("activity started")
+		return nil
+	}
+
+	crossWorkflow := func(ctx WorkflowContext) error {
+		t.Log("cross workflow started")
+		if err := ctx.Activity("activity", activity, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	workflow := func(ctx WorkflowContext) error {
+		t.Log("workflow started")
+		if err := ctx.Workflow("queued", crossWorkflow, &WorkflowOptions{
+			Queue: "test-queue",
+		}).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	engine, err := New(
+		ctx,
+		database,
+		WithQueue(QueueConfig{
+			Name:        "test-queue",
+			WorkerCount: 1,
+		}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+	defer func() {
+		if err := engine.Close(); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
+
+	if err := engine.RegisterWorkflow(workflow); err != nil {
+		t.Fatalf("failed to register workflow: %v", err)
+	}
+	if err := engine.RegisterWorkflow(crossWorkflow); err != nil {
+		t.Fatalf("failed to register workflow: %v", err)
+	}
+
+	future := engine.Workflow(workflow, nil)
+
+	if err := future.Get(); err != nil {
+		t.Fatalf("failed to run workflow: %v", err)
+	}
+
+	t.Log("workflow completed successfully")
+	if err := engine.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("failed to wait for engine: %v", err)
+	}
+}

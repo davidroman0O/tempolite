@@ -555,6 +555,7 @@ func TestOrchestratorWorkflowPauseResume(t *testing.T) {
 	}
 
 	workflow := func(ctx WorkflowContext) error {
+		t.Log("Executing workflows")
 		executed++
 		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
 			return err
