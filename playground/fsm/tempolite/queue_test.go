@@ -173,3 +173,6 @@ func TestQueueWorkflowDbActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TODO: make test when we pause/resume
+// TODO: make test when we restart Tempolite
