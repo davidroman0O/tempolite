@@ -192,42 +192,45 @@ type queueWorkerRequests struct {
 
 func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestResponse[*taskRequest, struct{}]) error {
 
+	w.qm.mu.Lock()
+	defer w.qm.mu.Unlock()
 	fmt.Println("\t queueWorkerRequests", task.Request.requestType, task.Request.entityID)
 	defer fmt.Println("\t queueWorkerRequests done", task.Request.requestType, task.Request.entityID)
 
 	switch task.Request.requestType {
 	case queueRequestTypePause:
-		w.qm.mu.Lock()
-		worker, ok := w.qm.entitiesWorkers[task.Request.entityID]
+
+		workerID, ok := w.qm.entitiesWorkers[task.Request.entityID]
 		if !ok {
-			w.qm.mu.Unlock()
 			return fmt.Errorf("entity %d not found", task.Request.entityID)
 		}
-		w.qm.cache[worker].orchestrator.Pause()
-		w.qm.mu.Unlock()
+		w.qm.cache[workerID].orchestrator.Pause()
 		task.Complete(struct{}{})
+
 	case queueRequestTypeResume:
-		w.qm.mu.Lock()
-		slots := w.qm.pool.AvailableWorkers()
-		if slots == 0 {
-			w.qm.mu.Unlock()
+
+		if w.qm.pool.AvailableWorkers() == 0 {
 			return fmt.Errorf("no available workers for entity %d", task.Request.entityID)
 		}
-		freed := []int{}
-		for k, _ := range w.qm.free {
-			freed = append(freed, k)
+
+		var freeWorkers []int
+		for workerID := range w.qm.free {
+			freeWorkers = append(freeWorkers, workerID)
 		}
-		freeworker := freed[rand.Intn(slots)]
-		worker := w.qm.cache[freeworker]
+		if len(freeWorkers) == 0 {
+			return fmt.Errorf("no free workers available")
+		}
+
+		randomWorkerID := freeWorkers[rand.Intn(len(freeWorkers))]
+		worker := w.qm.cache[randomWorkerID]
 		worker.orchestrator.Resume(task.Request.entityID)
-		w.qm.mu.Unlock()
 		task.Complete(struct{}{})
+
 	case queueRequestTypeExecute:
 
-		w.qm.mu.Lock()
 		// Verify entity exists and is ready for execution
 		entity := w.qm.database.GetEntity(task.Request.entityID)
-		w.qm.mu.Unlock()
+
 		if entity == nil {
 			task.CompleteWithError(fmt.Errorf("entity not found: %d", task.Request.entityID))
 			return fmt.Errorf("entity not found: %d", task.Request.entityID)
@@ -251,7 +254,6 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 			return fmt.Errorf("failed to convert inputs: %w", err)
 		}
 
-		w.qm.mu.Lock()
 		// Create task for execution
 		queueTask := &QueueTask{
 			workflowFunc: entity.HandlerInfo.Handler,
@@ -260,17 +262,14 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 			queueName:    w.qm.name,
 			entityID:     task.Request.entityID,
 		}
-		w.qm.mu.Unlock()
 
 		processed := retrypool.NewProcessedNotification()
 
-		w.qm.mu.Lock()
 		// Submit to worker pool
 		if err := w.qm.pool.Submit(queueTask, retrypool.WithBeingProcessed[*QueueTask](processed)); err != nil {
 			task.CompleteWithError(fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err))
 			return fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err)
 		}
-		w.qm.mu.Unlock()
 
 		<-processed
 
