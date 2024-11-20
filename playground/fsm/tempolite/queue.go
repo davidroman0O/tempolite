@@ -18,8 +18,9 @@ import (
 type queueRequestType string
 
 var (
-	queueRequestTypePause  queueRequestType = "pause"
-	queueRequestTypeResume queueRequestType = "resume"
+	queueRequestTypePause   queueRequestType = "pause"
+	queueRequestTypeResume  queueRequestType = "resume"
+	queueRequestTypeExecute queueRequestType = "execute"
 )
 
 type taskRequest struct {
@@ -173,6 +174,11 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 	}
 
 	qm.pool = qm.createWorkerPool(workerCount)
+
+	// TODO: how much?
+	qm.requestPool.AddWorker(&queueWorkerRequests{
+		qm: qm,
+	})
 	qm.requestPool.AddWorker(&queueWorkerRequests{
 		qm: qm,
 	})
@@ -186,19 +192,25 @@ type queueWorkerRequests struct {
 
 func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestResponse[*taskRequest, struct{}]) error {
 
-	w.qm.mu.Lock()
-	defer w.qm.mu.Unlock()
+	fmt.Println("\t queueWorkerRequests", task.Request.requestType, task.Request.entityID)
+	defer fmt.Println("\t queueWorkerRequests done", task.Request.requestType, task.Request.entityID)
+
 	switch task.Request.requestType {
 	case queueRequestTypePause:
+		w.qm.mu.Lock()
 		worker, ok := w.qm.entitiesWorkers[task.Request.entityID]
 		if !ok {
+			w.qm.mu.Unlock()
 			return fmt.Errorf("entity %d not found", task.Request.entityID)
 		}
 		w.qm.cache[worker].orchestrator.Pause()
+		w.qm.mu.Unlock()
 		task.Complete(struct{}{})
 	case queueRequestTypeResume:
+		w.qm.mu.Lock()
 		slots := w.qm.pool.AvailableWorkers()
 		if slots == 0 {
+			w.qm.mu.Unlock()
 			return fmt.Errorf("no available workers for entity %d", task.Request.entityID)
 		}
 		freed := []int{}
@@ -208,7 +220,63 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 		freeworker := freed[rand.Intn(slots)]
 		worker := w.qm.cache[freeworker]
 		worker.orchestrator.Resume(task.Request.entityID)
+		w.qm.mu.Unlock()
 		task.Complete(struct{}{})
+	case queueRequestTypeExecute:
+
+		w.qm.mu.Lock()
+		// Verify entity exists and is ready for execution
+		entity := w.qm.database.GetEntity(task.Request.entityID)
+		w.qm.mu.Unlock()
+		if entity == nil {
+			task.CompleteWithError(fmt.Errorf("entity not found: %d", task.Request.entityID))
+			return fmt.Errorf("entity not found: %d", task.Request.entityID)
+		}
+
+		if entity.Status != StatusPending {
+			task.CompleteWithError(fmt.Errorf("entity %d is not in pending status", task.Request.entityID))
+			return fmt.Errorf("entity %d is not in pending status", task.Request.entityID)
+		}
+
+		// Get handler info
+		if entity.HandlerInfo == nil {
+			task.CompleteWithError(fmt.Errorf("no handler info for entity %d", task.Request.entityID))
+			return fmt.Errorf("no handler info for entity %d", task.Request.entityID)
+		}
+
+		// Convert stored inputs
+		inputs, err := convertInputsFromSerialization(*entity.HandlerInfo, entity.WorkflowData.Input)
+		if err != nil {
+			task.CompleteWithError(fmt.Errorf("failed to convert inputs: %w", err))
+			return fmt.Errorf("failed to convert inputs: %w", err)
+		}
+
+		w.qm.mu.Lock()
+		// Create task for execution
+		queueTask := &QueueTask{
+			workflowFunc: entity.HandlerInfo.Handler,
+			options:      nil, // Could be stored in entity if needed
+			args:         inputs,
+			queueName:    w.qm.name,
+			entityID:     task.Request.entityID,
+		}
+		w.qm.mu.Unlock()
+
+		processed := retrypool.NewProcessedNotification()
+
+		w.qm.mu.Lock()
+		// Submit to worker pool
+		if err := w.qm.pool.Submit(queueTask, retrypool.WithBeingProcessed[*QueueTask](processed)); err != nil {
+			task.CompleteWithError(fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err))
+			return fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err)
+		}
+		w.qm.mu.Unlock()
+
+		<-processed
+
+		task.Complete(struct{}{})
+
+		return nil
 	}
 	return nil
 }
@@ -218,9 +286,11 @@ func (qm *QueueManager) Pause(id int) *retrypool.RequestResponse[*taskRequest, s
 		requestType: queueRequestTypePause,
 		entityID:    id,
 	})
+	fmt.Println("\t PAUSE")
 	qm.mu.Lock()
 	qm.requestPool.Submit(task)
 	qm.mu.Unlock()
+	fmt.Println("\t PAUSE2")
 	return task
 }
 
@@ -335,57 +405,20 @@ func (qm *QueueManager) checkAndProcessPending() {
 			continue
 		}
 
-		// Only use BeingProcessed notification
-		processed := retrypool.NewProcessedNotification()
-
-		if err := qm.ExecuteDatabaseWorkflow(freshEntity.ID, processed); err != nil {
-			log.Printf("Failed to execute workflow %d on queue %s: %v",
-				freshEntity.ID, qm.name, err)
-			continue
-		}
+		task := qm.ExecuteWorkflow(freshEntity.ID)
 
 		// Wait for processing to start before continuing
 		select {
-		case <-processed:
+		case <-task.Done():
+			if task.Err() != nil {
+				log.Printf("Failed to execute workflow %d on queue %s: %v",
+					freshEntity.ID, qm.name, task.Err())
+			}
 			// Processing started
 		case <-qm.ctx.Done():
 			return
 		}
 	}
-}
-
-func (qm *QueueManager) ExecuteRuntimeWorkflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
-	future := NewRuntimeFuture()
-
-	// Handler registration check before submitting
-	if _, err := qm.registry.RegisterWorkflow(workflowFunc); err != nil {
-		future.setError(err)
-		return future
-	}
-
-	// Create the workflow entity first
-	entity, err := qm.orchestrator.prepareWorkflowEntity(workflowFunc, options, args...)
-	if err != nil {
-		future.setError(fmt.Errorf("failed to prepare workflow entity: %w", err))
-		return future
-	}
-
-	task := &QueueTask{
-		workflowFunc: workflowFunc,
-		options:      options,
-		args:         args,
-		queueName:    qm.name,
-		future:       future,
-		entityID:     entity.ID, // Set the entity ID in the task
-	}
-
-	// Submit task to worker pool
-	if err := qm.pool.Submit(task); err != nil {
-		future.setError(fmt.Errorf("failed to submit task to queue %s: %w", qm.name, err))
-		return future
-	}
-
-	return future
 }
 
 func (am *QueueManager) CreateWorkflow(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (int, error) {
@@ -403,43 +436,15 @@ func (am *QueueManager) CreateWorkflow(workflowFunc interface{}, options *Workfl
 	return entity.ID, nil
 }
 
-func (qm *QueueManager) ExecuteDatabaseWorkflow(id int, processed chan struct{}) error {
-	// Verify entity exists and is ready for execution
-	entity := qm.database.GetEntity(id)
-	if entity == nil {
-		return fmt.Errorf("entity not found: %d", id)
-	}
-
-	if entity.Status != StatusPending {
-		return fmt.Errorf("entity %d is not in pending status", id)
-	}
-
-	// Get handler info
-	if entity.HandlerInfo == nil {
-		return fmt.Errorf("no handler info for entity %d", id)
-	}
-
-	// Convert stored inputs
-	inputs, err := convertInputsFromSerialization(*entity.HandlerInfo, entity.WorkflowData.Input)
-	if err != nil {
-		return fmt.Errorf("failed to convert inputs: %w", err)
-	}
-
-	// Create task for execution
-	task := &QueueTask{
-		workflowFunc: entity.HandlerInfo.Handler,
-		options:      nil, // Could be stored in entity if needed
-		args:         inputs,
-		queueName:    qm.name,
-		entityID:     id,
-	}
-
-	// Submit to worker pool
-	if err := qm.pool.Submit(task, retrypool.WithBeingProcessed[*QueueTask](processed)); err != nil {
-		return fmt.Errorf("failed to submit entity %d to queue %s: %w", id, qm.name, err)
-	}
-
-	return nil
+func (qm *QueueManager) ExecuteWorkflow(id int) *retrypool.RequestResponse[*taskRequest, struct{}] {
+	task := retrypool.NewRequestResponse[*taskRequest, struct{}](&taskRequest{
+		entityID:    id,
+		requestType: queueRequestTypeExecute,
+	})
+	qm.mu.Lock()
+	qm.requestPool.Submit(task)
+	qm.mu.Unlock()
+	return task
 }
 
 func (qm *QueueManager) handleTaskFailure(controller retrypool.WorkerController[*QueueTask], workerID int, worker retrypool.Worker[*QueueTask], task *retrypool.TaskWrapper[*QueueTask], err error) retrypool.DeadTaskAction {
