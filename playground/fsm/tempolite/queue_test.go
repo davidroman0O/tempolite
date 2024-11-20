@@ -137,6 +137,8 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 
 	qm := newQueueManager(ctx, "default", 1, register, database)
 
+	<-time.After(2 * time.Second)
+
 	id, err := qm.CreateWorkflow(workflow, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -181,6 +183,93 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 	if err := qm.Wait(); err != nil {
 		t.Fatal(err)
 	}
+
+	if executed != 2 {
+		t.Fatalf("Executed not 2 but %d", executed)
+	}
 }
 
 // TODO: make test when we restart queue
+
+func TestQueueWorkflowDbRestart(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	executed := 0
+
+	subWorkflow := func(ctx WorkflowContext) error {
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	workflow := func(ctx WorkflowContext) error {
+		t.Log("Executing workflows")
+		executed++
+		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub2", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub3", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	qm := newQueueManager(ctx, "default", 1, register, database)
+
+	id, err := qm.CreateWorkflow(workflow, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	execCtx := context.Background()
+	execCtx, cancel := context.WithTimeout(execCtx, time.Second)
+	defer cancel()
+	if _, err := qm.ExecuteWorkflow(id).Wait(execCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	// <-time.After(1 * time.Second)
+
+	if err := qm.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Restarting queue manager")
+
+	// <-time.After(3 * time.Second)
+
+	ctx = context.Background()
+	qm = newQueueManager(ctx, "default", 1, register, database)
+
+	execCtx = context.Background()
+	execCtx, cancel = context.WithTimeout(execCtx, time.Second)
+	defer cancel()
+	if _, err := qm.Resume(id).Wait(execCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	future := NewDatabaseFuture(ctx, database)
+	future.setEntityID(id)
+
+	t.Log("Waiting for future")
+	if err := future.Get(); err != nil { // it is stuck there
+		t.Fatal(err)
+	}
+
+	if err := qm.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if executed != 2 {
+		fmt.Printf("executed not 2 but %d\n", executed)
+		<-time.After(1 * time.Second)
+		t.Fatalf("Executed not 2 but %d", executed)
+	}
+}

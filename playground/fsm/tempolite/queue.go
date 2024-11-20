@@ -11,6 +11,7 @@ import (
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/retrypool/logs"
+	"golang.org/x/sync/errgroup"
 )
 
 /// TODO: after that we will see on tempolite which works differently, more data-based using the goroutine and triggering the function then
@@ -80,6 +81,13 @@ type QueueWorker struct {
 	mu           sync.Mutex
 	onStartTask  func(*QueueWorker, *QueueTask)
 	onEndTask    func(*QueueWorker, *QueueTask)
+	onStart      func(*QueueWorker)
+}
+
+func (w *QueueWorker) OnStart(ctx context.Context) {
+	if w.onStart != nil {
+		w.onStart(w)
+	}
 }
 
 func (w *QueueWorker) Run(ctx context.Context, task *QueueTask) error {
@@ -156,6 +164,7 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 		requestPool: retrypool.New(
 			ctx,
 			[]retrypool.Worker[*retrypool.RequestResponse[*taskRequest, struct{}]]{},
+			retrypool.WithLogLevel[*retrypool.RequestResponse[*taskRequest, struct{}]](logs.LevelDebug),
 			retrypool.WithAttempts[*retrypool.RequestResponse[*taskRequest, struct{}]](3),
 			retrypool.WithDelay[*retrypool.RequestResponse[*taskRequest, struct{}]](time.Second/2),
 			retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*taskRequest, struct{}]](func(task *retrypool.DeadTask[*retrypool.RequestResponse[*taskRequest, struct{}]], idx int) {
@@ -183,11 +192,18 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 		qm: qm,
 	})
 
+	fmt.Println("Queue manager", name, "created with", workerCount, "workers", qm.pool.AvailableWorkers(), "available workers", qm.requestPool.AvailableWorkers(), "available request workers")
+
 	return qm
 }
 
 type queueWorkerRequests struct {
+	ID int
 	qm *QueueManager
+}
+
+func (w *queueWorkerRequests) OnStart(ctx context.Context) {
+	fmt.Println("queueWorkerRequests started")
 }
 
 func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestResponse[*taskRequest, struct{}]) error {
@@ -204,8 +220,8 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 		if !ok {
 			return fmt.Errorf("entity %d not found", task.Request.entityID)
 		}
-		w.qm.cache[workerID].orchestrator.Pause()
 		task.Complete(struct{}{})
+		w.qm.cache[workerID].orchestrator.Pause()
 
 	case queueRequestTypeResume:
 
@@ -223,8 +239,8 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 
 		randomWorkerID := freeWorkers[rand.Intn(len(freeWorkers))]
 		worker := w.qm.cache[randomWorkerID]
-		worker.orchestrator.Resume(task.Request.entityID)
 		task.Complete(struct{}{})
+		worker.orchestrator.Resume(task.Request.entityID)
 
 	case queueRequestTypeExecute:
 
@@ -264,14 +280,22 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 		}
 
 		processed := retrypool.NewProcessedNotification()
+		queued := retrypool.NewQueuedNotification()
 
 		// Submit to worker pool
-		if err := w.qm.pool.Submit(queueTask, retrypool.WithBeingProcessed[*QueueTask](processed)); err != nil {
+		if err := w.qm.pool.Submit(
+			queueTask,
+			retrypool.WithBeingProcessed[*QueueTask](processed),
+			retrypool.WithQueued[*QueueTask](queued),
+		); err != nil {
 			task.CompleteWithError(fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err))
 			return fmt.Errorf("failed to submit entity %d to queue %s: %w", task.Request.entityID, w.qm.name, err)
 		}
 
-		<-processed
+		fmt.Println("workflow queuing", w.qm.name, task.Request.entityID, w.qm.pool.AvailableWorkers(), w.qm.pool.QueueSize(), w.qm.pool.ProcessingCount(), queued)
+		<-queued.Done()
+		fmt.Println("workflow submitted to queue", w.qm.name, task.Request.entityID, w.qm.pool.AvailableWorkers(), w.qm.pool.QueueSize(), w.qm.pool.ProcessingCount(), processed)
+		<-processed.Done()
 
 		task.Complete(struct{}{})
 
@@ -285,11 +309,9 @@ func (qm *QueueManager) Pause(id int) *retrypool.RequestResponse[*taskRequest, s
 		requestType: queueRequestTypePause,
 		entityID:    id,
 	})
-	fmt.Println("\t PAUSE")
 	qm.mu.Lock()
 	qm.requestPool.Submit(task)
 	qm.mu.Unlock()
-	fmt.Println("\t PAUSE2")
 	return task
 }
 
@@ -347,13 +369,23 @@ func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] 
 			queueName:    qm.name,
 			onStartTask:  qm.onTaskStart,
 			onEndTask:    qm.onTaskEnd,
+			onStart: func(w *QueueWorker) {
+				qm.mu.Lock()
+				qm.free[w.ID] = struct{}{}
+				qm.cache[w.ID] = w
+				qm.mu.Unlock()
+				fmt.Println("worker started", w.ID)
+			},
 		}
 	}
-	return retrypool.New(qm.ctx, workers, []retrypool.Option[*QueueTask]{
+
+	pool := retrypool.New(qm.ctx, workers, []retrypool.Option[*QueueTask]{
 		retrypool.WithAttempts[*QueueTask](1),
 		retrypool.WithLogLevel[*QueueTask](logs.LevelDebug),
 		retrypool.WithOnTaskFailure[*QueueTask](qm.handleTaskFailure),
 	}...)
+
+	return pool
 }
 
 // Starts the automatic queue pulling process
@@ -446,7 +478,7 @@ func (qm *QueueManager) ExecuteWorkflow(id int) *retrypool.RequestResponse[*task
 	return task
 }
 
-func (qm *QueueManager) handleTaskFailure(controller retrypool.WorkerController[*QueueTask], workerID int, worker retrypool.Worker[*QueueTask], task *retrypool.TaskWrapper[*QueueTask], err error) retrypool.DeadTaskAction {
+func (qm *QueueManager) handleTaskFailure(controller retrypool.WorkerController[*QueueTask], workerID int, worker retrypool.Worker[*QueueTask], data *QueueTask, retries int, totalDuration time.Duration, timeLimit time.Duration, maxDuration time.Duration, scheduledTime time.Time, triedWorkers map[int]bool, taskErrors []error, durations []time.Duration, queuedAt []time.Time, processedAt []time.Time, err error) retrypool.DeadTaskAction {
 	if errors.Is(err, ErrPaused) {
 		return retrypool.DeadTaskActionDoNothing
 	}
@@ -465,6 +497,12 @@ func (qm *QueueManager) AddWorkers(count int) error {
 			queueName:    qm.name,
 			onStartTask:  qm.onTaskStart,
 			onEndTask:    qm.onTaskEnd,
+			onStart: func(w *QueueWorker) {
+				qm.mu.Lock()
+				qm.free[w.ID] = struct{}{}
+				qm.cache[w.ID] = w
+				qm.mu.Unlock()
+			},
 		}
 		qm.pool.AddWorker(worker)
 	}
@@ -506,12 +544,49 @@ func (qm *QueueManager) GetInfo() *QueueInfo {
 	}
 }
 
+func (qm *QueueManager) pauseAll() {
+	qm.mu.Lock()
+	defer qm.mu.Unlock()
+	for workerID := range qm.busy {
+		qm.cache[workerID].orchestrator.Pause()
+	}
+}
+
 func (qm *QueueManager) Close() error {
 	go func() {
 		<-time.After(5 * time.Second) // grace period
+		fmt.Println("Queue manager", qm.name, "force closing")
 		qm.cancel()
 	}()
-	return qm.pool.Close()
+
+	shutdown := errgroup.Group{}
+
+	shutdown.Go(func() error {
+		err := qm.requestPool.Close()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			fmt.Println("Request pool closed", err)
+			return err
+		}
+		return nil
+	})
+
+	shutdown.Go(func() error {
+		qm.pauseAll()
+		err := qm.pool.Close()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			fmt.Println("Queue", qm.name, "closed", err)
+			return err
+		}
+		return nil
+	})
+	defer qm.cancel()
+	return shutdown.Wait()
 }
 
 func (qm *QueueManager) Wait() error {

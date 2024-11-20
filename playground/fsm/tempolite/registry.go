@@ -41,6 +41,38 @@ func NewRegistry() *Registry {
 	}
 }
 
+func (r *Registry) GetWorkflow(name string) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	handler, ok := r.workflows[name]
+	return handler, ok
+}
+
+func (r *Registry) GetActivity(name string) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	handler, ok := r.activities[name]
+	return handler, ok
+}
+
+func (r *Registry) GetWorkflowFunc(f interface{}) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	name := getFunctionName(f)
+	handler, ok := r.workflows[name]
+	return handler, ok
+}
+
+func (r *Registry) GetActivityFunc(f interface{}) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	name := getFunctionName(f)
+	handler, ok := r.activities[name]
+	return handler, ok
+}
+
 // TODO: add description schema so later features
 func (r *Registry) RegisterWorkflow(workflowFunc interface{}) (HandlerInfo, error) {
 	funcName := getFunctionName(workflowFunc)

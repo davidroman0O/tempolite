@@ -61,12 +61,10 @@ func (wi *WorkflowInstance) Start() {
 
 	fmt.Println("Starting workflow: ", wi.stepID, wi.entity.ID, wi.entity.Status)
 
-	go func() {
-		log.Printf("Starting workflow: %s (Entity ID: %d)", wi.stepID, wi.entity.ID)
-		if err := wi.fsm.Fire(TriggerStart); err != nil {
-			log.Printf("Error starting workflow: %v", err)
-		}
-	}()
+	log.Printf("Starting workflow: %s (Entity ID: %d)", wi.stepID, wi.entity.ID)
+	if err := wi.fsm.Fire(TriggerStart); err != nil {
+		log.Printf("Error starting workflow: %v", err)
+	}
 }
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
