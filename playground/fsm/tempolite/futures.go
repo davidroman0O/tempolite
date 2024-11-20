@@ -14,6 +14,7 @@ type Future interface {
 	setEntityID(entityID int)
 	setError(err error)
 	setResult(results []interface{})
+	WorkflowID() int
 }
 
 type DatabaseFuture struct {
@@ -39,6 +40,10 @@ func (f *DatabaseFuture) setError(err error) {
 	f.err = err
 }
 
+func (f *DatabaseFuture) WorkflowID() int {
+	return f.entityID
+}
+
 func (f *DatabaseFuture) Get(out ...interface{}) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -52,9 +57,17 @@ func (f *DatabaseFuture) Get(out ...interface{}) error {
 				continue
 			}
 			if f.err != nil {
+				defer func() { // if we re-use the same future, we must start from a fresh state
+					f.err = nil
+					f.results = nil
+				}()
 				return f.err
 			}
 			if completed := f.checkCompletion(); completed {
+				defer func() { // if we re-use the same future, we must start from a fresh state
+					f.err = nil
+					f.results = nil
+				}()
 				return f.handleResults(out...)
 			}
 			continue

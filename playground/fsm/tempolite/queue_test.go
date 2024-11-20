@@ -2,7 +2,10 @@ package tempolite
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/davidroman0O/retrypool"
 )
@@ -175,4 +178,89 @@ func TestQueueWorkflowDbActivity(t *testing.T) {
 }
 
 // TODO: make test when we pause/resume
+
+func TestQueueWorkflowDbPauseResume(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	executed := 0
+
+	subWorkflow := func(ctx WorkflowContext) error {
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	workflow := func(ctx WorkflowContext) error {
+		t.Log("Executing workflows")
+		executed++
+		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub2", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Workflow("sub3", subWorkflow, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	qm := newQueueManager(ctx, "default", 1, register, database)
+
+	id, err := qm.CreateWorkflow(workflow, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	processed := retrypool.NewProcessedNotification()
+	if err := qm.ExecuteDatabaseWorkflow(id, processed); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Waiting for being processed")
+	<-processed
+	t.Log("Processed")
+
+	future := NewDatabaseFuture(ctx, database)
+	future.setEntityID(id)
+
+	go func() {
+		<-time.After(1 * time.Second)
+		if _, err := qm.Pause(id).Wait(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println("Pausing orchestrator, 2s")
+		<-time.After(2 * time.Second)
+		fmt.Println("Resuming orchestrator")
+		if _, err := qm.Resume(id).Wait(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	t.Log("Waiting for future")
+	if err := future.Get(); err != nil { // it is stuck there
+		if !errors.Is(err, ErrPaused) {
+			t.Fatal(err)
+		}
+	}
+
+	<-time.After(2 * time.Second)
+
+	t.Log("Waiting for future post wait")
+	if err := future.Get(); err != nil { // it is stuck there
+		fmt.Println("post wait", err)
+		t.Fatal(err)
+	}
+
+	t.Log("Waiting for queue manager")
+	if err := qm.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 // TODO: make test when we restart Tempolite

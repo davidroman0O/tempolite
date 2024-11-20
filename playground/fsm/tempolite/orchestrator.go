@@ -375,7 +375,7 @@ func (o *Orchestrator) Wait() error {
 			log.Printf("Root Workflow FSM state: %s", state)
 			lastLogTime = currentTime
 		}
-		if state == StateCompleted || state == StateFailed {
+		if state == StateCompleted || state == StateFailed || state == StatePaused {
 			break
 		}
 		select {
@@ -413,6 +413,8 @@ func (o *Orchestrator) Wait() error {
 		} else {
 			fmt.Printf("Root workflow completed successfully\n")
 		}
+	case StatusPaused:
+		fmt.Printf("Root workflow paused\n")
 	case StatusFailed:
 		var errMsg string
 		if latestExecution.Error != "" {
