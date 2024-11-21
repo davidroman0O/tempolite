@@ -190,6 +190,7 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 }
 
 // TODO: make test when we restart queue
+
 func TestQueueWorkflowDbRestart(t *testing.T) {
 
 	database := NewDefaultDatabase()

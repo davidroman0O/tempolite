@@ -2061,6 +2061,8 @@ type QueueManager struct {
 	busy            map[int]struct{}
 	free            map[int]struct{}
 	requestPool     *retrypool.Pool[*retrypool.RequestResponse[*taskRequest, struct{}]]
+
+	startWorkersWG sync.WaitGroup
 }
 
 // QueueTask represents a workflow execution task
@@ -2207,6 +2209,8 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 	poolRequest.AddWorker(&queueWorkerRequests{
 		qm: qm,
 	})
+
+	qm.startWorkersWG.Wait()
 
 	fmt.Println("Queue manager", name, "created with", workerCount, "workers", qm.pool.AvailableWorkers(), "available workers", qm.requestPool.AvailableWorkers(), "available request workers")
 
@@ -2384,6 +2388,8 @@ func (qm *QueueManager) GetEntities() []int {
 
 func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] {
 	workers := make([]retrypool.Worker[*QueueTask], count)
+
+	qm.startWorkersWG.Add(count)
 	for i := 0; i < count; i++ {
 		workers[i] = &QueueWorker{
 			orchestrator: NewOrchestrator(qm.ctx, qm.database, qm.registry),
@@ -2395,6 +2401,7 @@ func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] 
 				qm.free[w.ID] = struct{}{}
 				qm.cache[w.ID] = w
 				fmt.Println("worker started", w.ID)
+				qm.startWorkersWG.Done() // Signal worker has started
 			},
 		}
 	}
