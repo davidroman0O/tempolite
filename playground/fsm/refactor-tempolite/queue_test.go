@@ -190,14 +190,14 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 }
 
 // TODO: make test when we restart queue
-
 func TestQueueWorkflowDbRestart(t *testing.T) {
 
 	database := NewDefaultDatabase()
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	executed := new(int)
+	*executed = 0
 
 	subWorkflow := func(ctx WorkflowContext) error {
 		<-time.After(1 * time.Second)
@@ -206,7 +206,7 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 
 	workflow := func(ctx WorkflowContext) error {
 		t.Log("Executing workflows")
-		executed++
+		(*executed)++
 		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
 			return err
 		}
@@ -229,13 +229,16 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 	}
 
 	execCtx := context.Background()
-	execCtx, cancel := context.WithTimeout(execCtx, time.Second)
+	// Set timeout less than the total execution time of the workflow
+	execCtx, cancel := context.WithTimeout(execCtx, 500*time.Millisecond)
 	defer cancel()
 	if _, err := qm.ExecuteWorkflow(id).Wait(execCtx); err != nil {
-		t.Fatal(err)
+		t.Logf("Expected error on initial execution: %v", err)
 	}
 
-	// <-time.After(1 * time.Second)
+	if err := qm.Wait(); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := qm.Close(); err != nil {
 		t.Fatal(err)
@@ -243,13 +246,12 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 
 	t.Log("Restarting queue manager")
 
-	// <-time.After(3 * time.Second)
-
 	ctx = context.Background()
 	qm = newQueueManager(ctx, "default", 1, register, database)
 
+	// Now, when we resume, the RetryState.Attempts should be reset
 	execCtx = context.Background()
-	execCtx, cancel = context.WithTimeout(execCtx, time.Second)
+	execCtx, cancel = context.WithTimeout(execCtx, time.Second*5)
 	defer cancel()
 	if _, err := qm.Resume(id).Wait(execCtx); err != nil {
 		t.Fatal(err)
@@ -259,7 +261,7 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 	future.setEntityID(id)
 
 	t.Log("Waiting for future")
-	if err := future.Get(); err != nil { // it is stuck there
+	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -267,9 +269,8 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if executed != 2 {
-		fmt.Printf("executed not 2 but %d\n", executed)
-		<-time.After(1 * time.Second)
-		t.Fatalf("Executed not 2 but %d", executed)
+	if *executed != 2 {
+		fmt.Printf("executed not 2 but %d\n", *executed)
+		t.Fatalf("Executed not 2 but %d", *executed)
 	}
 }

@@ -4331,8 +4331,6 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 	var backoffCoefficient float64
 	var maxInterval time.Duration
 
-	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWithRetry called", wi.stepID, wi.entity.ID)
-
 	if wi.entity.RetryPolicy != nil {
 		rp := wi.entity.RetryPolicy
 		maxAttempts = rp.MaxAttempts
@@ -4347,7 +4345,6 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		maxInterval = 5 * time.Minute
 	}
 
-	// Start attempt from RetryState
 	attempt = wi.entity.RetryState.Attempts + 1
 
 	for {
@@ -4366,15 +4363,9 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			wi.entity.Status = StatusFailed
 			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusFailed)
 			wi.fsm.Fire(TriggerFail)
-			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt-1)
+			log.Printf("Workflow %s (Entity ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, attempt-1)
 			return nil
 		}
-
-		// Update RetryState without changing attempts values beyond maxAttempts
-		if attempt <= maxAttempts {
-			wi.entity.RetryState.Attempts = attempt
-		}
-		wi.orchestrator.db.UpdateEntityRetryState(wi.entity.ID, wi.entity.RetryState)
 
 		// Create Execution
 		execution := &Execution{
@@ -4413,6 +4404,12 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			wi.orchestrator.db.AddHierarchy(hierarchy)
 		}
 
+		// Now we have an execution, so we can update the RetryState
+		if attempt <= maxAttempts {
+			wi.entity.RetryState.Attempts = attempt
+			wi.orchestrator.db.UpdateEntityRetryState(wi.entity.ID, wi.entity.RetryState)
+		}
+
 		log.Printf("Executing workflow %s (Entity ID: %d, Execution ID: %d)", wi.stepID, wi.entity.ID, wi.executionID)
 
 		err := wi.runWorkflow(execution)
@@ -4443,14 +4440,12 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			execution.Error = err.Error()
 			wi.err = err
 			wi.orchestrator.db.UpdateExecution(execution)
-
-			// Calculate next interval
-			nextInterval := time.Duration(float64(initialInterval) * math.Pow(backoffCoefficient, float64(attempt-1)))
-			if nextInterval > maxInterval {
-				nextInterval = maxInterval
-			}
-
 			if attempt < maxAttempts || wi.entity.Resumable {
+				// Calculate next interval
+				nextInterval := time.Duration(float64(initialInterval) * math.Pow(backoffCoefficient, float64(attempt-1)))
+				if nextInterval > maxInterval {
+					nextInterval = maxInterval
+				}
 				log.Printf("Retrying workflow %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v", wi.stepID, wi.entity.ID, wi.executionID, attempt+1, maxAttempts, nextInterval)
 				time.Sleep(nextInterval)
 			} else {
@@ -4463,10 +4458,8 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			}
 		}
 
-		// Increment attempt only if less than maxAttempts
-		if attempt < maxAttempts {
-			attempt++
-		}
+		// Increment attempt for the next loop iteration
+		attempt++
 	}
 }
 
