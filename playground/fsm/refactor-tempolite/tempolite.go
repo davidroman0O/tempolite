@@ -140,7 +140,8 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			log.Printf("ActivityInstance %s is paused", ai.stepID)
 			ai.entity.Status = StatusPaused
 			ai.entity.Paused = true
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.orchestrator.db.UpdateEntityStatus(ai.entity.ID, StatusPaused)
+			ai.orchestrator.db.UpdateEntityPaused(ai.entity.ID, true)
 			ai.mu.Lock()
 			ai.fsm.Fire(TriggerPause)
 			ai.mu.Unlock()
@@ -149,7 +150,7 @@ func (ai *ActivityInstance) executeWithRetry() error {
 
 		// Update RetryState
 		ai.entity.RetryState.Attempts = attempt
-		ai.orchestrator.db.UpdateEntity(ai.entity)
+		ai.orchestrator.db.UpdateEntityRetryState(ai.entity.ID, ai.entity.RetryState)
 
 		// Create Execution without ID
 		execution := &Execution{
@@ -165,7 +166,7 @@ func (ai *ActivityInstance) executeWithRetry() error {
 		if err = ai.orchestrator.db.AddExecution(execution); err != nil {
 			log.Printf("Error adding execution: %v", err)
 			ai.entity.Status = StatusFailed
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.orchestrator.db.UpdateEntityStatus(ai.entity.ID, StatusFailed)
 			ai.mu.Lock()
 			ai.fsm.Fire(TriggerFail)
 			ai.mu.Unlock()
@@ -199,7 +200,8 @@ func (ai *ActivityInstance) executeWithRetry() error {
 		if errors.Is(err, ErrPaused) {
 			ai.entity.Status = StatusPaused
 			ai.entity.Paused = true
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.orchestrator.db.UpdateEntityStatus(ai.entity.ID, StatusPaused)
+			ai.orchestrator.db.UpdateEntityPaused(ai.entity.ID, true)
 			ai.mu.Lock()
 			ai.fsm.Fire(TriggerPause)
 			ai.mu.Unlock()
@@ -212,7 +214,7 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			execution.CompletedAt = &completedAt
 			ai.entity.Status = StatusCompleted
 			ai.orchestrator.db.UpdateExecution(execution)
-			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.orchestrator.db.UpdateEntityStatus(ai.entity.ID, StatusCompleted)
 			ai.mu.Lock()
 			ai.fsm.Fire(TriggerComplete)
 			ai.mu.Unlock()
@@ -236,7 +238,7 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			} else {
 				// Max attempts reached
 				ai.entity.Status = StatusFailed
-				ai.orchestrator.db.UpdateEntity(ai.entity)
+				ai.orchestrator.db.UpdateEntityStatus(ai.entity.ID, StatusFailed)
 				ai.mu.Lock()
 				ai.fsm.Fire(TriggerFail)
 				ai.mu.Unlock()
@@ -1438,18 +1440,6 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 		return nil, fmt.Errorf("failed to add entity: %w", err)
 	}
 
-	// // Create initial execution
-	// execution := &Execution{
-	// 	EntityID:  entity.ID,
-	// 	Status:    ExecutionStatusPending,
-	// 	Attempt:   1,
-	// 	StartedAt: time.Now(),
-	// 	CreatedAt: time.Now(),
-	// 	UpdatedAt: time.Now(),
-	// 	Entity:    entity,
-	// }
-	// o.db.AddExecution(execution)
-
 	return entity, nil
 }
 
@@ -1578,7 +1568,9 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 	entity.Paused = false
 	entity.Status = StatusPending
 	entity.Resumable = true
-	o.db.UpdateEntity(entity)
+	o.db.UpdateEntityPaused(entity.ID, false)
+	o.db.UpdateEntityStatus(entity.ID, StatusPending)
+	o.db.UpdateEntityResumable(entity.ID, true)
 
 	// Update Run status
 	var run *Run
@@ -3057,7 +3049,7 @@ func (si *SagaInstance) Start() {
 		Permit(TriggerResume, StateExecuting)
 	si.mu.Unlock()
 
-	// Start the FSM without holding the mutex
+	// Start the FSM
 	go func() {
 		if err := si.fsm.Fire(TriggerStart); err != nil {
 			log.Printf("Error starting saga: %v", err)
@@ -3192,7 +3184,7 @@ func (si *SagaInstance) executeCompensations() {
 func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	// Update entity status to Completed
 	si.entity.Status = StatusCompleted
-	si.orchestrator.db.UpdateEntity(si.entity)
+	si.orchestrator.db.UpdateEntityStatus(si.entity.ID, StatusCompleted)
 
 	// Update execution status to Completed
 	si.execution.Status = ExecutionStatusCompleted
@@ -3212,7 +3204,7 @@ func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 
 	// Update entity status to Failed
 	si.entity.Status = StatusFailed
-	si.orchestrator.db.UpdateEntity(si.entity)
+	si.orchestrator.db.UpdateEntityStatus(si.entity.ID, StatusFailed)
 
 	// Update execution status to Failed
 	si.execution.Status = ExecutionStatusFailed
@@ -3235,7 +3227,7 @@ func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	}
 
 	parentEntity.Status = StatusFailed
-	si.orchestrator.db.UpdateEntity(parentEntity)
+	si.orchestrator.db.UpdateEntityStatus(parentEntity.ID, StatusFailed)
 
 	close(si.sagaInfo.done)
 	log.Printf("Saga failed with error: %v", si.sagaInfo.err)
@@ -3344,7 +3336,8 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			log.Printf("SideEffectInstance %s is paused", sei.stepID)
 			sei.entity.Status = StatusPaused
 			sei.entity.Paused = true
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.orchestrator.db.UpdateEntityStatus(sei.entity.ID, StatusPaused)
+			sei.orchestrator.db.UpdateEntityPaused(sei.entity.ID, true)
 			sei.mu.Lock()
 			sei.fsm.Fire(TriggerPause)
 			sei.mu.Unlock()
@@ -3353,7 +3346,7 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 
 		// Update RetryState
 		sei.entity.RetryState.Attempts = attempt
-		sei.orchestrator.db.UpdateEntity(sei.entity)
+		sei.orchestrator.db.UpdateEntityRetryState(sei.entity.ID, sei.entity.RetryState)
 
 		// Create Execution without ID
 		execution := &Execution{
@@ -3369,7 +3362,7 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 		// Add execution to database, which assigns the ID
 		if err = sei.orchestrator.db.AddExecution(execution); err != nil {
 			sei.entity.Status = StatusFailed
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.orchestrator.db.UpdateEntityStatus(sei.entity.ID, StatusFailed)
 			sei.mu.Lock()
 			sei.fsm.Fire(TriggerFail)
 			sei.mu.Unlock()
@@ -3403,7 +3396,8 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 		if errors.Is(err, ErrPaused) {
 			sei.entity.Status = StatusPaused
 			sei.entity.Paused = true
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.orchestrator.db.UpdateEntityStatus(sei.entity.ID, StatusPaused)
+			sei.orchestrator.db.UpdateEntityPaused(sei.entity.ID, true)
 			sei.mu.Lock()
 			sei.fsm.Fire(TriggerPause)
 			sei.mu.Unlock()
@@ -3416,7 +3410,7 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			execution.CompletedAt = &completedAt
 			sei.entity.Status = StatusCompleted
 			sei.orchestrator.db.UpdateExecution(execution)
-			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.orchestrator.db.UpdateEntityStatus(sei.entity.ID, StatusCompleted)
 			sei.mu.Lock()
 			sei.fsm.Fire(TriggerComplete)
 			sei.mu.Unlock()
@@ -3440,7 +3434,7 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			} else {
 				// Max attempts reached
 				sei.entity.Status = StatusFailed
-				sei.orchestrator.db.UpdateEntity(sei.entity)
+				sei.orchestrator.db.UpdateEntityStatus(sei.entity.ID, StatusFailed)
 				sei.mu.Lock()
 				sei.fsm.Fire(TriggerFail)
 				sei.mu.Unlock()
@@ -4257,7 +4251,7 @@ func (e *ContinueAsNewError) Error() string {
 
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
-	mu                deadlock.Mutex // TODO: need to support mutex to fix all those data races
+	mu                deadlock.Mutex
 	stepID            string
 	handler           HandlerInfo
 	input             []interface{}
@@ -4353,8 +4347,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		maxInterval = 5 * time.Minute
 	}
 
-	// Somehow we need to also check if `wi.entity.Resumable` is true and allow to pass that for loop
-	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWithRetry maxAttempts: %d, initialInterval: %v, backoffCoefficient: %f, maxInterval: %v", wi.stepID, wi.entity.ID, maxAttempts, initialInterval, backoffCoefficient, maxInterval)
+	// Start attempt from RetryState
 	attempt = wi.entity.RetryState.Attempts + 1
 
 	for {
@@ -4362,7 +4355,8 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			log.Printf("WorkflowInstance %s is paused", wi.stepID)
 			wi.entity.Status = StatusPaused
 			wi.entity.Paused = true
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusPaused)
+			wi.orchestrator.db.UpdateEntityPaused(wi.entity.ID, true)
 			wi.fsm.Fire(TriggerPause)
 			return nil
 		}
@@ -4370,7 +4364,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		// Check if maximum attempts have been reached and not resumable
 		if attempt > maxAttempts && !wi.entity.Resumable {
 			wi.entity.Status = StatusFailed
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusFailed)
 			wi.fsm.Fire(TriggerFail)
 			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt-1)
 			return nil
@@ -4380,7 +4374,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		if attempt <= maxAttempts {
 			wi.entity.RetryState.Attempts = attempt
 		}
-		wi.orchestrator.db.UpdateEntity(wi.entity)
+		wi.orchestrator.db.UpdateEntityRetryState(wi.entity.ID, wi.entity.RetryState)
 
 		// Create Execution
 		execution := &Execution{
@@ -4395,7 +4389,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		if err = wi.orchestrator.db.AddExecution(execution); err != nil {
 			log.Printf("Error adding execution: %v", err)
 			wi.entity.Status = StatusFailed
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusFailed)
 			wi.fsm.Fire(TriggerFail)
 			return nil
 		}
@@ -4425,7 +4419,8 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		if errors.Is(err, ErrPaused) {
 			wi.entity.Status = StatusPaused
 			wi.entity.Paused = true
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusPaused)
+			wi.orchestrator.db.UpdateEntityPaused(wi.entity.ID, true)
 			wi.fsm.Fire(TriggerPause)
 			log.Printf("WorkflowInstance %s is paused post-runWorkflow", wi.stepID)
 			return nil
@@ -4437,7 +4432,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			execution.CompletedAt = &completedAt
 			wi.entity.Status = StatusCompleted
 			wi.orchestrator.db.UpdateExecution(execution)
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusCompleted)
 			wi.fsm.Fire(TriggerComplete)
 			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) completed successfully", wi.stepID, wi.entity.ID, wi.executionID)
 			return nil
@@ -4461,7 +4456,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 			} else {
 				// Max attempts reached and not resumable
 				wi.entity.Status = StatusFailed
-				wi.orchestrator.db.UpdateEntity(wi.entity)
+				wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusFailed)
 				wi.fsm.Fire(TriggerFail)
 				log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt)
 				return nil
@@ -4542,7 +4537,7 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 		log.Printf("Context cancelled in workflow")
 		wi.err = wi.ctx.Err()
 		return wi.err
-	case <-time.After(0):
+	default:
 	}
 
 	results := reflect.ValueOf(f).Call(argsValues)
@@ -4799,6 +4794,7 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 
 var ErrQueueExists = errors.New("queue already exists")
 var ErrQueueNotFound = errors.New("queue not found")
+var ErrEntityNotFound = errors.New("entity not found")
 
 // Database interface defines methods for interacting with the data store.
 // All methods return errors to handle future implementations that might have errors.
@@ -4824,6 +4820,9 @@ type Database interface {
 	UpdateEntity(entity *Entity) error
 	GetEntityStatus(id int) (EntityStatus, error)
 	UpdateEntityStatus(id int, status EntityStatus) error
+	UpdateEntityPaused(id int, paused bool) error
+	UpdateEntityRetryState(id int, retryState *RetryState) error
+	UpdateEntityResumable(id int, resumable bool) error
 	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error)
 	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error)
 	FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error)
@@ -5010,8 +5009,6 @@ func (db *DefaultDatabase) AddEntity(entity *Entity) error {
 	return nil
 }
 
-var ErrEntityNotFound = errors.New("entity not found")
-
 func (db *DefaultDatabase) GetEntity(id int) (*Entity, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -5056,16 +5053,6 @@ func (db *DefaultDatabase) UpdateEntity(entity *Entity) error {
 	return nil
 }
 
-func (db *DefaultDatabase) GetEntityStatus(id int) (EntityStatus, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	entity, exists := db.entities[id]
-	if !exists {
-		return "", errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
-	}
-	return entity.Status, nil
-}
-
 func (db *DefaultDatabase) UpdateEntityStatus(id int, status EntityStatus) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -5076,6 +5063,52 @@ func (db *DefaultDatabase) UpdateEntityStatus(id int, status EntityStatus) error
 	entity.Status = status
 	entity.UpdatedAt = time.Now()
 	return nil
+}
+
+func (db *DefaultDatabase) UpdateEntityPaused(id int, paused bool) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	entity.Paused = paused
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) UpdateEntityRetryState(id int, retryState *RetryState) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	entity.RetryState = retryState
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) UpdateEntityResumable(id int, resumable bool) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	entity.Resumable = resumable
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) GetEntityStatus(id int) (EntityStatus, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return "", errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	return entity.Status, nil
 }
 
 func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error) {
