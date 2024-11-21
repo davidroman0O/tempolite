@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -15,10 +17,10 @@ func TestOrchestratorWorkflow(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := false
+	var executed uint32 // Use atomic variable
 
 	workflow := func(ctx WorkflowContext) error {
-		executed = true
+		atomic.StoreUint32(&executed, 1) // Atomically set executed to true
 		return nil
 	}
 
@@ -33,7 +35,7 @@ func TestOrchestratorWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !executed {
+	if atomic.LoadUint32(&executed) == 0 {
 		t.Fatal("Workflow was not executed")
 	}
 
@@ -56,10 +58,10 @@ func TestOrchestratorSubWorkflow(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := false
+	var executed uint32 // Use atomic variable
 
 	subWorkflow := func(ctx WorkflowContext) error {
-		executed = true
+		atomic.StoreUint32(&executed, 1) // Atomically set executed to true
 		return nil
 	}
 
@@ -81,7 +83,7 @@ func TestOrchestratorSubWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !executed {
+	if atomic.LoadUint32(&executed) == 0 {
 		t.Fatal("Workflow was not executed")
 	}
 
@@ -95,10 +97,10 @@ func TestOrchestratorWorkflowActivity(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := false
+	var executed uint32 // Use atomic variable
 
 	activity := func(ctx ActivityContext) error {
-		executed = true
+		atomic.StoreUint32(&executed, 1) // Atomically set executed to true
 		return nil
 	}
 
@@ -120,7 +122,7 @@ func TestOrchestratorWorkflowActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !executed {
+	if atomic.LoadUint32(&executed) == 0 {
 		t.Fatal("Workflow was not executed")
 	}
 
@@ -129,13 +131,12 @@ func TestOrchestratorWorkflowActivity(t *testing.T) {
 }
 
 type sagaA struct {
-	executed           bool
+	executed           uint32 // Use atomic variable
 	onCompensationFunc func()
 }
 
 func (a *sagaA) Transaction(ctx TransactionContext) (interface{}, error) {
-	a.executed = true
-
+	atomic.StoreUint32(&a.executed, 1) // Atomically set executed to true
 	return nil, nil
 }
 
@@ -148,12 +149,12 @@ func (a *sagaA) Compensation(ctx CompensationContext) (interface{}, error) {
 }
 
 type sagaB struct {
-	executed           bool
+	executed           uint32 // Use atomic variable
 	onCompensationFunc func()
 }
 
 func (b *sagaB) Transaction(ctx TransactionContext) (interface{}, error) {
-	b.executed = true
+	atomic.StoreUint32(&b.executed, 1) // Atomically set executed to true
 	return nil, nil
 }
 
@@ -165,13 +166,13 @@ func (b *sagaB) Compensation(ctx CompensationContext) (interface{}, error) {
 }
 
 type sagaC struct {
-	executed           bool
+	executed           uint32 // Use atomic variable
 	onCompensationFunc func()
 	failTransaction    bool
 }
 
 func (c *sagaC) Transaction(ctx TransactionContext) (interface{}, error) {
-	c.executed = true
+	atomic.StoreUint32(&c.executed, 1) // Atomically set executed to true
 	if c.failTransaction {
 		return nil, errors.New("intentional failure")
 	}
@@ -226,13 +227,13 @@ func TestOrchestratorWorkflowSaga(t *testing.T) {
 	}
 
 	// Check if all transactions have been executed
-	if !sagaStepA.executed {
+	if atomic.LoadUint32(&sagaStepA.executed) == 0 {
 		t.Fatal("Transaction for sagaA was not executed")
 	}
-	if !sagaStepB.executed {
+	if atomic.LoadUint32(&sagaStepB.executed) == 0 {
 		t.Fatal("Transaction for sagaB was not executed")
 	}
-	if !sagaStepC.executed {
+	if atomic.LoadUint32(&sagaStepC.executed) == 0 {
 		t.Fatal("Transaction for sagaC was not executed")
 	}
 
@@ -248,15 +249,20 @@ func TestOrchestratorSagaCompensation(t *testing.T) {
 
 	// Slice to track compensation order
 	var compensationOrder []string
+	var compensationOrderMu sync.Mutex // Mutex to protect compensationOrder
 
 	// Create instances of saga steps with compensation functions
 	sagaStepA := &sagaA{
 		onCompensationFunc: func() {
+			compensationOrderMu.Lock()
+			defer compensationOrderMu.Unlock()
 			compensationOrder = append(compensationOrder, "A")
 		},
 	}
 	sagaStepB := &sagaB{
 		onCompensationFunc: func() {
+			compensationOrderMu.Lock()
+			defer compensationOrderMu.Unlock()
 			compensationOrder = append(compensationOrder, "B")
 		},
 	}
@@ -296,12 +302,18 @@ func TestOrchestratorSagaCompensation(t *testing.T) {
 
 	fmt.Println("Saga failure", err)
 
+	// Lock the mutex before accessing compensationOrder
+	compensationOrderMu.Lock()
+	orderCopy := make([]string, len(compensationOrder))
+	copy(orderCopy, compensationOrder)
+	compensationOrderMu.Unlock()
+
 	// Check that compensations were called in the correct order
-	if len(compensationOrder) != 2 {
-		t.Fatalf("Expected 2 compensations, got %d", len(compensationOrder))
+	if len(orderCopy) != 2 {
+		t.Fatalf("Expected 2 compensations, got %d", len(orderCopy))
 	}
-	if compensationOrder[0] != "B" || compensationOrder[1] != "A" {
-		t.Fatalf("Compensations were not called in correct order: %v", compensationOrder)
+	if orderCopy[0] != "B" || orderCopy[1] != "A" {
+		t.Fatalf("Compensations were not called in correct order: %v", orderCopy)
 	}
 
 	t.Log("Orchestrator saga compensation test completed successfully")
@@ -314,14 +326,14 @@ func TestOrchestratorWorkflowSideEffect(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := false
+	var executed uint32 // Use atomic variable
 	var a int
 
 	workflow := func(ctx WorkflowContext) error {
 
 		if err := ctx.SideEffect("switch-a", func() int {
-			executed = true
-			return rand.Intn(100)
+			atomic.StoreUint32(&executed, 1) // Atomically set executed to true
+			return rand.Intn(99) + 1         // Returns a number between 1 and 99
 		}).Get(&a); err != nil {
 			return err
 		}
@@ -340,7 +352,7 @@ func TestOrchestratorWorkflowSideEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !executed {
+	if atomic.LoadUint32(&executed) == 0 {
 		t.Fatal("Workflow was not executed")
 	}
 
@@ -358,11 +370,11 @@ func TestOrchestratorRetryFailureWorkflow(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	workflow := func(ctx WorkflowContext) error {
-		executed++
-		if executed < 3 {
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
+		if atomic.LoadInt32(&executed) < 3 {
 			return errors.New("intentional failure")
 		}
 		return nil
@@ -414,8 +426,8 @@ func TestOrchestratorRetryFailureWorkflow(t *testing.T) {
 		t.Fatal("Expected workflow to succeed")
 	}
 
-	if executed != 4 {
-		t.Fatalf("Expected 4 executions, got %d", executed)
+	if atomic.LoadInt32(&executed) != 4 {
+		t.Fatalf("Expected 4 executions, got %d", atomic.LoadInt32(&executed))
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
@@ -428,11 +440,11 @@ func TestOrchestratorWorkflowRetryPolicy(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	workflow := func(ctx WorkflowContext) error {
-		executed++
-		if executed < 3 {
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
+		if atomic.LoadInt32(&executed) < 3 {
 			return errors.New("intentional failure")
 		}
 		return nil
@@ -453,8 +465,8 @@ func TestOrchestratorWorkflowRetryPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if executed != 3 {
-		t.Fatalf("Expected 3 executions, got %d", executed)
+	if atomic.LoadInt32(&executed) != 3 {
+		t.Fatalf("Expected 3 executions, got %d", atomic.LoadInt32(&executed))
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
@@ -467,10 +479,10 @@ func TestOrchestratorWorkflowRetryPolicyFailure(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	workflow := func(ctx WorkflowContext) error {
-		executed++
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
 		return errors.New("intentional failure")
 	}
 
@@ -490,8 +502,8 @@ func TestOrchestratorWorkflowRetryPolicyFailure(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	if executed != 3 {
-		t.Fatalf("Expected 3 executions, got %d", executed)
+	if atomic.LoadInt32(&executed) != 3 {
+		t.Fatalf("Expected 3 executions, got %d", atomic.LoadInt32(&executed))
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
@@ -504,12 +516,12 @@ func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	workflow := func(ctx WorkflowContext) error {
-		executed++
-		if executed < 3 {
-			fmt.Println("Continue as new", executed)
+		count := atomic.AddInt32(&executed, 1)
+		if count < 3 {
+			fmt.Println("Continue as new", count)
 			return ctx.ContinueAsNew(nil)
 		}
 		return nil
@@ -526,16 +538,17 @@ func TestOrchestratorWorkflowContinueAsNew(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The original future will ends because of the ContinueAsNew, it will be a new workflow, the current future won't follow it
-	// So we need to wait for all continuations
 	if err := o.WaitForContinuations(future.WorkflowID()); err != nil {
 		t.Fatal(err)
 	}
 
-	o.Wait() // you have to wait before checking the executed count (duuuh)
+	if err := o.Wait(); err != nil {
+		t.Fatal(err)
+	}
 
-	if executed != 3 {
-		t.Fatalf("Expected 3 executions, got %d", executed)
+	finalCount := atomic.LoadInt32(&executed)
+	if finalCount != 3 {
+		t.Fatalf("Expected 3 executions, got %d", finalCount)
 	}
 
 	t.Log("Orchestrator workflow completed successfully")
@@ -547,16 +560,16 @@ func TestOrchestratorWorkflowPauseResume(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	subWorkflow := func(ctx WorkflowContext) error {
-		<-time.After(1 * time.Second)
+		time.Sleep(1 * time.Second)
 		return nil
 	}
 
 	workflow := func(ctx WorkflowContext) error {
 		t.Log("Executing workflows")
-		executed++
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
 		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
 			return err
 		}
@@ -576,10 +589,10 @@ func TestOrchestratorWorkflowPauseResume(t *testing.T) {
 	future := o.Execute(workflow, nil)
 
 	go func() {
-		<-time.After(2 * time.Second)
+		time.Sleep(2 * time.Second)
 		o.Pause()
 		fmt.Println("Pausing orchestrator, 2s")
-		<-time.After(2 * time.Second)
+		time.Sleep(2 * time.Second)
 		fmt.Println("Resuming orchestrator")
 		o.Resume(future.WorkflowID())
 	}()
@@ -594,14 +607,14 @@ func TestOrchestratorWorkflowPauseResume(t *testing.T) {
 	}
 	t.Log("Workflow future came back after pause")
 
-	<-time.After(2 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	if err := o.Wait(); err != nil {
 		t.Fatal(err)
-	} // you have to wait before checking the executed count (duuuh)
+	}
 
-	if executed != 2 {
-		t.Fatalf("Expected 2 executions, got %d", executed)
+	if atomic.LoadInt32(&executed) != 2 {
+		t.Fatalf("Expected 2 executions, got %d", atomic.LoadInt32(&executed))
 	}
 
 	t.Log("Orchestrator workflow completed successfully")

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -49,7 +51,7 @@ func TestQueueWorkflowDb(t *testing.T) {
 	future.setEntityID(id)
 
 	t.Log("Waiting for future")
-	if err := future.Get(); err != nil { // it is stuck there
+	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -95,7 +97,7 @@ func TestQueueWorkflowDbActivity(t *testing.T) {
 	future.setEntityID(id)
 
 	t.Log("Waiting for future")
-	if err := future.Get(); err != nil { // it is stuck there
+	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,16 +113,16 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := 0
+	var executed int32 // Use atomic variable
 
 	subWorkflow := func(ctx WorkflowContext) error {
-		<-time.After(1 * time.Second)
+		time.Sleep(1 * time.Second)
 		return nil
 	}
 
 	workflow := func(ctx WorkflowContext) error {
 		t.Log("Executing workflows")
-		executed++
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
 		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
 			return err
 		}
@@ -137,7 +139,7 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 
 	qm := newQueueManager(ctx, "default", 1, register, database)
 
-	<-time.After(2 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	id, err := qm.CreateWorkflow(workflow, nil)
 	if err != nil {
@@ -151,30 +153,42 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 	future := NewDatabaseFuture(ctx, database)
 	future.setEntityID(id)
 
+	var goroutineError error
+	var goroutineErrorMu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
-		<-time.After(1 * time.Second)
+		defer wg.Done()
+		time.Sleep(1 * time.Second)
 		if _, err := qm.Pause(id).Wait(context.Background()); err != nil {
-			t.Fatal(err)
+			goroutineErrorMu.Lock()
+			goroutineError = err
+			goroutineErrorMu.Unlock()
+			return
 		}
 		fmt.Println("Pausing orchestrator, 2s")
-		<-time.After(2 * time.Second)
+		time.Sleep(2 * time.Second)
 		fmt.Println("Resuming orchestrator")
 		if _, err := qm.Resume(id).Wait(context.Background()); err != nil {
-			t.Fatal(err)
+			goroutineErrorMu.Lock()
+			goroutineError = err
+			goroutineErrorMu.Unlock()
+			return
 		}
 	}()
 
 	t.Log("Waiting for future")
-	if err := future.Get(); err != nil { // it is stuck there
+	if err := future.Get(); err != nil {
 		if !errors.Is(err, ErrPaused) {
 			t.Fatal(err)
 		}
 	}
 
-	<-time.After(2 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	t.Log("Waiting for future post wait")
-	if err := future.Get(); err != nil { // it is stuck there
+	if err := future.Get(); err != nil {
 		fmt.Println("post wait", err)
 		t.Fatal(err)
 	}
@@ -184,12 +198,20 @@ func TestQueueWorkflowDbPauseResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if executed != 2 {
-		t.Fatalf("Executed not 2 but %d", executed)
+	// Wait for the goroutine to finish
+	wg.Wait()
+
+	// Check for errors from goroutine
+	goroutineErrorMu.Lock()
+	if goroutineError != nil {
+		t.Fatal(goroutineError)
+	}
+	goroutineErrorMu.Unlock()
+
+	if atomic.LoadInt32(&executed) != 2 {
+		t.Fatalf("Executed not 2 but %d", atomic.LoadInt32(&executed))
 	}
 }
-
-// TODO: make test when we restart queue
 
 func TestQueueWorkflowDbRestart(t *testing.T) {
 
@@ -197,17 +219,16 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 	register := NewRegistry()
 	ctx := context.Background()
 
-	executed := new(int)
-	*executed = 0
+	var executed int32 // Use atomic variable
 
 	subWorkflow := func(ctx WorkflowContext) error {
-		<-time.After(1 * time.Second)
+		time.Sleep(1 * time.Second)
 		return nil
 	}
 
 	workflow := func(ctx WorkflowContext) error {
 		t.Log("Executing workflows")
-		(*executed)++
+		atomic.AddInt32(&executed, 1) // Atomically increment executed
 		if err := ctx.Workflow("sub1", subWorkflow, nil).Get(); err != nil {
 			return err
 		}
@@ -270,8 +291,8 @@ func TestQueueWorkflowDbRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if *executed != 2 {
-		fmt.Printf("executed not 2 but %d\n", *executed)
-		t.Fatalf("Executed not 2 but %d", *executed)
+	if atomic.LoadInt32(&executed) != 2 {
+		fmt.Printf("Executed not 2 but %d\n", atomic.LoadInt32(&executed))
+		t.Fatalf("Executed not 2 but %d", atomic.LoadInt32(&executed))
 	}
 }

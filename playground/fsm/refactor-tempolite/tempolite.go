@@ -1724,23 +1724,31 @@ func (o *Orchestrator) Wait() error {
 
 	// Root workflow has completed or failed
 	// Get final status safely
-	status, err := o.db.GetEntityStatus(o.rootWf.entityID)
+	o.instancesMu.RLock()
+	rootWfEntityID := o.rootWf.entityID
+	o.instancesMu.RUnlock()
+
+	status, err := o.db.GetEntityStatus(rootWfEntityID)
 	if err != nil {
 		log.Printf("error getting entity status: %v", err)
 		return err
 	}
 
 	var latestExecution *Execution
-	if latestExecution, err = o.db.GetLatestExecution(o.rootWf.entityID); err != nil {
+	if latestExecution, err = o.db.GetLatestExecution(rootWfEntityID); err != nil {
 		log.Printf("error getting latest execution: %v", err)
 		return err
 	}
 
 	switch status {
 	case StatusCompleted:
-		o.rootWf.mu.Lock()
-		results := o.rootWf.results
-		o.rootWf.mu.Unlock()
+		o.instancesMu.RLock()
+		rootWf := o.rootWf
+		o.instancesMu.RUnlock()
+
+		rootWf.mu.Lock()
+		results := rootWf.results
+		rootWf.mu.Unlock()
 		if results != nil && len(results) > 0 {
 			fmt.Printf("Root workflow completed successfully with results: %v\n", results)
 		} else {
@@ -1753,13 +1761,17 @@ func (o *Orchestrator) Wait() error {
 		if latestExecution.Error != "" {
 			errMsg = latestExecution.Error
 		} else {
-			o.rootWf.mu.Lock()
-			if o.rootWf.err != nil {
-				errMsg = o.rootWf.err.Error()
+			o.instancesMu.RLock()
+			rootWf := o.rootWf
+			o.instancesMu.RUnlock()
+
+			rootWf.mu.Lock()
+			if rootWf.err != nil {
+				errMsg = rootWf.err.Error()
 			} else {
 				errMsg = "unknown error"
 			}
-			o.rootWf.mu.Unlock()
+			rootWf.mu.Unlock()
 		}
 		fmt.Printf("Root workflow failed with error: %v\n", errMsg)
 	default:
@@ -4689,18 +4701,18 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			parentStepID:      wi.parentStepID,
 		}
 
-		// Lock orchestrator's instancesMu before modifying shared state
+		// Lock orchestrator's instancesMu before accessing or modifying shared state
 		o.instancesMu.Lock()
 		defer o.instancesMu.Unlock()
-
-		// Add the new instance to the orchestrator's instances
-		o.instances = append(o.instances, newInstance)
 
 		// Update rootWf if this is the root workflow
 		isRootWorkflow := (wi == o.rootWf)
 		if isRootWorkflow {
 			o.rootWf = newInstance
 		}
+
+		// Add the new instance to the orchestrator's instances
+		o.instances = append(o.instances, newInstance)
 
 		// Now we can start the new instance
 		newInstance.Start()
