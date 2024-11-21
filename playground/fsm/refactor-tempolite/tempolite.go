@@ -1989,6 +1989,9 @@ func (o *Orchestrator) WaitForContinuations(originalID int) error {
 		if err != nil {
 			return fmt.Errorf("error getting latest execution: %v", err)
 		}
+		if latestExecution == nil {
+			return fmt.Errorf("no execution found for workflow %d", currentID)
+		}
 
 		if latestExecution.Status == ExecutionStatusCompleted {
 			// Look for any child workflow that was created via ContinueAsNew
@@ -4473,15 +4476,17 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 }
 
 // Sub-function to run the workflow within retry loop
+
 func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d, Execution ID: %d) runWorkflow attempt %d", wi.stepID, wi.entity.ID, execution.ID, execution.Attempt)
 	var err error
-	// Check if result already exists in the database
-	var latestExecution *Execution
-	if latestExecution, err = wi.orchestrator.db.GetLatestExecution(wi.entity.ID); err != nil {
+	// Get the latest execution, which may be nil if none exist
+	latestExecution, err := wi.orchestrator.db.GetLatestExecution(wi.entity.ID)
+	if err != nil {
 		log.Printf("Error getting latest execution: %v", err)
-		return err
+		return err // Only return if there's an actual error
 	}
+
 	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", wi.entity.ID)
 		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Outputs)
@@ -4689,20 +4694,21 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			parentStepID:      wi.parentStepID,
 		}
 
-		// Start the new workflow instance to initialize fsm
-		newInstance.Start()
-
-		// Determine if this is the root workflow
+		// Lock orchestrator's instancesMu before modifying shared state
 		o.instancesMu.Lock()
+		defer o.instancesMu.Unlock()
+
+		// Add the new instance to the orchestrator's instances
+		o.instances = append(o.instances, newInstance)
+
+		// Update rootWf if this is the root workflow
 		isRootWorkflow := (wi == o.rootWf)
 		if isRootWorkflow {
-			// Update rootWf
 			o.rootWf = newInstance
 		}
-		o.instancesMu.Unlock()
 
-		// Add the new instance
-		o.addWorkflowInstance(newInstance)
+		// Now we can start the new instance
+		newInstance.Start()
 
 		if isRootWorkflow {
 			// Complete the future immediately
@@ -4714,6 +4720,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			// Pass the future to the newInstance
 			newInstance.future = wi.future
 		}
+
 	} else {
 		// Normal completion
 		if wi.future != nil {
@@ -5170,10 +5177,8 @@ func (db *DefaultDatabase) GetLatestExecution(entityID int) (*Execution, error) 
 			}
 		}
 	}
-	if latestExecution != nil {
-		return latestExecution, nil
-	}
-	return nil, errors.New("execution not found")
+	// Return latestExecution (which may be nil), and nil error
+	return latestExecution, nil
 }
 
 // Queue methods
