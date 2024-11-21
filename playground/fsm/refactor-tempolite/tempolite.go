@@ -14,15 +14,29 @@ import (
 	"time"
 
 	"math/rand"
-	"sync"
 
 	"github.com/qmuntal/stateless"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stephenfire/go-rtl"
+	"go.uber.org/automaxprocs/maxprocs"
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/davidroman0O/retrypool/logs"
 	"golang.org/x/sync/errgroup"
 )
+
+func init() {
+	maxprocs.Set()
+
+	deadlock.Opts.DeadlockTimeout = time.Second * 2 // Time to wait before reporting a potential deadlock
+	deadlock.Opts.OnPotentialDeadlock = func() {
+		// You can customize the behavior when a potential deadlock is detected
+		log.Println("POTENTIAL DEADLOCK DETECTED!")
+		buf := make([]byte, 1<<16)
+		runtime.Stack(buf, true)
+		log.Printf("Goroutine stack dump:\n%s", buf)
+	}
+}
 
 /// FILE: ./activities.go
 
@@ -41,6 +55,7 @@ func (ac ActivityContext) Err() error {
 
 // ActivityInstance represents an instance of an activity execution.
 type ActivityInstance struct {
+	mu                deadlock.Mutex
 	stepID            string
 	handler           HandlerInfo
 	input             []interface{}
@@ -62,6 +77,7 @@ type ActivityInstance struct {
 }
 
 func (ai *ActivityInstance) Start() {
+	ai.mu.Lock()
 	// Initialize the FSM
 	ai.fsm = stateless.NewStateMachine(StateIdle)
 	ai.fsm.Configure(StateIdle).
@@ -83,9 +99,12 @@ func (ai *ActivityInstance) Start() {
 	ai.fsm.Configure(StatePaused).
 		OnEntry(ai.onPaused).
 		Permit(TriggerResume, StateExecuting)
+	ai.mu.Unlock()
 
 	// Start the FSM
-	go ai.fsm.Fire(TriggerStart)
+	go func() {
+		ai.fsm.Fire(TriggerStart)
+	}()
 }
 
 func (ai *ActivityInstance) executeActivity(_ context.Context, _ ...interface{}) error {
@@ -121,7 +140,9 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			ai.entity.Status = StatusPaused
 			ai.entity.Paused = true
 			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.mu.Lock()
 			ai.fsm.Fire(TriggerPause)
+			ai.mu.Unlock()
 			return nil
 		}
 
@@ -144,7 +165,9 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			log.Printf("Error adding execution: %v", err)
 			ai.entity.Status = StatusFailed
 			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.mu.Lock()
 			ai.fsm.Fire(TriggerFail)
+			ai.mu.Unlock()
 			return nil
 		}
 		ai.entity.Executions = append(ai.entity.Executions, execution)
@@ -176,7 +199,9 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			ai.entity.Status = StatusPaused
 			ai.entity.Paused = true
 			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.mu.Lock()
 			ai.fsm.Fire(TriggerPause)
+			ai.mu.Unlock()
 			return nil
 		}
 		if err == nil {
@@ -187,7 +212,9 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			ai.entity.Status = StatusCompleted
 			ai.orchestrator.db.UpdateExecution(execution)
 			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.mu.Lock()
 			ai.fsm.Fire(TriggerComplete)
+			ai.mu.Unlock()
 			return nil
 		} else {
 			execution.Status = ExecutionStatusFailed
@@ -209,7 +236,9 @@ func (ai *ActivityInstance) executeWithRetry() error {
 				// Max attempts reached
 				ai.entity.Status = StatusFailed
 				ai.orchestrator.db.UpdateEntity(ai.entity)
+				ai.mu.Lock()
 				ai.fsm.Fire(TriggerFail)
+				ai.mu.Unlock()
 				return nil
 			}
 		}
@@ -218,17 +247,22 @@ func (ai *ActivityInstance) executeWithRetry() error {
 }
 
 // Sub-function within executeWithRetry
+
 func (ai *ActivityInstance) runActivity(execution *Execution) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d) runActivity attempt %d", ai.stepID, ai.entity.ID, execution.ID, execution.Attempt)
+
+	// You only need to lock when accessing shared data
 	var err error
-	// Check if result already exists in the database
 	var latestExecution *Execution
-	if latestExecution, err = ai.orchestrator.db.GetLatestExecution(ai.entity.ID); err != nil {
+	latestExecution, err = ai.orchestrator.db.GetLatestExecution(ai.entity.ID)
+	if err != nil {
 		log.Printf("Error getting latest execution: %v", err)
 		return err
 	}
 
-	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Outputs != nil {
+	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted &&
+		latestExecution.ActivityExecutionData != nil &&
+		latestExecution.ActivityExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", ai.entity.ID)
 		outputs, err := convertOutputsFromSerialization(ai.handler, latestExecution.ActivityExecutionData.Outputs)
 		if err != nil {
@@ -286,7 +320,6 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 
 		// Serialize error
 		errorMessage := ai.err.Error()
-
 		// Update execution error
 		execution.Error = errorMessage
 
@@ -334,7 +367,10 @@ func (ai *ActivityInstance) runActivity(execution *Execution) error {
 func (ai *ActivityInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d) onCompleted called", ai.stepID, ai.entity.ID)
 	if ai.future != nil {
-		ai.future.setResult(ai.results)
+		ai.mu.Lock()
+		results := ai.results
+		ai.mu.Unlock()
+		ai.future.setResult(results)
 	}
 	return nil
 }
@@ -342,7 +378,10 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, _ ...interface{}) err
 func (ai *ActivityInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d) onFailed called", ai.stepID, ai.entity.ID)
 	if ai.future != nil {
-		ai.future.setError(ai.err)
+		ai.mu.Lock()
+		err := ai.err
+		ai.mu.Unlock()
+		ai.future.setError(err)
 	}
 	return nil
 }
@@ -968,23 +1007,6 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 
 	// Use the retry policy from options or default
 	var retryPolicy *RetryPolicy
-	// if options != nil && options.RetryPolicy != nil {
-	// 	rp := options.RetryPolicy
-	// 	// Fill defaults where zero
-	// 	if rp.MaxAttempts == 0 {
-	// 		rp.MaxAttempts = 1
-	// 	}
-	// 	if rp.InitialInterval == 0 {
-	// 		rp.InitialInterval = time.Second
-	// 	}
-	// 	if rp.BackoffCoefficient == 0 {
-	// 		rp.BackoffCoefficient = 2.0
-	// 	}
-	// 	if rp.MaxInterval == 0 {
-	// 		rp.MaxInterval = 5 * time.Minute
-	// 	}
-	// 	retryPolicy = rp
-	// } else {
 	// Default retry policy with MaxAttempts=1
 	retryPolicy = &RetryPolicy{
 		MaxAttempts:        1,
@@ -992,7 +1014,6 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		BackoffCoefficient: 2.0,
 		MaxInterval:        5 * time.Minute,
 	}
-	// }
 
 	// Convert API RetryPolicy to internal retry policy
 	internalRetryPolicy := &retryPolicyInternal{
@@ -1038,15 +1059,14 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 
 	// Prepare to create the side effect instance
 	sideEffectInstance := &SideEffectInstance{
-		stepID:         stepID,
-		sideEffectFunc: sideEffectFunc,
-		future:         future,
-		ctx:            ctx.ctx,
-		orchestrator:   ctx.orchestrator,
-		workflowID:     ctx.workflowID,
-		entityID:       entity.ID,
-		options:        nil,
-		// options:           options,
+		stepID:            stepID,
+		sideEffectFunc:    sideEffectFunc,
+		future:            future,
+		ctx:               ctx.ctx,
+		orchestrator:      ctx.orchestrator,
+		workflowID:        ctx.workflowID,
+		entityID:          entity.ID,
+		options:           nil,
 		returnTypes:       returnTypes,
 		handlerName:       handlerName,
 		handler:           handler,
@@ -1061,511 +1081,6 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	sideEffectInstance.Start()
 
 	return future
-}
-
-/// FILE: ./database.go
-
-var ErrQueueExists = errors.New("queue already exists")
-var ErrQueueNotFound = errors.New("queue not found")
-
-// Database interface defines methods for interacting with the data store.
-// All methods return errors to handle future implementations that might have errors.
-type Database interface {
-	// Run methods
-	AddRun(run *Run) error
-	GetRun(id int) (*Run, error)
-	UpdateRun(run *Run) error
-
-	// Version methods
-	GetVersion(entityID int, changeID string) (*Version, error)
-	SetVersion(version *Version) error
-
-	// Hierarchy methods
-	AddHierarchy(hierarchy *Hierarchy) error
-	GetHierarchy(parentID, childID int) (*Hierarchy, error)
-	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
-
-	// Entity methods
-	AddEntity(entity *Entity) error
-	HasEntity(id int) (bool, error)
-	GetEntity(id int) (*Entity, error)
-	UpdateEntity(entity *Entity) error
-	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error)
-	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error)
-	FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error)
-
-	// Execution methods
-	AddExecution(execution *Execution) error
-	GetExecution(id int) (*Execution, error)
-	UpdateExecution(execution *Execution) error
-	GetLatestExecution(entityID int) (*Execution, error)
-
-	// Queue methods
-	AddQueue(queue *Queue) error
-	GetQueue(id int) (*Queue, error)
-	GetQueueByName(name string) (*Queue, error)
-	UpdateQueue(queue *Queue) error
-	ListQueues() ([]*Queue, error)
-
-	// Clear removes all Runs that are 'Completed' and their associated data.
-	Clear() error
-}
-
-/// FILE: ./database_memory.go
-
-// DefaultDatabase is an in-memory implementation of Database.
-type DefaultDatabase struct {
-	runs        map[int]*Run
-	versions    map[int]*Version
-	hierarchies map[int]*Hierarchy
-	entities    map[int]*Entity
-	executions  map[int]*Execution
-	queues      map[int]*Queue
-	mu          sync.RWMutex
-}
-
-func NewDefaultDatabase() *DefaultDatabase {
-	db := &DefaultDatabase{
-		runs:        make(map[int]*Run),
-		versions:    make(map[int]*Version),
-		hierarchies: make(map[int]*Hierarchy),
-		entities:    make(map[int]*Entity),
-		executions:  make(map[int]*Execution),
-		queues:      make(map[int]*Queue),
-	}
-	db.queues[1] = &Queue{
-		ID:        1,
-		Name:      "default",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Entities:  []*Entity{},
-	}
-	return db
-}
-
-var (
-	runIDCounter       int64
-	versionIDCounter   int64
-	entityIDCounter    int64
-	executionIDCounter int64
-	hierarchyIDCounter int64
-	queueIDCounter     int64 = 1 // Starting from 1 for the default queue.
-)
-
-// Run methods
-func (db *DefaultDatabase) AddRun(run *Run) error {
-	runID := int(atomic.AddInt64(&runIDCounter, 1))
-	run.ID = runID
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.runs[run.ID] = run
-	return nil
-}
-
-func (db *DefaultDatabase) GetRun(id int) (*Run, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	run, exists := db.runs[id]
-	if !exists {
-		return nil, errors.New("run not found")
-	}
-
-	return db.copyRun(run), nil
-}
-
-func (db *DefaultDatabase) UpdateRun(run *Run) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.runs[run.ID]; !exists {
-		return errors.New("run not found")
-	}
-
-	db.runs[run.ID] = run
-	return nil
-}
-
-func (db *DefaultDatabase) copyRun(run *Run) *Run {
-	copyRun := *run
-	copyRun.Entities = make([]*Entity, len(run.Entities))
-	copy(copyRun.Entities, run.Entities)
-	return &copyRun
-}
-
-// Version methods
-func (db *DefaultDatabase) GetVersion(entityID int, changeID string) (*Version, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	for _, version := range db.versions {
-		if version.EntityID == entityID && version.ChangeID == changeID {
-			return version, nil
-		}
-	}
-	return nil, errors.New("version not found")
-}
-
-func (db *DefaultDatabase) SetVersion(version *Version) error {
-	versionID := int(atomic.AddInt64(&versionIDCounter, 1))
-	version.ID = versionID
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.versions[version.ID] = version
-	return nil
-}
-
-// Hierarchy methods
-func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) error {
-	hierarchyID := int(atomic.AddInt64(&hierarchyIDCounter, 1))
-	hierarchy.ID = hierarchyID
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.hierarchies[hierarchy.ID] = hierarchy
-	return nil
-}
-
-func (db *DefaultDatabase) GetHierarchy(parentID, childID int) (*Hierarchy, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	for _, h := range db.hierarchies {
-		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
-			return h, nil
-		}
-	}
-	return nil, errors.New("hierarchy not found")
-}
-
-func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	var result []*Hierarchy
-	for _, h := range db.hierarchies {
-		if h.ChildEntityID == childEntityID {
-			result = append(result, h)
-		}
-	}
-	return result, nil
-}
-
-// Entity methods
-func (db *DefaultDatabase) AddEntity(entity *Entity) error {
-	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
-	entity.ID = entityID
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.entities[entity.ID] = entity
-
-	// Add the entity to its Run
-	run, exists := db.runs[entity.RunID]
-	if exists {
-		run.Entities = append(run.Entities, entity)
-		db.runs[entity.RunID] = run
-	}
-
-	return nil
-}
-
-var ErrEntityNotFound = errors.New("entity not found")
-
-func (db *DefaultDatabase) GetEntity(id int) (*Entity, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	entity, exists := db.entities[id]
-	if !exists {
-		return nil, errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
-	}
-	copy := *entity
-	return &copy, nil
-}
-
-func (db *DefaultDatabase) HasEntity(id int) (bool, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	_, exists := db.entities[id]
-	return exists, nil
-}
-
-func (db *DefaultDatabase) UpdateEntity(entity *Entity) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.entities[entity.ID]; !exists {
-		return errors.Join(fmt.Errorf("entity %d", entity.ID), ErrEntityNotFound)
-	}
-
-	db.entities[entity.ID] = entity
-
-	// Update the entity in its Run's Entities slice
-	run, exists := db.runs[entity.RunID]
-	if exists {
-		for i, e := range run.Entities {
-			if e.ID == entity.ID {
-				run.Entities[i] = entity
-				db.runs[run.ID] = run
-				break
-			}
-		}
-	}
-
-	return nil
-}
-
-func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	for _, entity := range db.entities {
-		if entity.RunID == workflowID && entity.StepID == stepID {
-			return entity, nil
-		}
-	}
-	return nil, errors.Join(fmt.Errorf(
-		"entity with workflow ID %d and step ID %s", workflowID, stepID,
-	), ErrEntityNotFound)
-}
-
-func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	for _, hierarchy := range db.hierarchies {
-		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
-			childEntityID := hierarchy.ChildEntityID
-			if entity, exists := db.entities[childEntityID]; exists && entity.Type == entityType {
-				return entity, nil
-			}
-		}
-	}
-	return nil, errors.Join(fmt.Errorf(
-		"child entity with parent entity ID %d, step ID %s, and type %s", parentEntityID, stepID, entityType,
-	), ErrEntityNotFound)
-}
-
-func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	var result []*Entity
-	for _, entity := range db.entities {
-		if entity.Type == EntityTypeWorkflow &&
-			entity.Status == StatusPending &&
-			entity.QueueID == queueID {
-			result = append(result, entity)
-		}
-	}
-
-	// Sort by creation time
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.Before(result[j].CreatedAt)
-	})
-
-	return result, nil
-}
-
-// Execution methods
-func (db *DefaultDatabase) AddExecution(execution *Execution) error {
-	executionID := int(atomic.AddInt64(&executionIDCounter, 1))
-	execution.ID = executionID
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.executions[execution.ID] = execution
-	return nil
-}
-
-func (db *DefaultDatabase) GetExecution(id int) (*Execution, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	execution, exists := db.executions[id]
-	if !exists {
-		return nil, errors.New("execution not found")
-	}
-	return execution, nil
-}
-
-func (db *DefaultDatabase) UpdateExecution(execution *Execution) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.executions[execution.ID]; !exists {
-		return errors.New("execution not found")
-	}
-
-	db.executions[execution.ID] = execution
-	return nil
-}
-
-func (db *DefaultDatabase) GetLatestExecution(entityID int) (*Execution, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	var latestExecution *Execution
-	for _, execution := range db.executions {
-		if execution.EntityID == entityID {
-			if latestExecution == nil || execution.ID > latestExecution.ID {
-				latestExecution = execution
-			}
-		}
-	}
-	if latestExecution != nil {
-		return latestExecution, nil
-	}
-	return nil, errors.New("execution not found")
-}
-
-// Queue methods
-func (db *DefaultDatabase) AddQueue(queue *Queue) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	// Check if queue with same name exists
-	for _, q := range db.queues {
-		if q.Name == queue.Name {
-			return errors.New("queue already exists")
-		}
-	}
-
-	queueID := int(atomic.AddInt64(&queueIDCounter, 1))
-	queue.ID = queueID
-	queue.CreatedAt = time.Now()
-	queue.UpdatedAt = time.Now()
-
-	db.queues[queue.ID] = queue
-	return nil
-}
-
-func (db *DefaultDatabase) GetQueue(id int) (*Queue, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	queue, exists := db.queues[id]
-	if !exists {
-		return nil, errors.Join(ErrQueueNotFound)
-	}
-	copy := *queue
-	return &copy, nil
-}
-
-func (db *DefaultDatabase) GetQueueByName(name string) (*Queue, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	for _, queue := range db.queues {
-		if queue.Name == name {
-			return queue, nil
-		}
-	}
-	return nil, errors.Join(ErrQueueNotFound)
-}
-
-func (db *DefaultDatabase) UpdateQueue(queue *Queue) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if existing, exists := db.queues[queue.ID]; exists {
-		existing.UpdatedAt = time.Now()
-		existing.Name = queue.Name
-		existing.Entities = queue.Entities
-		db.queues[queue.ID] = existing
-		return nil
-	}
-	return errors.Join(ErrQueueNotFound)
-}
-
-func (db *DefaultDatabase) ListQueues() ([]*Queue, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	queues := make([]*Queue, 0, len(db.queues))
-	for _, q := range db.queues {
-		queues = append(queues, q)
-	}
-	return queues, nil
-}
-
-// Clear removes all Runs that are 'Completed' or 'Failed' and their associated data.
-func (db *DefaultDatabase) Clear() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	runsToDelete := []int{}
-	entitiesToDelete := map[int]bool{}
-	executionsToDelete := map[int]bool{}
-	hierarchiesToKeep := map[int]*Hierarchy{}
-	versionsToDelete := map[int]*Version{}
-
-	// Find Runs to delete
-	for runID, run := range db.runs {
-		if run.Status == string(StatusCompleted) || run.Status == string(StatusFailed) {
-			runsToDelete = append(runsToDelete, runID)
-			// Collect Entities associated with the Run
-			for _, entity := range run.Entities {
-				entitiesToDelete[entity.ID] = true
-			}
-		}
-	}
-
-	// Collect Executions associated with Entities to delete
-	for execID, execution := range db.executions {
-		if _, exists := entitiesToDelete[execution.EntityID]; exists {
-			executionsToDelete[execID] = true
-		}
-	}
-
-	// Collect Versions associated with Entities to delete
-	for versionID, version := range db.versions {
-		if _, exists := entitiesToDelete[version.EntityID]; exists {
-			versionsToDelete[versionID] = version
-		}
-	}
-
-	// Filter Hierarchies to keep only those not associated with Entities to delete
-	for hid, hierarchy := range db.hierarchies {
-		if _, parentExists := entitiesToDelete[hierarchy.ParentEntityID]; parentExists {
-			continue
-		}
-		if _, childExists := entitiesToDelete[hierarchy.ChildEntityID]; childExists {
-			continue
-		}
-		hierarchiesToKeep[hid] = hierarchy
-	}
-
-	// Delete Runs
-	for _, runID := range runsToDelete {
-		delete(db.runs, runID)
-	}
-
-	// Delete Entities and Executions
-	for entityID := range entitiesToDelete {
-		delete(db.entities, entityID)
-	}
-	for execID := range executionsToDelete {
-		delete(db.executions, execID)
-	}
-
-	// Delete Versions
-	for versionID := range versionsToDelete {
-		delete(db.versions, versionID)
-	}
-
-	// Replace hierarchies with the filtered ones
-	db.hierarchies = hierarchiesToKeep
-
-	return nil
 }
 
 /// FILE: ./futures.go
@@ -1649,24 +1164,6 @@ func (f *DatabaseFuture) handleResults(out ...interface{}) error {
 		return nil
 	}
 
-	// // Handle single result case
-	// if len(f.results) == 1 && len(out) == 1 {
-	// 	val := reflect.ValueOf(out[0])
-	// 	if val.Kind() != reflect.Ptr {
-	// 		return fmt.Errorf("output parameter must be a pointer")
-	// 	}
-	// 	val = val.Elem()
-
-	// 	result := reflect.ValueOf(f.results[0])
-	// 	if !result.Type().AssignableTo(val.Type()) {
-	// 		return fmt.Errorf("cannot assign type %v to %v", result.Type(), val.Type())
-	// 	}
-
-	// 	val.Set(result)
-	// 	return nil
-	// }
-
-	// Handle multiple results
 	if len(out) > len(f.results) {
 		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results))
 	}
@@ -1741,6 +1238,7 @@ func (f *DatabaseFuture) checkCompletion() bool {
 
 // RuntimeFuture represents an asynchronous result.
 type RuntimeFuture struct {
+	mu         deadlock.Mutex
 	results    []interface{}
 	err        error
 	done       chan struct{}
@@ -1762,12 +1260,18 @@ func (f *RuntimeFuture) setEntityID(entityID int) {
 }
 
 func (f *RuntimeFuture) setResult(results []interface{}) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	log.Printf("Future.setResult called with results: %v", results)
 	f.results = results
 	close(f.done)
 }
 
 func (f *RuntimeFuture) setError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	log.Printf("Future.setError called with error: %v", err)
 	f.err = err
 	close(f.done)
@@ -1775,6 +1279,9 @@ func (f *RuntimeFuture) setError(err error) {
 
 func (f *RuntimeFuture) Get(out ...interface{}) error {
 	<-f.done
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.err != nil {
 		return f.err
 	}
@@ -1782,25 +1289,6 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 	if len(out) == 0 {
 		return nil
 	}
-
-	// // Handle the case where we have a single result
-	// if len(f.results) == 1 && len(out) == 1 {
-	// 	val := reflect.ValueOf(out[0])
-	// 	if val.Kind() != reflect.Ptr {
-	// 		return fmt.Errorf("output parameter must be a pointer")
-	// 	}
-	// 	val = val.Elem()
-
-	// 	result := reflect.ValueOf(f.results[0])
-	// 	if !result.Type().AssignableTo(val.Type()) {
-	// 		return fmt.Errorf("cannot assign type %v to %v", result.Type(), val.Type())
-	// 	}
-
-	// 	val.Set(result)
-	// 	return nil
-	// } else if len(f.results) == 0 {
-	// 	return nil
-	// }
 
 	if len(out) > len(f.results) {
 		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results))
@@ -1837,15 +1325,15 @@ type Orchestrator struct {
 	activities    []*ActivityInstance
 	sideEffects   []*SideEffectInstance
 	sagas         []*SagaInstance
-	mu            sync.Mutex
-	instancesMu   sync.Mutex
-	activitiesMu  sync.Mutex
-	sideEffectsMu sync.Mutex
-	sagasMu       sync.Mutex
+	mu            deadlock.Mutex
+	instancesMu   deadlock.Mutex
+	activitiesMu  deadlock.Mutex
+	sideEffectsMu deadlock.Mutex
+	sagasMu       deadlock.Mutex
 	err           error
 	runID         int
 	paused        bool
-	pausedMu      sync.Mutex
+	pausedMu      deadlock.Mutex
 }
 
 func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orchestrator {
@@ -2141,14 +1629,13 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 
 	// Create a new WorkflowInstance with parent info
 	instance := &WorkflowInstance{
-		stepID:       entity.StepID,
-		handler:      handler,
-		input:        inputs,
-		ctx:          ctx,
-		orchestrator: o,
-		workflowID:   entity.ID,
-		entity:       entity,
-		// TODO: might need to find them back tho
+		stepID:            entity.StepID,
+		handler:           handler,
+		input:             inputs,
+		ctx:               ctx,
+		orchestrator:      o,
+		workflowID:        entity.ID,
+		entity:            entity,
 		options:           nil,
 		entityID:          entity.ID,
 		parentExecutionID: parentExecID,
@@ -2171,7 +1658,9 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 func (o *Orchestrator) stopWithError(err error) {
 	o.err = err
 	if o.rootWf != nil && o.rootWf.fsm != nil {
+		o.instancesMu.Lock()
 		o.rootWf.fsm.Fire(TriggerFail)
+		o.instancesMu.Unlock()
 	}
 }
 
@@ -2206,11 +1695,6 @@ func (o *Orchestrator) Wait() error {
 	// Wait for root workflow to complete
 	for {
 		o.instancesMu.Lock()
-		// not initialized yet
-		if o.rootWf.fsm == nil {
-			o.instancesMu.Unlock()
-			continue
-		}
 		state := o.rootWf.fsm.MustState()
 		o.instancesMu.Unlock()
 		// Log the state every 500ms
@@ -2230,10 +1714,8 @@ func (o *Orchestrator) Wait() error {
 			o.instancesMu.Unlock()
 			return o.ctx.Err()
 		default:
-			// tbf i don't know yet which one
-			// time.Sleep(5 * time.Millisecond)
-			runtime.Gosched()
 		}
+		runtime.Gosched()
 	}
 
 	// Root workflow has completed or failed
@@ -2254,8 +1736,11 @@ func (o *Orchestrator) Wait() error {
 
 	switch entity.Status {
 	case StatusCompleted:
-		if o.rootWf.results != nil && len(o.rootWf.results) > 0 {
-			fmt.Printf("Root workflow completed successfully with results: %v\n", o.rootWf.results)
+		o.rootWf.mu.Lock()
+		results := o.rootWf.results
+		o.rootWf.mu.Unlock()
+		if results != nil && len(results) > 0 {
+			fmt.Printf("Root workflow completed successfully with results: %v\n", results)
 		} else {
 			fmt.Printf("Root workflow completed successfully\n")
 		}
@@ -2265,10 +1750,14 @@ func (o *Orchestrator) Wait() error {
 		var errMsg string
 		if latestExecution.Error != "" {
 			errMsg = latestExecution.Error
-		} else if o.rootWf.err != nil {
-			errMsg = o.rootWf.err.Error()
 		} else {
-			errMsg = "unknown error"
+			o.rootWf.mu.Lock()
+			if o.rootWf.err != nil {
+				errMsg = o.rootWf.err.Error()
+			} else {
+				errMsg = "unknown error"
+			}
+			o.rootWf.mu.Unlock()
 		}
 		fmt.Printf("Root workflow failed with error: %v\n", errMsg)
 	default:
@@ -2437,7 +1926,6 @@ func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
 }
 
 // WaitForContinuations waits for all continuations of a workflow to complete
-// In orchestrator.go
 func (o *Orchestrator) WaitForContinuations(originalID int) error {
 	log.Printf("Waiting for all continuations starting from workflow %d", originalID)
 	var err error
@@ -2467,7 +1955,7 @@ func (o *Orchestrator) WaitForContinuations(originalID int) error {
 		}
 
 		if !hasEntity {
-			return fmt.Errorf("isn't initiated contiuation: %d", currentID)
+			return fmt.Errorf("isn't initiated continuation: %d", currentID)
 		}
 
 		var latestExecution *Execution
@@ -2498,8 +1986,6 @@ func (o *Orchestrator) WaitForContinuations(originalID int) error {
 
 /// FILE: ./queue.go
 
-/// TODO: after that we will see on tempolite which works differently, more data-based using the goroutine and triggering the function then
-
 type queueRequestType string
 
 var (
@@ -2515,27 +2001,20 @@ type taskRequest struct {
 
 // QueueManager manages a single queue and its workers
 type QueueManager struct {
-	mu sync.RWMutex
-
-	name        string
-	pool        *retrypool.Pool[*QueueTask]
-	database    Database
-	registry    *Registry
-	ctx         context.Context
-	cancel      context.CancelFunc
-	workerCount int
-
-	orchestrator *Orchestrator
-
-	workerCounter int
-
-	// which orchestrator is handling which entity ID
+	mu              deadlock.RWMutex
+	name            string
+	pool            *retrypool.Pool[*QueueTask]
+	database        Database
+	registry        *Registry
+	ctx             context.Context
+	cancel          context.CancelFunc
+	workerCount     int
+	orchestrator    *Orchestrator
 	cache           map[int]*QueueWorker
 	entitiesWorkers map[int]int
 	busy            map[int]struct{}
 	free            map[int]struct{}
-
-	requestPool *retrypool.Pool[*retrypool.RequestResponse[*taskRequest, struct{}]]
+	requestPool     *retrypool.Pool[*retrypool.RequestResponse[*taskRequest, struct{}]]
 }
 
 // QueueTask represents a workflow execution task
@@ -2563,7 +2042,7 @@ type QueueWorker struct {
 	queueName    string
 	orchestrator *Orchestrator
 	ctx          context.Context
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	onStartTask  func(*QueueWorker, *QueueTask)
 	onEndTask    func(*QueueWorker, *QueueTask)
 	onStart      func(*QueueWorker)
@@ -2623,7 +2102,9 @@ func (w *QueueWorker) Run(ctx context.Context, task *QueueTask) error {
 
 	// if optional future is set, propagate results
 	if task.future != nil {
+		w.orchestrator.rootWf.mu.Lock()
 		task.future.setResult(ftre.results)
+		w.orchestrator.rootWf.mu.Unlock()
 	}
 
 	fmt.Println("\t workflow done")
@@ -2810,6 +2291,8 @@ func (qm *QueueManager) Pause(id int) *retrypool.RequestResponse[*taskRequest, s
 }
 
 func (qm *QueueManager) AvailableWorkers() int {
+	qm.mu.RLock()
+	defer qm.mu.RUnlock()
 	return qm.pool.AvailableWorkers()
 }
 
@@ -3052,10 +2535,11 @@ func (qm *QueueManager) GetInfo() *QueueInfo {
 }
 
 func (qm *QueueManager) pauseAll() {
-	qm.mu.Lock()
-	defer qm.mu.Unlock()
+	qm.mu.RLock()
+	defer qm.mu.RUnlock()
 	for workerID := range qm.busy {
-		qm.cache[workerID].orchestrator.Pause()
+		worker := qm.cache[workerID]
+		worker.orchestrator.Pause()
 	}
 }
 
@@ -3129,7 +2613,7 @@ type Registry struct {
 	workflows   map[string]HandlerInfo
 	activities  map[string]HandlerInfo
 	sideEffects map[string]HandlerInfo
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 }
 
 func NewRegistry() *Registry {
@@ -3196,7 +2680,7 @@ func (r *Registry) RegisterWorkflow(workflowFunc interface{}) (HandlerInfo, erro
 
 	expectedContextType := reflect.TypeOf(WorkflowContext{})
 	if handlerType.In(0) != expectedContextType {
-		err := fmt.Errorf("first parameter of workflow function must be *WorkflowContext")
+		err := fmt.Errorf("first parameter of workflow function must be WorkflowContext")
 		return HandlerInfo{}, err
 	}
 
@@ -3480,6 +2964,7 @@ func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 }
 
 type SagaInstance struct {
+	mu                deadlock.Mutex
 	saga              *SagaDefinition
 	ctx               context.Context
 	orchestrator      *Orchestrator
@@ -3491,7 +2976,6 @@ type SagaInstance struct {
 	err               error
 	currentStep       int
 	compensations     []int // Indices of steps to compensate
-	mu                sync.Mutex
 	executionID       int
 	execution         *Execution
 	parentExecutionID int
@@ -3500,6 +2984,9 @@ type SagaInstance struct {
 }
 
 func (si *SagaInstance) Start() {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
 	// Initialize the FSM
 	si.fsm = stateless.NewStateMachine(StateIdle)
 	si.fsm.Configure(StateIdle).
@@ -3523,7 +3010,11 @@ func (si *SagaInstance) Start() {
 		Permit(TriggerResume, StateExecuting)
 
 	// Start the FSM
-	go si.fsm.Fire(TriggerStart)
+	go func() {
+		si.mu.Lock()
+		defer si.mu.Unlock()
+		si.fsm.Fire(TriggerStart)
+	}()
 }
 
 func (si *SagaInstance) executeSaga(_ context.Context, _ ...interface{}) error {
@@ -3719,6 +3210,7 @@ func (o *Orchestrator) addSagaInstance(si *SagaInstance) {
 
 // SideEffectInstance represents an instance of a side effect execution.
 type SideEffectInstance struct {
+	mu                deadlock.Mutex
 	stepID            string
 	sideEffectFunc    interface{}
 	results           []interface{}
@@ -3742,6 +3234,9 @@ type SideEffectInstance struct {
 }
 
 func (sei *SideEffectInstance) Start() {
+	sei.mu.Lock()
+	defer sei.mu.Unlock()
+
 	// Initialize the FSM
 	sei.fsm = stateless.NewStateMachine(StateIdle)
 	sei.fsm.Configure(StateIdle).
@@ -3765,7 +3260,11 @@ func (sei *SideEffectInstance) Start() {
 		Permit(TriggerResume, StateExecuting)
 
 	// Start the FSM
-	go sei.fsm.Fire(TriggerStart)
+	go func() {
+		sei.mu.Lock()
+		defer sei.mu.Unlock()
+		sei.fsm.Fire(TriggerStart)
+	}()
 }
 
 func (sei *SideEffectInstance) executeSideEffect(_ context.Context, _ ...interface{}) error {
@@ -3801,7 +3300,9 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			sei.entity.Status = StatusPaused
 			sei.entity.Paused = true
 			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.mu.Lock()
 			sei.fsm.Fire(TriggerPause)
+			sei.mu.Unlock()
 			return nil
 		}
 
@@ -3824,7 +3325,9 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 		if err = sei.orchestrator.db.AddExecution(execution); err != nil {
 			sei.entity.Status = StatusFailed
 			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.mu.Lock()
 			sei.fsm.Fire(TriggerFail)
+			sei.mu.Unlock()
 			return nil
 		}
 		sei.entity.Executions = append(sei.entity.Executions, execution)
@@ -3856,7 +3359,9 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			sei.entity.Status = StatusPaused
 			sei.entity.Paused = true
 			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.mu.Lock()
 			sei.fsm.Fire(TriggerPause)
+			sei.mu.Unlock()
 			return nil
 		}
 		if err == nil {
@@ -3867,7 +3372,9 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 			sei.entity.Status = StatusCompleted
 			sei.orchestrator.db.UpdateExecution(execution)
 			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.mu.Lock()
 			sei.fsm.Fire(TriggerComplete)
+			sei.mu.Unlock()
 			return nil
 		} else {
 			execution.Status = ExecutionStatusFailed
@@ -3889,7 +3396,9 @@ func (sei *SideEffectInstance) executeWithRetry() error {
 				// Max attempts reached
 				sei.entity.Status = StatusFailed
 				sei.orchestrator.db.UpdateEntity(sei.entity)
+				sei.mu.Lock()
 				sei.fsm.Fire(TriggerFail)
+				sei.mu.Unlock()
 				return nil
 			}
 		}
@@ -3915,7 +3424,9 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 			log.Printf("Error deserializing side effect result: %v", err)
 			return err
 		}
+		sei.mu.Lock()
 		sei.results = outputs
+		sei.mu.Unlock()
 		return nil
 	}
 
@@ -3923,14 +3434,18 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 		if r := recover(); r != nil {
 			err := fmt.Errorf("panic in side effect: %v", r)
 			log.Printf("Panic in side effect: %v", err)
+			sei.mu.Lock()
 			sei.err = err
+			sei.mu.Unlock()
 		}
 	}()
 
 	select {
 	case <-sei.ctx.Done():
 		log.Printf("Context cancelled in side effect")
+		sei.mu.Lock()
 		sei.err = sei.ctx.Err()
+		sei.mu.Unlock()
 		return sei.err
 	default:
 	}
@@ -3944,7 +3459,9 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	if numOut == 0 {
 		err := fmt.Errorf("side effect should return at least a value")
 		log.Printf("Error: %v", err)
+		sei.mu.Lock()
 		sei.err = err
+		sei.mu.Unlock()
 		return err
 	}
 
@@ -3954,7 +3471,9 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 		log.Printf("Side effect returned result [%d]: %v", i, result)
 		outputs = append(outputs, result)
 	}
+	sei.mu.Lock()
 	sei.results = outputs
+	sei.mu.Unlock()
 
 	// Serialize output
 	outputBytes, err := convertOutputsForSerialization(sei.results)
@@ -3978,7 +3497,10 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 func (sei *SideEffectInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("SideEffectInstance %s (Entity ID: %d) onCompleted called", sei.stepID, sei.entity.ID)
 	if sei.future != nil {
-		sei.future.setResult(sei.results)
+		sei.mu.Lock()
+		results := sei.results
+		sei.mu.Unlock()
+		sei.future.setResult(results)
 	}
 	return nil
 }
@@ -3986,7 +3508,10 @@ func (sei *SideEffectInstance) onCompleted(_ context.Context, _ ...interface{}) 
 func (sei *SideEffectInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	log.Printf("SideEffectInstance %s (Entity ID: %d) onFailed called", sei.stepID, sei.entity.ID)
 	if sei.future != nil {
-		sei.future.setError(sei.err)
+		sei.mu.Lock()
+		err := sei.err
+		sei.mu.Unlock()
+		sei.future.setError(err)
 	}
 	return nil
 }
@@ -4030,7 +3555,7 @@ const (
 
 // Tempolite is the main API interface for the workflow engine
 type Tempolite struct {
-	mu       sync.RWMutex
+	mu       deadlock.RWMutex
 	registry *Registry
 	database Database
 	queues   map[string]*QueueManager
@@ -4134,7 +3659,7 @@ func (t *Tempolite) Workflow(workflowFunc interface{}, options *WorkflowOptions,
 // executeWorkflow executes a workflow on a specific queue
 func (t *Tempolite) executeWorkflow(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *DatabaseFuture {
 
-	// probably asked to execute on another queue
+	// If options specify a different queue, use that
 	if options != nil && options.Queue != "" {
 		queueName = options.Queue
 	}
@@ -4158,8 +3683,7 @@ func (t *Tempolite) executeWorkflow(queueName string, workflowFunc interface{}, 
 		return future
 	}
 
-	// We don't need to manage execution on Tempolite layer since it has to go through a pulling
-
+	// We don't manage execution on Tempolite layer since it has to go through a pulling
 	future.setEntityID(id)
 
 	return future
@@ -4205,6 +3729,7 @@ func (t *Tempolite) Wait() error {
 	var err error
 	shutdown := errgroup.Group{}
 
+	t.mu.RLock()
 	for _, qm := range t.queues {
 		qm := qm
 		shutdown.Go(func() error {
@@ -4217,6 +3742,7 @@ func (t *Tempolite) Wait() error {
 			return nil
 		})
 	}
+	t.mu.RUnlock()
 
 	if err = shutdown.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return errors.Join(err, fmt.Errorf("failed to wait for queues"))
@@ -4255,7 +3781,7 @@ func (t *Tempolite) Close() error {
 		defer close(done)
 
 		shutdown := errgroup.Group{}
-		// wait for them to close
+		// Wait for them to close
 		for _, qm := range t.queues {
 			qm := qm
 			shutdown.Go(func() error {
@@ -4331,6 +3857,14 @@ func WithDefaultQueueWorkers(count int) TempoliteOption {
 			panic(fmt.Sprintf("failed to configure default queue: %v", err))
 		}
 	}
+}
+
+// min function used in checkAndProcessPending
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 /// FILE: ./types.go
@@ -4638,7 +4172,7 @@ func (e *ContinueAsNewError) Error() string {
 
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
-	mu                sync.Mutex // TODO: need to support mutex to fix all those data races
+	mu                deadlock.Mutex // TODO: need to support mutex to fix all those data races
 	stepID            string
 	handler           HandlerInfo
 	input             []interface{}
@@ -5169,5 +4703,510 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 	if wi.future != nil {
 		wi.future.setError(ErrPaused)
 	}
+	return nil
+}
+
+/// FILE: ./database.go
+
+var ErrQueueExists = errors.New("queue already exists")
+var ErrQueueNotFound = errors.New("queue not found")
+
+// Database interface defines methods for interacting with the data store.
+// All methods return errors to handle future implementations that might have errors.
+type Database interface {
+	// Run methods
+	AddRun(run *Run) error
+	GetRun(id int) (*Run, error)
+	UpdateRun(run *Run) error
+
+	// Version methods
+	GetVersion(entityID int, changeID string) (*Version, error)
+	SetVersion(version *Version) error
+
+	// Hierarchy methods
+	AddHierarchy(hierarchy *Hierarchy) error
+	GetHierarchy(parentID, childID int) (*Hierarchy, error)
+	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
+
+	// Entity methods
+	AddEntity(entity *Entity) error
+	HasEntity(id int) (bool, error)
+	GetEntity(id int) (*Entity, error)
+	UpdateEntity(entity *Entity) error
+	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error)
+	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error)
+	FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error)
+
+	// Execution methods
+	AddExecution(execution *Execution) error
+	GetExecution(id int) (*Execution, error)
+	UpdateExecution(execution *Execution) error
+	GetLatestExecution(entityID int) (*Execution, error)
+
+	// Queue methods
+	AddQueue(queue *Queue) error
+	GetQueue(id int) (*Queue, error)
+	GetQueueByName(name string) (*Queue, error)
+	UpdateQueue(queue *Queue) error
+	ListQueues() ([]*Queue, error)
+
+	// Clear removes all Runs that are 'Completed' and their associated data.
+	Clear() error
+}
+
+/// FILE: ./database_memory.go
+
+// DefaultDatabase is an in-memory implementation of Database.
+type DefaultDatabase struct {
+	runs        map[int]*Run
+	versions    map[int]*Version
+	hierarchies map[int]*Hierarchy
+	entities    map[int]*Entity
+	executions  map[int]*Execution
+	queues      map[int]*Queue
+	mu          deadlock.RWMutex
+}
+
+func NewDefaultDatabase() *DefaultDatabase {
+	db := &DefaultDatabase{
+		runs:        make(map[int]*Run),
+		versions:    make(map[int]*Version),
+		hierarchies: make(map[int]*Hierarchy),
+		entities:    make(map[int]*Entity),
+		executions:  make(map[int]*Execution),
+		queues:      make(map[int]*Queue),
+	}
+	db.queues[1] = &Queue{
+		ID:        1,
+		Name:      "default",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Entities:  []*Entity{},
+	}
+	return db
+}
+
+var (
+	runIDCounter       int64
+	versionIDCounter   int64
+	entityIDCounter    int64
+	executionIDCounter int64
+	hierarchyIDCounter int64
+	queueIDCounter     int64 = 1 // Starting from 1 for the default queue.
+)
+
+// Run methods
+func (db *DefaultDatabase) AddRun(run *Run) error {
+	runID := int(atomic.AddInt64(&runIDCounter, 1))
+	run.ID = runID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.runs[run.ID] = run
+	return nil
+}
+
+func (db *DefaultDatabase) GetRun(id int) (*Run, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	run, exists := db.runs[id]
+	if !exists {
+		return nil, errors.New("run not found")
+	}
+
+	return db.copyRun(run), nil
+}
+
+func (db *DefaultDatabase) UpdateRun(run *Run) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.runs[run.ID]; !exists {
+		return errors.New("run not found")
+	}
+
+	db.runs[run.ID] = run
+	return nil
+}
+
+func (db *DefaultDatabase) copyRun(run *Run) *Run {
+	copyRun := *run
+	copyRun.Entities = make([]*Entity, len(run.Entities))
+	copy(copyRun.Entities, run.Entities)
+	return &copyRun
+}
+
+// Version methods
+func (db *DefaultDatabase) GetVersion(entityID int, changeID string) (*Version, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, version := range db.versions {
+		if version.EntityID == entityID && version.ChangeID == changeID {
+			return version, nil
+		}
+	}
+	return nil, errors.New("version not found")
+}
+
+func (db *DefaultDatabase) SetVersion(version *Version) error {
+	versionID := int(atomic.AddInt64(&versionIDCounter, 1))
+	version.ID = versionID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.versions[version.ID] = version
+	return nil
+}
+
+// Hierarchy methods
+func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) error {
+	hierarchyID := int(atomic.AddInt64(&hierarchyIDCounter, 1))
+	hierarchy.ID = hierarchyID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.hierarchies[hierarchy.ID] = hierarchy
+	return nil
+}
+
+func (db *DefaultDatabase) GetHierarchy(parentID, childID int) (*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, h := range db.hierarchies {
+		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
+			return h, nil
+		}
+	}
+	return nil, errors.New("hierarchy not found")
+}
+
+func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var result []*Hierarchy
+	for _, h := range db.hierarchies {
+		if h.ChildEntityID == childEntityID {
+			result = append(result, h)
+		}
+	}
+	return result, nil
+}
+
+// Entity methods
+func (db *DefaultDatabase) AddEntity(entity *Entity) error {
+	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
+	entity.ID = entityID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.entities[entity.ID] = entity
+
+	// Add the entity to its Run
+	run, exists := db.runs[entity.RunID]
+	if exists {
+		run.Entities = append(run.Entities, entity)
+		db.runs[entity.RunID] = run
+	}
+
+	return nil
+}
+
+var ErrEntityNotFound = errors.New("entity not found")
+
+func (db *DefaultDatabase) GetEntity(id int) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return nil, errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	copy := *entity
+	return &copy, nil
+}
+
+func (db *DefaultDatabase) HasEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	_, exists := db.entities[id]
+	return exists, nil
+}
+
+func (db *DefaultDatabase) UpdateEntity(entity *Entity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.entities[entity.ID]; !exists {
+		return errors.Join(fmt.Errorf("entity %d", entity.ID), ErrEntityNotFound)
+	}
+
+	db.entities[entity.ID] = entity
+
+	// Update the entity in its Run's Entities slice
+	run, exists := db.runs[entity.RunID]
+	if exists {
+		for i, e := range run.Entities {
+			if e.ID == entity.ID {
+				run.Entities[i] = entity
+				db.runs[run.ID] = run
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, entity := range db.entities {
+		if entity.RunID == workflowID && entity.StepID == stepID {
+			return entity, nil
+		}
+	}
+	return nil, errors.Join(fmt.Errorf(
+		"entity with workflow ID %d and step ID %s", workflowID, stepID,
+	), ErrEntityNotFound)
+}
+
+func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
+			childEntityID := hierarchy.ChildEntityID
+			if entity, exists := db.entities[childEntityID]; exists && entity.Type == entityType {
+				return entity, nil
+			}
+		}
+	}
+	return nil, errors.Join(fmt.Errorf(
+		"child entity with parent entity ID %d, step ID %s, and type %s", parentEntityID, stepID, entityType,
+	), ErrEntityNotFound)
+}
+
+func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var result []*Entity
+	for _, entity := range db.entities {
+		if entity.Type == EntityTypeWorkflow &&
+			entity.Status == StatusPending &&
+			entity.QueueID == queueID {
+			result = append(result, entity)
+		}
+	}
+
+	// Sort by creation time
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+
+	return result, nil
+}
+
+// Execution methods
+func (db *DefaultDatabase) AddExecution(execution *Execution) error {
+	executionID := int(atomic.AddInt64(&executionIDCounter, 1))
+	execution.ID = executionID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.executions[execution.ID] = execution
+	return nil
+}
+
+func (db *DefaultDatabase) GetExecution(id int) (*Execution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	execution, exists := db.executions[id]
+	if !exists {
+		return nil, errors.New("execution not found")
+	}
+	return execution, nil
+}
+
+func (db *DefaultDatabase) UpdateExecution(execution *Execution) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.executions[execution.ID]; !exists {
+		return errors.New("execution not found")
+	}
+
+	db.executions[execution.ID] = execution
+	return nil
+}
+
+func (db *DefaultDatabase) GetLatestExecution(entityID int) (*Execution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var latestExecution *Execution
+	for _, execution := range db.executions {
+		if execution.EntityID == entityID {
+			if latestExecution == nil || execution.ID > latestExecution.ID {
+				latestExecution = execution
+			}
+		}
+	}
+	if latestExecution != nil {
+		return latestExecution, nil
+	}
+	return nil, errors.New("execution not found")
+}
+
+// Queue methods
+func (db *DefaultDatabase) AddQueue(queue *Queue) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Check if queue with same name exists
+	for _, q := range db.queues {
+		if q.Name == queue.Name {
+			return errors.New("queue already exists")
+		}
+	}
+
+	queueID := int(atomic.AddInt64(&queueIDCounter, 1))
+	queue.ID = queueID
+	queue.CreatedAt = time.Now()
+	queue.UpdatedAt = time.Now()
+
+	db.queues[queue.ID] = queue
+	return nil
+}
+
+func (db *DefaultDatabase) GetQueue(id int) (*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	queue, exists := db.queues[id]
+	if !exists {
+		return nil, errors.Join(ErrQueueNotFound)
+	}
+	copy := *queue
+	return &copy, nil
+}
+
+func (db *DefaultDatabase) GetQueueByName(name string) (*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, queue := range db.queues {
+		if queue.Name == name {
+			return queue, nil
+		}
+	}
+	return nil, errors.Join(ErrQueueNotFound)
+}
+
+func (db *DefaultDatabase) UpdateQueue(queue *Queue) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if existing, exists := db.queues[queue.ID]; exists {
+		existing.UpdatedAt = time.Now()
+		existing.Name = queue.Name
+		existing.Entities = queue.Entities
+		db.queues[queue.ID] = existing
+		return nil
+	}
+	return errors.Join(ErrQueueNotFound)
+}
+
+func (db *DefaultDatabase) ListQueues() ([]*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	queues := make([]*Queue, 0, len(db.queues))
+	for _, q := range db.queues {
+		queues = append(queues, q)
+	}
+	return queues, nil
+}
+
+// Clear removes all Runs that are 'Completed' or 'Failed' and their associated data.
+func (db *DefaultDatabase) Clear() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	runsToDelete := []int{}
+	entitiesToDelete := map[int]bool{}
+	executionsToDelete := map[int]bool{}
+	hierarchiesToKeep := map[int]*Hierarchy{}
+	versionsToDelete := map[int]*Version{}
+
+	// Find Runs to delete
+	for runID, run := range db.runs {
+		if run.Status == string(StatusCompleted) || run.Status == string(StatusFailed) {
+			runsToDelete = append(runsToDelete, runID)
+			// Collect Entities associated with the Run
+			for _, entity := range run.Entities {
+				entitiesToDelete[entity.ID] = true
+			}
+		}
+	}
+
+	// Collect Executions associated with Entities to delete
+	for execID, execution := range db.executions {
+		if _, exists := entitiesToDelete[execution.EntityID]; exists {
+			executionsToDelete[execID] = true
+		}
+	}
+
+	// Collect Versions associated with Entities to delete
+	for versionID, version := range db.versions {
+		if _, exists := entitiesToDelete[version.EntityID]; exists {
+			versionsToDelete[versionID] = version
+		}
+	}
+
+	// Filter Hierarchies to keep only those not associated with Entities to delete
+	for hid, hierarchy := range db.hierarchies {
+		if _, parentExists := entitiesToDelete[hierarchy.ParentEntityID]; parentExists {
+			continue
+		}
+		if _, childExists := entitiesToDelete[hierarchy.ChildEntityID]; childExists {
+			continue
+		}
+		hierarchiesToKeep[hid] = hierarchy
+	}
+
+	// Delete Runs
+	for _, runID := range runsToDelete {
+		delete(db.runs, runID)
+	}
+
+	// Delete Entities and Executions
+	for entityID := range entitiesToDelete {
+		delete(db.entities, entityID)
+	}
+	for execID := range executionsToDelete {
+		delete(db.executions, execID)
+	}
+
+	// Delete Versions
+	for versionID := range versionsToDelete {
+		delete(db.versions, versionID)
+	}
+
+	// Replace hierarchies with the filtered ones
+	db.hierarchies = hierarchiesToKeep
+
 	return nil
 }
