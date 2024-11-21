@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -1238,11 +1239,12 @@ func (f *DatabaseFuture) checkCompletion() bool {
 
 // RuntimeFuture represents an asynchronous result.
 type RuntimeFuture struct {
-	mu         deadlock.Mutex
+	mu         sync.Mutex
 	results    []interface{}
 	err        error
 	done       chan struct{}
 	workflowID int
+	once       sync.Once
 }
 
 func (f *RuntimeFuture) WorkflowID() int {
@@ -1260,28 +1262,29 @@ func (f *RuntimeFuture) setEntityID(entityID int) {
 }
 
 func (f *RuntimeFuture) setResult(results []interface{}) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	log.Printf("Future.setResult called with results: %v", results)
+	f.mu.Lock()
 	f.results = results
-	close(f.done)
+	f.mu.Unlock()
+	f.once.Do(func() {
+		close(f.done)
+	})
 }
 
 func (f *RuntimeFuture) setError(err error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	log.Printf("Future.setError called with error: %v", err)
+	f.mu.Lock()
 	f.err = err
-	close(f.done)
+	f.mu.Unlock()
+	f.once.Do(func() {
+		close(f.done)
+	})
 }
 
 func (f *RuntimeFuture) Get(out ...interface{}) error {
 	<-f.done
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
 	if f.err != nil {
 		return f.err
 	}
@@ -1326,7 +1329,7 @@ type Orchestrator struct {
 	sideEffects   []*SideEffectInstance
 	sagas         []*SagaInstance
 	mu            deadlock.Mutex
-	instancesMu   deadlock.Mutex
+	instancesMu   deadlock.RWMutex
 	activitiesMu  deadlock.Mutex
 	sideEffectsMu deadlock.Mutex
 	sagasMu       deadlock.Mutex
@@ -1459,6 +1462,9 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 		return nil, fmt.Errorf("failed to get entity: %w", err)
 	}
 
+	// Set orchestrator's runID from entity
+	o.runID = entity.RunID
+
 	// Verify it's a workflow
 	if entity.Type != EntityTypeWorkflow {
 		return nil, fmt.Errorf("entity %d is not a workflow", entityID)
@@ -1549,19 +1555,13 @@ func (o *Orchestrator) IsPaused() bool {
 }
 
 func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
-
 	var err error
-	// Resuming isn't retrying! We need to create a new execution to the entity while avoiding increasing the attempt count.
 	future := NewRuntimeFuture()
+	future.setEntityID(entityID)
 
 	o.pausedMu.Lock()
 	o.paused = false
 	o.pausedMu.Unlock()
-
-	// Create new context
-	ctx, cancel := context.WithCancel(context.Background())
-	o.ctx = ctx
-	o.cancel = cancel
 
 	// Retrieve the workflow entity
 	var entity *Entity
@@ -1632,7 +1632,7 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 		stepID:            entity.StepID,
 		handler:           handler,
 		input:             inputs,
-		ctx:               ctx,
+		ctx:               o.ctx,
 		orchestrator:      o,
 		workflowID:        entity.ID,
 		entity:            entity,
@@ -1646,8 +1646,10 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 	future.setEntityID(entity.ID)
 	instance.future = future
 
-	// Store the root workflow instance
+	// Lock orchestrator's instancesMu before modifying shared state
+	o.instancesMu.Lock()
 	o.rootWf = instance
+	o.instancesMu.Unlock()
 
 	// Start the instance
 	instance.Start()
@@ -1686,17 +1688,27 @@ func (o *Orchestrator) Wait() error {
 	log.Printf("Orchestrator.Wait called")
 	var err error
 
+	// Lock instancesMu before accessing rootWf
+	o.instancesMu.RLock()
 	if o.rootWf == nil {
+		o.instancesMu.RUnlock()
 		log.Printf("No root workflow to execute")
 		return fmt.Errorf("no root workflow to execute")
 	}
+	rootWf := o.rootWf
+	o.instancesMu.RUnlock()
 
 	lastLogTime := time.Now()
 	// Wait for root workflow to complete
 	for {
-		o.instancesMu.Lock()
-		state := o.rootWf.fsm.MustState()
-		o.instancesMu.Unlock()
+		rootWf.mu.Lock()
+		if rootWf.fsm == nil {
+			rootWf.mu.Unlock()
+			continue
+		}
+		state := rootWf.fsm.MustState()
+		rootWf.mu.Unlock()
+
 		// Log the state every 500ms
 		currentTime := time.Now()
 		if currentTime.Sub(lastLogTime) >= 500*time.Millisecond {
@@ -1709,32 +1721,30 @@ func (o *Orchestrator) Wait() error {
 		select {
 		case <-o.ctx.Done():
 			log.Printf("Context cancelled: %v", o.ctx.Err())
-			o.instancesMu.Lock()
-			o.rootWf.fsm.Fire(TriggerFail)
-			o.instancesMu.Unlock()
+			rootWf.mu.Lock()
+			rootWf.fsm.Fire(TriggerFail)
+			rootWf.mu.Unlock()
 			return o.ctx.Err()
 		default:
+			runtime.Gosched()
 		}
-		runtime.Gosched()
 	}
 
 	// Root workflow has completed or failed
-	// The Run's status should have been updated in onCompleted or onFailed of the root workflow
-
-	// Get final status from the database instead of relying on error field
-	var entity *Entity
-	if entity, err = o.db.GetEntity(o.rootWf.entityID); err != nil {
-		log.Printf("error getting entity: %v", err)
+	// Get final status safely
+	status, err := o.db.GetEntityStatus(o.rootWf.entityID)
+	if err != nil {
+		log.Printf("error getting entity status: %v", err)
 		return err
 	}
 
 	var latestExecution *Execution
-	if latestExecution, err = o.db.GetLatestExecution(entity.ID); err != nil {
+	if latestExecution, err = o.db.GetLatestExecution(o.rootWf.entityID); err != nil {
 		log.Printf("error getting latest execution: %v", err)
 		return err
 	}
 
-	switch entity.Status {
+	switch status {
 	case StatusCompleted:
 		o.rootWf.mu.Lock()
 		results := o.rootWf.results
@@ -1761,7 +1771,7 @@ func (o *Orchestrator) Wait() error {
 		}
 		fmt.Printf("Root workflow failed with error: %v\n", errMsg)
 	default:
-		fmt.Printf("Root workflow ended with status: %s\n", entity.Status)
+		fmt.Printf("Root workflow ended with status: %s\n", status)
 	}
 	return nil
 }
@@ -1928,58 +1938,99 @@ func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
 // WaitForContinuations waits for all continuations of a workflow to complete
 func (o *Orchestrator) WaitForContinuations(originalID int) error {
 	log.Printf("Waiting for all continuations starting from workflow %d", originalID)
-	var err error
+	// var err error
 	currentID := originalID
 
 	for {
-		// Wait for current workflow
-		o.instancesMu.Lock()
-		state := o.rootWf.MustState()
-		o.instancesMu.Unlock()
+		// Lock instancesMu before accessing rootWf
+		o.instancesMu.RLock()
+		rootWf := o.rootWf
+		o.instancesMu.RUnlock()
+
+		if rootWf == nil {
+			// If rootWf is not yet initialized, wait a bit and retry
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Check the state of rootWf
+		rootWf.mu.Lock()
+		state := rootWf.fsm.MustState()
+		rootWf.mu.Unlock()
+
+		// Wait for workflow to complete
 		for state != StateCompleted && state != StateFailed {
 			select {
 			case <-o.ctx.Done():
+				log.Printf("Context cancelled: %v", o.ctx.Err())
+				rootWf.mu.Lock()
+				rootWf.fsm.Fire(TriggerFail)
+				rootWf.mu.Unlock()
 				return o.ctx.Err()
 			default:
 				runtime.Gosched()
 			}
-			o.instancesMu.Lock()
-			state = o.rootWf.MustState()
-			o.instancesMu.Unlock()
+			rootWf.mu.Lock()
+			state = rootWf.fsm.MustState()
+			rootWf.mu.Unlock()
 		}
 
 		// Check if this workflow initiated a continuation
-		var hasEntity bool
-		if hasEntity, err = o.db.HasEntity(currentID); err != nil {
+		hasEntity, err := o.db.HasEntity(currentID)
+		if err != nil {
 			return fmt.Errorf("error checking for entity: %v", err)
 		}
 
 		if !hasEntity {
-			return fmt.Errorf("isn't initiated continuation: %d", currentID)
+			return fmt.Errorf("workflow %d not found", currentID)
 		}
 
-		var latestExecution *Execution
-		if latestExecution, err = o.db.GetLatestExecution(currentID); err != nil {
+		latestExecution, err := o.db.GetLatestExecution(currentID)
+		if err != nil {
 			return fmt.Errorf("error getting latest execution: %v", err)
 		}
 
 		if latestExecution.Status == ExecutionStatusCompleted {
 			// Look for any child workflow that was created via ContinueAsNew
-			var children *Entity
-			if children, err = o.db.GetChildEntityByParentEntityIDAndStepIDAndType(currentID, "root", EntityTypeWorkflow); err != nil {
-				// No more continuations, we're done
-				if !errors.Is(err, ErrEntityNotFound) {
-					return err
+			childEntity, err := o.db.GetChildEntityByParentEntityIDAndStepIDAndType(currentID, "root", EntityTypeWorkflow)
+			if err != nil {
+				if errors.Is(err, ErrEntityNotFound) {
+					log.Printf("No more continuations found after workflow %d", currentID)
+					return nil
+				}
+				return err
+			}
+
+			currentID = childEntity.ID
+
+			// Update the rootWf to the new workflow instance
+			o.instancesMu.Lock()
+			var found bool
+			for _, wi := range o.instances {
+				if wi.entityID == currentID {
+					// Ensure wi.fsm is initialized
+					wi.mu.Lock()
+					if wi.fsm != nil {
+						o.rootWf = wi
+						found = true
+					}
+					wi.mu.Unlock()
+					break
 				}
 			}
-			if children == nil {
-				log.Printf("No more continuations found after workflow %d", currentID)
-				return nil
+			o.instancesMu.Unlock()
+
+			if !found {
+				// Wait for the new workflow instance to be added and initialized
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
-			currentID = children.ID
+
 			log.Printf("Found continuation: workflow %d", currentID)
 		} else if latestExecution.Status == ExecutionStatusFailed {
 			return fmt.Errorf("workflow %d failed", currentID)
+		} else {
+			return nil
 		}
 	}
 }
@@ -2177,10 +2228,9 @@ func (w *queueWorkerRequests) OnStart(ctx context.Context) {
 }
 
 func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestResponse[*taskRequest, struct{}]) error {
+
 	var err error
 
-	w.qm.mu.Lock()
-	defer w.qm.mu.Unlock()
 	fmt.Println("\t queueWorkerRequests", task.Request.requestType, task.Request.entityID)
 	defer fmt.Println("\t queueWorkerRequests done", task.Request.requestType, task.Request.entityID)
 
@@ -2347,10 +2397,8 @@ func (qm *QueueManager) createWorkerPool(count int) *retrypool.Pool[*QueueTask] 
 			onStartTask:  qm.onTaskStart,
 			onEndTask:    qm.onTaskEnd,
 			onStart: func(w *QueueWorker) {
-				qm.mu.Lock()
 				qm.free[w.ID] = struct{}{}
 				qm.cache[w.ID] = w
-				qm.mu.Unlock()
 				fmt.Println("worker started", w.ID)
 			},
 		}
@@ -2488,10 +2536,8 @@ func (qm *QueueManager) AddWorkers(count int) error {
 			onStartTask:  qm.onTaskStart,
 			onEndTask:    qm.onTaskEnd,
 			onStart: func(w *QueueWorker) {
-				qm.mu.Lock()
 				qm.free[w.ID] = struct{}{}
 				qm.cache[w.ID] = w
-				qm.mu.Unlock()
 			},
 		}
 		qm.pool.AddWorker(worker)
@@ -2984,10 +3030,8 @@ type SagaInstance struct {
 }
 
 func (si *SagaInstance) Start() {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-
 	// Initialize the FSM
+	si.mu.Lock()
 	si.fsm = stateless.NewStateMachine(StateIdle)
 	si.fsm.Configure(StateIdle).
 		Permit(TriggerStart, StateExecuting).
@@ -3008,12 +3052,13 @@ func (si *SagaInstance) Start() {
 	si.fsm.Configure(StatePaused).
 		OnEntry(si.onPaused).
 		Permit(TriggerResume, StateExecuting)
+	si.mu.Unlock()
 
-	// Start the FSM
+	// Start the FSM without holding the mutex
 	go func() {
-		si.mu.Lock()
-		defer si.mu.Unlock()
-		si.fsm.Fire(TriggerStart)
+		if err := si.fsm.Fire(TriggerStart); err != nil {
+			log.Printf("Error starting saga: %v", err)
+		}
 	}()
 }
 
@@ -3064,35 +3109,34 @@ func (si *SagaInstance) executeWithRetry() {
 }
 
 func (si *SagaInstance) executeTransactions() {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-
+	// Lock only around shared data access
+	// Remove or minimize the usage of si.mu.Lock() if possible
 	for si.currentStep < len(si.saga.Steps) {
-		step := si.saga.Steps[si.currentStep]
+		// Lock before accessing or modifying shared data
+		si.mu.Lock()
+		currentStep := si.currentStep
+		si.mu.Unlock()
+
+		step := si.saga.Steps[currentStep]
+		// Perform the transaction without holding the lock
 		_, err := step.Transaction(TransactionContext{
 			ctx: si.ctx,
 		})
 		if err != nil {
-			// Transaction failed
-			log.Printf("Transaction failed at step %d: %v", si.currentStep, err)
-
-			// Store the error
-			si.err = fmt.Errorf("transaction failed at step %d: %v", si.currentStep, err)
-
-			// Update execution error
-			si.execution.Error = si.err.Error()
-			si.orchestrator.db.UpdateExecution(si.execution)
-
-			// Execute compensations for all completed steps
+			// Handle error
+			si.mu.Lock()
+			si.err = fmt.Errorf("transaction failed at step %d: %v", currentStep, err)
+			si.mu.Unlock()
 			si.executeCompensations()
 			return
 		}
-		// Record the successful transaction
-		si.compensations = append(si.compensations, si.currentStep)
+		// Update shared data
+		si.mu.Lock()
+		si.compensations = append(si.compensations, currentStep)
 		si.currentStep++
+		si.mu.Unlock()
 	}
 
-	// All transactions succeeded
 	si.fsm.Fire(TriggerComplete)
 }
 
@@ -3235,7 +3279,6 @@ type SideEffectInstance struct {
 
 func (sei *SideEffectInstance) Start() {
 	sei.mu.Lock()
-	defer sei.mu.Unlock()
 
 	// Initialize the FSM
 	sei.fsm = stateless.NewStateMachine(StateIdle)
@@ -3258,11 +3301,10 @@ func (sei *SideEffectInstance) Start() {
 	sei.fsm.Configure(StatePaused).
 		OnEntry(sei.onPaused).
 		Permit(TriggerResume, StateExecuting)
+	sei.mu.Unlock()
 
 	// Start the FSM
 	go func() {
-		sei.mu.Lock()
-		defer sei.mu.Unlock()
 		sei.fsm.Fire(TriggerStart)
 	}()
 }
@@ -3411,15 +3453,20 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	var err error
 
 	// Check if result already exists in the database
-	var latestExecution *Execution
-	if latestExecution, err = sei.orchestrator.db.GetLatestExecution(sei.entity.ID); err != nil {
+	latestExecution, err := sei.orchestrator.db.GetLatestExecution(sei.entity.ID)
+	if err != nil {
 		log.Printf("Error getting latest execution: %v", err)
 		return err
 	}
 
-	if latestExecution.Status == ExecutionStatusCompleted && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Outputs != nil {
+	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted &&
+		latestExecution.SideEffectExecutionData != nil &&
+		latestExecution.SideEffectExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", sei.entity.ID)
-		outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Outputs)
+		outputs, err := convertOutputsFromSerialization(
+			HandlerInfo{ReturnTypes: sei.returnTypes},
+			latestExecution.SideEffectExecutionData.Outputs,
+		)
 		if err != nil {
 			log.Printf("Error deserializing side effect result: %v", err)
 			return err
@@ -3465,12 +3512,15 @@ func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 		return err
 	}
 
-	outputs := []interface{}{}
+	// Collect results without holding the lock
+	outputs := make([]interface{}, numOut)
 	for i := 0; i < numOut; i++ {
 		result := results[i].Interface()
 		log.Printf("Side effect returned result [%d]: %v", i, result)
-		outputs = append(outputs, result)
+		outputs[i] = result
 	}
+
+	// Now set results while holding the lock
 	sei.mu.Lock()
 	sei.results = outputs
 	sei.mu.Unlock()
@@ -3869,6 +3919,38 @@ func min(a, b int) int {
 
 /// FILE: ./types.go
 
+func getInternalRetryPolicy(options *WorkflowOptions) *retryPolicyInternal {
+	if options != nil && options.RetryPolicy != nil {
+		rp := options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
+		return &retryPolicyInternal{
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    rp.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		}
+	}
+	// Default RetryPolicy
+	return &retryPolicyInternal{
+		MaxAttempts:        1,
+		InitialInterval:    time.Second.Nanoseconds(),
+		BackoffCoefficient: 2.0,
+		MaxInterval:        (5 * time.Minute).Nanoseconds(),
+	}
+}
+
 // RetryPolicy defines retry behavior configuration
 type RetryPolicy struct {
 	MaxAttempts        int
@@ -4197,15 +4279,18 @@ type WorkflowInstance struct {
 func (wi *WorkflowInstance) MustState() any {
 	wi.mu.Lock()
 	defer wi.mu.Unlock()
+	if wi.fsm == nil {
+		return nil
+	}
 	return wi.fsm.MustState()
 }
 
 func (wi *WorkflowInstance) Start() {
-	wi.mu.Lock()
-	defer wi.mu.Unlock()
 
-	// Initialize the FSM
+	wi.mu.Lock()
 	wi.fsm = stateless.NewStateMachine(StateIdle)
+	wi.mu.Unlock()
+
 	wi.fsm.Configure(StateIdle).
 		Permit(TriggerStart, StateExecuting).
 		Permit(TriggerPause, StatePaused)
@@ -4226,12 +4311,14 @@ func (wi *WorkflowInstance) Start() {
 		OnEntry(wi.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
-	fmt.Println("Starting workflow: ", wi.stepID, wi.entity.ID, wi.entity.Status)
-
 	log.Printf("Starting workflow: %s (Entity ID: %d)", wi.stepID, wi.entity.ID)
-	if err := wi.fsm.Fire(TriggerStart); err != nil {
-		log.Printf("Error starting workflow: %v", err)
-	}
+
+	// Start the FSM without holding wi.mu
+	go func() {
+		if err := wi.fsm.Fire(TriggerStart); err != nil {
+			log.Printf("Error starting workflow: %v", err)
+		}
+	}()
 }
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
@@ -4473,7 +4560,9 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 			return nil
 		} else {
 			log.Printf("Workflow returned error: %v", errInterface)
+			wi.mu.Lock()
 			wi.err = errInterface.(error)
+			wi.mu.Unlock()
 
 			// Serialize error
 			errorMessage := wi.err.Error()
@@ -4502,7 +4591,9 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 			}
 		}
 
+		wi.mu.Lock()
 		wi.results = outputs
+		wi.mu.Unlock()
 
 		// Serialize output
 		outputBytes, err := convertOutputsForSerialization(wi.results)
@@ -4532,7 +4623,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		// Handle ContinueAsNew
 		o := wi.orchestrator
 
-		// Use the existing handler instead of registering a new one
+		// Use the existing handler
 		handler := wi.handler
 
 		// Convert inputs to [][]byte
@@ -4547,38 +4638,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		}
 
 		// Convert API RetryPolicy to internal retry policy
-		var internalRetryPolicy *retryPolicyInternal
-
-		if wi.continueAsNew.Options != nil && wi.continueAsNew.Options.RetryPolicy != nil {
-			rp := wi.continueAsNew.Options.RetryPolicy
-			// Fill default values if zero
-			if rp.MaxAttempts == 0 {
-				rp.MaxAttempts = 1
-			}
-			if rp.InitialInterval == 0 {
-				rp.InitialInterval = time.Second
-			}
-			if rp.BackoffCoefficient == 0 {
-				rp.BackoffCoefficient = 2.0
-			}
-			if rp.MaxInterval == 0 {
-				rp.MaxInterval = 5 * time.Minute
-			}
-			internalRetryPolicy = &retryPolicyInternal{
-				MaxAttempts:        rp.MaxAttempts,
-				InitialInterval:    rp.InitialInterval.Nanoseconds(),
-				BackoffCoefficient: rp.BackoffCoefficient,
-				MaxInterval:        rp.MaxInterval.Nanoseconds(),
-			}
-		} else {
-			// Default RetryPolicy
-			internalRetryPolicy = &retryPolicyInternal{
-				MaxAttempts:        1,
-				InitialInterval:    time.Second.Nanoseconds(),
-				BackoffCoefficient: 2.0,
-				MaxInterval:        (5 * time.Minute).Nanoseconds(),
-			}
-		}
+		internalRetryPolicy := getInternalRetryPolicy(wi.continueAsNew.Options)
 
 		// Create WorkflowData
 		workflowData := &WorkflowData{
@@ -4592,7 +4652,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		// Create RetryState
 		retryState := &RetryState{Attempts: 0}
 
-		// Create a new Entity without ID (database assigns it)
+		// Create a new Entity
 		newEntity := &Entity{
 			StepID:       wi.entity.StepID, // Use the same stepID
 			HandlerName:  handler.HandlerName,
@@ -4608,7 +4668,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			Paused:       false,
 			Resumable:    false,
 		}
-		// Add the entity to the database, which assigns the ID
+		// Add the entity to the database
 		if err = o.db.AddEntity(newEntity); err != nil {
 			return err
 		}
@@ -4616,7 +4676,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		// Create a new WorkflowInstance
 		newInstance := &WorkflowInstance{
 			stepID:            wi.stepID,
-			handler:           handler, // Use existing handler
+			handler:           handler,
 			input:             wi.continueAsNew.Args,
 			ctx:               o.ctx,
 			orchestrator:      o,
@@ -4628,12 +4688,25 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			parentEntityID:    wi.parentEntityID,
 			parentStepID:      wi.parentStepID,
 		}
-		if wi == o.rootWf {
-			// Root workflow
+
+		// Start the new workflow instance to initialize fsm
+		newInstance.Start()
+
+		// Determine if this is the root workflow
+		o.instancesMu.Lock()
+		isRootWorkflow := (wi == o.rootWf)
+		if isRootWorkflow {
+			// Update rootWf
 			o.rootWf = newInstance
+		}
+		o.instancesMu.Unlock()
+
+		// Add the new instance
+		o.addWorkflowInstance(newInstance)
+
+		if isRootWorkflow {
 			// Complete the future immediately
 			if wi.future != nil {
-				// Set empty results as per instruction
 				wi.future.setResult(wi.results)
 			}
 		} else {
@@ -4641,15 +4714,23 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			// Pass the future to the newInstance
 			newInstance.future = wi.future
 		}
-		o.addWorkflowInstance(newInstance)
-		newInstance.Start()
 	} else {
 		// Normal completion
 		if wi.future != nil {
-			wi.future.setResult(wi.results)
+			wi.mu.Lock()
+			resultsCopy := wi.results
+			wi.mu.Unlock()
+			wi.future.setResult(resultsCopy)
 		}
+
+		// Check if this is the root workflow
+		wi.orchestrator.instancesMu.RLock()
+		isRootWorkflow := (wi == wi.orchestrator.rootWf)
+		wi.orchestrator.instancesMu.RUnlock()
+
 		// If this is the root workflow, update the Run status to Completed
-		if wi.orchestrator.rootWf == wi {
+		if isRootWorkflow {
+			// Update the run status
 			var run *Run
 			if run, err = wi.orchestrator.db.GetRun(wi.orchestrator.runID); err != nil {
 				log.Printf("Error getting run: %v", err)
@@ -4664,14 +4745,12 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			run.UpdatedAt = time.Now()
 			wi.orchestrator.db.UpdateRun(run)
 
-			wi.entity.Status = StatusCompleted
-			wi.entity.UpdatedAt = time.Now()
-			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.orchestrator.db.UpdateEntityStatus(wi.entity.ID, StatusCompleted)
 			wi.execution.Status = ExecutionStatusCompleted
 			wi.execution.UpdatedAt = time.Now()
 			wi.orchestrator.db.UpdateExecution(wi.execution)
-			fmt.Println("Entity ", wi.entity.ID, " completed")
-			fmt.Println("Execution ", wi.execution.ID, " completed")
+			fmt.Println("Entity", wi.entity.ID, "completed")
+			fmt.Println("Execution", wi.execution.ID, "completed")
 		}
 	}
 	return nil
@@ -4681,7 +4760,10 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error 
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onFailed called", wi.stepID, wi.entity.ID)
 	var err error
 	if wi.future != nil {
-		wi.future.setError(wi.err)
+		wi.mu.Lock()
+		errCopy := wi.err
+		wi.mu.Unlock()
+		wi.future.setError(errCopy)
 	}
 	// If this is the root workflow, update the Run status to Failed
 	if wi.orchestrator.rootWf == wi {
@@ -4733,6 +4815,8 @@ type Database interface {
 	HasEntity(id int) (bool, error)
 	GetEntity(id int) (*Entity, error)
 	UpdateEntity(entity *Entity) error
+	GetEntityStatus(id int) (EntityStatus, error)
+	UpdateEntityStatus(id int, status EntityStatus) error
 	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error)
 	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error)
 	FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error)
@@ -4962,6 +5046,28 @@ func (db *DefaultDatabase) UpdateEntity(entity *Entity) error {
 		}
 	}
 
+	return nil
+}
+
+func (db *DefaultDatabase) GetEntityStatus(id int) (EntityStatus, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return "", errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	return entity.Status, nil
+}
+
+func (db *DefaultDatabase) UpdateEntityStatus(id int, status EntityStatus) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	entity.Status = status
+	entity.UpdatedAt = time.Now()
 	return nil
 }
 
