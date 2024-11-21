@@ -57,32 +57,42 @@ func (ctx WorkflowContext) checkPause() error {
 }
 
 // GetVersion retrieves or sets a version for a changeID.
-func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) int {
+func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) (int, error) {
+
+	var err error
+
 	// First check if version is overridden in options
 	if ctx.options != nil && ctx.options.VersionOverrides != nil {
 		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
-			return forcedVersion
+			return forcedVersion, nil
 		}
 	}
 
-	version := ctx.orchestrator.db.GetVersion(ctx.workflowID, changeID)
-	if version != nil {
-		return version.Version
+	var version *Version
+	if version, err = ctx.orchestrator.db.GetVersion(ctx.workflowID, changeID); err != nil {
+
+		// If version not found, create a new version.
+		newVersion := &Version{
+			EntityID: ctx.workflowID,
+			ChangeID: changeID,
+			Version:  maxSupported,
+		}
+
+		if err := ctx.orchestrator.db.SetVersion(newVersion); err != nil {
+			return 0, err
+		}
+
+		return newVersion.Version, nil
 	}
 
-	// If version not found, create a new version.
-	newVersion := &Version{
-		EntityID: ctx.workflowID,
-		ChangeID: changeID,
-		Version:  maxSupported,
-	}
+	return version.Version, nil
 
-	ctx.orchestrator.db.SetVersion(newVersion)
-	return newVersion.Version
 }
 
 // Workflow creates a sub-workflow.
 func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var err error
+
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
 		future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
@@ -94,7 +104,17 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v, args: %v", stepID, getFunctionName(workflowFunc), args)
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeWorkflow)
+	var entity *Entity
+	if entity, err = ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeWorkflow); err != nil {
+		if !errors.Is(err, ErrEntityNotFound) {
+			log.Printf("Error getting entity: %v", err)
+			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
+			future.setEntityID(ctx.workflowID)
+			future.setError(err)
+			return future
+		}
+	}
+
 	if entity != nil {
 		handlerInfo := entity.HandlerInfo
 		if handlerInfo == nil {
@@ -105,8 +125,17 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			future.setError(err)
 			return future
 		}
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
+
+		var latestExecution *Execution
+		if latestExecution, err = ctx.orchestrator.db.GetLatestExecution(entity.ID); err != nil {
+			log.Printf("Error getting latest execution: %v", err)
+			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
+			future.setEntityID(entity.ID)
+			future.setError(err)
+			return future
+		}
+
+		if latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
 			// Deserialize output
 			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 			future.setEntityID(entity.ID)
@@ -119,7 +148,8 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			future.setResult(outputs)
 			return future
 		}
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
+
+		if latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
 			log.Printf("Workflow %s has failed execution with error: %s", stepID, latestExecution.Error)
 			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 			future.setEntityID(entity.ID)
@@ -199,10 +229,11 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	// Check for queue routing
 	if options != nil && options.Queue != "" {
+
 		// Find or get queue by name
-		queue := ctx.orchestrator.db.GetQueueByName(options.Queue)
-		if queue == nil {
-			err := fmt.Errorf("queue %s not found", options.Queue)
+		var queue *Queue
+		if queue, err = ctx.orchestrator.db.GetQueueByName(options.Queue); err != nil {
+			log.Printf("Error getting queue: %v", err)
 			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 			future.setEntityID(ctx.workflowID)
 			future.setError(err)
@@ -229,7 +260,14 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		}
 
 		// Add the entity to the database
-		entity = ctx.orchestrator.db.AddEntity(entity)
+		if err = ctx.orchestrator.db.AddEntity(entity); err != nil {
+			log.Printf("Error adding entity: %v", err)
+			future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
+			future.setError(err)
+			future.setEntityID(entity.ID)
+			return future
+		}
+
 		future := NewDatabaseFuture(ctx.orchestrator.ctx, ctx.orchestrator.db)
 		future.setEntityID(entity.ID) // track that one
 		return future
@@ -253,7 +291,14 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	}
 
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
+	if err = ctx.orchestrator.db.AddEntity(entity); err != nil {
+		log.Printf("Error adding entity: %v", err)
+		future := NewRuntimeFuture()
+		future.setError(err)
+		future.setEntityID(entity.ID)
+		return future
+	}
+
 	future := NewRuntimeFuture()
 	future.setEntityID(entity.ID) // track that one
 

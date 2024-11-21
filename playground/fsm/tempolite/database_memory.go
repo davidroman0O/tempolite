@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -10,22 +12,22 @@ import (
 // DefaultDatabase is an in-memory implementation of Database.
 type DefaultDatabase struct {
 	runs        map[int]*Run
-	versions    map[int]*Version // for in-memory we will basically run the latest all the time, it's just that we don't know if the dev will re-use other workflows. Hopefully we can still force it.
-	hierarchies []*Hierarchy
+	versions    map[int]*Version
+	hierarchies map[int]*Hierarchy
 	entities    map[int]*Entity
 	executions  map[int]*Execution
 	queues      map[int]*Queue
-	mu          sync.Mutex
+	mu          sync.RWMutex
 }
 
 func NewDefaultDatabase() *DefaultDatabase {
 	db := &DefaultDatabase{
 		runs:        make(map[int]*Run),
 		versions:    make(map[int]*Version),
+		hierarchies: make(map[int]*Hierarchy),
 		entities:    make(map[int]*Entity),
 		executions:  make(map[int]*Execution),
 		queues:      make(map[int]*Queue),
-		hierarchies: []*Hierarchy{},
 	}
 	db.queues[1] = &Queue{
 		ID:        1,
@@ -43,71 +45,103 @@ var (
 	entityIDCounter    int64
 	executionIDCounter int64
 	hierarchyIDCounter int64
+	queueIDCounter     int64 = 1 // Starting from 1 for the default queue.
 )
 
-func (db *DefaultDatabase) AddRun(run *Run) *Run {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+// Run methods
+func (db *DefaultDatabase) AddRun(run *Run) error {
 	runID := int(atomic.AddInt64(&runIDCounter, 1))
 	run.ID = runID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.runs[run.ID] = run
-	return run
+	return nil
 }
 
-func (db *DefaultDatabase) GetRun(id int) *Run {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.runs[id]
+func (db *DefaultDatabase) GetRun(id int) (*Run, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	run, exists := db.runs[id]
+	if !exists {
+		return nil, errors.New("run not found")
+	}
+
+	return db.copyRun(run), nil
 }
 
-func (db *DefaultDatabase) UpdateRun(run *Run) {
+func (db *DefaultDatabase) UpdateRun(run *Run) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if _, exists := db.runs[run.ID]; !exists {
+		return errors.New("run not found")
+	}
+
 	db.runs[run.ID] = run
+	return nil
 }
 
-func (db *DefaultDatabase) GetVersion(entityID int, changeID string) *Version {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) copyRun(run *Run) *Run {
+	copyRun := *run
+	copyRun.Entities = make([]*Entity, len(run.Entities))
+	copy(copyRun.Entities, run.Entities)
+	return &copyRun
+}
+
+// Version methods
+func (db *DefaultDatabase) GetVersion(entityID int, changeID string) (*Version, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	for _, version := range db.versions {
 		if version.EntityID == entityID && version.ChangeID == changeID {
-			return version
+			return version, nil
 		}
 	}
-	return nil
+	return nil, errors.New("version not found")
 }
 
-func (db *DefaultDatabase) SetVersion(version *Version) *Version {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) SetVersion(version *Version) error {
 	versionID := int(atomic.AddInt64(&versionIDCounter, 1))
 	version.ID = versionID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.versions[version.ID] = version
-	return version
-}
-
-func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	hierarchyID := int(atomic.AddInt64(&hierarchyIDCounter, 1))
-	hierarchy.ID = hierarchyID
-	db.hierarchies = append(db.hierarchies, hierarchy)
-}
-
-func (db *DefaultDatabase) GetHierarchy(parentID, childID int) *Hierarchy {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, h := range db.hierarchies {
-		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
-			return h
-		}
-	}
 	return nil
 }
 
-func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) []*Hierarchy {
+// Hierarchy methods
+func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) error {
+	hierarchyID := int(atomic.AddInt64(&hierarchyIDCounter, 1))
+	hierarchy.ID = hierarchyID
+
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	db.hierarchies[hierarchy.ID] = hierarchy
+	return nil
+}
+
+func (db *DefaultDatabase) GetHierarchy(parentID, childID int) (*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, h := range db.hierarchies {
+		if h.ParentEntityID == parentID && h.ChildEntityID == childID {
+			return h, nil
+		}
+	}
+	return nil, errors.New("hierarchy not found")
+}
+
+func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
 	var result []*Hierarchy
 	for _, h := range db.hierarchies {
@@ -115,65 +149,109 @@ func (db *DefaultDatabase) GetHierarchiesByChildEntity(childEntityID int) []*Hie
 			result = append(result, h)
 		}
 	}
-	return result
+	return result, nil
 }
 
 // Entity methods
-func (db *DefaultDatabase) AddEntity(entity *Entity) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) AddEntity(entity *Entity) error {
 	entityID := int(atomic.AddInt64(&entityIDCounter, 1))
 	entity.ID = entityID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.entities[entity.ID] = entity
 
 	// Add the entity to its Run
-	run := db.runs[entity.RunID]
-	if run != nil {
+	run, exists := db.runs[entity.RunID]
+	if exists {
 		run.Entities = append(run.Entities, entity)
+		db.runs[entity.RunID] = run
 	}
-	return entity
-}
 
-func (db *DefaultDatabase) GetEntity(id int) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.entities[id]
-}
-
-func (db *DefaultDatabase) UpdateEntity(entity *Entity) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.entities[entity.ID] = entity
-}
-
-func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) *Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, entity := range db.entities {
-		if entity.RunID == workflowID && entity.StepID == stepID {
-			return entity
-		}
-	}
 	return nil
 }
 
-func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) *Entity {
+var ErrEntityNotFound = errors.New("entity not found")
+
+func (db *DefaultDatabase) GetEntity(id int) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	entity, exists := db.entities[id]
+	if !exists {
+		return nil, errors.Join(fmt.Errorf("entity %d", id), ErrEntityNotFound)
+	}
+	copy := *entity
+	return &copy, nil
+}
+
+func (db *DefaultDatabase) HasEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	_, exists := db.entities[id]
+	return exists, nil
+}
+
+func (db *DefaultDatabase) UpdateEntity(entity *Entity) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if _, exists := db.entities[entity.ID]; !exists {
+		return errors.Join(fmt.Errorf("entity %d", entity.ID), ErrEntityNotFound)
+	}
+
+	db.entities[entity.ID] = entity
+
+	// Update the entity in its Run's Entities slice
+	run, exists := db.runs[entity.RunID]
+	if exists {
+		for i, e := range run.Entities {
+			if e.ID == entity.ID {
+				run.Entities[i] = entity
+				db.runs[run.ID] = run
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, entity := range db.entities {
+		if entity.RunID == workflowID && entity.StepID == stepID {
+			return entity, nil
+		}
+	}
+	return nil, errors.Join(fmt.Errorf(
+		"entity with workflow ID %d and step ID %s", workflowID, stepID,
+	), ErrEntityNotFound)
+}
+
+func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	for _, hierarchy := range db.hierarchies {
 		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
 			childEntityID := hierarchy.ChildEntityID
 			if entity, exists := db.entities[childEntityID]; exists && entity.Type == entityType {
-				return entity
+				return entity, nil
 			}
 		}
 	}
-	return nil
+	return nil, errors.Join(fmt.Errorf(
+		"child entity with parent entity ID %d, step ID %s, and type %s", parentEntityID, stepID, entityType,
+	), ErrEntityNotFound)
 }
 
-func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) []*Entity {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
 	var result []*Entity
 	for _, entity := range db.entities {
@@ -189,34 +267,48 @@ func (db *DefaultDatabase) FindPendingWorkflowsByQueue(queueID int) []*Entity {
 		return result[i].CreatedAt.Before(result[j].CreatedAt)
 	})
 
-	return result
+	return result, nil
 }
 
 // Execution methods
-func (db *DefaultDatabase) AddExecution(execution *Execution) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) AddExecution(execution *Execution) error {
 	executionID := int(atomic.AddInt64(&executionIDCounter, 1))
 	execution.ID = executionID
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.executions[execution.ID] = execution
-	return execution
+	return nil
 }
 
-func (db *DefaultDatabase) GetExecution(id int) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.executions[id]
+func (db *DefaultDatabase) GetExecution(id int) (*Execution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	execution, exists := db.executions[id]
+	if !exists {
+		return nil, errors.New("execution not found")
+	}
+	return execution, nil
 }
 
-func (db *DefaultDatabase) UpdateExecution(execution *Execution) {
+func (db *DefaultDatabase) UpdateExecution(execution *Execution) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if _, exists := db.executions[execution.ID]; !exists {
+		return errors.New("execution not found")
+	}
+
 	db.executions[execution.ID] = execution
+	return nil
 }
 
-func (db *DefaultDatabase) GetLatestExecution(entityID int) *Execution {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DefaultDatabase) GetLatestExecution(entityID int) (*Execution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	var latestExecution *Execution
 	for _, execution := range db.executions {
 		if execution.EntityID == entityID {
@@ -225,18 +317,91 @@ func (db *DefaultDatabase) GetLatestExecution(entityID int) *Execution {
 			}
 		}
 	}
-	return latestExecution
+	if latestExecution != nil {
+		return latestExecution, nil
+	}
+	return nil, errors.New("execution not found")
 }
 
-// Clear removes all Runs that are 'Completed' and their associated data.
-func (db *DefaultDatabase) Clear() {
+// Queue methods
+func (db *DefaultDatabase) AddQueue(queue *Queue) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Check if queue with same name exists
+	for _, q := range db.queues {
+		if q.Name == queue.Name {
+			return errors.New("queue already exists")
+		}
+	}
+
+	queueID := int(atomic.AddInt64(&queueIDCounter, 1))
+	queue.ID = queueID
+	queue.CreatedAt = time.Now()
+	queue.UpdatedAt = time.Now()
+
+	db.queues[queue.ID] = queue
+	return nil
+}
+
+func (db *DefaultDatabase) GetQueue(id int) (*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	queue, exists := db.queues[id]
+	if !exists {
+		return nil, errors.Join(ErrQueueNotFound)
+	}
+	copy := *queue
+	return &copy, nil
+}
+
+func (db *DefaultDatabase) GetQueueByName(name string) (*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, queue := range db.queues {
+		if queue.Name == name {
+			return queue, nil
+		}
+	}
+	return nil, errors.Join(ErrQueueNotFound)
+}
+
+func (db *DefaultDatabase) UpdateQueue(queue *Queue) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if existing, exists := db.queues[queue.ID]; exists {
+		existing.UpdatedAt = time.Now()
+		existing.Name = queue.Name
+		existing.Entities = queue.Entities
+		db.queues[queue.ID] = existing
+		return nil
+	}
+	return errors.Join(ErrQueueNotFound)
+}
+
+func (db *DefaultDatabase) ListQueues() ([]*Queue, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	queues := make([]*Queue, 0, len(db.queues))
+	for _, q := range db.queues {
+		queues = append(queues, q)
+	}
+	return queues, nil
+}
+
+// Clear removes all Runs that are 'Completed' or 'Failed' and their associated data.
+func (db *DefaultDatabase) Clear() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	runsToDelete := []int{}
-	entitiesToDelete := map[int]bool{} // EntityID to delete
+	entitiesToDelete := map[int]bool{}
 	executionsToDelete := map[int]bool{}
-	hierarchiesToKeep := []*Hierarchy{}
+	hierarchiesToKeep := map[int]*Hierarchy{}
 	versionsToDelete := map[int]*Version{}
 
 	// Find Runs to delete
@@ -265,14 +430,14 @@ func (db *DefaultDatabase) Clear() {
 	}
 
 	// Filter Hierarchies to keep only those not associated with Entities to delete
-	for _, hierarchy := range db.hierarchies {
+	for hid, hierarchy := range db.hierarchies {
 		if _, parentExists := entitiesToDelete[hierarchy.ParentEntityID]; parentExists {
 			continue
 		}
 		if _, childExists := entitiesToDelete[hierarchy.ChildEntityID]; childExists {
 			continue
 		}
-		hierarchiesToKeep = append(hierarchiesToKeep, hierarchy)
+		hierarchiesToKeep[hid] = hierarchy
 	}
 
 	// Delete Runs
@@ -295,63 +460,6 @@ func (db *DefaultDatabase) Clear() {
 
 	// Replace hierarchies with the filtered ones
 	db.hierarchies = hierarchiesToKeep
-}
 
-func (db *DefaultDatabase) AddQueue(queue *Queue) *Queue {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	// Check if queue with same name exists
-	for _, q := range db.queues {
-		if q.Name == queue.Name {
-			return q
-		}
-	}
-
-	queue.ID = len(db.queues) + 1
-	queue.CreatedAt = time.Now()
-	queue.UpdatedAt = time.Now()
-
-	if db.queues == nil {
-		db.queues = make(map[int]*Queue)
-	}
-	db.queues[queue.ID] = queue
-	return queue
-}
-
-func (db *DefaultDatabase) GetQueue(id int) *Queue {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.queues[id]
-}
-
-func (db *DefaultDatabase) GetQueueByName(name string) *Queue {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, queue := range db.queues {
-		if queue.Name == name {
-			return queue
-		}
-	}
 	return nil
-}
-
-func (db *DefaultDatabase) UpdateQueue(queue *Queue) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if existing, exists := db.queues[queue.ID]; exists {
-		existing.UpdatedAt = time.Now()
-		existing.Name = queue.Name
-		existing.Entities = queue.Entities
-	}
-}
-
-func (db *DefaultDatabase) ListQueues() []*Queue {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	queues := make([]*Queue, 0, len(db.queues))
-	for _, q := range db.queues {
-		queues = append(queues, q)
-	}
-	return queues
 }

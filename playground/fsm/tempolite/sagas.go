@@ -234,7 +234,10 @@ func (si *SagaInstance) executeSaga(_ context.Context, _ ...interface{}) error {
 		UpdatedAt: time.Now(),
 	}
 	// Add execution to database, which assigns the ID
-	execution = si.orchestrator.db.AddExecution(execution)
+	if err := si.orchestrator.db.AddExecution(execution); err != nil {
+		log.Printf("Error adding execution: %v", err)
+		return err
+	}
 	si.entity.Executions = append(si.entity.Executions, execution)
 	executionID := execution.ID
 	si.executionID = executionID // Store execution ID
@@ -364,6 +367,8 @@ func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 }
 
 func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
+	var err error
+
 	// Update entity status to Failed
 	si.entity.Status = StatusFailed
 	si.orchestrator.db.UpdateEntity(si.entity)
@@ -382,11 +387,14 @@ func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	}
 
 	// Mark parent Workflow as Failed
-	parentEntity := si.orchestrator.db.GetEntity(si.workflowID)
-	if parentEntity != nil {
-		parentEntity.Status = StatusFailed
-		si.orchestrator.db.UpdateEntity(parentEntity)
+	var parentEntity *Entity
+	if parentEntity, err = si.orchestrator.db.GetEntity(si.workflowID); err != nil {
+		log.Printf("Error getting parent entity %d: %v", si.workflowID, err)
+		return err
 	}
+
+	parentEntity.Status = StatusFailed
+	si.orchestrator.db.UpdateEntity(parentEntity)
 
 	close(si.sagaInfo.done)
 	log.Printf("Saga failed with error: %v", si.sagaInfo.err)

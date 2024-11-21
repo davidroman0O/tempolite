@@ -2,11 +2,17 @@ module github.com/davidroman0O/tempolite
 
 go 1.23.0
 
-require github.com/google/uuid v1.6.0 // indirect
+require (
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
+	golang.org/x/sys v0.23.0 // indirect
+)
 
 require (
 	entgo.io/ent v0.14.1
 	github.com/davidroman0O/comfylite3 v0.0.0-20241111232046-8a763fa15923
+	github.com/k0kubun/pp/v3 v3.3.0
 	github.com/qmuntal/stateless v1.7.1
 	github.com/stephenfire/go-rtl v1.2.1
 	github.com/stretchr/testify v1.8.2

@@ -31,13 +31,14 @@ type taskRequest struct {
 
 // QueueManager manages a single queue and its workers
 type QueueManager struct {
+	mu sync.RWMutex
+
 	name        string
 	pool        *retrypool.Pool[*QueueTask]
 	database    Database
 	registry    *Registry
 	ctx         context.Context
 	cancel      context.CancelFunc
-	mu          sync.RWMutex
 	workerCount int
 
 	orchestrator *Orchestrator
@@ -182,13 +183,17 @@ func newQueueManager(ctx context.Context, name string, workerCount int, registry
 		),
 	}
 
+	qm.mu.Lock()
+	poolRequest := qm.requestPool
 	qm.pool = qm.createWorkerPool(workerCount)
+	qm.mu.Unlock()
 
 	// TODO: how much?
-	qm.requestPool.AddWorker(&queueWorkerRequests{
+	poolRequest.AddWorker(&queueWorkerRequests{
 		qm: qm,
 	})
-	qm.requestPool.AddWorker(&queueWorkerRequests{
+
+	poolRequest.AddWorker(&queueWorkerRequests{
 		qm: qm,
 	})
 
@@ -207,6 +212,7 @@ func (w *queueWorkerRequests) OnStart(ctx context.Context) {
 }
 
 func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestResponse[*taskRequest, struct{}]) error {
+	var err error
 
 	w.qm.mu.Lock()
 	defer w.qm.mu.Unlock()
@@ -245,7 +251,11 @@ func (w *queueWorkerRequests) Run(ctx context.Context, task *retrypool.RequestRe
 	case queueRequestTypeExecute:
 
 		// Verify entity exists and is ready for execution
-		entity := w.qm.database.GetEntity(task.Request.entityID)
+		var entity *Entity
+		if entity, err = w.qm.database.GetEntity(task.Request.entityID); err != nil {
+			task.CompleteWithError(fmt.Errorf("failed to get entity %d: %w", task.Request.entityID, err))
+			return fmt.Errorf("failed to get entity %d: %w", task.Request.entityID, err)
+		}
 
 		if entity == nil {
 			task.CompleteWithError(fmt.Errorf("entity not found: %d", task.Request.entityID))
@@ -404,6 +414,8 @@ func (qm *QueueManager) Start() {
 }
 
 func (qm *QueueManager) checkAndProcessPending() {
+	var err error
+
 	// Get current queue state
 	info := qm.GetInfo()
 	availableSlots := info.WorkerCount - info.ProcessingTasks
@@ -413,13 +425,19 @@ func (qm *QueueManager) checkAndProcessPending() {
 	}
 
 	// Get queue first
-	queue := qm.database.GetQueueByName(qm.name)
-	if queue == nil {
+	var queue *Queue
+	if queue, err = qm.database.GetQueueByName(qm.name); err != nil {
+		log.Printf("Failed to get queue %s: %v", qm.name, err)
 		return
 	}
 
 	// Find pending workflows for this queue
-	pendingEntities := qm.database.FindPendingWorkflowsByQueue(queue.ID)
+	var pendingEntities []*Entity
+	if pendingEntities, err = qm.database.FindPendingWorkflowsByQueue(queue.ID); err != nil {
+		log.Printf("Failed to get pending workflows for queue %s: %v", qm.name, err)
+		return
+	}
+
 	if len(pendingEntities) == 0 {
 		// fmt.Println("Queue", qm.name, "has no pending tasks", info.PendingTasks, "pending tasks and", availableSlots, "available slots")
 		return
@@ -431,8 +449,13 @@ func (qm *QueueManager) checkAndProcessPending() {
 		entity := pendingEntities[i]
 
 		// Recheck entity state from database
-		freshEntity := qm.database.GetEntity(entity.ID)
-		if freshEntity == nil || freshEntity.Status != StatusPending {
+		var freshEntity *Entity
+		if freshEntity, err = qm.database.GetEntity(entity.ID); err != nil {
+			log.Printf("Failed to get entity %d: %v", entity.ID, err)
+			continue
+		}
+
+		if freshEntity.Status != StatusPending {
 			continue
 		}
 

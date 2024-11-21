@@ -10,6 +10,8 @@ import (
 
 // SideEffect executes a side effect function
 func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) *RuntimeFuture {
+	var err error
+
 	if err := ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
 		future := NewRuntimeFuture()
@@ -37,10 +39,24 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	}
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeSideEffect)
+	var entity *Entity
+	if entity, err = ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeSideEffect); err != nil {
+		if !errors.Is(err, ErrEntityNotFound) {
+			log.Printf("Error getting side effect entity: %v", err)
+			future.setError(err)
+			return future
+		}
+	}
+
 	if entity != nil {
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Outputs != nil {
+		var latestExecution *Execution
+		if latestExecution, err = ctx.orchestrator.db.GetLatestExecution(entity.ID); err != nil {
+			log.Printf("Error getting latest execution: %v", err)
+			future.setError(err)
+			return future
+		}
+
+		if latestExecution.Status == ExecutionStatusCompleted && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Outputs != nil {
 			// Deserialize result using the returnTypes
 			outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: returnTypes}, latestExecution.SideEffectExecutionData.Outputs)
 			if err != nil {
@@ -51,7 +67,8 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 			future.setResult(outputs)
 			return future
 		}
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
+
+		if latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
 			log.Printf("SideEffect %s has failed execution with error: %s", stepID, latestExecution.Error)
 			future.setError(errors.New(latestExecution.Error))
 			return future
@@ -128,9 +145,15 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		Paused:         false,
 		Resumable:      false,
 	}
+
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
-	future.workflowID = entity.ID
+	if err = ctx.orchestrator.db.AddEntity(entity); err != nil {
+		log.Printf("Error adding side effect entity: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	future.setEntityID(entity.ID)
 
 	// Prepare to create the side effect instance
 	sideEffectInstance := &SideEffectInstance{

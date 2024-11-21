@@ -53,8 +53,10 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 			Name:        t.defaultQ,
 			WorkerCount: 1,
 		}); err != nil {
-			t.mu.Unlock()
-			return nil, err
+			if !errors.Is(err, ErrQueueExists) {
+				t.mu.Unlock()
+				return nil, err
+			}
 		}
 	}
 	t.mu.Unlock()
@@ -64,20 +66,26 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 
 // createQueueLocked creates a queue while holding the lock
 func (t *Tempolite) createQueueLocked(config QueueConfig) error {
+
 	if config.WorkerCount <= 0 {
 		return fmt.Errorf("worker count must be greater than 0")
 	}
+	var err error
+
+	_, err = t.database.GetQueueByName(config.Name)
+	if errors.Is(err, ErrQueueNotFound) {
+		// Create queue in database
+		queue := &Queue{
+			Name: config.Name,
+		}
+		if err = t.database.AddQueue(queue); err != nil {
+			return fmt.Errorf("failed to create queue in database: %w", err)
+		}
+	}
 
 	if _, exists := t.queues[config.Name]; exists {
-		return fmt.Errorf("queue %s already exists", config.Name)
+		return ErrQueueExists
 	}
-
-	// Create queue in database
-	queue := &Queue{
-		Name: config.Name,
-	}
-
-	queue = t.database.AddQueue(queue)
 
 	// Create queue manager
 	manager := newQueueManager(t.ctx, config.Name, config.WorkerCount, t.registry, t.database)

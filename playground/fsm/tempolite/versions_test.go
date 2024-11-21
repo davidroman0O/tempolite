@@ -15,7 +15,10 @@ func TestOrchestratorVersionWorkflows(t *testing.T) {
 
 	workflow := func(ctx WorkflowContext) error {
 
-		v := ctx.GetVersion("featureA", DefaultVersion, 2)
+		v, e := ctx.GetVersion("featureA", DefaultVersion, 2)
+		if e != nil {
+			return e
+		}
 		switch v {
 		case DefaultVersion:
 			t.Log("Version original version")

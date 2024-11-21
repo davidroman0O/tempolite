@@ -9,7 +9,9 @@ import (
 
 // Activity creates an activity.
 func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *RuntimeFuture {
-	if err := ctx.checkPause(); err != nil {
+	var err error
+
+	if err = ctx.checkPause(); err != nil {
 		log.Printf("WorkflowContext.Activity paused at stepID: %s", stepID)
 		future := NewRuntimeFuture()
 		future.setError(err)
@@ -20,7 +22,15 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	future := NewRuntimeFuture()
 
 	// Check if result already exists in the database
-	entity := ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeActivity)
+	var entity *Entity
+	if entity, err = ctx.orchestrator.db.GetChildEntityByParentEntityIDAndStepIDAndType(ctx.workflowID, stepID, EntityTypeActivity); err != nil {
+		if !errors.Is(err, ErrEntityNotFound) {
+			log.Printf("Error getting entity: %v", err)
+			future.setError(err)
+			return future
+		}
+	}
+
 	if entity != nil {
 		handlerInfo := entity.HandlerInfo
 		if handlerInfo == nil {
@@ -30,8 +40,16 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 			future.setError(err)
 			return future
 		}
-		latestExecution := ctx.orchestrator.db.GetLatestExecution(entity.ID)
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Outputs != nil {
+
+		var latestExecution *Execution
+		if latestExecution, err = ctx.orchestrator.db.GetLatestExecution(entity.ID); err != nil {
+			log.Printf("Error getting latest execution: %v", err)
+			future.setEntityID(entity.ID)
+			future.setError(err)
+			return future
+		}
+
+		if latestExecution.Status == ExecutionStatusCompleted && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Outputs != nil {
 			// Deserialize output
 			outputs, err := convertOutputsFromSerialization(*handlerInfo, latestExecution.ActivityExecutionData.Outputs)
 			if err != nil {
@@ -43,7 +61,8 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 			future.setResult(outputs)
 			return future
 		}
-		if latestExecution != nil && latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
+
+		if latestExecution.Status == ExecutionStatusFailed && latestExecution.Error != "" {
 			log.Printf("Activity %s has failed execution with error: %s", stepID, latestExecution.Error)
 			future.setEntityID(entity.ID)
 			future.setError(errors.New(latestExecution.Error))
@@ -131,9 +150,13 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		Paused:       false,
 		Resumable:    false,
 	}
+
 	// Add the entity to the database, which assigns the ID
-	entity = ctx.orchestrator.db.AddEntity(entity)
-	future.workflowID = entity.ID
+	if err = ctx.orchestrator.db.AddEntity(entity); err != nil {
+		log.Printf("Error adding entity: %v", err)
+		future.setError(err)
+		return future
+	}
 
 	future.setEntityID(entity.ID)
 

@@ -64,11 +64,12 @@ func (sei *SideEffectInstance) Start() {
 }
 
 func (sei *SideEffectInstance) executeSideEffect(_ context.Context, _ ...interface{}) error {
-	sei.executeWithRetry()
-	return nil
+	return sei.executeWithRetry()
 }
 
-func (sei *SideEffectInstance) executeWithRetry() {
+func (sei *SideEffectInstance) executeWithRetry() error {
+	var err error
+
 	var attempt int
 	var maxAttempts int
 	var initialInterval time.Duration
@@ -96,7 +97,7 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			sei.entity.Paused = true
 			sei.orchestrator.db.UpdateEntity(sei.entity)
 			sei.fsm.Fire(TriggerPause)
-			return
+			return nil
 		}
 
 		// Update RetryState
@@ -113,8 +114,14 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 			Entity:    sei.entity,
 		}
+
 		// Add execution to database, which assigns the ID
-		execution = sei.orchestrator.db.AddExecution(execution)
+		if err = sei.orchestrator.db.AddExecution(execution); err != nil {
+			sei.entity.Status = StatusFailed
+			sei.orchestrator.db.UpdateEntity(sei.entity)
+			sei.fsm.Fire(TriggerFail)
+			return nil
+		}
 		sei.entity.Executions = append(sei.entity.Executions, execution)
 		executionID := execution.ID
 		sei.executionID = executionID // Store execution ID
@@ -145,7 +152,7 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			sei.entity.Paused = true
 			sei.orchestrator.db.UpdateEntity(sei.entity)
 			sei.fsm.Fire(TriggerPause)
-			return
+			return nil
 		}
 		if err == nil {
 			// Success
@@ -156,7 +163,7 @@ func (sei *SideEffectInstance) executeWithRetry() {
 			sei.orchestrator.db.UpdateExecution(execution)
 			sei.orchestrator.db.UpdateEntity(sei.entity)
 			sei.fsm.Fire(TriggerComplete)
-			return
+			return nil
 		} else {
 			execution.Status = ExecutionStatusFailed
 			completedAt := time.Now()
@@ -178,18 +185,25 @@ func (sei *SideEffectInstance) executeWithRetry() {
 				sei.entity.Status = StatusFailed
 				sei.orchestrator.db.UpdateEntity(sei.entity)
 				sei.fsm.Fire(TriggerFail)
-				return
+				return nil
 			}
 		}
 	}
+	return nil
 }
 
 func (sei *SideEffectInstance) runSideEffect(execution *Execution) error {
 	log.Printf("SideEffectInstance %s (Entity ID: %d, Execution ID: %d) runSideEffect attempt %d", sei.stepID, sei.entity.ID, execution.ID, execution.Attempt)
+	var err error
 
 	// Check if result already exists in the database
-	latestExecution := sei.orchestrator.db.GetLatestExecution(sei.entity.ID)
-	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Outputs != nil {
+	var latestExecution *Execution
+	if latestExecution, err = sei.orchestrator.db.GetLatestExecution(sei.entity.ID); err != nil {
+		log.Printf("Error getting latest execution: %v", err)
+		return err
+	}
+
+	if latestExecution.Status == ExecutionStatusCompleted && latestExecution.SideEffectExecutionData != nil && latestExecution.SideEffectExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", sei.entity.ID)
 		outputs, err := convertOutputsFromSerialization(HandlerInfo{ReturnTypes: sei.returnTypes}, latestExecution.SideEffectExecutionData.Outputs)
 		if err != nil {

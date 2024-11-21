@@ -8,6 +8,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/qmuntal/stateless"
@@ -15,6 +16,7 @@ import (
 
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
+	mu                sync.Mutex // TODO: need to support mutex to fix all those data races
 	stepID            string
 	handler           HandlerInfo
 	input             []interface{}
@@ -36,7 +38,16 @@ type WorkflowInstance struct {
 	parentStepID      string
 }
 
+func (wi *WorkflowInstance) MustState() any {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	return wi.fsm.MustState()
+}
+
 func (wi *WorkflowInstance) Start() {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+
 	// Initialize the FSM
 	wi.fsm = stateless.NewStateMachine(StateIdle)
 	wi.fsm.Configure(StateIdle).
@@ -69,11 +80,11 @@ func (wi *WorkflowInstance) Start() {
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) executeWorkflow called", wi.stepID, wi.entity.ID)
-	wi.executeWithRetry()
-	return nil
+	return wi.executeWithRetry()
 }
 
-func (wi *WorkflowInstance) executeWithRetry() {
+func (wi *WorkflowInstance) executeWithRetry() error {
+	var err error
 	var attempt int
 	var maxAttempts int
 	var initialInterval time.Duration
@@ -107,7 +118,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.entity.Paused = true
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerPause)
-			return
+			return nil
 		}
 
 		// Check if maximum attempts have been reached and not resumable
@@ -116,7 +127,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerFail)
 			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt-1)
-			return
+			return nil
 		}
 
 		// Update RetryState without changing attempts values beyond maxAttempts
@@ -135,7 +146,13 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			UpdatedAt: time.Now(),
 			Entity:    wi.entity,
 		}
-		execution = wi.orchestrator.db.AddExecution(execution)
+		if err = wi.orchestrator.db.AddExecution(execution); err != nil {
+			log.Printf("Error adding execution: %v", err)
+			wi.entity.Status = StatusFailed
+			wi.orchestrator.db.UpdateEntity(wi.entity)
+			wi.fsm.Fire(TriggerFail)
+			return nil
+		}
 		wi.entity.Executions = append(wi.entity.Executions, execution)
 		wi.executionID = execution.ID
 		wi.execution = execution
@@ -165,7 +182,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerPause)
 			log.Printf("WorkflowInstance %s is paused post-runWorkflow", wi.stepID)
-			return
+			return nil
 		}
 		if err == nil {
 			// Success
@@ -177,7 +194,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			wi.orchestrator.db.UpdateEntity(wi.entity)
 			wi.fsm.Fire(TriggerComplete)
 			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) completed successfully", wi.stepID, wi.entity.ID, wi.executionID)
-			return
+			return nil
 		} else {
 			execution.Status = ExecutionStatusFailed
 			completedAt := time.Now()
@@ -201,7 +218,7 @@ func (wi *WorkflowInstance) executeWithRetry() {
 				wi.orchestrator.db.UpdateEntity(wi.entity)
 				wi.fsm.Fire(TriggerFail)
 				log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) failed after %d attempts", wi.stepID, wi.entity.ID, wi.executionID, attempt)
-				return
+				return nil
 			}
 		}
 
@@ -210,14 +227,18 @@ func (wi *WorkflowInstance) executeWithRetry() {
 			attempt++
 		}
 	}
-	log.Printf("Workflow %s (Entity ID: %d) completed", wi.stepID, wi.entity.ID)
 }
 
+// Sub-function to run the workflow within retry loop
 func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d, Execution ID: %d) runWorkflow attempt %d", wi.stepID, wi.entity.ID, execution.ID, execution.Attempt)
-
+	var err error
 	// Check if result already exists in the database
-	latestExecution := wi.orchestrator.db.GetLatestExecution(wi.entity.ID)
+	var latestExecution *Execution
+	if latestExecution, err = wi.orchestrator.db.GetLatestExecution(wi.entity.ID); err != nil {
+		log.Printf("Error getting latest execution: %v", err)
+		return err
+	}
 	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", wi.entity.ID)
 		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Outputs)
@@ -349,6 +370,8 @@ func (wi *WorkflowInstance) runWorkflow(execution *Execution) error {
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.entity.ID)
+	var err error
+
 	if wi.continueAsNew != nil {
 		// Handle ContinueAsNew
 		o := wi.orchestrator
@@ -430,7 +453,9 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 			Resumable:    false,
 		}
 		// Add the entity to the database, which assigns the ID
-		newEntity = o.db.AddEntity(newEntity)
+		if err = o.db.AddEntity(newEntity); err != nil {
+			return err
+		}
 
 		// Create a new WorkflowInstance
 		newInstance := &WorkflowInstance{
@@ -469,12 +494,20 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 		}
 		// If this is the root workflow, update the Run status to Completed
 		if wi.orchestrator.rootWf == wi {
-			run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
-			if run != nil {
-				run.Status = string(StatusCompleted)
-				run.UpdatedAt = time.Now()
-				wi.orchestrator.db.UpdateRun(run)
+			var run *Run
+			if run, err = wi.orchestrator.db.GetRun(wi.orchestrator.runID); err != nil {
+				log.Printf("Error getting run: %v", err)
+				wi.err = err
+				if wi.future != nil {
+					wi.future.setError(wi.err)
+				}
+				return nil
 			}
+
+			run.Status = string(StatusCompleted)
+			run.UpdatedAt = time.Now()
+			wi.orchestrator.db.UpdateRun(run)
+
 			wi.entity.Status = StatusCompleted
 			wi.entity.UpdatedAt = time.Now()
 			wi.orchestrator.db.UpdateEntity(wi.entity)
@@ -490,17 +523,21 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, _ ...interface{}) err
 
 func (wi *WorkflowInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onFailed called", wi.stepID, wi.entity.ID)
+	var err error
 	if wi.future != nil {
 		wi.future.setError(wi.err)
 	}
 	// If this is the root workflow, update the Run status to Failed
 	if wi.orchestrator.rootWf == wi {
-		run := wi.orchestrator.db.GetRun(wi.orchestrator.runID)
-		if run != nil {
-			run.Status = string(StatusFailed)
-			run.UpdatedAt = time.Now()
-			wi.orchestrator.db.UpdateRun(run)
+		var run *Run
+		if run, err = wi.orchestrator.db.GetRun(wi.orchestrator.runID); err != nil {
+			log.Printf("Error getting run: %v", err)
+			return err
 		}
+
+		run.Status = string(StatusFailed)
+		run.UpdatedAt = time.Now()
+		wi.orchestrator.db.UpdateRun(run)
 	}
 	return nil
 }

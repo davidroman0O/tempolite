@@ -75,11 +75,12 @@ func (ai *ActivityInstance) Start() {
 }
 
 func (ai *ActivityInstance) executeActivity(_ context.Context, _ ...interface{}) error {
-	ai.executeWithRetry()
-	return nil
+	return ai.executeWithRetry()
 }
 
-func (ai *ActivityInstance) executeWithRetry() {
+func (ai *ActivityInstance) executeWithRetry() error {
+	var err error
+
 	var attempt int
 	var maxAttempts int
 	var initialInterval time.Duration
@@ -107,7 +108,7 @@ func (ai *ActivityInstance) executeWithRetry() {
 			ai.entity.Paused = true
 			ai.orchestrator.db.UpdateEntity(ai.entity)
 			ai.fsm.Fire(TriggerPause)
-			return
+			return nil
 		}
 
 		// Update RetryState
@@ -125,7 +126,13 @@ func (ai *ActivityInstance) executeWithRetry() {
 			Entity:    ai.entity,
 		}
 		// Add execution to database, which assigns the ID
-		execution = ai.orchestrator.db.AddExecution(execution)
+		if err = ai.orchestrator.db.AddExecution(execution); err != nil {
+			log.Printf("Error adding execution: %v", err)
+			ai.entity.Status = StatusFailed
+			ai.orchestrator.db.UpdateEntity(ai.entity)
+			ai.fsm.Fire(TriggerFail)
+			return nil
+		}
 		ai.entity.Executions = append(ai.entity.Executions, execution)
 		executionID := execution.ID
 		ai.executionID = executionID // Store execution ID
@@ -156,7 +163,7 @@ func (ai *ActivityInstance) executeWithRetry() {
 			ai.entity.Paused = true
 			ai.orchestrator.db.UpdateEntity(ai.entity)
 			ai.fsm.Fire(TriggerPause)
-			return
+			return nil
 		}
 		if err == nil {
 			// Success
@@ -167,7 +174,7 @@ func (ai *ActivityInstance) executeWithRetry() {
 			ai.orchestrator.db.UpdateExecution(execution)
 			ai.orchestrator.db.UpdateEntity(ai.entity)
 			ai.fsm.Fire(TriggerComplete)
-			return
+			return nil
 		} else {
 			execution.Status = ExecutionStatusFailed
 			completedAt := time.Now()
@@ -189,17 +196,24 @@ func (ai *ActivityInstance) executeWithRetry() {
 				ai.entity.Status = StatusFailed
 				ai.orchestrator.db.UpdateEntity(ai.entity)
 				ai.fsm.Fire(TriggerFail)
-				return
+				return nil
 			}
 		}
 	}
+	return nil
 }
 
+// Sub-function within executeWithRetry
 func (ai *ActivityInstance) runActivity(execution *Execution) error {
 	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d) runActivity attempt %d", ai.stepID, ai.entity.ID, execution.ID, execution.Attempt)
-
+	var err error
 	// Check if result already exists in the database
-	latestExecution := ai.orchestrator.db.GetLatestExecution(ai.entity.ID)
+	var latestExecution *Execution
+	if latestExecution, err = ai.orchestrator.db.GetLatestExecution(ai.entity.ID); err != nil {
+		log.Printf("Error getting latest execution: %v", err)
+		return err
+	}
+
 	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.ActivityExecutionData != nil && latestExecution.ActivityExecutionData.Outputs != nil {
 		log.Printf("Result found in database for entity ID: %d", ai.entity.ID)
 		outputs, err := convertOutputsFromSerialization(ai.handler, latestExecution.ActivityExecutionData.Outputs)

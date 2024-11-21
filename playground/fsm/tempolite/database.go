@@ -1,39 +1,49 @@
 package tempolite
 
-// Database interface defines methods for interacting with the data store. Runtime based.
+import "errors"
+
+var ErrQueueExists = errors.New("queue already exists")
+var ErrQueueNotFound = errors.New("queue not found")
+
+// Database interface defines methods for interacting with the data store.
+// All methods return errors to handle future implementations that might have errors.
 type Database interface {
 	// Run methods
-	AddRun(run *Run) *Run
-	GetRun(id int) *Run
-	UpdateRun(run *Run)
+	AddRun(run *Run) error
+	GetRun(id int) (*Run, error)
+	UpdateRun(run *Run) error
 
 	// Version methods
-	GetVersion(entityID int, changeID string) *Version
-	SetVersion(version *Version) *Version
+	GetVersion(entityID int, changeID string) (*Version, error)
+	SetVersion(version *Version) error
 
 	// Hierarchy methods
-	AddHierarchy(hierarchy *Hierarchy)
-	GetHierarchy(parentID, childID int) *Hierarchy
-	GetHierarchiesByChildEntity(childEntityID int) []*Hierarchy
+	AddHierarchy(hierarchy *Hierarchy) error
+	GetHierarchy(parentID, childID int) (*Hierarchy, error)
+	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
 
 	// Entity methods
-	AddEntity(entity *Entity) *Entity
-	GetEntity(id int) *Entity
-	UpdateEntity(entity *Entity)
-	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) *Entity
-	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) *Entity
-	FindPendingWorkflowsByQueue(queueID int) []*Entity
+	AddEntity(entity *Entity) error
+	HasEntity(id int) (bool, error)
+	GetEntity(id int) (*Entity, error)
+	UpdateEntity(entity *Entity) error
+	GetEntityByWorkflowIDAndStepID(workflowID int, stepID string) (*Entity, error)
+	GetChildEntityByParentEntityIDAndStepIDAndType(parentEntityID int, stepID string, entityType EntityType) (*Entity, error)
+	FindPendingWorkflowsByQueue(queueID int) ([]*Entity, error)
 
 	// Execution methods
-	AddExecution(execution *Execution) *Execution
-	GetExecution(id int) *Execution
-	UpdateExecution(execution *Execution)
-	GetLatestExecution(entityID int) *Execution
+	AddExecution(execution *Execution) error
+	GetExecution(id int) (*Execution, error)
+	UpdateExecution(execution *Execution) error
+	GetLatestExecution(entityID int) (*Execution, error)
 
-	// Queues
-	AddQueue(queue *Queue) *Queue
-	GetQueue(id int) *Queue
-	GetQueueByName(name string) *Queue
-	UpdateQueue(queue *Queue)
-	ListQueues() []*Queue
+	// Queue methods
+	AddQueue(queue *Queue) error
+	GetQueue(id int) (*Queue, error)
+	GetQueueByName(name string) (*Queue, error)
+	UpdateQueue(queue *Queue) error
+	ListQueues() ([]*Queue, error)
+
+	// Clear removes all Runs that are 'Completed' and their associated data.
+	Clear() error
 }

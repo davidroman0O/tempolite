@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"runtime"
@@ -20,6 +21,7 @@ type Orchestrator struct {
 	activities    []*ActivityInstance
 	sideEffects   []*SideEffectInstance
 	sagas         []*SagaInstance
+	mu            sync.Mutex
 	instancesMu   sync.Mutex
 	activitiesMu  sync.Mutex
 	sideEffectsMu sync.Mutex
@@ -63,7 +65,9 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
-		run = o.db.AddRun(run)
+		if err = o.db.AddRun(run); err != nil {
+			return nil, fmt.Errorf("failed to create run: %w", err)
+		}
 		o.runID = run.ID
 	}
 
@@ -93,9 +97,9 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 		queueName = options.Queue
 	}
 
-	queue := o.db.GetQueueByName(queueName)
-	if queue == nil {
-		return nil, fmt.Errorf("queue %s not found", queueName)
+	var queue *Queue
+	if queue, err = o.db.GetQueueByName(queueName); err != nil {
+		return nil, fmt.Errorf("failed to get queue %s: %w", queueName, err)
 	}
 
 	// Create Entity
@@ -123,7 +127,9 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 	}
 
 	// Add entity to database
-	entity = o.db.AddEntity(entity)
+	if err = o.db.AddEntity(entity); err != nil {
+		return nil, fmt.Errorf("failed to add entity: %w", err)
+	}
 
 	// // Create initial execution
 	// execution := &Execution{
@@ -143,9 +149,10 @@ func (o *Orchestrator) prepareWorkflowEntity(workflowFunc interface{}, options *
 // ExecuteWithEntity starts a workflow using an existing entity ID
 func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 	// Get the entity and verify it exists
-	entity := o.db.GetEntity(entityID)
-	if entity == nil {
-		return nil, fmt.Errorf("entity not found: %d", entityID)
+	var err error
+	var entity *Entity
+	if entity, err = o.db.GetEntity(entityID); err != nil {
+		return nil, fmt.Errorf("failed to get entity: %w", err)
 	}
 
 	// Verify it's a workflow
@@ -178,7 +185,10 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 	}
 
 	// If this is a sub-workflow, set parent info from hierarchies
-	hierarchies := o.db.GetHierarchiesByChildEntity(entityID)
+	var hierarchies []*Hierarchy
+	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
+		return nil, fmt.Errorf("failed to get hierarchies: %w", err)
+	}
 	if len(hierarchies) > 0 {
 		h := hierarchies[0]
 		instance.parentExecutionID = h.ParentExecutionID
@@ -195,7 +205,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 	o.rootWf = instance
 
 	o.addWorkflowInstance(instance)
-	instance.Start()
+	go instance.Start()
 
 	return future, nil
 }
@@ -236,8 +246,8 @@ func (o *Orchestrator) IsPaused() bool {
 
 func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 
+	var err error
 	// Resuming isn't retrying! We need to create a new execution to the entity while avoiding increasing the attempt count.
-
 	future := NewRuntimeFuture()
 
 	o.pausedMu.Lock()
@@ -250,10 +260,10 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 	o.cancel = cancel
 
 	// Retrieve the workflow entity
-	entity := o.db.GetEntity(entityID)
-	if entity == nil {
-		log.Printf("No workflow found with ID: %d", entityID)
-		future.setError(fmt.Errorf("no workflow found with ID: %d", entityID))
+	var entity *Entity
+	if entity, err = o.db.GetEntity(entityID); err != nil {
+		log.Printf("Error getting entity: %v", err)
+		future.setError(err)
 		return future
 	}
 
@@ -267,16 +277,30 @@ func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
 	o.db.UpdateEntity(entity)
 
 	// Update Run status
-	run := o.db.GetRun(o.runID)
-	if run != nil {
-		run.Status = string(StatusPending)
-		run.UpdatedAt = time.Now()
-		o.db.UpdateRun(run)
+	var run *Run
+	if run, err = o.db.GetRun(o.runID); err != nil {
+		log.Printf("Error getting run: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	run.Status = string(StatusPending)
+	run.UpdatedAt = time.Now()
+	if err = o.db.UpdateRun(run); err != nil {
+		log.Printf("Error updating run: %v", err)
+		future.setError(err)
+		return future
 	}
 
 	// Get parent execution if this is a sub-workflow
 	var parentExecID, parentEntityID int
-	hierarchies := o.db.GetHierarchiesByChildEntity(entityID)
+	var hierarchies []*Hierarchy
+	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
+		log.Printf("Error getting hierarchies: %v", err)
+		future.setError(err)
+		return future
+	}
+
 	if len(hierarchies) > 0 {
 		parentExecID = hierarchies[0].ParentExecutionID
 		parentEntityID = hierarchies[0].ParentEntityID
@@ -355,6 +379,7 @@ func (o *Orchestrator) addSideEffectInstance(sei *SideEffectInstance) {
 
 func (o *Orchestrator) Wait() error {
 	log.Printf("Orchestrator.Wait called")
+	var err error
 
 	if o.rootWf == nil {
 		log.Printf("No root workflow to execute")
@@ -364,11 +389,14 @@ func (o *Orchestrator) Wait() error {
 	lastLogTime := time.Now()
 	// Wait for root workflow to complete
 	for {
+		o.instancesMu.Lock()
 		// not initialized yet
 		if o.rootWf.fsm == nil {
+			o.instancesMu.Unlock()
 			continue
 		}
 		state := o.rootWf.fsm.MustState()
+		o.instancesMu.Unlock()
 		// Log the state every 500ms
 		currentTime := time.Now()
 		if currentTime.Sub(lastLogTime) >= 500*time.Millisecond {
@@ -381,7 +409,9 @@ func (o *Orchestrator) Wait() error {
 		select {
 		case <-o.ctx.Done():
 			log.Printf("Context cancelled: %v", o.ctx.Err())
+			o.instancesMu.Lock()
 			o.rootWf.fsm.Fire(TriggerFail)
+			o.instancesMu.Unlock()
 			return o.ctx.Err()
 		default:
 			// tbf i don't know yet which one
@@ -394,16 +424,16 @@ func (o *Orchestrator) Wait() error {
 	// The Run's status should have been updated in onCompleted or onFailed of the root workflow
 
 	// Get final status from the database instead of relying on error field
-	entity := o.db.GetEntity(o.rootWf.entityID)
-	if entity == nil {
-		log.Printf("Could not find root workflow entity")
-		return fmt.Errorf("could not find root workflow entity")
+	var entity *Entity
+	if entity, err = o.db.GetEntity(o.rootWf.entityID); err != nil {
+		log.Printf("error getting entity: %v", err)
+		return err
 	}
 
-	latestExecution := o.db.GetLatestExecution(entity.ID)
-	if latestExecution == nil {
-		log.Printf("Could not find latest execution for root workflow")
-		return fmt.Errorf("could not find latest execution for root workflow")
+	var latestExecution *Execution
+	if latestExecution, err = o.db.GetLatestExecution(entity.ID); err != nil {
+		log.Printf("error getting latest execution: %v", err)
+		return err
 	}
 
 	switch entity.Status {
@@ -434,14 +464,16 @@ func (o *Orchestrator) Wait() error {
 // Retry retries a failed root workflow by creating a new entity and execution.
 func (o *Orchestrator) Retry(workflowID int) *RuntimeFuture {
 
+	var err error
+
 	future := NewRuntimeFuture()
 	future.setEntityID(workflowID)
 
 	// Retrieve the workflow entity
-	entity := o.db.GetEntity(workflowID)
-	if entity == nil {
-		log.Printf("No workflow found with ID: %d", workflowID)
-		future.setError(fmt.Errorf("no workflow found with ID: %d", workflowID))
+	var entity *Entity
+	if entity, err = o.db.GetEntity(workflowID); err != nil {
+		log.Printf("Error getting entity: %v", err)
+		future.setError(err)
 		return future
 	}
 
@@ -484,7 +516,12 @@ func (o *Orchestrator) Retry(workflowID int) *RuntimeFuture {
 		Paused:       false,
 		Resumable:    false,
 	}
-	newEntity = o.db.AddEntity(newEntity)
+
+	if err = o.db.AddEntity(newEntity); err != nil {
+		log.Printf("Error adding entity: %v", err)
+		future.setError(err)
+		return future
+	}
 
 	// Create a new WorkflowInstance
 	instance := &WorkflowInstance{
@@ -517,6 +554,7 @@ func (o *Orchestrator) executeSaga(ctx WorkflowContext, stepID string, saga *Sag
 	sagaInfo := &SagaInfo{
 		done: make(chan struct{}),
 	}
+	var err error
 
 	// Create a new Entity
 	entity := &Entity{
@@ -531,7 +569,10 @@ func (o *Orchestrator) executeSaga(ctx WorkflowContext, stepID string, saga *Sag
 	entity.HandlerInfo = &HandlerInfo{}
 
 	// Add the entity to the database
-	entity = o.db.AddEntity(entity)
+	if err = o.db.AddEntity(entity); err != nil {
+		log.Printf("Error adding entity: %v", err)
+		return nil
+	}
 
 	// Prepare to create the SagaInstance
 	sagaInstance := &SagaInstance{
@@ -555,12 +596,17 @@ func (o *Orchestrator) executeSaga(ctx WorkflowContext, stepID string, saga *Sag
 }
 
 func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
-	entity := o.db.GetEntity(id)
-	if entity == nil {
-		return nil, fmt.Errorf("workflow entity not found with ID: %d", id)
+	var err error
+
+	var entity *Entity
+	if entity, err = o.db.GetEntity(id); err != nil {
+		return nil, fmt.Errorf("error getting entity: %v", err)
 	}
 
-	run := o.db.GetRun(entity.RunID)
+	var run *Run
+	if run, err = o.db.GetRun(entity.RunID); err != nil {
+		return nil, fmt.Errorf("error getting run: %v", err)
+	}
 
 	info := &WorkflowInfo{
 		EntityID: entity.ID,
@@ -578,12 +624,14 @@ func (o *Orchestrator) GetWorkflow(id int) (*WorkflowInfo, error) {
 // In orchestrator.go
 func (o *Orchestrator) WaitForContinuations(originalID int) error {
 	log.Printf("Waiting for all continuations starting from workflow %d", originalID)
-
+	var err error
 	currentID := originalID
 
 	for {
 		// Wait for current workflow
-		state := o.rootWf.fsm.MustState()
+		o.instancesMu.Lock()
+		state := o.rootWf.MustState()
+		o.instancesMu.Unlock()
 		for state != StateCompleted && state != StateFailed {
 			select {
 			case <-o.ctx.Done():
@@ -591,25 +639,36 @@ func (o *Orchestrator) WaitForContinuations(originalID int) error {
 			default:
 				runtime.Gosched()
 			}
-			state = o.rootWf.fsm.MustState()
+			o.instancesMu.Lock()
+			state = o.rootWf.MustState()
+			o.instancesMu.Unlock()
 		}
 
 		// Check if this workflow initiated a continuation
-		entity := o.db.GetEntity(currentID)
-		if entity == nil {
-			return fmt.Errorf("entity not found: %d", currentID)
+		var hasEntity bool
+		if hasEntity, err = o.db.HasEntity(currentID); err != nil {
+			return fmt.Errorf("error checking for entity: %v", err)
 		}
 
-		latestExecution := o.db.GetLatestExecution(currentID)
-		if latestExecution == nil {
-			return fmt.Errorf("no execution found for entity: %d", currentID)
+		if !hasEntity {
+			return fmt.Errorf("isn't initiated contiuation: %d", currentID)
+		}
+
+		var latestExecution *Execution
+		if latestExecution, err = o.db.GetLatestExecution(currentID); err != nil {
+			return fmt.Errorf("error getting latest execution: %v", err)
 		}
 
 		if latestExecution.Status == ExecutionStatusCompleted {
 			// Look for any child workflow that was created via ContinueAsNew
-			children := o.db.GetChildEntityByParentEntityIDAndStepIDAndType(currentID, "root", EntityTypeWorkflow)
-			if children == nil {
+			var children *Entity
+			if children, err = o.db.GetChildEntityByParentEntityIDAndStepIDAndType(currentID, "root", EntityTypeWorkflow); err != nil {
 				// No more continuations, we're done
+				if !errors.Is(err, ErrEntityNotFound) {
+					return err
+				}
+			}
+			if children == nil {
 				log.Printf("No more continuations found after workflow %d", currentID)
 				return nil
 			}

@@ -129,19 +129,24 @@ func (f *DatabaseFuture) handleResults(out ...interface{}) error {
 }
 
 func (f *DatabaseFuture) checkCompletion() bool {
-	entity := f.database.GetEntity(f.entityID)
-	if entity == nil {
+	var err error
+	var entity *Entity
+	if entity, err = f.database.GetEntity(f.entityID); err != nil {
 		f.err = fmt.Errorf("entity not found: %d", f.entityID)
 		return true
 	}
 
 	fmt.Println("\t entity", entity.ID, " status: ", entity.Status)
+	var latestExec *Execution
 	// TODO: should we check for pause?
 	switch entity.Status {
 	case StatusCompleted:
 		// Get results from latest execution
-		if latestExec := f.database.GetLatestExecution(f.entityID); latestExec != nil &&
-			latestExec.WorkflowExecutionData != nil {
+		if latestExec, err = f.database.GetLatestExecution(f.entityID); err != nil {
+			f.err = err
+			return true
+		}
+		if latestExec.WorkflowExecutionData != nil {
 			outputs, err := convertOutputsFromSerialization(*entity.HandlerInfo,
 				latestExec.WorkflowExecutionData.Outputs)
 			if err != nil {
@@ -151,12 +156,16 @@ func (f *DatabaseFuture) checkCompletion() bool {
 			f.results = outputs
 			return true
 		}
+		// TODO: no output, maybe we don't care?
+		return true
 	case StatusFailed:
-		if latestExec := f.database.GetLatestExecution(f.entityID); latestExec != nil {
-			f.err = errors.New(latestExec.Error)
-		} else {
-			f.err = errors.New("workflow failed with no error details")
+		if latestExec, err = f.database.GetLatestExecution(f.entityID); err != nil {
+			f.err = err
+			return true
 		}
+
+		f.err = errors.New(latestExec.Error)
+
 		return true
 	case StatusPaused:
 		f.err = ErrPaused
