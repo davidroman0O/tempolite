@@ -320,6 +320,50 @@ func TestOrchestratorSagaCompensation(t *testing.T) {
 	o.Wait()
 }
 
+func TestOrchestratorWorkflowSideEffectZeroed(t *testing.T) {
+
+	database := NewDefaultDatabase()
+	register := NewRegistry()
+	ctx := context.Background()
+
+	var executed uint32 // Use atomic variable
+	var a int = -1
+
+	workflow := func(ctx WorkflowContext) error {
+
+		if err := ctx.SideEffect("switch-a", func() int {
+			atomic.StoreUint32(&executed, 1) // Atomically set executed to true
+			return 0
+		}).Get(&a); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	register.RegisterWorkflow(workflow)
+
+	o := NewOrchestrator(ctx, database, register)
+
+	future := o.Execute(workflow, nil)
+
+	t.Log("Waiting for workflow to complete")
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if atomic.LoadUint32(&executed) == 0 {
+		t.Fatal("Workflow was not executed")
+	}
+
+	if a < -1 {
+		t.Fatal("Side effect did not return a value")
+	}
+
+	t.Log("Orchestrator workflow completed successfully")
+	o.Wait()
+}
+
 func TestOrchestratorWorkflowSideEffect(t *testing.T) {
 
 	database := NewDefaultDatabase()
