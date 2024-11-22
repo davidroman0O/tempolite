@@ -20,6 +20,882 @@ var (
 	ErrExecutionNotFound = errors.New("execution not found")
 )
 
+// Property getter/setter types for each data type
+type (
+	RunPropertyGetter func(*Run) error
+	RunPropertySetter func(*Run) error
+
+	VersionPropertyGetter func(*Version) error
+	VersionPropertySetter func(*Version) error
+
+	EntityPropertyGetter func(*Entity) error
+	EntityPropertySetter func(*Entity) error
+
+	HierarchyPropertyGetter func(*Hierarchy) error
+	HierarchyPropertySetter func(*Hierarchy) error
+
+	ExecutionPropertyGetter func(*Execution) error
+	ExecutionPropertySetter func(*Execution) error
+
+	SagaDataPropertyGetter func(*SagaData) error
+	SagaDataPropertySetter func(*SagaData) error
+
+	WorkflowExecutionDataPropertyGetter func(*WorkflowExecutionData) error
+	WorkflowExecutionDataPropertySetter func(*WorkflowExecutionData) error
+
+	ActivityExecutionDataPropertyGetter func(*ActivityExecutionData) error
+	ActivityExecutionDataPropertySetter func(*ActivityExecutionData) error
+
+	SideEffectExecutionDataPropertyGetter func(*SideEffectExecutionData) error
+	SideEffectExecutionDataPropertySetter func(*SideEffectExecutionData) error
+
+	SagaExecutionDataPropertyGetter func(*SagaExecutionData) error
+	SagaExecutionDataPropertySetter func(*SagaExecutionData) error
+
+	WorkflowDataPropertyGetter func(*WorkflowData) error
+	WorkflowDataPropertySetter func(*WorkflowData) error
+
+	ActivityDataPropertyGetter func(*ActivityData) error
+	ActivityDataPropertySetter func(*ActivityData) error
+
+	SideEffectDataPropertyGetter func(*SideEffectData) error
+	SideEffectDataPropertySetter func(*SideEffectData) error
+
+	QueuePropertyGetter func(*Queue) error
+	QueuePropertySetter func(*Queue) error
+)
+
+// Run property getters/setters
+func GetRunStatus(status *string) RunPropertyGetter {
+	return func(r *Run) error {
+		*status = r.Status
+		return nil
+	}
+}
+
+func SetRunStatus(status string) RunPropertySetter {
+	return func(r *Run) error {
+		r.Status = status
+		return nil
+	}
+}
+
+func GetRunCreatedAt(createdAt *time.Time) RunPropertyGetter {
+	return func(r *Run) error {
+		*createdAt = r.CreatedAt
+		return nil
+	}
+}
+
+func SetRunCreatedAt(createdAt time.Time) RunPropertySetter {
+	return func(r *Run) error {
+		r.CreatedAt = createdAt
+		return nil
+	}
+}
+
+// Version property getters/setters
+func GetVersionValue(version *int) VersionPropertyGetter {
+	return func(v *Version) error {
+		*version = v.Version
+		return nil
+	}
+}
+
+func SetVersionValue(version int) VersionPropertySetter {
+	return func(v *Version) error {
+		v.Version = version
+		return nil
+	}
+}
+
+func GetVersionChangeID(changeID *string) VersionPropertyGetter {
+	return func(v *Version) error {
+		*changeID = v.ChangeID
+		return nil
+	}
+}
+
+func SetVersionChangeID(changeID string) VersionPropertySetter {
+	return func(v *Version) error {
+		v.ChangeID = changeID
+		return nil
+	}
+}
+
+// Entity property getters/setters
+
+func GetEntityStatus(status *EntityStatus) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*status = e.Status
+		return nil
+	}
+}
+
+func SetEntityStatus(status EntityStatus) EntityPropertySetter {
+	return func(e *Entity) error {
+		e.Status = status
+		return nil
+	}
+}
+
+func GetEntityType(entityType *EntityType) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*entityType = e.Type
+		return nil
+	}
+}
+
+func SetEntityType(entityType EntityType) EntityPropertySetter {
+	return func(e *Entity) error {
+		e.Type = entityType
+		return nil
+	}
+}
+
+func GetEntityHandlerName(handlerName *string) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*handlerName = e.HandlerName
+		return nil
+	}
+}
+
+func SetEntityHandlerName(handlerName string) EntityPropertySetter {
+	return func(e *Entity) error {
+		e.HandlerName = handlerName
+		return nil
+	}
+}
+
+// Hierarchy property getters/setters
+func GetHierarchyParentID(parentID *int) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*parentID = h.ParentEntityID
+		return nil
+	}
+}
+
+func SetHierarchyParentID(parentID int) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ParentEntityID = parentID
+		return nil
+	}
+}
+
+func GetHierarchyChildID(childID *int) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*childID = h.ChildEntityID
+		return nil
+	}
+}
+
+func SetHierarchyChildID(childID int) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ChildEntityID = childID
+		return nil
+	}
+}
+
+// Execution property getters/setters
+
+func GetExecutionStatus(status *ExecutionStatus) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		*status = e.Status
+		return nil
+	}
+}
+
+func SetExecutionStatus(status ExecutionStatus) ExecutionPropertySetter {
+	return func(e *Execution) error {
+		e.Status = status
+		return nil
+	}
+}
+
+func GetExecutionError(execError *string) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		*execError = e.Error
+		return nil
+	}
+}
+
+func SetExecutionError(execError string) ExecutionPropertySetter {
+	return func(e *Execution) error {
+		e.Error = execError
+		return nil
+	}
+}
+
+// ActivityExecutionData getters/setters
+func GetActivityExecutionDataLastHeartbeat(lastHeartbeat *time.Time) ActivityExecutionDataPropertyGetter {
+	return func(aed *ActivityExecutionData) error {
+		if aed.LastHeartbeat != nil {
+			*lastHeartbeat = *aed.LastHeartbeat
+		}
+		return nil
+	}
+}
+
+func SetActivityExecutionDataLastHeartbeat(lastHeartbeat time.Time) ActivityExecutionDataPropertySetter {
+	return func(aed *ActivityExecutionData) error {
+		heartbeatCopy := lastHeartbeat
+		aed.LastHeartbeat = &heartbeatCopy
+		return nil
+	}
+}
+
+func GetActivityExecutionDataOutputs(outputs *[][]byte) ActivityExecutionDataPropertyGetter {
+	return func(aed *ActivityExecutionData) error {
+		if aed.Outputs != nil {
+			*outputs = make([][]byte, len(aed.Outputs))
+			for i, output := range aed.Outputs {
+				if output != nil {
+					outputCopy := make([]byte, len(output))
+					copy(outputCopy, output)
+					(*outputs)[i] = outputCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetActivityExecutionDataOutputs(outputs [][]byte) ActivityExecutionDataPropertySetter {
+	return func(aed *ActivityExecutionData) error {
+		if outputs != nil {
+			aed.Outputs = make([][]byte, len(outputs))
+			for i, output := range outputs {
+				if output != nil {
+					outputCopy := make([]byte, len(output))
+					copy(outputCopy, output)
+					aed.Outputs[i] = outputCopy
+				}
+			}
+		} else {
+			aed.Outputs = nil
+		}
+		return nil
+	}
+}
+
+// SagaExecutionData getters/setters
+func GetSagaExecutionDataOutput(output *[][]byte) SagaExecutionDataPropertyGetter {
+	return func(sed *SagaExecutionData) error {
+		if sed.Output != nil {
+			*output = make([][]byte, len(sed.Output))
+			for i, out := range sed.Output {
+				if out != nil {
+					outCopy := make([]byte, len(out))
+					copy(outCopy, out)
+					(*output)[i] = outCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetSagaExecutionDataOutput(output [][]byte) SagaExecutionDataPropertySetter {
+	return func(sed *SagaExecutionData) error {
+		if output != nil {
+			sed.Output = make([][]byte, len(output))
+			for i, out := range output {
+				if out != nil {
+					outCopy := make([]byte, len(out))
+					copy(outCopy, out)
+					sed.Output[i] = outCopy
+				}
+			}
+		} else {
+			sed.Output = nil
+		}
+		return nil
+	}
+}
+
+func GetSagaExecutionDataHasOutput(hasOutput *bool) SagaExecutionDataPropertyGetter {
+	return func(sed *SagaExecutionData) error {
+		*hasOutput = sed.HasOutput
+		return nil
+	}
+}
+
+func SetSagaExecutionDataHasOutput(hasOutput bool) SagaExecutionDataPropertySetter {
+	return func(sed *SagaExecutionData) error {
+		sed.HasOutput = hasOutput
+		return nil
+	}
+}
+
+// SideEffectExecutionData getters/setters
+func GetSideEffectExecutionDataOutputs(outputs *[][]byte) SideEffectExecutionDataPropertyGetter {
+	return func(seed *SideEffectExecutionData) error {
+		if seed.Outputs != nil {
+			*outputs = make([][]byte, len(seed.Outputs))
+			for i, output := range seed.Outputs {
+				if output != nil {
+					outputCopy := make([]byte, len(output))
+					copy(outputCopy, output)
+					(*outputs)[i] = outputCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetSideEffectExecutionDataOutputs(outputs [][]byte) SideEffectExecutionDataPropertySetter {
+	return func(seed *SideEffectExecutionData) error {
+		if outputs != nil {
+			seed.Outputs = make([][]byte, len(outputs))
+			for i, output := range outputs {
+				if output != nil {
+					outputCopy := make([]byte, len(output))
+					copy(outputCopy, output)
+					seed.Outputs[i] = outputCopy
+				}
+			}
+		} else {
+			seed.Outputs = nil
+		}
+		return nil
+	}
+}
+
+// Version property getters/setters
+func GetVersionEntityID(entityID *int) VersionPropertyGetter {
+	return func(v *Version) error {
+		*entityID = v.EntityID
+		return nil
+	}
+}
+
+func SetVersionEntityID(entityID int) VersionPropertySetter {
+	return func(v *Version) error {
+		v.EntityID = entityID
+		return nil
+	}
+}
+
+func GetVersionData(data *map[string]interface{}) VersionPropertyGetter {
+	return func(v *Version) error {
+		if v.Data != nil {
+			*data = make(map[string]interface{}, len(v.Data))
+			for k, v := range v.Data {
+				(*data)[k] = v
+			}
+		}
+		return nil
+	}
+}
+
+func SetVersionData(data map[string]interface{}) VersionPropertySetter {
+	return func(v *Version) error {
+		if data != nil {
+			v.Data = make(map[string]interface{}, len(data))
+			for k, value := range data {
+				v.Data[k] = value
+			}
+		} else {
+			v.Data = nil
+		}
+		return nil
+	}
+}
+
+// Hierarchy property getters/setters
+func GetHierarchyRunID(runID *int) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*runID = h.RunID
+		return nil
+	}
+}
+
+func SetHierarchyRunID(runID int) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.RunID = runID
+		return nil
+	}
+}
+
+func GetHierarchyParentExecutionID(executionID *int) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*executionID = h.ParentExecutionID
+		return nil
+	}
+}
+
+func SetHierarchyParentExecutionID(executionID int) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ParentExecutionID = executionID
+		return nil
+	}
+}
+
+func GetHierarchyChildExecutionID(executionID *int) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*executionID = h.ChildExecutionID
+		return nil
+	}
+}
+
+func SetHierarchyChildExecutionID(executionID int) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ChildExecutionID = executionID
+		return nil
+	}
+}
+
+func GetHierarchyParentStepID(stepID *string) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*stepID = h.ParentStepID
+		return nil
+	}
+}
+
+func SetHierarchyParentStepID(stepID string) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ParentStepID = stepID
+		return nil
+	}
+}
+
+func GetHierarchyChildStepID(stepID *string) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*stepID = h.ChildStepID
+		return nil
+	}
+}
+
+func SetHierarchyChildStepID(stepID string) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ChildStepID = stepID
+		return nil
+	}
+}
+
+func GetHierarchyParentType(parentType *string) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*parentType = h.ParentType
+		return nil
+	}
+}
+
+func SetHierarchyParentType(parentType string) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ParentType = parentType
+		return nil
+	}
+}
+
+func GetHierarchyChildType(childType *string) HierarchyPropertyGetter {
+	return func(h *Hierarchy) error {
+		*childType = h.ChildType
+		return nil
+	}
+}
+
+func SetHierarchyChildType(childType string) HierarchyPropertySetter {
+	return func(h *Hierarchy) error {
+		h.ChildType = childType
+		return nil
+	}
+}
+
+// ActivityData additional getters/setters
+func GetActivityDataInput(input *[][]byte) ActivityDataPropertyGetter {
+	return func(ad *ActivityData) error {
+		if ad.Input != nil {
+			*input = make([][]byte, len(ad.Input))
+			for i, in := range ad.Input {
+				if in != nil {
+					inCopy := make([]byte, len(in))
+					copy(inCopy, in)
+					(*input)[i] = inCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetActivityDataInput(input [][]byte) ActivityDataPropertySetter {
+	return func(ad *ActivityData) error {
+		if input != nil {
+			ad.Input = make([][]byte, len(input))
+			for i, in := range input {
+				if in != nil {
+					inCopy := make([]byte, len(in))
+					copy(inCopy, in)
+					ad.Input[i] = inCopy
+				}
+			}
+		} else {
+			ad.Input = nil
+		}
+		return nil
+	}
+}
+
+func GetActivityDataOutput(output *[][]byte) ActivityDataPropertyGetter {
+	return func(ad *ActivityData) error {
+		if ad.Output != nil {
+			*output = make([][]byte, len(ad.Output))
+			for i, out := range ad.Output {
+				if out != nil {
+					outCopy := make([]byte, len(out))
+					copy(outCopy, out)
+					(*output)[i] = outCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetActivityDataOutput(output [][]byte) ActivityDataPropertySetter {
+	return func(ad *ActivityData) error {
+		if output != nil {
+			ad.Output = make([][]byte, len(output))
+			for i, out := range output {
+				if out != nil {
+					outCopy := make([]byte, len(out))
+					copy(outCopy, out)
+					ad.Output[i] = outCopy
+				}
+			}
+		} else {
+			ad.Output = nil
+		}
+		return nil
+	}
+}
+
+func GetActivityDataAttempt(attempt *int) ActivityDataPropertyGetter {
+	return func(ad *ActivityData) error {
+		*attempt = ad.Attempt
+		return nil
+	}
+}
+
+func SetActivityDataAttempt(attempt int) ActivityDataPropertySetter {
+	return func(ad *ActivityData) error {
+		ad.Attempt = attempt
+		return nil
+	}
+}
+
+// Queue additional getters/setters
+func GetQueueCreatedAt(createdAt *time.Time) QueuePropertyGetter {
+	return func(q *Queue) error {
+		*createdAt = q.CreatedAt
+		return nil
+	}
+}
+
+func GetQueueUpdatedAt(updatedAt *time.Time) QueuePropertyGetter {
+	return func(q *Queue) error {
+		*updatedAt = q.UpdatedAt
+		return nil
+	}
+}
+
+// RetryState getters/setters
+func GetEntityRetryStateAttempts(attempts *int) EntityPropertyGetter {
+	return func(e *Entity) error {
+		if e.RetryState != nil {
+			*attempts = e.RetryState.Attempts
+		}
+		return nil
+	}
+}
+
+func SetEntityRetryStateAttempts(attempts int) EntityPropertySetter {
+	return func(e *Entity) error {
+		if e.RetryState == nil {
+			e.RetryState = &RetryState{}
+		}
+		e.RetryState.Attempts = attempts
+		return nil
+	}
+}
+
+// RetryPolicy getters/setters
+func GetEntityRetryPolicyMaxAttempts(maxAttempts *int) EntityPropertyGetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy != nil {
+			*maxAttempts = e.RetryPolicy.MaxAttempts
+		}
+		return nil
+	}
+}
+
+func SetEntityRetryPolicyMaxAttempts(maxAttempts int) EntityPropertySetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy == nil {
+			e.RetryPolicy = &retryPolicyInternal{}
+		}
+		e.RetryPolicy.MaxAttempts = maxAttempts
+		return nil
+	}
+}
+
+func GetEntityRetryPolicyInitialInterval(initialInterval *int64) EntityPropertyGetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy != nil {
+			*initialInterval = e.RetryPolicy.InitialInterval
+		}
+		return nil
+	}
+}
+
+func SetEntityRetryPolicyInitialInterval(initialInterval int64) EntityPropertySetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy == nil {
+			e.RetryPolicy = &retryPolicyInternal{}
+		}
+		e.RetryPolicy.InitialInterval = initialInterval
+		return nil
+	}
+}
+
+func GetEntityRetryPolicyBackoffCoefficient(backoffCoefficient *float64) EntityPropertyGetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy != nil {
+			*backoffCoefficient = e.RetryPolicy.BackoffCoefficient
+		}
+		return nil
+	}
+}
+
+func SetEntityRetryPolicyBackoffCoefficient(backoffCoefficient float64) EntityPropertySetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy == nil {
+			e.RetryPolicy = &retryPolicyInternal{}
+		}
+		e.RetryPolicy.BackoffCoefficient = backoffCoefficient
+		return nil
+	}
+}
+
+func GetEntityRetryPolicyMaxInterval(maxInterval *int64) EntityPropertyGetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy != nil {
+			*maxInterval = e.RetryPolicy.MaxInterval
+		}
+		return nil
+	}
+}
+
+func SetEntityRetryPolicyMaxInterval(maxInterval int64) EntityPropertySetter {
+	return func(e *Entity) error {
+		if e.RetryPolicy == nil {
+			e.RetryPolicy = &retryPolicyInternal{}
+		}
+		e.RetryPolicy.MaxInterval = maxInterval
+		return nil
+	}
+}
+
+// ActivityData property getters/setters
+
+func GetActivityDataTimeout(timeout *int64) ActivityDataPropertyGetter {
+	return func(ad *ActivityData) error {
+		*timeout = ad.Timeout
+		return nil
+	}
+}
+
+func SetActivityDataTimeout(timeout int64) ActivityDataPropertySetter {
+	return func(ad *ActivityData) error {
+		ad.Timeout = timeout
+		return nil
+	}
+}
+
+func GetActivityDataMaxAttempts(maxAttempts *int) ActivityDataPropertyGetter {
+	return func(ad *ActivityData) error {
+		*maxAttempts = ad.MaxAttempts
+		return nil
+	}
+}
+
+func SetActivityDataMaxAttempts(maxAttempts int) ActivityDataPropertySetter {
+	return func(ad *ActivityData) error {
+		ad.MaxAttempts = maxAttempts
+		return nil
+	}
+}
+
+// Queue property getters/setters
+
+func GetQueueName(name *string) QueuePropertyGetter {
+	return func(q *Queue) error {
+		*name = q.Name
+		return nil
+	}
+}
+
+func SetQueueName(name string) QueuePropertySetter {
+	return func(q *Queue) error {
+		q.Name = name
+		return nil
+	}
+}
+
+func GetRunUpdatedAt(updatedAt *time.Time) RunPropertyGetter {
+	return func(r *Run) error {
+		*updatedAt = r.UpdatedAt
+		return nil
+	}
+}
+
+func SetRunUpdatedAt(updatedAt time.Time) RunPropertySetter {
+	return func(r *Run) error {
+		r.UpdatedAt = updatedAt
+		return nil
+	}
+}
+
+// Additional Entity property getters/setters
+
+func GetEntityCreatedAt(createdAt *time.Time) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*createdAt = e.CreatedAt
+		return nil
+	}
+}
+
+func GetEntityUpdatedAt(updatedAt *time.Time) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*updatedAt = e.UpdatedAt
+		return nil
+	}
+}
+
+func GetEntityRunID(runID *int) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*runID = e.RunID
+		return nil
+	}
+}
+
+func GetEntityQueueID(queueID *int) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*queueID = e.QueueID
+		return nil
+	}
+}
+
+func GetEntityResumable(resumable *bool) EntityPropertyGetter {
+	return func(e *Entity) error {
+		*resumable = e.Resumable
+		return nil
+	}
+}
+
+func SetEntityResumable(resumable bool) EntityPropertySetter {
+	return func(e *Entity) error {
+		e.Resumable = resumable
+		return nil
+	}
+}
+
+// Additional Execution property getters/setters
+
+func GetExecutionStartedAt(startedAt *time.Time) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		*startedAt = e.StartedAt
+		return nil
+	}
+}
+
+func GetExecutionCompletedAt(completedAt *time.Time) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		if e.CompletedAt != nil {
+			*completedAt = *e.CompletedAt
+		}
+		return nil
+	}
+}
+
+func SetExecutionCompletedAt(completedAt time.Time) ExecutionPropertySetter {
+	return func(e *Execution) error {
+		completedAtCopy := completedAt
+		e.CompletedAt = &completedAtCopy
+		return nil
+	}
+}
+
+func GetExecutionEntityID(entityID *int) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		*entityID = e.EntityID
+		return nil
+	}
+}
+
+func GetExecutionAttempt(attempt *int) ExecutionPropertyGetter {
+	return func(e *Execution) error {
+		*attempt = e.Attempt
+		return nil
+	}
+}
+
+func SetExecutionAttempt(attempt int) ExecutionPropertySetter {
+	return func(e *Execution) error {
+		e.Attempt = attempt
+		return nil
+	}
+}
+
+func GetSagaDataCompensating(compensating *bool) SagaDataPropertyGetter {
+	return func(sd *SagaData) error {
+		*compensating = sd.Compensating
+		return nil
+	}
+}
+
+func SetSagaDataCompensating(compensating bool) SagaDataPropertySetter {
+	return func(sd *SagaData) error {
+		sd.Compensating = compensating
+		return nil
+	}
+}
+
+func GetSagaDataCompensationData(compensationData *[][]byte) SagaDataPropertyGetter {
+	return func(sd *SagaData) error {
+		if sd.CompensationData != nil {
+			*compensationData = make([][]byte, len(sd.CompensationData))
+			for i, data := range sd.CompensationData {
+				if data != nil {
+					dataCopy := make([]byte, len(data))
+					copy(dataCopy, data)
+					(*compensationData)[i] = dataCopy
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func SetSagaDataCompensationData(compensationData [][]byte) SagaDataPropertySetter {
+	return func(sd *SagaData) error {
+		if compensationData != nil {
+			sd.CompensationData = make([][]byte, len(compensationData))
+			for i, data := range compensationData {
+				if data != nil {
+					dataCopy := make([]byte, len(data))
+					copy(dataCopy, data)
+					sd.CompensationData[i] = dataCopy
+				}
+			}
+		} else {
+			sd.CompensationData = nil
+		}
+		return nil
+	}
+}
+
 type Database interface {
 	// Run methods
 	AddRun(run *Run) error
@@ -124,6 +1000,42 @@ type Database interface {
 	GetEmptyQueues() ([]*Queue, error)
 	GetActiveQueues() ([]*Queue, error)
 	DeleteQueue(id int) error
+
+	// Run property methods
+	GetRunProperties(id int, getters ...RunPropertyGetter) error
+	SetRunProperties(id int, setters ...RunPropertySetter) error
+	BatchGetRunProperties(ids []int, getters ...RunPropertyGetter) error
+	BatchSetRunProperties(ids []int, setters ...RunPropertySetter) error
+
+	// Version property methods
+	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
+	SetVersionProperties(id int, setters ...VersionPropertySetter) error
+	BatchGetVersionProperties(ids []int, getters ...VersionPropertyGetter) error
+	BatchSetVersionProperties(ids []int, setters ...VersionPropertySetter) error
+
+	// Entity property methods
+	GetEntityProperties(id int, getters ...EntityPropertyGetter) error
+	SetEntityProperties(id int, setters ...EntityPropertySetter) error
+	BatchGetEntityProperties(ids []int, getters ...EntityPropertyGetter) error
+	BatchSetEntityProperties(ids []int, setters ...EntityPropertySetter) error
+
+	// Hierarchy property methods
+	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
+	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
+	BatchGetHierarchyProperties(ids []int, getters ...HierarchyPropertyGetter) error
+	BatchSetHierarchyProperties(ids []int, setters ...HierarchyPropertySetter) error
+
+	// Execution property methods
+	GetExecutionProperties(id int, getters ...ExecutionPropertyGetter) error
+	SetExecutionProperties(id int, setters ...ExecutionPropertySetter) error
+	BatchGetExecutionProperties(ids []int, getters ...ExecutionPropertyGetter) error
+	BatchSetExecutionProperties(ids []int, setters ...ExecutionPropertySetter) error
+
+	// Queue property methods
+	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
+	SetQueueProperties(id int, setters ...QueuePropertySetter) error
+	BatchGetQueueProperties(ids []int, getters ...QueuePropertyGetter) error
+	BatchSetQueueProperties(ids []int, setters ...QueuePropertySetter) error
 
 	// Maintenance methods
 	Clear() error
@@ -2087,6 +2999,984 @@ func (db *DefaultDatabase) Clear() error {
 
 	// Replace hierarchies with the filtered ones
 	db.hierarchies = hierarchiesToKeep
+
+	return nil
+}
+
+func (db *DefaultDatabase) GetRunProperties(id int, getters ...RunPropertyGetter) error {
+	db.mu.RLock()
+	run, exists := db.runs[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrRunNotFound
+	}
+
+	runCopy := copyRun(run)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(runCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetRunProperties(id int, setters ...RunPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	run, exists := db.runs[id]
+	if !exists {
+		return ErrRunNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(run); err != nil {
+			return err
+		}
+	}
+
+	run.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetRunProperties(ids []int, getters ...RunPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		run, exists := db.runs[id]
+		if !exists {
+			continue
+		}
+
+		runCopy := copyRun(run)
+		for _, getter := range getters {
+			if err := getter(runCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetRunProperties(ids []int, setters ...RunPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		run, exists := db.runs[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(run); err != nil {
+				return err
+			}
+		}
+		run.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// Entity implementation
+func (db *DefaultDatabase) GetEntityProperties(id int, getters ...EntityPropertyGetter) error {
+	db.mu.RLock()
+	entity, exists := db.entities[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrEntityNotFound
+	}
+
+	entityCopy := copyEntity(entity)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(entityCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetEntityProperties(id int, setters ...EntityPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	entity, exists := db.entities[id]
+	if !exists {
+		return ErrEntityNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(entity); err != nil {
+			return err
+		}
+	}
+
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetEntityProperties(ids []int, getters ...EntityPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		entity, exists := db.entities[id]
+		if !exists {
+			continue
+		}
+
+		entityCopy := copyEntity(entity)
+		for _, getter := range getters {
+			if err := getter(entityCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetEntityProperties(ids []int, setters ...EntityPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		entity, exists := db.entities[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(entity); err != nil {
+				return err
+			}
+		}
+		entity.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// Version implementation
+func (db *DefaultDatabase) GetVersionProperties(id int, getters ...VersionPropertyGetter) error {
+	db.mu.RLock()
+	version, exists := db.versions[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrVersionNotFound
+	}
+
+	versionCopy := copyVersion(version)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(versionCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetVersionProperties(id int, setters ...VersionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	version, exists := db.versions[id]
+	if !exists {
+		return ErrVersionNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(version); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetVersionProperties(ids []int, getters ...VersionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		version, exists := db.versions[id]
+		if !exists {
+			continue
+		}
+
+		versionCopy := copyVersion(version)
+		for _, getter := range getters {
+			if err := getter(versionCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetVersionProperties(ids []int, setters ...VersionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		version, exists := db.versions[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(version); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Hierarchy implementation
+func (db *DefaultDatabase) GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error {
+	db.mu.RLock()
+	hierarchy, exists := db.hierarchies[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrHierarchyNotFound
+	}
+
+	hierarchyCopy := copyHierarchy(hierarchy)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(hierarchyCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	hierarchy, exists := db.hierarchies[id]
+	if !exists {
+		return ErrHierarchyNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(hierarchy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetHierarchyProperties(ids []int, getters ...HierarchyPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		hierarchy, exists := db.hierarchies[id]
+		if !exists {
+			continue
+		}
+
+		hierarchyCopy := copyHierarchy(hierarchy)
+		for _, getter := range getters {
+			if err := getter(hierarchyCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetHierarchyProperties(ids []int, setters ...HierarchyPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		hierarchy, exists := db.hierarchies[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(hierarchy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Execution implementation
+func (db *DefaultDatabase) GetExecutionProperties(id int, getters ...ExecutionPropertyGetter) error {
+	db.mu.RLock()
+	execution, exists := db.executions[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrExecutionNotFound
+	}
+
+	executionCopy := copyExecution(execution)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(executionCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetExecutionProperties(id int, setters ...ExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	execution, exists := db.executions[id]
+	if !exists {
+		return ErrExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(execution); err != nil {
+			return err
+		}
+	}
+
+	execution.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetExecutionProperties(ids []int, getters ...ExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		execution, exists := db.executions[id]
+		if !exists {
+			continue
+		}
+
+		executionCopy := copyExecution(execution)
+		for _, getter := range getters {
+			if err := getter(executionCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetExecutionProperties(ids []int, setters ...ExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		execution, exists := db.executions[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(execution); err != nil {
+				return err
+			}
+		}
+		execution.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// Queue implementation
+func (db *DefaultDatabase) GetQueueProperties(id int, getters ...QueuePropertyGetter) error {
+	db.mu.RLock()
+	queue, exists := db.queues[id]
+	if !exists {
+		db.mu.RUnlock()
+		return ErrQueueNotFound
+	}
+
+	queueCopy := copyQueue(queue)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(queueCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetQueueProperties(id int, setters ...QueuePropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	queue, exists := db.queues[id]
+	if !exists {
+		return ErrQueueNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(queue); err != nil {
+			return err
+		}
+	}
+
+	queue.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetQueueProperties(ids []int, getters ...QueuePropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range ids {
+		queue, exists := db.queues[id]
+		if !exists {
+			continue
+		}
+
+		queueCopy := copyQueue(queue)
+		for _, getter := range getters {
+			if err := getter(queueCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetQueueProperties(ids []int, setters ...QueuePropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range ids {
+		queue, exists := db.queues[id]
+		if !exists {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(queue); err != nil {
+				return err
+			}
+		}
+		queue.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// ActivityData implementation
+func (db *DefaultDatabase) GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error {
+	db.mu.RLock()
+	entity, exists := db.entities[entityID]
+	if !exists || entity.ActivityData == nil {
+		db.mu.RUnlock()
+		return ErrEntityNotFound
+	}
+
+	dataCopy := copyActivityData(entity.ActivityData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	entity, exists := db.entities[entityID]
+	if !exists || entity.ActivityData == nil {
+		return ErrEntityNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(entity.ActivityData); err != nil {
+			return err
+		}
+	}
+
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetActivityDataProperties(entityIDs []int, getters ...ActivityDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.ActivityData == nil {
+			continue
+		}
+
+		dataCopy := copyActivityData(entity.ActivityData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetActivityDataProperties(entityIDs []int, setters ...ActivityDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.ActivityData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(entity.ActivityData); err != nil {
+				return err
+			}
+		}
+		entity.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// WorkflowData implementation
+func (db *DefaultDatabase) GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error {
+	db.mu.RLock()
+	entity, exists := db.entities[entityID]
+	if !exists || entity.WorkflowData == nil {
+		db.mu.RUnlock()
+		return ErrEntityNotFound
+	}
+
+	dataCopy := copyWorkflowData(entity.WorkflowData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	entity, exists := db.entities[entityID]
+	if !exists || entity.WorkflowData == nil {
+		return ErrEntityNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(entity.WorkflowData); err != nil {
+			return err
+		}
+	}
+
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetWorkflowDataProperties(entityIDs []int, getters ...WorkflowDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.WorkflowData == nil {
+			continue
+		}
+
+		dataCopy := copyWorkflowData(entity.WorkflowData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetWorkflowDataProperties(entityIDs []int, setters ...WorkflowDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.WorkflowData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(entity.WorkflowData); err != nil {
+				return err
+			}
+		}
+		entity.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// WorkflowExecutionData implementation
+func (db *DefaultDatabase) GetWorkflowExecutionDataProperties(executionID int, getters ...WorkflowExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	execution, exists := db.executions[executionID]
+	if !exists || execution.WorkflowExecutionData == nil {
+		db.mu.RUnlock()
+		return ErrExecutionNotFound
+	}
+
+	dataCopy := copyWorkflowExecutionData(execution.WorkflowExecutionData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetWorkflowExecutionDataProperties(executionID int, setters ...WorkflowExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	execution, exists := db.executions[executionID]
+	if !exists || execution.WorkflowExecutionData == nil {
+		return ErrExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(execution.WorkflowExecutionData); err != nil {
+			return err
+		}
+	}
+
+	execution.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetWorkflowExecutionDataProperties(executionIDs []int, getters ...WorkflowExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.WorkflowExecutionData == nil {
+			continue
+		}
+
+		dataCopy := copyWorkflowExecutionData(execution.WorkflowExecutionData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetWorkflowExecutionDataProperties(executionIDs []int, setters ...WorkflowExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.WorkflowExecutionData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(execution.WorkflowExecutionData); err != nil {
+				return err
+			}
+		}
+		execution.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// SagaExecutionData implementation
+func (db *DefaultDatabase) GetSagaExecutionDataProperties(executionID int, getters ...SagaExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	execution, exists := db.executions[executionID]
+	if !exists || execution.SagaExecutionData == nil {
+		db.mu.RUnlock()
+		return ErrExecutionNotFound
+	}
+
+	dataCopy := copySagaExecutionData(execution.SagaExecutionData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetSagaExecutionDataProperties(executionID int, setters ...SagaExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	execution, exists := db.executions[executionID]
+	if !exists || execution.SagaExecutionData == nil {
+		return ErrExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(execution.SagaExecutionData); err != nil {
+			return err
+		}
+	}
+
+	execution.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetSagaExecutionDataProperties(executionIDs []int, getters ...SagaExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.SagaExecutionData == nil {
+			continue
+		}
+
+		dataCopy := copySagaExecutionData(execution.SagaExecutionData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetSagaExecutionDataProperties(executionIDs []int, setters ...SagaExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.SagaExecutionData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(execution.SagaExecutionData); err != nil {
+				return err
+			}
+		}
+		execution.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+// SideEffectExecutionData implementation
+func (db *DefaultDatabase) GetSideEffectExecutionDataProperties(executionID int, getters ...SideEffectExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	execution, exists := db.executions[executionID]
+	if !exists || execution.SideEffectExecutionData == nil {
+		db.mu.RUnlock()
+		return ErrExecutionNotFound
+	}
+
+	dataCopy := copySideEffectExecutionData(execution.SideEffectExecutionData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetSideEffectExecutionDataProperties(executionID int, setters ...SideEffectExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	execution, exists := db.executions[executionID]
+	if !exists || execution.SideEffectExecutionData == nil {
+		return ErrExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(execution.SideEffectExecutionData); err != nil {
+			return err
+		}
+	}
+
+	execution.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetSideEffectExecutionDataProperties(executionIDs []int, getters ...SideEffectExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.SideEffectExecutionData == nil {
+			continue
+		}
+
+		dataCopy := copySideEffectExecutionData(execution.SideEffectExecutionData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetSideEffectExecutionDataProperties(executionIDs []int, setters ...SideEffectExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range executionIDs {
+		execution, exists := db.executions[id]
+		if !exists || execution.SideEffectExecutionData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(execution.SideEffectExecutionData); err != nil {
+				return err
+			}
+		}
+		execution.UpdatedAt = time.Now()
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error {
+	db.mu.RLock()
+	entity, exists := db.entities[entityID]
+	if !exists || entity.SagaData == nil {
+		db.mu.RUnlock()
+		return ErrEntityNotFound
+	}
+
+	dataCopy := copySagaData(entity.SagaData)
+	db.mu.RUnlock()
+
+	for _, getter := range getters {
+		if err := getter(dataCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	entity, exists := db.entities[entityID]
+	if !exists || entity.SagaData == nil {
+		return ErrEntityNotFound
+	}
+
+	for _, setter := range setters {
+		if err := setter(entity.SagaData); err != nil {
+			return err
+		}
+	}
+
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *DefaultDatabase) BatchGetSagaDataProperties(entityIDs []int, getters ...SagaDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.SagaData == nil {
+			continue
+		}
+
+		dataCopy := copySagaData(entity.SagaData)
+		for _, getter := range getters {
+			if err := getter(dataCopy); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DefaultDatabase) BatchSetSagaDataProperties(entityIDs []int, setters ...SagaDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, id := range entityIDs {
+		entity, exists := db.entities[id]
+		if !exists || entity.SagaData == nil {
+			continue
+		}
+
+		for _, setter := range setters {
+			if err := setter(entity.SagaData); err != nil {
+				return err
+			}
+		}
+		entity.UpdatedAt = time.Now()
+	}
 
 	return nil
 }

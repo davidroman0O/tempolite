@@ -528,6 +528,7 @@ func (ai *ActivityInstance) executeWithRetry() error {
 			UpdatedAt: time.Now(),
 			Entity:    ai.entity,
 		}
+
 		// Add execution to database, which assigns the ID
 		if err = ai.orchestrator.db.AddExecution(execution); err != nil {
 			log.Printf("Error adding execution: %v", err)
