@@ -414,6 +414,19 @@ func copyEntity(entity *Entity) *Entity {
 	return &entityCopy
 }
 
+func copyExecutions(executions []*Execution) []*Execution {
+	if executions == nil {
+		return nil
+	}
+
+	// Create a new slice for the copied executions
+	copied := make([]*Execution, len(executions))
+	for i, exec := range executions {
+		copied[i] = copyExecution(exec) // `copyExecution` already exists in your code
+	}
+	return copied
+}
+
 func copyExecution(execution *Execution) *Execution {
 	if execution == nil {
 		return nil
@@ -1446,7 +1459,9 @@ func (db *DefaultDatabase) GetChildEntityByParentEntityIDAndStepIDAndType(parent
 	for _, hierarchy := range db.hierarchies {
 		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == stepID {
 			if entity, exists := db.entities[hierarchy.ChildEntityID]; exists && entity.Type == entityType {
-				return copyEntity(entity), nil
+				entity.mu.RLock()              // Add a read lock specific to the `Entity`
+				defer entity.mu.RUnlock()      // Ensure this lock is released after copying
+				return copyEntity(entity), nil // Now it's safe to copy the entity
 			}
 		}
 	}

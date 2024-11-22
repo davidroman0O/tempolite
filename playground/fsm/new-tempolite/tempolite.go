@@ -37,6 +37,374 @@ func init() {
 	}
 }
 
+// FILE: ./types.go
+
+// min function used in checkAndProcessPending
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func getInternalRetryPolicy(options *WorkflowOptions) *retryPolicyInternal {
+	if options != nil && options.RetryPolicy != nil {
+		rp := options.RetryPolicy
+		// Fill default values if zero
+		if rp.MaxAttempts == 0 {
+			rp.MaxAttempts = 1
+		}
+		if rp.InitialInterval == 0 {
+			rp.InitialInterval = time.Second
+		}
+		if rp.BackoffCoefficient == 0 {
+			rp.BackoffCoefficient = 2.0
+		}
+		if rp.MaxInterval == 0 {
+			rp.MaxInterval = 5 * time.Minute
+		}
+		return &retryPolicyInternal{
+			MaxAttempts:        rp.MaxAttempts,
+			InitialInterval:    rp.InitialInterval.Nanoseconds(),
+			BackoffCoefficient: rp.BackoffCoefficient,
+			MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		}
+	}
+	// Default RetryPolicy
+	return &retryPolicyInternal{
+		MaxAttempts:        1,
+		InitialInterval:    time.Second.Nanoseconds(),
+		BackoffCoefficient: 2.0,
+		MaxInterval:        (5 * time.Minute).Nanoseconds(),
+	}
+}
+
+// ActivityOptions provides options for activities, including retry policies.
+type ActivityOptions struct {
+	RetryPolicy *RetryPolicy
+}
+
+// ContinueAsNewError indicates that the workflow should restart with new inputs.
+type ContinueAsNewError struct {
+	Options *WorkflowOptions
+	Args    []interface{}
+}
+
+func (e *ContinueAsNewError) Error() string {
+	return "workflow is continuing as new"
+}
+
+var ErrPaused = errors.New("execution paused")
+
+// RetryPolicy defines retry behavior configuration
+type RetryPolicy struct {
+	MaxAttempts        int
+	InitialInterval    time.Duration
+	BackoffCoefficient float64
+	MaxInterval        time.Duration
+}
+
+// RetryState tracks the state of retries
+type RetryState struct {
+	Attempts int `json:"attempts"`
+}
+
+// retryPolicyInternal matches the database schema, using int64 for intervals
+type retryPolicyInternal struct {
+	MaxAttempts        int     `json:"max_attempts"`
+	InitialInterval    int64   `json:"initial_interval"`
+	BackoffCoefficient float64 `json:"backoff_coefficient"`
+	MaxInterval        int64   `json:"max_interval"`
+}
+
+var DefaultVersion int = 0
+
+// Version tracks entity versions
+type Version struct {
+	ID       int
+	EntityID int
+	ChangeID string
+	Version  int
+	Data     map[string]interface{} // Additional data if needed
+}
+
+// Hierarchy tracks parent-child relationships between entities
+type Hierarchy struct {
+	ID                int
+	RunID             int
+	ParentEntityID    int
+	ChildEntityID     int
+	ParentExecutionID int
+	ChildExecutionID  int
+	ParentStepID      string
+	ChildStepID       string
+	ParentType        string
+	ChildType         string
+}
+
+// Run represents a workflow execution group
+type Run struct {
+	ID          int
+	Status      string // "Pending", "Running", "Completed", etc.
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Entities    []*Entity
+	Hierarchies []*Hierarchy
+}
+
+// EntityType defines the type of the entity
+type EntityType string
+
+const (
+	EntityTypeWorkflow   EntityType = "Workflow"
+	EntityTypeActivity   EntityType = "Activity"
+	EntityTypeSaga       EntityType = "Saga"
+	EntityTypeSideEffect EntityType = "SideEffect"
+)
+
+// EntityStatus defines the status of the entity
+type EntityStatus string
+
+const (
+	StatusPending   EntityStatus = "Pending"
+	StatusQueued    EntityStatus = "Queued"
+	StatusRunning   EntityStatus = "Running"
+	StatusPaused    EntityStatus = "Paused"
+	StatusCancelled EntityStatus = "Cancelled"
+	StatusCompleted EntityStatus = "Completed"
+	StatusFailed    EntityStatus = "Failed"
+)
+
+// Entity represents an executable component
+type Entity struct {
+	mu             deadlock.RWMutex
+	ID             int
+	HandlerName    string
+	Type           EntityType
+	Status         EntityStatus
+	StepID         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	RunID          int
+	Run            *Run
+	Executions     []*Execution
+	QueueID        int    // optional
+	Queue          *Queue // optional
+	Versions       []*Version
+	WorkflowData   *WorkflowData   // optional
+	ActivityData   *ActivityData   // optional
+	SagaData       *SagaData       // optional
+	SideEffectData *SideEffectData // optional
+	HandlerInfo    *HandlerInfo    // handler metadata
+	RetryState     *RetryState
+	RetryPolicy    *retryPolicyInternal
+	Paused         bool
+	Resumable      bool
+}
+
+func (e *Entity) AddExecution(execution *Execution) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.Executions = append(e.Executions, execution)
+}
+
+func (e *Entity) GetExecutions() []*Execution {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return copyExecutions(e.Executions) // deep copy to avoid external mutation
+}
+
+// ExecutionStatus defines the status of an execution
+type ExecutionStatus string
+
+const (
+	ExecutionStatusPending   ExecutionStatus = "Pending"
+	ExecutionStatusQueued    ExecutionStatus = "Queued"
+	ExecutionStatusRunning   ExecutionStatus = "Running"
+	ExecutionStatusRetried   ExecutionStatus = "Retried"
+	ExecutionStatusPaused    ExecutionStatus = "Paused"
+	ExecutionStatusCancelled ExecutionStatus = "Cancelled"
+	ExecutionStatusCompleted ExecutionStatus = "Completed"
+	ExecutionStatusFailed    ExecutionStatus = "Failed"
+)
+
+// Execution represents a single execution attempt
+type Execution struct {
+	ID                      int
+	EntityID                int
+	Entity                  *Entity
+	StartedAt               time.Time
+	CompletedAt             *time.Time
+	Status                  ExecutionStatus
+	Error                   string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	WorkflowExecutionData   *WorkflowExecutionData   // optional
+	ActivityExecutionData   *ActivityExecutionData   // optional
+	SagaExecutionData       *SagaExecutionData       // optional
+	SideEffectExecutionData *SideEffectExecutionData // optional
+	Attempt                 int
+}
+
+// Queue represents a work queue
+type Queue struct {
+	ID        int
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Entities  []*Entity
+}
+
+// ActivityData contains data specific to activity entities
+type ActivityData struct {
+	Timeout      int64      `json:"timeout,omitempty"`
+	MaxAttempts  int        `json:"max_attempts"`
+	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
+	Input        [][]byte   `json:"input,omitempty"`
+	Output       [][]byte   `json:"output,omitempty"`
+	Attempt      int        `json:"attempt"`
+}
+
+// SagaData contains data specific to saga entities
+type SagaData struct {
+	Compensating     bool     `json:"compensating"`
+	CompensationData [][]byte `json:"compensation_data,omitempty"`
+}
+
+// SideEffectData contains data specific to side effect entities
+type SideEffectData struct {
+	// No fields as per schema
+}
+
+// ActivityExecutionData contains execution data for activities
+type ActivityExecutionData struct {
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	Outputs       [][]byte   `json:"outputs,omitempty"`
+}
+
+// SagaExecutionData contains execution data for sagas
+type SagaExecutionData struct {
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	Output        [][]byte   `json:"output,omitempty"`
+	HasOutput     bool       `json:"hasOutput"`
+}
+
+// SideEffectExecutionData contains execution data for side effects
+type SideEffectExecutionData struct {
+	Outputs [][]byte `json:"outputs,omitempty"`
+}
+
+// RunInfo provides information about a run
+type RunInfo struct {
+	RunID  int
+	Status string
+}
+
+// WorkflowInfo provides information about a workflow
+type WorkflowInfo struct {
+	EntityID int
+	Status   EntityStatus
+	Run      *RunInfo
+}
+
+// Serialization functions
+
+func convertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
+	inputs := [][]byte{}
+
+	for _, input := range executionInputs {
+		buf := new(bytes.Buffer)
+
+		// Get the real value
+		if reflect.TypeOf(input).Kind() == reflect.Ptr {
+			input = reflect.ValueOf(input).Elem().Interface()
+		}
+
+		if err := rtl.Encode(input, buf); err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, buf.Bytes())
+	}
+
+	return inputs, nil
+}
+
+func convertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, error) {
+	outputs := [][]byte{}
+
+	for _, output := range executionOutputs {
+		buf := new(bytes.Buffer)
+
+		// Get the real value
+		if reflect.TypeOf(output).Kind() == reflect.Ptr {
+			output = reflect.ValueOf(output).Elem().Interface()
+		}
+
+		if err := rtl.Encode(output, buf); err != nil {
+			return nil, err
+		}
+		outputs = append(outputs, buf.Bytes())
+	}
+
+	return outputs, nil
+}
+
+func convertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][]byte) ([]interface{}, error) {
+	inputs := []interface{}{}
+
+	for idx, inputType := range handlerInfo.ParamTypes {
+		if idx >= len(executionInputs) {
+			return nil, fmt.Errorf("insufficient execution inputs")
+		}
+		buf := bytes.NewBuffer(executionInputs[idx])
+
+		// Get the pointer of the type of the parameter that we target
+		decodedObj := reflect.New(inputType).Interface()
+
+		if err := rtl.Decode(buf, decodedObj); err != nil {
+			return nil, err
+		}
+
+		inputs = append(inputs, reflect.ValueOf(decodedObj).Elem().Interface())
+	}
+
+	return inputs, nil
+}
+
+func convertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [][]byte) ([]interface{}, error) {
+	output := []interface{}{}
+
+	for idx, outputType := range handlerInfo.ReturnTypes {
+		if idx >= len(executionOutputs) {
+			return nil, fmt.Errorf("insufficient execution outputs")
+		}
+		buf := bytes.NewBuffer(executionOutputs[idx])
+
+		// Get the pointer of the type of the parameter that we target
+		decodedObj := reflect.New(outputType).Interface()
+
+		if err := rtl.Decode(buf, decodedObj); err != nil {
+			return nil, err
+		}
+
+		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
+	}
+
+	return output, nil
+}
+
+func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
+	buf := bytes.NewBuffer(executionOutput)
+
+	decodedObj := reflect.New(outputType).Interface()
+
+	if err := rtl.Decode(buf, decodedObj); err != nil {
+		return nil, err
+	}
+
+	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
+}
+
 /// FILE: ./activities.go
 
 // ActivityContext provides context for activity execution.
@@ -3985,361 +4353,6 @@ func WithDefaultQueueWorkers(count int) TempoliteOption {
 	}
 }
 
-// min function used in checkAndProcessPending
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// FILE: ./types.go
-
-func getInternalRetryPolicy(options *WorkflowOptions) *retryPolicyInternal {
-	if options != nil && options.RetryPolicy != nil {
-		rp := options.RetryPolicy
-		// Fill default values if zero
-		if rp.MaxAttempts == 0 {
-			rp.MaxAttempts = 1
-		}
-		if rp.InitialInterval == 0 {
-			rp.InitialInterval = time.Second
-		}
-		if rp.BackoffCoefficient == 0 {
-			rp.BackoffCoefficient = 2.0
-		}
-		if rp.MaxInterval == 0 {
-			rp.MaxInterval = 5 * time.Minute
-		}
-		return &retryPolicyInternal{
-			MaxAttempts:        rp.MaxAttempts,
-			InitialInterval:    rp.InitialInterval.Nanoseconds(),
-			BackoffCoefficient: rp.BackoffCoefficient,
-			MaxInterval:        rp.MaxInterval.Nanoseconds(),
-		}
-	}
-	// Default RetryPolicy
-	return &retryPolicyInternal{
-		MaxAttempts:        1,
-		InitialInterval:    time.Second.Nanoseconds(),
-		BackoffCoefficient: 2.0,
-		MaxInterval:        (5 * time.Minute).Nanoseconds(),
-	}
-}
-
-// ActivityOptions provides options for activities, including retry policies.
-type ActivityOptions struct {
-	RetryPolicy *RetryPolicy
-}
-
-// ContinueAsNewError indicates that the workflow should restart with new inputs.
-type ContinueAsNewError struct {
-	Options *WorkflowOptions
-	Args    []interface{}
-}
-
-func (e *ContinueAsNewError) Error() string {
-	return "workflow is continuing as new"
-}
-
-var ErrPaused = errors.New("execution paused")
-
-// RetryPolicy defines retry behavior configuration
-type RetryPolicy struct {
-	MaxAttempts        int
-	InitialInterval    time.Duration
-	BackoffCoefficient float64
-	MaxInterval        time.Duration
-}
-
-// RetryState tracks the state of retries
-type RetryState struct {
-	Attempts int `json:"attempts"`
-}
-
-// retryPolicyInternal matches the database schema, using int64 for intervals
-type retryPolicyInternal struct {
-	MaxAttempts        int     `json:"max_attempts"`
-	InitialInterval    int64   `json:"initial_interval"`
-	BackoffCoefficient float64 `json:"backoff_coefficient"`
-	MaxInterval        int64   `json:"max_interval"`
-}
-
-var DefaultVersion int = 0
-
-// Version tracks entity versions
-type Version struct {
-	ID       int
-	EntityID int
-	ChangeID string
-	Version  int
-	Data     map[string]interface{} // Additional data if needed
-}
-
-// Hierarchy tracks parent-child relationships between entities
-type Hierarchy struct {
-	ID                int
-	RunID             int
-	ParentEntityID    int
-	ChildEntityID     int
-	ParentExecutionID int
-	ChildExecutionID  int
-	ParentStepID      string
-	ChildStepID       string
-	ParentType        string
-	ChildType         string
-}
-
-// Run represents a workflow execution group
-type Run struct {
-	ID          int
-	Status      string // "Pending", "Running", "Completed", etc.
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Entities    []*Entity
-	Hierarchies []*Hierarchy
-}
-
-// EntityType defines the type of the entity
-type EntityType string
-
-const (
-	EntityTypeWorkflow   EntityType = "Workflow"
-	EntityTypeActivity   EntityType = "Activity"
-	EntityTypeSaga       EntityType = "Saga"
-	EntityTypeSideEffect EntityType = "SideEffect"
-)
-
-// EntityStatus defines the status of the entity
-type EntityStatus string
-
-const (
-	StatusPending   EntityStatus = "Pending"
-	StatusQueued    EntityStatus = "Queued"
-	StatusRunning   EntityStatus = "Running"
-	StatusPaused    EntityStatus = "Paused"
-	StatusCancelled EntityStatus = "Cancelled"
-	StatusCompleted EntityStatus = "Completed"
-	StatusFailed    EntityStatus = "Failed"
-)
-
-// Entity represents an executable component
-type Entity struct {
-	ID             int
-	HandlerName    string
-	Type           EntityType
-	Status         EntityStatus
-	StepID         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	RunID          int
-	Run            *Run
-	Executions     []*Execution
-	QueueID        int    // optional
-	Queue          *Queue // optional
-	Versions       []*Version
-	WorkflowData   *WorkflowData   // optional
-	ActivityData   *ActivityData   // optional
-	SagaData       *SagaData       // optional
-	SideEffectData *SideEffectData // optional
-	HandlerInfo    *HandlerInfo    // handler metadata
-	RetryState     *RetryState
-	RetryPolicy    *retryPolicyInternal
-	Paused         bool
-	Resumable      bool
-}
-
-// ExecutionStatus defines the status of an execution
-type ExecutionStatus string
-
-const (
-	ExecutionStatusPending   ExecutionStatus = "Pending"
-	ExecutionStatusQueued    ExecutionStatus = "Queued"
-	ExecutionStatusRunning   ExecutionStatus = "Running"
-	ExecutionStatusRetried   ExecutionStatus = "Retried"
-	ExecutionStatusPaused    ExecutionStatus = "Paused"
-	ExecutionStatusCancelled ExecutionStatus = "Cancelled"
-	ExecutionStatusCompleted ExecutionStatus = "Completed"
-	ExecutionStatusFailed    ExecutionStatus = "Failed"
-)
-
-// Execution represents a single execution attempt
-type Execution struct {
-	ID                      int
-	EntityID                int
-	Entity                  *Entity
-	StartedAt               time.Time
-	CompletedAt             *time.Time
-	Status                  ExecutionStatus
-	Error                   string
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	WorkflowExecutionData   *WorkflowExecutionData   // optional
-	ActivityExecutionData   *ActivityExecutionData   // optional
-	SagaExecutionData       *SagaExecutionData       // optional
-	SideEffectExecutionData *SideEffectExecutionData // optional
-	Attempt                 int
-}
-
-// Queue represents a work queue
-type Queue struct {
-	ID        int
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Entities  []*Entity
-}
-
-// ActivityData contains data specific to activity entities
-type ActivityData struct {
-	Timeout      int64      `json:"timeout,omitempty"`
-	MaxAttempts  int        `json:"max_attempts"`
-	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
-	Input        [][]byte   `json:"input,omitempty"`
-	Output       [][]byte   `json:"output,omitempty"`
-	Attempt      int        `json:"attempt"`
-}
-
-// SagaData contains data specific to saga entities
-type SagaData struct {
-	Compensating     bool     `json:"compensating"`
-	CompensationData [][]byte `json:"compensation_data,omitempty"`
-}
-
-// SideEffectData contains data specific to side effect entities
-type SideEffectData struct {
-	// No fields as per schema
-}
-
-// ActivityExecutionData contains execution data for activities
-type ActivityExecutionData struct {
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	Outputs       [][]byte   `json:"outputs,omitempty"`
-}
-
-// SagaExecutionData contains execution data for sagas
-type SagaExecutionData struct {
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	Output        [][]byte   `json:"output,omitempty"`
-	HasOutput     bool       `json:"hasOutput"`
-}
-
-// SideEffectExecutionData contains execution data for side effects
-type SideEffectExecutionData struct {
-	Outputs [][]byte `json:"outputs,omitempty"`
-}
-
-// RunInfo provides information about a run
-type RunInfo struct {
-	RunID  int
-	Status string
-}
-
-// WorkflowInfo provides information about a workflow
-type WorkflowInfo struct {
-	EntityID int
-	Status   EntityStatus
-	Run      *RunInfo
-}
-
-// Serialization functions
-
-func convertInputsForSerialization(executionInputs []interface{}) ([][]byte, error) {
-	inputs := [][]byte{}
-
-	for _, input := range executionInputs {
-		buf := new(bytes.Buffer)
-
-		// Get the real value
-		if reflect.TypeOf(input).Kind() == reflect.Ptr {
-			input = reflect.ValueOf(input).Elem().Interface()
-		}
-
-		if err := rtl.Encode(input, buf); err != nil {
-			return nil, err
-		}
-		inputs = append(inputs, buf.Bytes())
-	}
-
-	return inputs, nil
-}
-
-func convertOutputsForSerialization(executionOutputs []interface{}) ([][]byte, error) {
-	outputs := [][]byte{}
-
-	for _, output := range executionOutputs {
-		buf := new(bytes.Buffer)
-
-		// Get the real value
-		if reflect.TypeOf(output).Kind() == reflect.Ptr {
-			output = reflect.ValueOf(output).Elem().Interface()
-		}
-
-		if err := rtl.Encode(output, buf); err != nil {
-			return nil, err
-		}
-		outputs = append(outputs, buf.Bytes())
-	}
-
-	return outputs, nil
-}
-
-func convertInputsFromSerialization(handlerInfo HandlerInfo, executionInputs [][]byte) ([]interface{}, error) {
-	inputs := []interface{}{}
-
-	for idx, inputType := range handlerInfo.ParamTypes {
-		if idx >= len(executionInputs) {
-			return nil, fmt.Errorf("insufficient execution inputs")
-		}
-		buf := bytes.NewBuffer(executionInputs[idx])
-
-		// Get the pointer of the type of the parameter that we target
-		decodedObj := reflect.New(inputType).Interface()
-
-		if err := rtl.Decode(buf, decodedObj); err != nil {
-			return nil, err
-		}
-
-		inputs = append(inputs, reflect.ValueOf(decodedObj).Elem().Interface())
-	}
-
-	return inputs, nil
-}
-
-func convertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [][]byte) ([]interface{}, error) {
-	output := []interface{}{}
-
-	for idx, outputType := range handlerInfo.ReturnTypes {
-		if idx >= len(executionOutputs) {
-			return nil, fmt.Errorf("insufficient execution outputs")
-		}
-		buf := bytes.NewBuffer(executionOutputs[idx])
-
-		// Get the pointer of the type of the parameter that we target
-		decodedObj := reflect.New(outputType).Interface()
-
-		if err := rtl.Decode(buf, decodedObj); err != nil {
-			return nil, err
-		}
-
-		output = append(output, reflect.ValueOf(decodedObj).Elem().Interface())
-	}
-
-	return output, nil
-}
-
-func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
-	buf := bytes.NewBuffer(executionOutput)
-
-	decodedObj := reflect.New(outputType).Interface()
-
-	if err := rtl.Decode(buf, decodedObj); err != nil {
-		return nil, err
-	}
-
-	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
-}
-
 // FILE: ./workflows.go
 
 // WorkflowInstance represents an instance of a workflow execution.
@@ -4489,7 +4502,7 @@ func (wi *WorkflowInstance) executeWithRetry() error {
 		}
 
 		wi.mu.Lock()
-		wi.entity.Executions = append(wi.entity.Executions, execution)
+		wi.entity.AddExecution(execution)
 		wi.executionID = execution.ID
 		wi.execution = execution
 		wi.mu.Unlock()
