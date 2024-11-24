@@ -16,7 +16,7 @@ func TestBasicDatabase(t *testing.T) {
 	id, err := db.AddWorkflowEntity(&WorkflowEntity{
 		BaseEntity: BaseEntity{
 			HandlerName: "test",
-			Type:        EntityTypeWorkflow,
+			Type:        EntityWorkflow,
 		},
 		WorkflowData: &WorkflowData{
 			Inputs: [][]byte{},
