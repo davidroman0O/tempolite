@@ -149,7 +149,7 @@ func (db *MemoryDatabase) AddRun(run *Run) (int, error) {
 	return run.ID, nil
 }
 
-func (db *MemoryDatabase) GetRun(id int) (*Run, error) {
+func (db *MemoryDatabase) GetRun(id int, opts ...RunGetOption) (*Run, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -157,6 +157,36 @@ func (db *MemoryDatabase) GetRun(id int) (*Run, error) {
 	if !exists {
 		return nil, ErrRunNotFound
 	}
+
+	cfg := &RunGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.IncludeWorkflows {
+		if workflowIDs, ok := db.runToWorkflows[id]; ok {
+			workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+			for _, wfID := range workflowIDs {
+				if wf, exists := db.workflowEntities[wfID]; exists {
+					workflows = append(workflows, copyWorkflowEntity(wf))
+				}
+			}
+			run.Entities = workflows
+		}
+	}
+
+	if cfg.IncludeHierarchies {
+		hierarchies := make([]*Hierarchy, 0)
+		for _, h := range db.hierarchies {
+			if h.RunID == id {
+				hierarchies = append(hierarchies, copyHierarchy(h))
+			}
+		}
+		run.Hierarchies = hierarchies
+	}
+
 	return copyRun(run), nil
 }
 
@@ -274,7 +304,7 @@ func (db *MemoryDatabase) AddQueue(queue *Queue) (int, error) {
 	return queue.ID, nil
 }
 
-func (db *MemoryDatabase) GetQueue(id int) (*Queue, error) {
+func (db *MemoryDatabase) GetQueue(id int, opts ...QueueGetOption) (*Queue, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -283,21 +313,29 @@ func (db *MemoryDatabase) GetQueue(id int) (*Queue, error) {
 		return nil, ErrQueueNotFound
 	}
 
-	// Load associated workflows
-	if workflowIDs, ok := db.queueToWorkflows[id]; ok {
-		workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
-		for _, wfID := range workflowIDs {
-			if wf, exists := db.workflowEntities[wfID]; exists {
-				workflows = append(workflows, copyWorkflowEntity(wf))
-			}
+	cfg := &QueueGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
-		queue.Entities = workflows
+	}
+
+	if cfg.IncludeWorkflows {
+		if workflowIDs, ok := db.queueToWorkflows[id]; ok {
+			workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+			for _, wfID := range workflowIDs {
+				if wf, exists := db.workflowEntities[wfID]; exists {
+					workflows = append(workflows, copyWorkflowEntity(wf))
+				}
+			}
+			queue.Entities = workflows
+		}
 	}
 
 	return copyQueue(queue), nil
 }
 
-func (db *MemoryDatabase) GetQueueByName(name string) (*Queue, error) {
+func (db *MemoryDatabase) GetQueueByName(name string, opts ...QueueGetOption) (*Queue, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -311,15 +349,23 @@ func (db *MemoryDatabase) GetQueueByName(name string) (*Queue, error) {
 		return nil, ErrQueueNotFound
 	}
 
-	// Load associated workflows
-	if workflowIDs, ok := db.queueToWorkflows[id]; ok {
-		workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
-		for _, wfID := range workflowIDs {
-			if wf, exists := db.workflowEntities[wfID]; exists {
-				workflows = append(workflows, copyWorkflowEntity(wf))
-			}
+	cfg := &QueueGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
-		queue.Entities = workflows
+	}
+
+	if cfg.IncludeWorkflows {
+		if workflowIDs, ok := db.queueToWorkflows[id]; ok {
+			workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+			for _, wfID := range workflowIDs {
+				if wf, exists := db.workflowEntities[wfID]; exists {
+					workflows = append(workflows, copyWorkflowEntity(wf))
+				}
+			}
+			queue.Entities = workflows
+		}
 	}
 
 	return copyQueue(queue), nil
@@ -341,7 +387,7 @@ func (db *MemoryDatabase) AddVersion(version *Version) (int, error) {
 	return version.ID, nil
 }
 
-func (db *MemoryDatabase) GetVersion(id int) (*Version, error) {
+func (db *MemoryDatabase) GetVersion(id int, opts ...VersionGetOption) (*Version, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -349,7 +395,24 @@ func (db *MemoryDatabase) GetVersion(id int) (*Version, error) {
 	if !exists {
 		return nil, ErrVersionNotFound
 	}
-	return copyVersion(version), nil
+
+	cfg := &VersionGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.IncludeData {
+		// Data is already included in the version structure
+		// Just ensure we return a copy
+		return copyVersion(version), nil
+	}
+
+	// If we don't need data, return version without data
+	versionCopy := *version
+	versionCopy.Data = nil
+	return &versionCopy, nil
 }
 
 func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
@@ -363,7 +426,7 @@ func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
 	return hierarchy.ID, nil
 }
 
-func (db *MemoryDatabase) GetHierarchy(id int) (*Hierarchy, error) {
+func (db *MemoryDatabase) GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -371,6 +434,14 @@ func (db *MemoryDatabase) GetHierarchy(id int) (*Hierarchy, error) {
 	if !exists {
 		return nil, ErrHierarchyNotFound
 	}
+
+	cfg := &HierarchyGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
+	}
+
 	return copyHierarchy(hierarchy), nil
 }
 
@@ -1163,4 +1234,1051 @@ func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecu
 	}
 
 	return copySideEffectExecution(exec), nil
+}
+
+// Activity Data properties
+func (db *MemoryDatabase) GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *ActivityData
+	for _, d := range db.activityData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrActivityEntityNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *ActivityData
+	for _, d := range db.activityData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrActivityEntityNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Saga Data properties
+func (db *MemoryDatabase) GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SagaData
+	for _, d := range db.sagaData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSagaEntityNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SagaData
+	for _, d := range db.sagaData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSagaEntityNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// SideEffect Data properties
+func (db *MemoryDatabase) GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SideEffectData
+	for _, d := range db.sideEffectData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSideEffectEntityNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SideEffectData
+	for _, d := range db.sideEffectData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSideEffectEntityNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Workflow Data properties
+func (db *MemoryDatabase) GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *WorkflowData
+	for _, d := range db.workflowData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrWorkflowEntityNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *WorkflowData
+	for _, d := range db.workflowData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrWorkflowEntityNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Execution Data properties implementations
+func (db *MemoryDatabase) GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *WorkflowExecutionData
+	for _, d := range db.workflowExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrWorkflowExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowExecutionDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *WorkflowExecutionData
+	for _, d := range db.workflowExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrWorkflowExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowExecutionDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Add similar implementations for Activity, Saga, and SideEffect Execution Data properties
+func (db *MemoryDatabase) GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *ActivityExecutionData
+	for _, d := range db.activityExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrActivityExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityExecutionDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *ActivityExecutionData
+	for _, d := range db.activityExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrActivityExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityExecutionDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SagaExecutionData
+	for _, d := range db.sagaExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSagaExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaExecutionDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SagaExecutionData
+	for _, d := range db.sagaExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSagaExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaExecutionDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) GetSideEffectExecutionDataProperties(entityID int, getters ...SideEffectExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SideEffectExecutionData
+	for _, d := range db.sideEffectExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSideEffectExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectExecutionDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSideEffectExecutionDataProperties(entityID int, setters ...SideEffectExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SideEffectExecutionData
+	for _, d := range db.sideEffectExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return ErrSideEffectExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectExecutionDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Workflow Execution properties
+func (db *MemoryDatabase) GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.workflowExecutions[id]
+	if !exists {
+		return ErrWorkflowExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowExecutionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.workflowExecutionData {
+					if d.ExecutionID == id {
+						exec.WorkflowExecutionData = copyWorkflowExecutionData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	exec, exists := db.workflowExecutions[id]
+	if !exists {
+		return ErrWorkflowExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &WorkflowExecutionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Activity Execution properties
+func (db *MemoryDatabase) GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.activityExecutions[id]
+	if !exists {
+		return ErrActivityExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityExecutionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.activityExecutionData {
+					if d.ExecutionID == id {
+						exec.ActivityExecutionData = copyActivityExecutionData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	exec, exists := db.activityExecutions[id]
+	if !exists {
+		return ErrActivityExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &ActivityExecutionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Saga Execution properties
+func (db *MemoryDatabase) GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.sagaExecutions[id]
+	if !exists {
+		return ErrSagaExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaExecutionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.sagaExecutionData {
+					if d.ExecutionID == id {
+						exec.SagaExecutionData = copySagaExecutionData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	exec, exists := db.sagaExecutions[id]
+	if !exists {
+		return ErrSagaExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SagaExecutionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// SideEffect Execution properties
+func (db *MemoryDatabase) GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.sideEffectExecutions[id]
+	if !exists {
+		return ErrSideEffectExecutionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectExecutionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.sideEffectExecutionData {
+					if d.ExecutionID == id {
+						exec.SideEffectExecutionData = copySideEffectExecutionData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	exec, exists := db.sideEffectExecutions[id]
+	if !exists {
+		return ErrSideEffectExecutionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SideEffectExecutionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Hierarchy properties
+func (db *MemoryDatabase) GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	hierarchy, exists := db.hierarchies[id]
+	if !exists {
+		return ErrHierarchyNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(hierarchy)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &HierarchyGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	hierarchy, exists := db.hierarchies[id]
+	if !exists {
+		return ErrHierarchyNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(hierarchy)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &HierarchySetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) UpdateHierarchy(hierarchy *Hierarchy) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.hierarchies[hierarchy.ID]; !exists {
+		return ErrHierarchyNotFound
+	}
+
+	db.hierarchies[hierarchy.ID] = copyHierarchy(hierarchy)
+	return nil
+}
+
+// Queue properties
+func (db *MemoryDatabase) GetQueueProperties(id int, getters ...QueuePropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	queue, exists := db.queues[id]
+	if !exists {
+		return ErrQueueNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(queue)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &QueueGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeWorkflows {
+				if workflowIDs, ok := db.queueToWorkflows[id]; ok {
+					workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+					for _, wfID := range workflowIDs {
+						if wf, exists := db.workflowEntities[wfID]; exists {
+							workflows = append(workflows, copyWorkflowEntity(wf))
+						}
+					}
+					queue.Entities = workflows
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetQueueProperties(id int, setters ...QueuePropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	queue, exists := db.queues[id]
+	if !exists {
+		return ErrQueueNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(queue)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &QueueSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.WorkflowIDs != nil {
+				// Remove existing relationships
+				if oldWorkflowIDs, ok := db.queueToWorkflows[id]; ok {
+					for _, oldWfID := range oldWorkflowIDs {
+						delete(db.workflowToQueue, oldWfID)
+					}
+				}
+
+				// Add new relationships
+				db.queueToWorkflows[id] = opts.WorkflowIDs
+				for _, wfID := range opts.WorkflowIDs {
+					db.workflowToQueue[wfID] = id
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) UpdateQueue(queue *Queue) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.queues[queue.ID]; !exists {
+		return ErrQueueNotFound
+	}
+
+	// If name is changing, update the name index
+	oldQueue := db.queues[queue.ID]
+	if oldQueue.Name != queue.Name {
+		delete(db.queueNames, oldQueue.Name)
+		db.queueNames[queue.Name] = queue.ID
+	}
+
+	queue.UpdatedAt = time.Now()
+	db.queues[queue.ID] = copyQueue(queue)
+	return nil
+}
+
+// Version properties
+func (db *MemoryDatabase) GetVersionProperties(id int, getters ...VersionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	version, exists := db.versions[id]
+	if !exists {
+		return ErrVersionNotFound
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(version)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &VersionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			// Handle IncludeData option if needed
+			if opts.IncludeData {
+				// Data is already part of the Version struct
+				// No additional loading needed
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetVersionProperties(id int, setters ...VersionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	version, exists := db.versions[id]
+	if !exists {
+		return ErrVersionNotFound
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(version)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &VersionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	version.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *MemoryDatabase) UpdateVersion(version *Version) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.versions[version.ID]; !exists {
+		return ErrVersionNotFound
+	}
+
+	version.UpdatedAt = time.Now()
+	db.versions[version.ID] = copyVersion(version)
+
+	return nil
+}
+
+// Activity Entity
+func (db *MemoryDatabase) UpdateActivityEntity(entity *ActivityEntity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.activityEntities[entity.ID]; !exists {
+		return ErrActivityEntityNotFound
+	}
+
+	entity.UpdatedAt = time.Now()
+	db.activityEntities[entity.ID] = copyActivityEntity(entity)
+	return nil
+}
+
+// Saga Entity
+func (db *MemoryDatabase) UpdateSagaEntity(entity *SagaEntity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.sagaEntities[entity.ID]; !exists {
+		return ErrSagaEntityNotFound
+	}
+
+	entity.UpdatedAt = time.Now()
+	db.sagaEntities[entity.ID] = copySagaEntity(entity)
+	return nil
+}
+
+// SideEffect Entity
+func (db *MemoryDatabase) UpdateSideEffectEntity(entity *SideEffectEntity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.sideEffectEntities[entity.ID]; !exists {
+		return ErrSideEffectEntityNotFound
+	}
+
+	entity.UpdatedAt = time.Now()
+	db.sideEffectEntities[entity.ID] = copySideEffectEntity(entity)
+	return nil
+}
+
+// Workflow Entity (if not already implemented)
+func (db *MemoryDatabase) UpdateWorkflowEntity(entity *WorkflowEntity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.workflowEntities[entity.ID]; !exists {
+		return ErrWorkflowEntityNotFound
+	}
+
+	entity.UpdatedAt = time.Now()
+	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
+	return nil
 }

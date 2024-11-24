@@ -8,10 +8,10 @@ import (
 )
 
 func TestBasicDatabase(t *testing.T) {
-	db := NewMemoryDatabase()
-	if db == nil {
-		t.Error("Failed to create database")
-	}
+
+	var db Database
+
+	db = NewMemoryDatabase()
 
 	id, err := db.AddWorkflowEntity(&WorkflowEntity{
 		BaseEntity: BaseEntity{
