@@ -32,6 +32,16 @@ var DefaultVersion int = 0
 
 // Status and Type enums remain the same as before
 type RunStatus string
+
+const (
+	RunStatusPending   RunStatus = "Pending"
+	RunStatusRunning   RunStatus = "Running"
+	RunStatusPaused    RunStatus = "Paused"
+	RunStatusCancelled RunStatus = "Cancelled"
+	RunStatusCompleted RunStatus = "Completed"
+	RunStatusFailed    RunStatus = "Failed"
+)
+
 type EntityType string
 
 var (
@@ -41,8 +51,32 @@ var (
 	EntitySideEffect EntityType = "side_effect"
 )
 
-type ExecutionStatus string
+// EntityStatus defines the status of the entity
 type EntityStatus string
+
+const (
+	StatusPending   EntityStatus = "Pending"
+	StatusQueued    EntityStatus = "Queued"
+	StatusRunning   EntityStatus = "Running"
+	StatusPaused    EntityStatus = "Paused"
+	StatusCancelled EntityStatus = "Cancelled"
+	StatusCompleted EntityStatus = "Completed"
+	StatusFailed    EntityStatus = "Failed"
+)
+
+// ExecutionStatus defines the status of an execution
+type ExecutionStatus string
+
+const (
+	ExecutionStatusPending   ExecutionStatus = "Pending"
+	ExecutionStatusQueued    ExecutionStatus = "Queued"
+	ExecutionStatusRunning   ExecutionStatus = "Running"
+	ExecutionStatusRetried   ExecutionStatus = "Retried"
+	ExecutionStatusPaused    ExecutionStatus = "Paused"
+	ExecutionStatusCancelled ExecutionStatus = "Cancelled"
+	ExecutionStatusCompleted ExecutionStatus = "Completed"
+	ExecutionStatusFailed    ExecutionStatus = "Failed"
+)
 
 // Base entity options
 type BaseEntityGetterOptions struct {
@@ -66,13 +100,13 @@ type BaseExecutionSetterOptions struct {
 }
 
 // Options structures for all property operations
-type RunPropertyGetterOptions struct {
+type RunGetterOptions struct {
 	IncludeWorkflows   bool
 	IncludeHierarchies bool
 	// Add more flags as needed
 }
 
-type RunPropertySetterOptions struct {
+type RunSetterOptions struct {
 	WorkflowID *int
 	// Add more options as needed
 }
@@ -97,19 +131,18 @@ type WorkflowEntitySetterOptions struct {
 }
 
 type ActivityEntityGetterOptions struct {
-	IncludeWorkflow bool
-	IncludeData     bool
+	IncludeData bool
 	// Add more flags as needed
 }
 
 type ActivityEntitySetterOptions struct {
 	ParentWorkflowID *int
+	ParentRunID      *int
 	// Add more options as needed
 }
 
 type SagaEntityGetterOptions struct {
-	IncludeWorkflow bool
-	IncludeData     bool
+	IncludeData bool
 	// Add more flags as needed
 }
 
@@ -119,8 +152,7 @@ type SagaEntitySetterOptions struct {
 }
 
 type SideEffectEntityGetterOptions struct {
-	IncludeWorkflow bool
-	IncludeData     bool
+	IncludeData bool
 	// Add more flags as needed
 }
 
@@ -230,6 +262,59 @@ type SideEffectExecutionDataSetterOptions struct {
 	// Add options as needed
 }
 
+// New option structs for Execution properties
+type WorkflowExecutionGetterOptions struct {
+	IncludeData bool
+	// Add more options as needed
+}
+
+type WorkflowExecutionSetterOptions struct {
+	// Add options as needed
+}
+
+type ActivityExecutionGetterOptions struct {
+	IncludeData bool
+	// Add more options as needed
+}
+
+type ActivityExecutionSetterOptions struct {
+	// Add options as needed
+}
+
+type SagaExecutionGetterOptions struct {
+	IncludeData bool
+	// Add more options as needed
+}
+
+type SagaExecutionSetterOptions struct {
+	// Add options as needed
+}
+
+type SideEffectExecutionGetterOptions struct {
+	IncludeData bool
+	// Add more options as needed
+}
+
+type SideEffectExecutionSetterOptions struct {
+	// Add options as needed
+}
+
+// Option get functions
+type WorkflowEntityGetOption func(*WorkflowEntityGetterOptions) error
+type ActivityEntityGetOption func(*ActivityEntityGetterOptions) error
+type SagaEntityGetOption func(*SagaEntityGetterOptions) error
+type SideEffectEntityGetOption func(*SideEffectEntityGetterOptions) error
+
+type WorkflowExecutionGetOption func(*WorkflowExecutionGetterOptions) error
+type ActivityExecutionGetOption func(*ActivityExecutionGetterOptions) error
+type SagaExecutionGetOption func(*SagaExecutionGetterOptions) error
+type SideEffectExecutionGetOption func(*SideEffectExecutionGetterOptions) error
+
+type RunGetOption func(*RunGetterOptions) error
+type VersionGetOption func(*VersionGetterOptions) error
+type QueueGetOption func(*QueueGetterOptions) error
+type HierarchyGetOption func(*HierarchyGetterOptions) error
+
 // Option function types
 type BaseEntityPropertyGetterOption func(*BaseEntityGetterOptions) error
 type BaseEntityPropertySetterOption func(*BaseEntitySetterOptions) error
@@ -237,8 +322,8 @@ type BaseEntityPropertySetterOption func(*BaseEntitySetterOptions) error
 type BaseExecutionPropertyGetterOption func(*BaseExecutionGetterOptions) error
 type BaseExecutionPropertySetterOption func(*BaseExecutionSetterOptions) error
 
-type RunPropertyGetterOption func(*RunPropertyGetterOptions) error
-type RunPropertySetterOption func(*RunPropertySetterOptions) error
+type RunPropertyGetterOption func(*RunGetterOptions) error
+type RunPropertySetterOption func(*RunSetterOptions) error
 
 type WorkflowEntityPropertyGetterOption func(*WorkflowEntityGetterOptions) error
 type WorkflowEntityPropertySetterOption func(*WorkflowEntitySetterOptions) error
@@ -260,6 +345,19 @@ type VersionPropertySetterOption func(*VersionSetterOptions) error
 
 type HierarchyPropertyGetterOption func(*HierarchyGetterOptions) error
 type HierarchyPropertySetterOption func(*HierarchySetterOptions) error
+
+// Execution property option types - Adding these new types
+type WorkflowExecutionPropertyGetterOption func(*WorkflowExecutionGetterOptions) error
+type WorkflowExecutionPropertySetterOption func(*WorkflowExecutionSetterOptions) error
+
+type ActivityExecutionPropertyGetterOption func(*ActivityExecutionGetterOptions) error
+type ActivityExecutionPropertySetterOption func(*ActivityExecutionSetterOptions) error
+
+type SagaExecutionPropertyGetterOption func(*SagaExecutionGetterOptions) error
+type SagaExecutionPropertySetterOption func(*SagaExecutionSetterOptions) error
+
+type SideEffectExecutionPropertyGetterOption func(*SideEffectExecutionGetterOptions) error
+type SideEffectExecutionPropertySetterOption func(*SideEffectExecutionSetterOptions) error
 
 // Data property option types
 type WorkflowDataPropertyGetterOption func(*WorkflowDataGetterOptions) error
@@ -318,17 +416,18 @@ type VersionPropertySetter func(*Version) (VersionPropertySetterOption, error)
 type HierarchyPropertyGetter func(*Hierarchy) (HierarchyPropertyGetterOption, error)
 type HierarchyPropertySetter func(*Hierarchy) (HierarchyPropertySetterOption, error)
 
-type WorkflowExecutionPropertyGetter func(*WorkflowExecution) (WorkflowExecutionDataPropertyGetterOption, error)
-type WorkflowExecutionPropertySetter func(*WorkflowExecution) (WorkflowExecutionDataPropertySetterOption, error)
+// Execution property types - Fixed these
+type WorkflowExecutionPropertyGetter func(*WorkflowExecution) (WorkflowExecutionPropertyGetterOption, error)
+type WorkflowExecutionPropertySetter func(*WorkflowExecution) (WorkflowExecutionPropertySetterOption, error)
 
-type ActivityExecutionPropertyGetter func(*ActivityExecution) (ActivityExecutionDataPropertyGetterOption, error)
-type ActivityExecutionPropertySetter func(*ActivityExecution) (ActivityExecutionDataPropertySetterOption, error)
+type ActivityExecutionPropertyGetter func(*ActivityExecution) (ActivityExecutionPropertyGetterOption, error)
+type ActivityExecutionPropertySetter func(*ActivityExecution) (ActivityExecutionPropertySetterOption, error)
 
-type SagaExecutionPropertyGetter func(*SagaExecution) (SagaExecutionDataPropertyGetterOption, error)
-type SagaExecutionPropertySetter func(*SagaExecution) (SagaExecutionDataPropertySetterOption, error)
+type SagaExecutionPropertyGetter func(*SagaExecution) (SagaExecutionPropertyGetterOption, error)
+type SagaExecutionPropertySetter func(*SagaExecution) (SagaExecutionPropertySetterOption, error)
 
-type SideEffectExecutionPropertyGetter func(*SideEffectExecution) (SideEffectExecutionDataPropertyGetterOption, error)
-type SideEffectExecutionPropertySetter func(*SideEffectExecution) (SideEffectExecutionDataPropertySetterOption, error)
+type SideEffectExecutionPropertyGetter func(*SideEffectExecution) (SideEffectExecutionPropertyGetterOption, error)
+type SideEffectExecutionPropertySetter func(*SideEffectExecution) (SideEffectExecutionPropertySetterOption, error)
 
 // Data property types
 type WorkflowDataPropertyGetter func(*WorkflowData) (WorkflowDataPropertyGetterOption, error)
@@ -343,6 +442,7 @@ type SagaDataPropertySetter func(*SagaData) (SagaDataPropertySetterOption, error
 type SideEffectDataPropertyGetter func(*SideEffectData) (SideEffectDataPropertyGetterOption, error)
 type SideEffectDataPropertySetter func(*SideEffectData) (SideEffectDataPropertySetterOption, error)
 
+// Execution Data property types
 type WorkflowExecutionDataPropertyGetter func(*WorkflowExecutionData) (WorkflowExecutionDataPropertyGetterOption, error)
 type WorkflowExecutionDataPropertySetter func(*WorkflowExecutionData) (WorkflowExecutionDataPropertySetterOption, error)
 
@@ -455,6 +555,7 @@ type Hierarchy struct {
 // Base entity type
 type BaseEntity struct {
 	ID          int
+	QueueID     int
 	HandlerName string
 	Type        EntityType
 	Status      EntityStatus
@@ -469,6 +570,8 @@ type BaseEntity struct {
 
 // Entity Data structures
 type WorkflowData struct {
+	ID        int      `json:"id,omitempty"`
+	EntityID  int      `json:"entity_id,omitempty"`
 	Duration  string   `json:"duration,omitempty"`
 	Paused    bool     `json:"paused"`
 	Resumable bool     `json:"resumable"`
@@ -477,6 +580,8 @@ type WorkflowData struct {
 }
 
 type ActivityData struct {
+	ID           int        `json:"id,omitempty"`
+	EntityID     int        `json:"entity_id,omitempty"`
 	Timeout      int64      `json:"timeout,omitempty"`
 	MaxAttempts  int        `json:"max_attempts"`
 	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
@@ -486,18 +591,32 @@ type ActivityData struct {
 }
 
 type SagaData struct {
+	ID               int      `json:"id,omitempty"`
+	EntityID         int      `json:"entity_id,omitempty"`
 	Compensating     bool     `json:"compensating"`
 	CompensationData [][]byte `json:"compensation_data,omitempty"`
 }
 
 type SideEffectData struct {
+	ID       int `json:"id,omitempty"`
+	EntityID int `json:"entity_id,omitempty"`
 	// No fields as per schema
 }
 
 // Entity types
+type WorkflowEntityEdges struct {
+	WorkflowChildren   []*WorkflowEntity
+	ActivityChildren   []*ActivityEntity
+	SagaChildren       []*SagaEntity
+	SideEffectChildren []*SideEffectEntity
+	Versions           []*Version
+	Queue              *Queue
+}
+
 type WorkflowEntity struct {
 	BaseEntity
 	WorkflowData *WorkflowData
+	Edges        *WorkflowEntityEdges
 }
 
 type ActivityEntity struct {
@@ -530,23 +649,31 @@ type BaseExecution struct {
 
 // Execution Data structures
 type WorkflowExecutionData struct {
+	ID            int        `json:"id,omitempty"`
+	ExecutionID   int        `json:"execution_id,omitempty"`
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
 	Outputs       [][]byte   `json:"outputs,omitempty"`
 }
 
 type ActivityExecutionData struct {
+	ID            int        `json:"id,omitempty"`
+	ExecutionID   int        `json:"execution_id,omitempty"`
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
 	Outputs       [][]byte   `json:"outputs,omitempty"`
 }
 
 type SagaExecutionData struct {
+	ID            int        `json:"id,omitempty"`
+	ExecutionID   int        `json:"execution_id,omitempty"`
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
 	Output        [][]byte   `json:"output,omitempty"`
 	HasOutput     bool       `json:"hasOutput"`
 }
 
 type SideEffectExecutionData struct {
-	Outputs [][]byte `json:"outputs,omitempty"`
+	ID          int      `json:"id,omitempty"`
+	ExecutionID int      `json:"execution_id,omitempty"`
+	Outputs     [][]byte `json:"outputs,omitempty"`
 }
 
 // Execution types
@@ -574,81 +701,82 @@ type SideEffectExecution struct {
 type Database interface {
 	// Run operations
 	AddRun(run *Run) (int, error)
-	GetRun(id int) (*Run, error)
+	GetRun(id int, opts ...RunGetOption) (*Run, error)
 	UpdateRun(run *Run) error
 	GetRunProperties(id int, getters ...RunPropertyGetter) error
 	SetRunProperties(id int, setters ...RunPropertySetter) error
 
 	// Version operations
 	AddVersion(version *Version) (int, error)
-	GetVersion(id int) (*Version, error)
+	GetVersion(id int, opts ...VersionGetOption) (*Version, error)
 	UpdateVersion(version *Version) error
 	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
 	SetVersionProperties(id int, setters ...VersionPropertySetter) error
 
 	// Hierarchy operations
 	AddHierarchy(hierarchy *Hierarchy) (int, error)
-	GetHierarchy(id int) (*Hierarchy, error)
+	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
 	UpdateHierarchy(hierarchy *Hierarchy) error
 	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
 	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
 
 	// Queue operations
 	AddQueue(queue *Queue) (int, error)
-	GetQueue(id int) (*Queue, error)
+	GetQueue(id int, opts ...QueueGetOption) (*Queue, error)
+	GetQueueByName(name string, opts ...QueueGetOption) (*Queue, error)
 	UpdateQueue(queue *Queue) error
 	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
 	SetQueueProperties(id int, setters ...QueuePropertySetter) error
 
 	// Workflow Entity operations
 	AddWorkflowEntity(entity *WorkflowEntity) (int, error)
-	GetWorkflowEntity(id int) (*WorkflowEntity, error)
+	GetWorkflowEntity(id int, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error)
 	UpdateWorkflowEntity(entity *WorkflowEntity) error
 	GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error
 	SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error
 
 	// Activity Entity operations
 	AddActivityEntity(entity *ActivityEntity) (int, error)
-	GetActivityEntity(id int) (*ActivityEntity, error)
+	GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error)
 	UpdateActivityEntity(entity *ActivityEntity) error
 	GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error
 	SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error
 
 	// Saga Entity operations
 	AddSagaEntity(entity *SagaEntity) (int, error)
-	GetSagaEntity(id int) (*SagaEntity, error)
+	GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error)
 	UpdateSagaEntity(entity *SagaEntity) error
 	GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error
 	SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error
 
 	// SideEffect Entity operations
 	AddSideEffectEntity(entity *SideEffectEntity) (int, error)
-	GetSideEffectEntity(id int) (*SideEffectEntity, error)
+	GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error)
 	UpdateSideEffectEntity(entity *SideEffectEntity) error
 	GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error
 	SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error
 
 	// Workflow Execution operations
 	AddWorkflowExecution(exec *WorkflowExecution) (int, error)
-	GetWorkflowExecution(id int) (*WorkflowExecution, error)
+	GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
 	GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error
 	SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error
 
 	// Activity Execution operations
 	AddActivityExecution(exec *ActivityExecution) (int, error)
-	GetActivityExecution(id int) (*ActivityExecution, error)
+	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
 	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
 	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
 
 	// Saga Execution operations
 	AddSagaExecution(exec *SagaExecution) (int, error)
-	GetSagaExecution(id int) (*SagaExecution, error)
+	GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error)
 	GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error
 	SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error
 
 	// SideEffect Execution operations
 	AddSideEffectExecution(exec *SideEffectExecution) (int, error)
-	GetSideEffectExecution(id int) (*SideEffectExecution, error)
+	GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
 	GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error
 	SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error
 
@@ -662,6 +790,7 @@ type Database interface {
 	GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error
 	SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error
 
+	// Execution Data properties operations
 	GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error
 	SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error
 	GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error
@@ -959,6 +1088,41 @@ func copyWorkflowData(data *WorkflowData) *WorkflowData {
 	}
 
 	return &c
+}
+
+func copyWorkflowEntityEdges(e *WorkflowEntityEdges) *WorkflowEntityEdges {
+	if e == nil {
+		return nil
+	}
+	copy := *e
+	if e.Queue != nil {
+		copy.Queue = copyQueue(e.Queue)
+	}
+	if e.Versions != nil {
+		copy.Versions = make([]*Version, len(e.Versions))
+		for i, v := range e.Versions {
+			copy.Versions[i] = copyVersion(v)
+		}
+	}
+	if e.ActivityChildren != nil {
+		copy.ActivityChildren = make([]*ActivityEntity, len(e.ActivityChildren))
+		for i, a := range e.ActivityChildren {
+			copy.ActivityChildren[i] = copyActivityEntity(a)
+		}
+	}
+	if e.SagaChildren != nil {
+		copy.SagaChildren = make([]*SagaEntity, len(e.SagaChildren))
+		for i, s := range e.SagaChildren {
+			copy.SagaChildren[i] = copySagaEntity(s)
+		}
+	}
+	if e.SideEffectChildren != nil {
+		copy.SideEffectChildren = make([]*SideEffectEntity, len(e.SideEffectChildren))
+		for i, se := range e.SideEffectChildren {
+			copy.SideEffectChildren[i] = copySideEffectEntity(se)
+		}
+	}
+	return &copy
 }
 
 func copyActivityData(data *ActivityData) *ActivityData {

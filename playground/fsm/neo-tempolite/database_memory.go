@@ -1,22 +1,49 @@
 package tempolite
 
 import (
-	"fmt"
-	"sync/atomic"
+	"sync"
 	"time"
-
-	"github.com/sasha-s/go-deadlock"
 )
 
-// DefaultDatabase implementation
-type DefaultDatabase struct {
-	mu deadlock.RWMutex
+type MemoryDatabase struct {
+	mu sync.RWMutex
+
+	// Core counters
+	runCounter       int
+	versionCounter   int
+	hierarchyCounter int
+	queueCounter     int
+
+	// Entity counters
+	workflowEntityCounter   int
+	activityEntityCounter   int
+	sagaEntityCounter       int
+	sideEffectEntityCounter int
+
+	// Entity Data counters
+	workflowDataCounter   int
+	activityDataCounter   int
+	sagaDataCounter       int
+	sideEffectDataCounter int
+
+	// Execution counters
+	workflowExecutionCounter   int
+	activityExecutionCounter   int
+	sagaExecutionCounter       int
+	sideEffectExecutionCounter int
+
+	// Execution Data counters
+	workflowExecutionDataCounter   int
+	activityExecutionDataCounter   int
+	sagaExecutionDataCounter       int
+	sideEffectExecutionDataCounter int
 
 	// Core maps
 	runs        map[int]*Run
 	versions    map[int]*Version
 	hierarchies map[int]*Hierarchy
 	queues      map[int]*Queue
+	queueNames  map[string]int
 
 	// Entity maps
 	workflowEntities   map[int]*WorkflowEntity
@@ -24,57 +51,41 @@ type DefaultDatabase struct {
 	sagaEntities       map[int]*SagaEntity
 	sideEffectEntities map[int]*SideEffectEntity
 
+	// Entity Data maps
+	workflowData   map[int]*WorkflowData
+	activityData   map[int]*ActivityData
+	sagaData       map[int]*SagaData
+	sideEffectData map[int]*SideEffectData
+
 	// Execution maps
 	workflowExecutions   map[int]*WorkflowExecution
 	activityExecutions   map[int]*ActivityExecution
 	sagaExecutions       map[int]*SagaExecution
 	sideEffectExecutions map[int]*SideEffectExecution
 
+	// Execution Data maps
+	workflowExecutionData   map[int]*WorkflowExecutionData
+	activityExecutionData   map[int]*ActivityExecutionData
+	sagaExecutionData       map[int]*SagaExecutionData
+	sideEffectExecutionData map[int]*SideEffectExecutionData
+
 	// Relationship maps
-	entityToWorkflow   map[int]int                  // entity ID -> workflow ID (for activity/saga/sideeffect)
-	workflowToChildren map[int]map[EntityType][]int // workflow ID -> type -> child entity IDs
+	entityToWorkflow   map[int]int                  // entity ID -> workflow ID
+	workflowToChildren map[int]map[EntityType][]int // workflow ID -> type -> child IDs
 	workflowToVersion  map[int][]int                // workflow ID -> version IDs
 	workflowToQueue    map[int]int                  // workflow ID -> queue ID
 	queueToWorkflows   map[int][]int                // queue ID -> workflow IDs
 	runToWorkflows     map[int][]int                // run ID -> workflow IDs
-
-	// Entity Data maps
-	workflowData   map[int]*WorkflowData   // entity ID -> data
-	activityData   map[int]*ActivityData   // entity ID -> data
-	sagaData       map[int]*SagaData       // entity ID -> data
-	sideEffectData map[int]*SideEffectData // entity ID -> data
-
-	// Execution Data maps
-	workflowExecutionData   map[int]*WorkflowExecutionData   // execution ID -> data
-	activityExecutionData   map[int]*ActivityExecutionData   // execution ID -> data
-	sagaExecutionData       map[int]*SagaExecutionData       // execution ID -> data
-	sideEffectExecutionData map[int]*SideEffectExecutionData // execution ID -> data
-
-	// Counters
-	runCounter       int64
-	versionCounter   int64
-	hierarchyCounter int64
-	queueCounter     int64
-
-	workflowEntityCounter   int64
-	activityEntityCounter   int64
-	sagaEntityCounter       int64
-	sideEffectEntityCounter int64
-
-	workflowExecutionCounter   int64
-	activityExecutionCounter   int64
-	sagaExecutionCounter       int64
-	sideEffectExecutionCounter int64
 }
 
-// NewDefaultDatabase creates a new instance of DefaultDatabase
-func NewDefaultDatabase() *DefaultDatabase {
-	db := &DefaultDatabase{
+func NewMemoryDatabase() *MemoryDatabase {
+	db := &MemoryDatabase{
 		// Core maps
 		runs:        make(map[int]*Run),
 		versions:    make(map[int]*Version),
 		hierarchies: make(map[int]*Hierarchy),
 		queues:      make(map[int]*Queue),
+		queueNames:  make(map[string]int),
 
 		// Entity maps
 		workflowEntities:   make(map[int]*WorkflowEntity),
@@ -82,11 +93,23 @@ func NewDefaultDatabase() *DefaultDatabase {
 		sagaEntities:       make(map[int]*SagaEntity),
 		sideEffectEntities: make(map[int]*SideEffectEntity),
 
+		// Entity Data maps
+		workflowData:   make(map[int]*WorkflowData),
+		activityData:   make(map[int]*ActivityData),
+		sagaData:       make(map[int]*SagaData),
+		sideEffectData: make(map[int]*SideEffectData),
+
 		// Execution maps
 		workflowExecutions:   make(map[int]*WorkflowExecution),
 		activityExecutions:   make(map[int]*ActivityExecution),
 		sagaExecutions:       make(map[int]*SagaExecution),
 		sideEffectExecutions: make(map[int]*SideEffectExecution),
+
+		// Execution Data maps
+		workflowExecutionData:   make(map[int]*WorkflowExecutionData),
+		activityExecutionData:   make(map[int]*ActivityExecutionData),
+		sagaExecutionData:       make(map[int]*SagaExecutionData),
+		sideEffectExecutionData: make(map[int]*SideEffectExecutionData),
 
 		// Relationship maps
 		entityToWorkflow:   make(map[int]int),
@@ -96,444 +119,37 @@ func NewDefaultDatabase() *DefaultDatabase {
 		queueToWorkflows:   make(map[int][]int),
 		runToWorkflows:     make(map[int][]int),
 
-		// Entity Data maps
-		workflowData:   make(map[int]*WorkflowData),
-		activityData:   make(map[int]*ActivityData),
-		sagaData:       make(map[int]*SagaData),
-		sideEffectData: make(map[int]*SideEffectData),
-
-		// Execution Data maps
-		workflowExecutionData:   make(map[int]*WorkflowExecutionData),
-		activityExecutionData:   make(map[int]*ActivityExecutionData),
-		sagaExecutionData:       make(map[int]*SagaExecutionData),
-		sideEffectExecutionData: make(map[int]*SideEffectExecutionData),
-
-		queueCounter: 1,
+		queueCounter: 1, // Starting from 1 for the default queue
 	}
 
 	// Initialize default queue
+	now := time.Now()
 	db.queues[1] = &Queue{
 		ID:        1,
 		Name:      "default",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Entities:  []*WorkflowEntity{},
+		CreatedAt: now,
+		UpdatedAt: now,
+		Entities:  make([]*WorkflowEntity, 0),
 	}
+	db.queueNames["default"] = 1
 
 	return db
 }
 
-// Helper function to remove an element from a slice of integers
-func removeFromSlice[T comparable](slice *[]T, value T) {
-	for i, v := range *slice {
-		if v == value {
-			*slice = append((*slice)[:i], (*slice)[i+1:]...)
-			return
-		}
-	}
-}
-
-// Entity Data Operations
-func (db *DefaultDatabase) GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.workflowData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("workflow data for entity %d not found", entityID)
-	}
-	dataCopy := copyWorkflowData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error {
+func (db *MemoryDatabase) AddRun(run *Run) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	data, exists := db.workflowData[entityID]
-	if !exists {
-		return fmt.Errorf("workflow data for entity %d not found", entityID)
-	}
+	db.runCounter++
+	run.ID = db.runCounter
+	run.CreatedAt = time.Now()
+	run.UpdatedAt = run.CreatedAt
 
-	dataCopy := copyWorkflowData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.workflowData[entityID] = dataCopy
-	return nil
+	db.runs[run.ID] = copyRun(run)
+	return run.ID, nil
 }
 
-func (db *DefaultDatabase) GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.activityData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("activity data for entity %d not found", entityID)
-	}
-	dataCopy := copyActivityData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.activityData[entityID]
-	if !exists {
-		return fmt.Errorf("activity data for entity %d not found", entityID)
-	}
-
-	dataCopy := copyActivityData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.activityData[entityID] = dataCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.sagaData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("saga data for entity %d not found", entityID)
-	}
-	dataCopy := copySagaData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.sagaData[entityID]
-	if !exists {
-		return fmt.Errorf("saga data for entity %d not found", entityID)
-	}
-
-	dataCopy := copySagaData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.sagaData[entityID] = dataCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.sideEffectData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("side effect data for entity %d not found", entityID)
-	}
-	dataCopy := copySideEffectData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.sideEffectData[entityID]
-	if !exists {
-		return fmt.Errorf("side effect data for entity %d not found", entityID)
-	}
-
-	dataCopy := copySideEffectData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.sideEffectData[entityID] = dataCopy
-	return nil
-}
-
-// Execution Data Properties
-func (db *DefaultDatabase) GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.workflowExecutionData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("workflow execution data for entity %d not found", entityID)
-	}
-	dataCopy := copyWorkflowExecutionData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.workflowExecutionData[entityID]
-	if !exists {
-		return fmt.Errorf("workflow execution data for entity %d not found", entityID)
-	}
-
-	dataCopy := copyWorkflowExecutionData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.workflowExecutionData[entityID] = dataCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.activityExecutionData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("activity execution data for entity %d not found", entityID)
-	}
-	dataCopy := copyActivityExecutionData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.activityExecutionData[entityID]
-	if !exists {
-		return fmt.Errorf("activity execution data for entity %d not found", entityID)
-	}
-
-	dataCopy := copyActivityExecutionData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.activityExecutionData[entityID] = dataCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.sagaExecutionData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("saga execution data for entity %d not found", entityID)
-	}
-	dataCopy := copySagaExecutionData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.sagaExecutionData[entityID]
-	if !exists {
-		return fmt.Errorf("saga execution data for entity %d not found", entityID)
-	}
-
-	dataCopy := copySagaExecutionData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.sagaExecutionData[entityID] = dataCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetSideEffectExecutionDataProperties(entityID int, getters ...SideEffectExecutionDataPropertyGetter) error {
-	db.mu.RLock()
-	data, exists := db.sideEffectExecutionData[entityID]
-	if !exists {
-		db.mu.RUnlock()
-		return fmt.Errorf("side effect execution data for entity %d not found", entityID)
-	}
-	dataCopy := copySideEffectExecutionData(data)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSideEffectExecutionDataProperties(entityID int, setters ...SideEffectExecutionDataPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	data, exists := db.sideEffectExecutionData[entityID]
-	if !exists {
-		return fmt.Errorf("side effect execution data for entity %d not found", entityID)
-	}
-
-	dataCopy := copySideEffectExecutionData(data)
-	for _, setter := range setters {
-		if option, err := setter(dataCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-
-	db.sideEffectExecutionData[entityID] = dataCopy
-	return nil
-}
-
-// Run operations
-func (db *DefaultDatabase) AddRun(run *Run) (int, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	runCopy := copyRun(run)
-	runCopy.ID = int(atomic.AddInt64(&db.runCounter, 1))
-	runCopy.CreatedAt = time.Now()
-	runCopy.UpdatedAt = time.Now()
-
-	db.runs[runCopy.ID] = runCopy
-	return runCopy.ID, nil
-}
-
-func (db *DefaultDatabase) GetRun(id int) (*Run, error) {
+func (db *MemoryDatabase) GetRun(id int) (*Run, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -541,11 +157,10 @@ func (db *DefaultDatabase) GetRun(id int) (*Run, error) {
 	if !exists {
 		return nil, ErrRunNotFound
 	}
-
 	return copyRun(run), nil
 }
 
-func (db *DefaultDatabase) UpdateRun(run *Run) error {
+func (db *MemoryDatabase) UpdateRun(run *Run) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -553,196 +168,113 @@ func (db *DefaultDatabase) UpdateRun(run *Run) error {
 		return ErrRunNotFound
 	}
 
-	runCopy := copyRun(run)
-	runCopy.UpdatedAt = time.Now()
-	db.runs[run.ID] = runCopy
+	run.UpdatedAt = time.Now()
+	db.runs[run.ID] = copyRun(run)
 	return nil
 }
 
-func (db *DefaultDatabase) GetRunProperties(id int, getters ...RunPropertyGetter) error {
-	db.mu.RLock()
-	run, exists := db.runs[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrRunNotFound
-	}
-	runCopy := copyRun(run)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(runCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &RunPropertyGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Handle options
-			if opts.IncludeWorkflows {
-				if workflows, exists := db.runToWorkflows[id]; exists {
-					for _, wfID := range workflows {
-						if wf, exists := db.workflowEntities[wfID]; exists {
-							runCopy.Entities = append(runCopy.Entities, copyWorkflowEntity(wf))
-						}
-					}
-				}
-			}
-			if opts.IncludeHierarchies {
-				// Load hierarchies if needed
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetRunProperties(id int, setters ...RunPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	run, exists := db.runs[id]
-	if !exists {
-		return ErrRunNotFound
-	}
-
-	runCopy := copyRun(run)
-	for _, setter := range setters {
-		if option, err := setter(runCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &RunPropertySetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Handle relationship changes
-			if opts.WorkflowID != nil {
-				db.runToWorkflows[id] = append(db.runToWorkflows[id], *opts.WorkflowID)
-			}
-		}
-	}
-
-	runCopy.UpdatedAt = time.Now()
-	db.runs[id] = runCopy
-	return nil
-}
-
-// Version operations
-func (db *DefaultDatabase) AddVersion(version *Version) (int, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	versionCopy := copyVersion(version)
-	versionCopy.ID = int(atomic.AddInt64(&db.versionCounter, 1))
-
-	// Update workflow -> version relationship
-	if versionCopy.EntityID != 0 {
-		db.workflowToVersion[versionCopy.EntityID] = append(
-			db.workflowToVersion[versionCopy.EntityID],
-			versionCopy.ID,
-		)
-	}
-
-	db.versions[versionCopy.ID] = versionCopy
-	return versionCopy.ID, nil
-}
-
-func (db *DefaultDatabase) GetVersion(id int) (*Version, error) {
+func (db *MemoryDatabase) GetRunProperties(id int, getters ...RunPropertyGetter) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	version, exists := db.versions[id]
+	run, exists := db.runs[id]
 	if !exists {
-		return nil, ErrVersionNotFound
+		return ErrRunNotFound
 	}
 
-	return copyVersion(version), nil
-}
-
-func (db *DefaultDatabase) UpdateVersion(version *Version) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.versions[version.ID]; !exists {
-		return ErrVersionNotFound
-	}
-
-	versionCopy := copyVersion(version)
-	db.versions[version.ID] = versionCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetVersionProperties(id int, getters ...VersionPropertyGetter) error {
-	db.mu.RLock()
-	version, exists := db.versions[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrVersionNotFound
-	}
-	versionCopy := copyVersion(version)
-	db.mu.RUnlock()
+	opts := &RunGetterOptions{}
 
 	for _, getter := range getters {
-		if option, err := getter(versionCopy); err != nil {
+		opt, err := getter(run)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &VersionGetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
 			}
-			// Handle options if needed
 		}
 	}
+
+	if opts.IncludeWorkflows {
+		workflows := make([]*WorkflowEntity, 0)
+		if workflowIDs, ok := db.runToWorkflows[id]; ok {
+			for _, wfID := range workflowIDs {
+				if wf, exists := db.workflowEntities[wfID]; exists {
+					workflows = append(workflows, copyWorkflowEntity(wf))
+				}
+			}
+		}
+		run.Entities = workflows
+	}
+
+	if opts.IncludeHierarchies {
+		hierarchies := make([]*Hierarchy, 0)
+		for _, h := range db.hierarchies {
+			if h.RunID == id {
+				hierarchies = append(hierarchies, copyHierarchy(h))
+			}
+		}
+		run.Hierarchies = hierarchies
+	}
+
 	return nil
 }
 
-func (db *DefaultDatabase) SetVersionProperties(id int, setters ...VersionPropertySetter) error {
+func (db *MemoryDatabase) SetRunProperties(id int, setters ...RunPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	version, exists := db.versions[id]
+	run, exists := db.runs[id]
 	if !exists {
-		return ErrVersionNotFound
+		return ErrRunNotFound
 	}
 
-	versionCopy := copyVersion(version)
+	opts := &RunSetterOptions{}
+
 	for _, setter := range setters {
-		if option, err := setter(versionCopy); err != nil {
+		opt, err := setter(run)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &VersionSetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
 			}
-			// Handle options if needed
 		}
 	}
 
-	db.versions[id] = versionCopy
+	if opts.WorkflowID != nil {
+		if _, exists := db.workflowEntities[*opts.WorkflowID]; !exists {
+			return ErrWorkflowEntityNotFound
+		}
+		db.runToWorkflows[id] = append(db.runToWorkflows[id], *opts.WorkflowID)
+	}
+
+	run.UpdatedAt = time.Now()
 	return nil
 }
 
-// Queue operations
-func (db *DefaultDatabase) AddQueue(queue *Queue) (int, error) {
+func (db *MemoryDatabase) AddQueue(queue *Queue) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// Check if queue with same name exists
-	for _, q := range db.queues {
-		if q.Name == queue.Name {
-			return 0, ErrQueueExists
-		}
+	if _, exists := db.queueNames[queue.Name]; exists {
+		return 0, ErrQueueExists
 	}
 
-	queueCopy := copyQueue(queue)
-	queueCopy.ID = int(atomic.AddInt64(&db.queueCounter, 1))
-	queueCopy.CreatedAt = time.Now()
-	queueCopy.UpdatedAt = time.Now()
+	db.queueCounter++
+	queue.ID = db.queueCounter
+	queue.CreatedAt = time.Now()
+	queue.UpdatedAt = queue.CreatedAt
+	queue.Entities = make([]*WorkflowEntity, 0)
 
-	db.queues[queueCopy.ID] = queueCopy
-	db.queueToWorkflows[queueCopy.ID] = make([]int, 0)
-	return queueCopy.ID, nil
+	db.queues[queue.ID] = copyQueue(queue)
+	db.queueNames[queue.Name] = queue.ID
+	return queue.ID, nil
 }
 
-func (db *DefaultDatabase) GetQueue(id int) (*Queue, error) {
+func (db *MemoryDatabase) GetQueue(id int) (*Queue, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -751,161 +283,87 @@ func (db *DefaultDatabase) GetQueue(id int) (*Queue, error) {
 		return nil, ErrQueueNotFound
 	}
 
+	// Load associated workflows
+	if workflowIDs, ok := db.queueToWorkflows[id]; ok {
+		workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+		for _, wfID := range workflowIDs {
+			if wf, exists := db.workflowEntities[wfID]; exists {
+				workflows = append(workflows, copyWorkflowEntity(wf))
+			}
+		}
+		queue.Entities = workflows
+	}
+
 	return copyQueue(queue), nil
 }
 
-func (db *DefaultDatabase) UpdateQueue(queue *Queue) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.queues[queue.ID]; !exists {
-		return ErrQueueNotFound
-	}
-
-	queueCopy := copyQueue(queue)
-	queueCopy.UpdatedAt = time.Now()
-	db.queues[queue.ID] = queueCopy
-	return nil
-}
-
-func (db *DefaultDatabase) GetQueueProperties(id int, getters ...QueuePropertyGetter) error {
+func (db *MemoryDatabase) GetQueueByName(name string) (*Queue, error) {
 	db.mu.RLock()
-	queue, exists := db.queues[id]
+	defer db.mu.RUnlock()
+
+	id, exists := db.queueNames[name]
 	if !exists {
-		db.mu.RUnlock()
-		return ErrQueueNotFound
+		return nil, ErrQueueNotFound
 	}
-	queueCopy := copyQueue(queue)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(queueCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &QueueGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			if opts.IncludeWorkflows {
-				if workflowIDs, exists := db.queueToWorkflows[id]; exists {
-					for _, wfID := range workflowIDs {
-						if wf, exists := db.workflowEntities[wfID]; exists {
-							queueCopy.Entities = append(queueCopy.Entities, copyWorkflowEntity(wf))
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetQueueProperties(id int, setters ...QueuePropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
 	queue, exists := db.queues[id]
 	if !exists {
-		return ErrQueueNotFound
+		return nil, ErrQueueNotFound
 	}
 
-	queueCopy := copyQueue(queue)
-	for _, setter := range setters {
-		if option, err := setter(queueCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &QueueSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Handle workflow relationships
-			if opts.WorkflowIDs != nil {
-				// Clear old relationships
-				if oldWorkflows, exists := db.queueToWorkflows[id]; exists {
-					for _, wfID := range oldWorkflows {
-						delete(db.workflowToQueue, wfID)
-					}
-				}
-				// Set new relationships
-				db.queueToWorkflows[id] = opts.WorkflowIDs
-				for _, wfID := range opts.WorkflowIDs {
-					db.workflowToQueue[wfID] = id
-				}
+	// Load associated workflows
+	if workflowIDs, ok := db.queueToWorkflows[id]; ok {
+		workflows := make([]*WorkflowEntity, 0, len(workflowIDs))
+		for _, wfID := range workflowIDs {
+			if wf, exists := db.workflowEntities[wfID]; exists {
+				workflows = append(workflows, copyWorkflowEntity(wf))
 			}
 		}
+		queue.Entities = workflows
 	}
 
-	queueCopy.UpdatedAt = time.Now()
-	db.queues[id] = queueCopy
-	return nil
+	return copyQueue(queue), nil
 }
 
-// Hierarchy operations
-func (db *DefaultDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
+func (db *MemoryDatabase) AddVersion(version *Version) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	hierarchyCopy := copyHierarchy(hierarchy)
-	hierarchyCopy.ID = int(atomic.AddInt64(&db.hierarchyCounter, 1))
+	db.versionCounter++
+	version.ID = db.versionCounter
+	version.CreatedAt = time.Now()
+	version.UpdatedAt = version.CreatedAt
 
-	// Validate relationships
-	if _, exists := db.runs[hierarchyCopy.RunID]; !exists {
-		return 0, fmt.Errorf("run %d not found", hierarchyCopy.RunID)
+	db.versions[version.ID] = copyVersion(version)
+	if version.EntityID != 0 {
+		db.workflowToVersion[version.EntityID] = append(db.workflowToVersion[version.EntityID], version.ID)
 	}
-
-	if hierarchyCopy.ParentType == EntityWorkflow {
-		if _, exists := db.workflowEntities[hierarchyCopy.ParentEntityID]; !exists {
-			return 0, fmt.Errorf("parent workflow %d not found", hierarchyCopy.ParentEntityID)
-		}
-	}
-
-	// Update parent-child relationship maps based on entity types
-	switch hierarchyCopy.ChildType {
-	case EntityActivity:
-		if _, exists := db.activityEntities[hierarchyCopy.ChildEntityID]; !exists {
-			return 0, fmt.Errorf("child activity %d not found", hierarchyCopy.ChildEntityID)
-		}
-		db.entityToWorkflow[hierarchyCopy.ChildEntityID] = hierarchyCopy.ParentEntityID
-		if _, exists := db.workflowToChildren[hierarchyCopy.ParentEntityID]; !exists {
-			db.workflowToChildren[hierarchyCopy.ParentEntityID] = make(map[EntityType][]int)
-		}
-		db.workflowToChildren[hierarchyCopy.ParentEntityID][EntityActivity] = append(
-			db.workflowToChildren[hierarchyCopy.ParentEntityID][EntityActivity],
-			hierarchyCopy.ChildEntityID,
-		)
-
-	case EntitySaga:
-		if _, exists := db.sagaEntities[hierarchyCopy.ChildEntityID]; !exists {
-			return 0, fmt.Errorf("child saga %d not found", hierarchyCopy.ChildEntityID)
-		}
-		db.entityToWorkflow[hierarchyCopy.ChildEntityID] = hierarchyCopy.ParentEntityID
-		if _, exists := db.workflowToChildren[hierarchyCopy.ParentEntityID]; !exists {
-			db.workflowToChildren[hierarchyCopy.ParentEntityID] = make(map[EntityType][]int)
-		}
-		db.workflowToChildren[hierarchyCopy.ParentEntityID][EntitySaga] = append(
-			db.workflowToChildren[hierarchyCopy.ParentEntityID][EntitySaga],
-			hierarchyCopy.ChildEntityID,
-		)
-
-	case EntitySideEffect:
-		if _, exists := db.sideEffectEntities[hierarchyCopy.ChildEntityID]; !exists {
-			return 0, fmt.Errorf("child side effect %d not found", hierarchyCopy.ChildEntityID)
-		}
-		db.entityToWorkflow[hierarchyCopy.ChildEntityID] = hierarchyCopy.ParentEntityID
-		if _, exists := db.workflowToChildren[hierarchyCopy.ParentEntityID]; !exists {
-			db.workflowToChildren[hierarchyCopy.ParentEntityID] = make(map[EntityType][]int)
-		}
-		db.workflowToChildren[hierarchyCopy.ParentEntityID][EntitySideEffect] = append(
-			db.workflowToChildren[hierarchyCopy.ParentEntityID][EntitySideEffect],
-			hierarchyCopy.ChildEntityID,
-		)
-	}
-
-	db.hierarchies[hierarchyCopy.ID] = hierarchyCopy
-	return hierarchyCopy.ID, nil
+	return version.ID, nil
 }
 
-func (db *DefaultDatabase) GetHierarchy(id int) (*Hierarchy, error) {
+func (db *MemoryDatabase) GetVersion(id int) (*Version, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	version, exists := db.versions[id]
+	if !exists {
+		return nil, ErrVersionNotFound
+	}
+	return copyVersion(version), nil
+}
+
+func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.hierarchyCounter++
+	hierarchy.ID = db.hierarchyCounter
+
+	db.hierarchies[hierarchy.ID] = copyHierarchy(hierarchy)
+	return hierarchy.ID, nil
+}
+
+func (db *MemoryDatabase) GetHierarchy(id int) (*Hierarchy, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -913,102 +371,58 @@ func (db *DefaultDatabase) GetHierarchy(id int) (*Hierarchy, error) {
 	if !exists {
 		return nil, ErrHierarchyNotFound
 	}
-
 	return copyHierarchy(hierarchy), nil
 }
 
-func (db *DefaultDatabase) UpdateHierarchy(hierarchy *Hierarchy) error {
+func (db *MemoryDatabase) AddWorkflowEntity(entity *WorkflowEntity) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if _, exists := db.hierarchies[hierarchy.ID]; !exists {
-		return ErrHierarchyNotFound
+	db.workflowEntityCounter++
+	entity.ID = db.workflowEntityCounter
+
+	if entity.WorkflowData != nil {
+		db.workflowDataCounter++
+		entity.WorkflowData.ID = db.workflowDataCounter
+		entity.WorkflowData.EntityID = entity.ID
+		db.workflowData[entity.WorkflowData.ID] = copyWorkflowData(entity.WorkflowData)
 	}
 
-	hierarchyCopy := copyHierarchy(hierarchy)
-	db.hierarchies[hierarchy.ID] = hierarchyCopy
-	return nil
+	entity.CreatedAt = time.Now()
+	entity.UpdatedAt = entity.CreatedAt
+
+	// Add to default queue if no queue specified
+	if entity.QueueID == 0 {
+		entity.QueueID = 1
+		db.queueToWorkflows[1] = append(db.queueToWorkflows[1], entity.ID)
+	}
+
+	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
+	return entity.ID, nil
 }
 
-func (db *DefaultDatabase) GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error {
-	db.mu.RLock()
-	hierarchy, exists := db.hierarchies[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrHierarchyNotFound
-	}
-	hierarchyCopy := copyHierarchy(hierarchy)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(hierarchyCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &HierarchyGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
+func (db *MemoryDatabase) AddWorkflowExecution(exec *WorkflowExecution) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	hierarchy, exists := db.hierarchies[id]
-	if !exists {
-		return ErrHierarchyNotFound
+	db.workflowExecutionCounter++
+	exec.ID = db.workflowExecutionCounter
+
+	if exec.WorkflowExecutionData != nil {
+		db.workflowExecutionDataCounter++
+		exec.WorkflowExecutionData.ID = db.workflowExecutionDataCounter
+		exec.WorkflowExecutionData.ExecutionID = exec.ID
+		db.workflowExecutionData[exec.WorkflowExecutionData.ID] = copyWorkflowExecutionData(exec.WorkflowExecutionData)
 	}
 
-	hierarchyCopy := copyHierarchy(hierarchy)
-	for _, setter := range setters {
-		if option, err := setter(hierarchyCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &HierarchySetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-		}
-	}
+	exec.CreatedAt = time.Now()
+	exec.UpdatedAt = exec.CreatedAt
 
-	db.hierarchies[id] = hierarchyCopy
-	return nil
+	db.workflowExecutions[exec.ID] = copyWorkflowExecution(exec)
+	return exec.ID, nil
 }
 
-// Entity operations
-func (db *DefaultDatabase) AddWorkflowEntity(entity *WorkflowEntity) (int, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	entityCopy := copyWorkflowEntity(entity)
-	entityCopy.ID = int(atomic.AddInt64(&db.workflowEntityCounter, 1))
-	entityCopy.Type = EntityWorkflow
-	entityCopy.CreatedAt = time.Now()
-	entityCopy.UpdatedAt = time.Now()
-
-	// Store the entity
-	db.workflowEntities[entityCopy.ID] = entityCopy
-
-	// Initialize relationships
-	db.workflowToChildren[entityCopy.ID] = make(map[EntityType][]int)
-
-	// Store entity data if present
-	if entityCopy.WorkflowData != nil {
-		db.workflowData[entityCopy.ID] = copyWorkflowData(entityCopy.WorkflowData)
-	}
-
-	// Add to run relationship if RunID is set
-	if entityCopy.RunID != 0 {
-		db.runToWorkflows[entityCopy.RunID] = append(db.runToWorkflows[entityCopy.RunID], entityCopy.ID)
-	}
-
-	return entityCopy.ID, nil
-}
-
-func (db *DefaultDatabase) GetWorkflowEntity(id int) (*WorkflowEntity, error) {
+func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -1017,93 +431,130 @@ func (db *DefaultDatabase) GetWorkflowEntity(id int) (*WorkflowEntity, error) {
 		return nil, ErrWorkflowEntityNotFound
 	}
 
-	entityCopy := copyWorkflowEntity(entity)
-	if data, exists := db.workflowData[id]; exists {
-		entityCopy.WorkflowData = copyWorkflowData(data)
+	cfg := &WorkflowEntityGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
 	}
 
-	return entityCopy, nil
+	if cfg.IncludeQueue {
+		if queueID, ok := db.workflowToQueue[id]; ok {
+			if queue, exists := db.queues[queueID]; exists {
+				if entity.Edges == nil {
+					entity.Edges = &WorkflowEntityEdges{}
+				}
+				entity.Edges.Queue = copyQueue(queue)
+			}
+		}
+	}
+
+	return copyWorkflowEntity(entity), nil
 }
 
-func (db *DefaultDatabase) UpdateWorkflowEntity(entity *WorkflowEntity) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.workflowEntities[entity.ID]; !exists {
-		return ErrWorkflowEntityNotFound
-	}
-
-	entityCopy := copyWorkflowEntity(entity)
-	entityCopy.UpdatedAt = time.Now()
-
-	// Update entity
-	db.workflowEntities[entity.ID] = entityCopy
-
-	// Update data if present
-	if entityCopy.WorkflowData != nil {
-		db.workflowData[entity.ID] = copyWorkflowData(entityCopy.WorkflowData)
-	}
-
-	return nil
-}
-
-func (db *DefaultDatabase) GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error {
 	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	entity, exists := db.workflowEntities[id]
 	if !exists {
-		db.mu.RUnlock()
 		return ErrWorkflowEntityNotFound
 	}
-	entityCopy := copyWorkflowEntity(entity)
-	db.mu.RUnlock()
+
+	opts := &WorkflowEntityGetterOptions{}
 
 	for _, getter := range getters {
-		if option, err := getter(entityCopy); err != nil {
+		opt, err := getter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &WorkflowEntityGetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle options
-			if opts.IncludeData {
-				if data, exists := db.workflowData[id]; exists {
-					entityCopy.WorkflowData = copyWorkflowData(data)
-				}
-			}
-
-			if opts.IncludeChildren {
-				if children, exists := db.workflowToChildren[id]; exists {
-					// Load children by type
-					if activities, ok := children[EntityActivity]; ok {
-						for _, actID := range activities {
-							if act, exists := db.activityEntities[actID]; exists {
-								// Handle activity relationship
-								_ = act // TODO: Add to appropriate collection
-							}
-						}
-					}
-					// Similar for sagas and side effects
-				}
-			}
-
-			if opts.IncludeVersion {
-				if versions, exists := db.workflowToVersion[id]; exists {
-					for _, versionID := range versions {
-						if version, exists := db.versions[versionID]; exists {
-							// Handle version relationship
-							_ = version // TODO: Add to appropriate collection
-						}
-					}
-				}
 			}
 		}
 	}
+
+	if opts.IncludeVersion {
+		if versionIDs, ok := db.workflowToVersion[id]; ok {
+			versions := make([]*Version, 0)
+			for _, vID := range versionIDs {
+				if v, exists := db.versions[vID]; exists {
+					versions = append(versions, copyVersion(v))
+				}
+			}
+			if entity.Edges == nil {
+				entity.Edges = &WorkflowEntityEdges{}
+			}
+			entity.Edges.Versions = versions
+		}
+	}
+
+	if opts.IncludeQueue {
+		if queueID, ok := db.workflowToQueue[id]; ok {
+			if queue, exists := db.queues[queueID]; exists {
+				if entity.Edges == nil {
+					entity.Edges = &WorkflowEntityEdges{}
+				}
+				entity.Edges.Queue = copyQueue(queue)
+			}
+		}
+	}
+
+	if opts.IncludeChildren {
+		if childMap, ok := db.workflowToChildren[id]; ok {
+			if entity.Edges == nil {
+				entity.Edges = &WorkflowEntityEdges{}
+			}
+
+			// Load activity children
+			if activityIDs, ok := childMap[EntityActivity]; ok {
+				activities := make([]*ActivityEntity, 0)
+				for _, aID := range activityIDs {
+					if a, exists := db.activityEntities[aID]; exists {
+						activities = append(activities, copyActivityEntity(a))
+					}
+				}
+				entity.Edges.ActivityChildren = activities
+			}
+
+			// Load saga children
+			if sagaIDs, ok := childMap[EntitySaga]; ok {
+				sagas := make([]*SagaEntity, 0)
+				for _, sID := range sagaIDs {
+					if s, exists := db.sagaEntities[sID]; exists {
+						sagas = append(sagas, copySagaEntity(s))
+					}
+				}
+				entity.Edges.SagaChildren = sagas
+			}
+
+			// Load side effect children
+			if sideEffectIDs, ok := childMap[EntitySideEffect]; ok {
+				sideEffects := make([]*SideEffectEntity, 0)
+				for _, seID := range sideEffectIDs {
+					if se, exists := db.sideEffectEntities[seID]; exists {
+						sideEffects = append(sideEffects, copySideEffectEntity(se))
+					}
+				}
+				entity.Edges.SideEffectChildren = sideEffects
+			}
+		}
+	}
+
+	if opts.IncludeData {
+		for _, d := range db.workflowData {
+			if d.EntityID == id {
+				entity.WorkflowData = copyWorkflowData(d)
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
-func (db *DefaultDatabase) SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error {
+func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -1112,84 +563,101 @@ func (db *DefaultDatabase) SetWorkflowEntityProperties(id int, setters ...Workfl
 		return ErrWorkflowEntityNotFound
 	}
 
-	entityCopy := copyWorkflowEntity(entity)
+	opts := &WorkflowEntitySetterOptions{}
+
 	for _, setter := range setters {
-		if option, err := setter(entityCopy); err != nil {
+		opt, err := setter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &WorkflowEntitySetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle queue relationship
-			if opts.QueueID != nil {
-				// Remove from old queue if exists
-				if oldQueueID, exists := db.workflowToQueue[id]; exists {
-					if workflows, exists := db.queueToWorkflows[oldQueueID]; exists {
-						newWorkflows := make([]int, len(workflows))
-						copy(newWorkflows, workflows)
-						removeFromSlice(&newWorkflows, id)
-						db.queueToWorkflows[oldQueueID] = newWorkflows
-					}
-				}
-				// Add to new queue
-				db.workflowToQueue[id] = *opts.QueueID
-				db.queueToWorkflows[*opts.QueueID] = append(db.queueToWorkflows[*opts.QueueID], id)
-			}
-
-			// Handle version relationship
-			if opts.Version != nil {
-				versionCopy := copyVersion(opts.Version)
-				versionCopy.ID = int(atomic.AddInt64(&db.versionCounter, 1))
-				versionCopy.EntityID = id
-				db.versions[versionCopy.ID] = versionCopy
-				db.workflowToVersion[id] = append(db.workflowToVersion[id], versionCopy.ID)
-			}
-
-			// Handle run relationship
-			if opts.RunID != nil {
-				if oldRunID := entityCopy.RunID; oldRunID != 0 {
-					if workflows, exists := db.runToWorkflows[oldRunID]; exists {
-						newWorkflows := make([]int, len(workflows))
-						copy(newWorkflows, workflows)
-						removeFromSlice(&newWorkflows, id)
-						db.runToWorkflows[oldRunID] = newWorkflows
-					}
-				}
-				entityCopy.RunID = *opts.RunID
-				db.runToWorkflows[*opts.RunID] = append(db.runToWorkflows[*opts.RunID], id)
 			}
 		}
 	}
 
-	entityCopy.UpdatedAt = time.Now()
-	db.workflowEntities[id] = entityCopy
+	if opts.QueueID != nil {
+		if _, exists := db.queues[*opts.QueueID]; !exists {
+			return ErrQueueNotFound
+		}
+
+		// Remove from old queue if exists
+		if oldQueueID, ok := db.workflowToQueue[id]; ok {
+			if workflows, exists := db.queueToWorkflows[oldQueueID]; exists {
+				for i, wID := range workflows {
+					if wID == id {
+						db.queueToWorkflows[oldQueueID] = append(workflows[:i], workflows[i+1:]...)
+						break
+					}
+				}
+			}
+		}
+
+		// Add to new queue
+		db.workflowToQueue[id] = *opts.QueueID
+		db.queueToWorkflows[*opts.QueueID] = append(db.queueToWorkflows[*opts.QueueID], id)
+	}
+
+	if opts.Version != nil {
+		db.workflowToVersion[id] = append(db.workflowToVersion[id], opts.Version.ID)
+	}
+
+	if opts.ChildID != nil && opts.ChildType != nil {
+		if db.workflowToChildren[id] == nil {
+			db.workflowToChildren[id] = make(map[EntityType][]int)
+		}
+		db.workflowToChildren[id][*opts.ChildType] = append(db.workflowToChildren[id][*opts.ChildType], *opts.ChildID)
+		db.entityToWorkflow[*opts.ChildID] = id
+	}
+
+	entity.UpdatedAt = time.Now()
 	return nil
 }
 
-func (db *DefaultDatabase) AddActivityEntity(entity *ActivityEntity) (int, error) {
+func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	entityCopy := copyActivityEntity(entity)
-	entityCopy.ID = int(atomic.AddInt64(&db.activityEntityCounter, 1))
-	entityCopy.Type = EntityActivity
-	entityCopy.CreatedAt = time.Now()
-	entityCopy.UpdatedAt = time.Now()
+	db.activityEntityCounter++
+	entity.ID = db.activityEntityCounter
 
-	// Store the entity
-	db.activityEntities[entityCopy.ID] = entityCopy
-
-	// Store entity data if present
-	if entityCopy.ActivityData != nil {
-		db.activityData[entityCopy.ID] = copyActivityData(entityCopy.ActivityData)
+	if entity.ActivityData != nil {
+		db.activityDataCounter++
+		entity.ActivityData.ID = db.activityDataCounter
+		entity.ActivityData.EntityID = entity.ID
+		db.activityData[entity.ActivityData.ID] = copyActivityData(entity.ActivityData)
 	}
 
-	return entityCopy.ID, nil
+	entity.CreatedAt = time.Now()
+	entity.UpdatedAt = entity.CreatedAt
+
+	db.activityEntities[entity.ID] = copyActivityEntity(entity)
+	return entity.ID, nil
 }
 
-func (db *DefaultDatabase) GetActivityEntity(id int) (*ActivityEntity, error) {
+func (db *MemoryDatabase) AddActivityExecution(exec *ActivityExecution) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.activityExecutionCounter++
+	exec.ID = db.activityExecutionCounter
+
+	if exec.ActivityExecutionData != nil {
+		db.activityExecutionDataCounter++
+		exec.ActivityExecutionData.ID = db.activityExecutionDataCounter
+		exec.ActivityExecutionData.ExecutionID = exec.ID
+		db.activityExecutionData[exec.ActivityExecutionData.ID] = copyActivityExecutionData(exec.ActivityExecutionData)
+	}
+
+	exec.CreatedAt = time.Now()
+	exec.UpdatedAt = exec.CreatedAt
+
+	db.activityExecutions[exec.ID] = copyActivityExecution(exec)
+	return exec.ID, nil
+}
+
+func (db *MemoryDatabase) GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -1198,74 +666,61 @@ func (db *DefaultDatabase) GetActivityEntity(id int) (*ActivityEntity, error) {
 		return nil, ErrActivityEntityNotFound
 	}
 
-	entityCopy := copyActivityEntity(entity)
-	if data, exists := db.activityData[id]; exists {
-		entityCopy.ActivityData = copyActivityData(data)
+	cfg := &ActivityEntityGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
 	}
 
-	return entityCopy, nil
+	if cfg.IncludeData {
+		for _, d := range db.activityData {
+			if d.EntityID == id {
+				entity.ActivityData = copyActivityData(d)
+				break
+			}
+		}
+	}
+
+	return copyActivityEntity(entity), nil
 }
 
-func (db *DefaultDatabase) UpdateActivityEntity(entity *ActivityEntity) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.activityEntities[entity.ID]; !exists {
-		return ErrActivityEntityNotFound
-	}
-
-	entityCopy := copyActivityEntity(entity)
-	entityCopy.UpdatedAt = time.Now()
-
-	// Update entity
-	db.activityEntities[entity.ID] = entityCopy
-
-	// Update data if present
-	if entityCopy.ActivityData != nil {
-		db.activityData[entity.ID] = copyActivityData(entityCopy.ActivityData)
-	}
-
-	return nil
-}
-
-func (db *DefaultDatabase) GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error {
 	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	entity, exists := db.activityEntities[id]
 	if !exists {
-		db.mu.RUnlock()
 		return ErrActivityEntityNotFound
 	}
-	entityCopy := copyActivityEntity(entity)
-	db.mu.RUnlock()
+
+	opts := &ActivityEntityGetterOptions{}
 
 	for _, getter := range getters {
-		if option, err := getter(entityCopy); err != nil {
+		opt, err := getter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &ActivityEntityGetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle options
-			if opts.IncludeData {
-				if data, exists := db.activityData[id]; exists {
-					entityCopy.ActivityData = copyActivityData(data)
-				}
-			}
-
-			if opts.IncludeWorkflow {
-				if workflowID, exists := db.entityToWorkflow[id]; exists {
-					// Load parent workflow info if needed
-					_ = workflowID // TODO: Handle parent workflow relationship
-				}
 			}
 		}
 	}
+
+	if opts.IncludeData {
+		for _, d := range db.activityData {
+			if d.EntityID == id {
+				entity.ActivityData = copyActivityData(d)
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
-func (db *DefaultDatabase) SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error {
+func (db *MemoryDatabase) SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -1274,70 +729,81 @@ func (db *DefaultDatabase) SetActivityEntityProperties(id int, setters ...Activi
 		return ErrActivityEntityNotFound
 	}
 
-	entityCopy := copyActivityEntity(entity)
+	opts := &ActivityEntitySetterOptions{}
+
 	for _, setter := range setters {
-		if option, err := setter(entityCopy); err != nil {
+		opt, err := setter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &ActivityEntitySetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle workflow relationship
-			if opts.ParentWorkflowID != nil {
-				// Remove from old workflow if exists
-				if oldWorkflowID, exists := db.entityToWorkflow[id]; exists {
-					if children, exists := db.workflowToChildren[oldWorkflowID]; exists {
-						if activities, exists := children[EntityActivity]; exists {
-							newActivities := make([]int, len(activities))
-							copy(newActivities, activities)
-							removeFromSlice(&newActivities, id)
-							db.workflowToChildren[oldWorkflowID][EntityActivity] = newActivities
-						}
-					}
-				}
-
-				// Add to new workflow
-				db.entityToWorkflow[id] = *opts.ParentWorkflowID
-				if _, exists := db.workflowToChildren[*opts.ParentWorkflowID]; !exists {
-					db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
-				}
-				db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity] = append(
-					db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity],
-					id,
-				)
 			}
 		}
 	}
 
-	entityCopy.UpdatedAt = time.Now()
-	db.activityEntities[id] = entityCopy
+	if opts.ParentWorkflowID != nil {
+		if _, exists := db.workflowEntities[*opts.ParentWorkflowID]; !exists {
+			return ErrWorkflowEntityNotFound
+		}
+		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
+			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
+		}
+		db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity],
+			id,
+		)
+	}
+
+	entity.UpdatedAt = time.Now()
 	return nil
 }
 
-func (db *DefaultDatabase) AddSagaEntity(entity *SagaEntity) (int, error) {
+func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	entityCopy := copySagaEntity(entity)
-	entityCopy.ID = int(atomic.AddInt64(&db.sagaEntityCounter, 1))
-	entityCopy.Type = EntitySaga
-	entityCopy.CreatedAt = time.Now()
-	entityCopy.UpdatedAt = time.Now()
+	db.sagaEntityCounter++
+	entity.ID = db.sagaEntityCounter
 
-	// Store the entity
-	db.sagaEntities[entityCopy.ID] = entityCopy
-
-	// Store entity data if present
-	if entityCopy.SagaData != nil {
-		db.sagaData[entityCopy.ID] = copySagaData(entityCopy.SagaData)
+	if entity.SagaData != nil {
+		db.sagaDataCounter++
+		entity.SagaData.ID = db.sagaDataCounter
+		entity.SagaData.EntityID = entity.ID
+		db.sagaData[entity.SagaData.ID] = copySagaData(entity.SagaData)
 	}
 
-	return entityCopy.ID, nil
+	entity.CreatedAt = time.Now()
+	entity.UpdatedAt = entity.CreatedAt
+
+	db.sagaEntities[entity.ID] = copySagaEntity(entity)
+	return entity.ID, nil
 }
 
-func (db *DefaultDatabase) GetSagaEntity(id int) (*SagaEntity, error) {
+func (db *MemoryDatabase) AddSagaExecution(exec *SagaExecution) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sagaExecutionCounter++
+	exec.ID = db.sagaExecutionCounter
+
+	if exec.SagaExecutionData != nil {
+		db.sagaExecutionDataCounter++
+		exec.SagaExecutionData.ID = db.sagaExecutionDataCounter
+		exec.SagaExecutionData.ExecutionID = exec.ID
+		db.sagaExecutionData[exec.SagaExecutionData.ID] = copySagaExecutionData(exec.SagaExecutionData)
+	}
+
+	exec.CreatedAt = time.Now()
+	exec.UpdatedAt = exec.CreatedAt
+
+	db.sagaExecutions[exec.ID] = copySagaExecution(exec)
+	return exec.ID, nil
+}
+
+func (db *MemoryDatabase) GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -1346,73 +812,61 @@ func (db *DefaultDatabase) GetSagaEntity(id int) (*SagaEntity, error) {
 		return nil, ErrSagaEntityNotFound
 	}
 
-	entityCopy := copySagaEntity(entity)
-	if data, exists := db.sagaData[id]; exists {
-		entityCopy.SagaData = copySagaData(data)
+	cfg := &SagaEntityGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
 	}
 
-	return entityCopy, nil
+	if cfg.IncludeData {
+		for _, d := range db.sagaData {
+			if d.EntityID == id {
+				entity.SagaData = copySagaData(d)
+				break
+			}
+		}
+	}
+
+	return copySagaEntity(entity), nil
 }
 
-func (db *DefaultDatabase) UpdateSagaEntity(entity *SagaEntity) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if _, exists := db.sagaEntities[entity.ID]; !exists {
-		return ErrSagaEntityNotFound
-	}
-
-	entityCopy := copySagaEntity(entity)
-	entityCopy.UpdatedAt = time.Now()
-
-	// Update entity
-	db.sagaEntities[entity.ID] = entityCopy
-
-	// Update data if present
-	if entityCopy.SagaData != nil {
-		db.sagaData[entity.ID] = copySagaData(entityCopy.SagaData)
-	}
-
-	return nil
-}
-
-func (db *DefaultDatabase) GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error {
 	db.mu.RLock()
+	defer db.mu.RUnlock()
+
 	entity, exists := db.sagaEntities[id]
 	if !exists {
-		db.mu.RUnlock()
 		return ErrSagaEntityNotFound
 	}
-	entityCopy := copySagaEntity(entity)
-	db.mu.RUnlock()
+
+	opts := &SagaEntityGetterOptions{}
 
 	for _, getter := range getters {
-		if option, err := getter(entityCopy); err != nil {
+		opt, err := getter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &SagaEntityGetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle options
-			if opts.IncludeData {
-				if data, exists := db.sagaData[id]; exists {
-					entityCopy.SagaData = copySagaData(data)
-				}
-			}
-
-			if opts.IncludeWorkflow {
-				if workflowID, exists := db.entityToWorkflow[id]; exists {
-					_ = workflowID // Handled in the getter function
-				}
 			}
 		}
 	}
+
+	if opts.IncludeData {
+		for _, d := range db.sagaData {
+			if d.EntityID == id {
+				entity.SagaData = copySagaData(d)
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
-func (db *DefaultDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error {
+func (db *MemoryDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -1421,70 +875,81 @@ func (db *DefaultDatabase) SetSagaEntityProperties(id int, setters ...SagaEntity
 		return ErrSagaEntityNotFound
 	}
 
-	entityCopy := copySagaEntity(entity)
+	opts := &SagaEntitySetterOptions{}
+
 	for _, setter := range setters {
-		if option, err := setter(entityCopy); err != nil {
+		opt, err := setter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &SagaEntitySetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle workflow relationship
-			if opts.ParentWorkflowID != nil {
-				// Remove from old workflow if exists
-				if oldWorkflowID, exists := db.entityToWorkflow[id]; exists {
-					if children, exists := db.workflowToChildren[oldWorkflowID]; exists {
-						if sagas, exists := children[EntitySaga]; exists {
-							newSagas := make([]int, len(sagas))
-							copy(newSagas, sagas)
-							removeFromSlice(&newSagas, id)
-							db.workflowToChildren[oldWorkflowID][EntitySaga] = newSagas
-						}
-					}
-				}
-
-				// Add to new workflow
-				db.entityToWorkflow[id] = *opts.ParentWorkflowID
-				if _, exists := db.workflowToChildren[*opts.ParentWorkflowID]; !exists {
-					db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
-				}
-				db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga] = append(
-					db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga],
-					id,
-				)
 			}
 		}
 	}
 
-	entityCopy.UpdatedAt = time.Now()
-	db.sagaEntities[id] = entityCopy
+	if opts.ParentWorkflowID != nil {
+		if _, exists := db.workflowEntities[*opts.ParentWorkflowID]; !exists {
+			return ErrWorkflowEntityNotFound
+		}
+		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
+			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
+		}
+		db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga],
+			id,
+		)
+	}
+
+	entity.UpdatedAt = time.Now()
 	return nil
 }
 
-func (db *DefaultDatabase) AddSideEffectEntity(entity *SideEffectEntity) (int, error) {
+func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	entityCopy := copySideEffectEntity(entity)
-	entityCopy.ID = int(atomic.AddInt64(&db.sideEffectEntityCounter, 1))
-	entityCopy.Type = EntitySideEffect
-	entityCopy.CreatedAt = time.Now()
-	entityCopy.UpdatedAt = time.Now()
+	db.sideEffectEntityCounter++
+	entity.ID = db.sideEffectEntityCounter
 
-	// Store the entity
-	db.sideEffectEntities[entityCopy.ID] = entityCopy
-
-	// Store entity data if present
-	if entityCopy.SideEffectData != nil {
-		db.sideEffectData[entityCopy.ID] = copySideEffectData(entityCopy.SideEffectData)
+	if entity.SideEffectData != nil {
+		db.sideEffectDataCounter++
+		entity.SideEffectData.ID = db.sideEffectDataCounter
+		entity.SideEffectData.EntityID = entity.ID
+		db.sideEffectData[entity.SideEffectData.ID] = copySideEffectData(entity.SideEffectData)
 	}
 
-	return entityCopy.ID, nil
+	entity.CreatedAt = time.Now()
+	entity.UpdatedAt = entity.CreatedAt
+
+	db.sideEffectEntities[entity.ID] = copySideEffectEntity(entity)
+	return entity.ID, nil
 }
 
-func (db *DefaultDatabase) GetSideEffectEntity(id int) (*SideEffectEntity, error) {
+func (db *MemoryDatabase) AddSideEffectExecution(exec *SideEffectExecution) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sideEffectExecutionCounter++
+	exec.ID = db.sideEffectExecutionCounter
+
+	if exec.SideEffectExecutionData != nil {
+		db.sideEffectExecutionDataCounter++
+		exec.SideEffectExecutionData.ID = db.sideEffectExecutionDataCounter
+		exec.SideEffectExecutionData.ExecutionID = exec.ID
+		db.sideEffectExecutionData[exec.SideEffectExecutionData.ID] = copySideEffectExecutionData(exec.SideEffectExecutionData)
+	}
+
+	exec.CreatedAt = time.Now()
+	exec.UpdatedAt = exec.CreatedAt
+
+	db.sideEffectExecutions[exec.ID] = copySideEffectExecution(exec)
+	return exec.ID, nil
+}
+
+func (db *MemoryDatabase) GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -1493,37 +958,61 @@ func (db *DefaultDatabase) GetSideEffectEntity(id int) (*SideEffectEntity, error
 		return nil, ErrSideEffectEntityNotFound
 	}
 
-	entityCopy := copySideEffectEntity(entity)
-	if data, exists := db.sideEffectData[id]; exists {
-		entityCopy.SideEffectData = copySideEffectData(data)
+	cfg := &SideEffectEntityGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
+		}
 	}
 
-	return entityCopy, nil
+	if cfg.IncludeData {
+		for _, d := range db.sideEffectData {
+			if d.EntityID == id {
+				entity.SideEffectData = copySideEffectData(d)
+				break
+			}
+		}
+	}
+
+	return copySideEffectEntity(entity), nil
 }
 
-func (db *DefaultDatabase) UpdateSideEffectEntity(entity *SideEffectEntity) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *MemoryDatabase) GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
-	if _, exists := db.sideEffectEntities[entity.ID]; !exists {
+	entity, exists := db.sideEffectEntities[id]
+	if !exists {
 		return ErrSideEffectEntityNotFound
 	}
 
-	entityCopy := copySideEffectEntity(entity)
-	entityCopy.UpdatedAt = time.Now()
+	opts := &SideEffectEntityGetterOptions{}
 
-	// Update entity
-	db.sideEffectEntities[entity.ID] = entityCopy
+	for _, getter := range getters {
+		opt, err := getter(entity)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
 
-	// Update data if present
-	if entityCopy.SideEffectData != nil {
-		db.sideEffectData[entity.ID] = copySideEffectData(entityCopy.SideEffectData)
+	if opts.IncludeData {
+		for _, d := range db.sideEffectData {
+			if d.EntityID == id {
+				entity.SideEffectData = copySideEffectData(d)
+				break
+			}
+		}
 	}
 
 	return nil
 }
 
-func (db *DefaultDatabase) SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error {
+func (db *MemoryDatabase) SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -1532,239 +1021,123 @@ func (db *DefaultDatabase) SetSideEffectEntityProperties(id int, setters ...Side
 		return ErrSideEffectEntityNotFound
 	}
 
-	entityCopy := copySideEffectEntity(entity)
+	opts := &SideEffectEntitySetterOptions{}
+
 	for _, setter := range setters {
-		if option, err := setter(entityCopy); err != nil {
+		opt, err := setter(entity)
+		if err != nil {
 			return err
-		} else if option != nil {
-			opts := &SideEffectEntitySetterOptions{}
-			if err := option(opts); err != nil {
+		}
+		if opt != nil {
+			if err := opt(opts); err != nil {
 				return err
-			}
-
-			// Handle workflow relationship
-			if opts.ParentWorkflowID != nil {
-				// Remove from old workflow if exists
-				if oldWorkflowID, exists := db.entityToWorkflow[id]; exists {
-					if children, exists := db.workflowToChildren[oldWorkflowID]; exists {
-						if sideEffects, exists := children[EntitySideEffect]; exists {
-							newSideEffects := make([]int, len(sideEffects))
-							copy(newSideEffects, sideEffects)
-							removeFromSlice(&newSideEffects, id)
-							db.workflowToChildren[oldWorkflowID][EntitySideEffect] = newSideEffects
-						}
-					}
-				}
-
-				// Add to new workflow
-				db.entityToWorkflow[id] = *opts.ParentWorkflowID
-				if _, exists := db.workflowToChildren[*opts.ParentWorkflowID]; !exists {
-					db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
-				}
-				db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect] = append(
-					db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect],
-					id,
-				)
 			}
 		}
 	}
 
-	entityCopy.UpdatedAt = time.Now()
-	db.sideEffectEntities[id] = entityCopy
+	if opts.ParentWorkflowID != nil {
+		if _, exists := db.workflowEntities[*opts.ParentWorkflowID]; !exists {
+			return ErrWorkflowEntityNotFound
+		}
+		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
+			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
+		}
+		db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect],
+			id,
+		)
+	}
+
+	entity.UpdatedAt = time.Now()
 	return nil
 }
-func (db *DefaultDatabase) GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error {
+
+func (db *MemoryDatabase) GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error) {
 	db.mu.RLock()
-	exec, exists := db.workflowExecutions[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrWorkflowExecutionNotFound
-	}
-	execCopy := copyWorkflowExecution(exec)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-
-			if opts.IncludeOutputs {
-				if data, exists := db.workflowExecutionData[id]; exists {
-					execCopy.WorkflowExecutionData = copyWorkflowExecutionData(data)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer db.mu.RUnlock()
 
 	exec, exists := db.workflowExecutions[id]
 	if !exists {
-		return ErrWorkflowExecutionNotFound
+		return nil, ErrWorkflowExecutionNotFound
 	}
 
-	execCopy := copyWorkflowExecution(exec)
-	for _, setter := range setters {
-		if option, err := setter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &WorkflowExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Apply any option-specific changes
+	cfg := &WorkflowExecutionGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
 	}
 
-	execCopy.UpdatedAt = time.Now()
-	db.workflowExecutions[id] = execCopy
-	return nil
+	if cfg.IncludeData {
+		for _, d := range db.workflowExecutionData {
+			if d.ExecutionID == id {
+				exec.WorkflowExecutionData = copyWorkflowExecutionData(d)
+				break
+			}
+		}
+	}
+
+	return copyWorkflowExecution(exec), nil
 }
 
-func (db *DefaultDatabase) GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error) {
 	db.mu.RLock()
-	exec, exists := db.activityExecutions[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrActivityExecutionNotFound
-	}
-	execCopy := copyActivityExecution(exec)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-
-			if opts.IncludeOutputs {
-				if data, exists := db.activityExecutionData[id]; exists {
-					execCopy.ActivityExecutionData = copyActivityExecutionData(data)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer db.mu.RUnlock()
 
 	exec, exists := db.activityExecutions[id]
 	if !exists {
-		return ErrActivityExecutionNotFound
+		return nil, ErrActivityExecutionNotFound
 	}
 
-	execCopy := copyActivityExecution(exec)
-	for _, setter := range setters {
-		if option, err := setter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &ActivityExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Apply any option-specific changes
+	cfg := &ActivityExecutionGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
 	}
 
-	execCopy.UpdatedAt = time.Now()
-	db.activityExecutions[id] = execCopy
-	return nil
+	if cfg.IncludeData {
+		for _, d := range db.activityExecutionData {
+			if d.ExecutionID == id {
+				exec.ActivityExecutionData = copyActivityExecutionData(d)
+				break
+			}
+		}
+	}
+
+	return copyActivityExecution(exec), nil
 }
 
-func (db *DefaultDatabase) GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error) {
 	db.mu.RLock()
-	exec, exists := db.sagaExecutions[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrSagaExecutionNotFound
-	}
-	execCopy := copySagaExecution(exec)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-
-			if opts.IncludeOutput {
-				if data, exists := db.sagaExecutionData[id]; exists {
-					execCopy.SagaExecutionData = copySagaExecutionData(data)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer db.mu.RUnlock()
 
 	exec, exists := db.sagaExecutions[id]
 	if !exists {
-		return ErrSagaExecutionNotFound
+		return nil, ErrSagaExecutionNotFound
 	}
 
-	execCopy := copySagaExecution(exec)
-	for _, setter := range setters {
-		if option, err := setter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SagaExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Apply any option-specific changes
+	cfg := &SagaExecutionGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
 	}
 
-	execCopy.UpdatedAt = time.Now()
-	db.sagaExecutions[id] = execCopy
-	return nil
-}
-
-func (db *DefaultDatabase) AddSideEffectExecution(exec *SideEffectExecution) (int, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	execCopy := copySideEffectExecution(exec)
-	execCopy.ID = int(atomic.AddInt64(&db.sideEffectExecutionCounter, 1))
-	execCopy.CreatedAt = time.Now()
-	execCopy.UpdatedAt = time.Now()
-	execCopy.StartedAt = time.Now()
-
-	// Store the execution
-	db.sideEffectExecutions[execCopy.ID] = execCopy
-
-	// Store execution data if present
-	if execCopy.SideEffectExecutionData != nil {
-		db.sideEffectExecutionData[execCopy.ID] = copySideEffectExecutionData(execCopy.SideEffectExecutionData)
-	} else {
-		db.sideEffectExecutionData[execCopy.ID] = &SideEffectExecutionData{}
+	if cfg.IncludeData {
+		for _, d := range db.sagaExecutionData {
+			if d.ExecutionID == id {
+				exec.SagaExecutionData = copySagaExecutionData(d)
+				break
+			}
+		}
 	}
 
-	return execCopy.ID, nil
+	return copySagaExecution(exec), nil
 }
 
-func (db *DefaultDatabase) GetSideEffectExecution(id int) (*SideEffectExecution, error) {
+func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
@@ -1773,66 +1146,21 @@ func (db *DefaultDatabase) GetSideEffectExecution(id int) (*SideEffectExecution,
 		return nil, ErrSideEffectExecutionNotFound
 	}
 
-	execCopy := copySideEffectExecution(exec)
-	if data, exists := db.sideEffectExecutionData[id]; exists {
-		execCopy.SideEffectExecutionData = copySideEffectExecutionData(data)
-	}
-
-	return execCopy, nil
-}
-
-func (db *DefaultDatabase) GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error {
-	db.mu.RLock()
-	exec, exists := db.sideEffectExecutions[id]
-	if !exists {
-		db.mu.RUnlock()
-		return ErrSideEffectExecutionNotFound
-	}
-	execCopy := copySideEffectExecution(exec)
-	db.mu.RUnlock()
-
-	for _, getter := range getters {
-		if option, err := getter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectExecutionDataGetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-
-			if opts.IncludeOutputs {
-				if data, exists := db.sideEffectExecutionData[id]; exists {
-					execCopy.SideEffectExecutionData = copySideEffectExecutionData(data)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (db *DefaultDatabase) SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	exec, exists := db.sideEffectExecutions[id]
-	if !exists {
-		return ErrSideEffectExecutionNotFound
-	}
-
-	execCopy := copySideEffectExecution(exec)
-	for _, setter := range setters {
-		if option, err := setter(execCopy); err != nil {
-			return err
-		} else if option != nil {
-			opts := &SideEffectExecutionDataSetterOptions{}
-			if err := option(opts); err != nil {
-				return err
-			}
-			// Apply any option-specific changes
+	cfg := &SideEffectExecutionGetterOptions{}
+	for _, v := range opts {
+		if err := v(cfg); err != nil {
+			return nil, err
 		}
 	}
 
-	execCopy.UpdatedAt = time.Now()
-	db.sideEffectExecutions[id] = execCopy
-	return nil
+	if cfg.IncludeData {
+		for _, d := range db.sideEffectExecutionData {
+			if d.ExecutionID == id {
+				exec.SideEffectExecutionData = copySideEffectExecutionData(d)
+				break
+			}
+		}
+	}
+
+	return copySideEffectExecution(exec), nil
 }

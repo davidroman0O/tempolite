@@ -8,7 +8,7 @@ import (
 )
 
 func TestBasicDatabase(t *testing.T) {
-	db := NewDefaultDatabase()
+	db := NewMemoryDatabase()
 	if db == nil {
 		t.Error("Failed to create database")
 	}
@@ -17,6 +17,7 @@ func TestBasicDatabase(t *testing.T) {
 		BaseEntity: BaseEntity{
 			HandlerName: "test",
 			Type:        EntityWorkflow,
+			QueueID:     1,
 		},
 		WorkflowData: &WorkflowData{
 			Inputs: [][]byte{},
@@ -34,4 +35,5 @@ func TestBasicDatabase(t *testing.T) {
 	}
 
 	pp.Println(data)
+
 }
