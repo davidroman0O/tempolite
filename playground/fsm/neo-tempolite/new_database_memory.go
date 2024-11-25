@@ -3,6 +3,8 @@ package tempolite
 import (
 	"sync"
 	"time"
+
+	"github.com/k0kubun/pp/v3"
 )
 
 type MemoryDatabase struct {
@@ -466,7 +468,12 @@ func (db *MemoryDatabase) AddWorkflowEntity(entity *WorkflowEntity) (int, error)
 	if entity.QueueID == 0 {
 		entity.QueueID = 1
 		db.queueToWorkflows[1] = append(db.queueToWorkflows[1], entity.ID)
+	} else {
+		db.workflowToQueue[entity.ID] = entity.QueueID
+		db.queueToWorkflows[entity.QueueID] = append(db.queueToWorkflows[entity.QueueID], entity.ID)
 	}
+
+	pp.Println("add", entity)
 
 	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
 	return entity.ID, nil
@@ -509,6 +516,8 @@ func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOpt
 		}
 	}
 
+	pp.Println("Get workflow", cfg, entity)
+
 	if cfg.IncludeQueue {
 		if queueID, ok := db.workflowToQueue[id]; ok {
 			if queue, exists := db.queues[queueID]; exists {
@@ -516,6 +525,15 @@ func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOpt
 					entity.Edges = &WorkflowEntityEdges{}
 				}
 				entity.Edges.Queue = copyQueue(queue)
+			}
+		}
+	}
+
+	if cfg.IncludeData {
+		for _, d := range db.workflowData {
+			if d.EntityID == id {
+				entity.WorkflowData = copyWorkflowData(d)
+				break
 			}
 		}
 	}
@@ -2045,6 +2063,20 @@ func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPro
 	return nil
 }
 
+func (db *MemoryDatabase) GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	hierarchies := make([]*Hierarchy, 0)
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ChildEntityID == childEntityID {
+			hierarchies = append(hierarchies, copyHierarchy(hierarchy))
+		}
+	}
+
+	return hierarchies, nil
+}
+
 func (db *MemoryDatabase) UpdateHierarchy(hierarchy *Hierarchy) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -2281,4 +2313,533 @@ func (db *MemoryDatabase) UpdateWorkflowEntity(entity *WorkflowEntity) error {
 	entity.UpdatedAt = time.Now()
 	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
 	return nil
+}
+
+// Entity Data operations
+func (db *MemoryDatabase) AddWorkflowData(entityID int, data *WorkflowData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.workflowDataCounter++
+	data.ID = db.workflowDataCounter
+	data.EntityID = entityID
+	db.workflowData[data.ID] = copyWorkflowData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddActivityData(entityID int, data *ActivityData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.activityDataCounter++
+	data.ID = db.activityDataCounter
+	data.EntityID = entityID
+	db.activityData[data.ID] = copyActivityData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddSagaData(entityID int, data *SagaData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sagaDataCounter++
+	data.ID = db.sagaDataCounter
+	data.EntityID = entityID
+	db.sagaData[data.ID] = copySagaData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddSideEffectData(entityID int, data *SideEffectData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sideEffectDataCounter++
+	data.ID = db.sideEffectDataCounter
+	data.EntityID = entityID
+	db.sideEffectData[data.ID] = copySideEffectData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) GetWorkflowData(id int) (*WorkflowData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.workflowData[id]; exists {
+		return copyWorkflowData(data), nil
+	}
+	return nil, ErrWorkflowEntityNotFound
+}
+
+func (db *MemoryDatabase) GetActivityData(id int) (*ActivityData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.activityData[id]; exists {
+		return copyActivityData(data), nil
+	}
+	return nil, ErrActivityEntityNotFound
+}
+
+func (db *MemoryDatabase) GetSagaData(id int) (*SagaData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.sagaData[id]; exists {
+		return copySagaData(data), nil
+	}
+	return nil, ErrSagaEntityNotFound
+}
+
+func (db *MemoryDatabase) GetSideEffectData(id int) (*SideEffectData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.sideEffectData[id]; exists {
+		return copySideEffectData(data), nil
+	}
+	return nil, ErrSideEffectEntityNotFound
+}
+
+func (db *MemoryDatabase) GetWorkflowDataByEntityID(entityID int) (*WorkflowData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.workflowData {
+		if data.EntityID == entityID {
+			return copyWorkflowData(data), nil
+		}
+	}
+	return nil, ErrWorkflowEntityNotFound
+}
+
+func (db *MemoryDatabase) GetActivityDataByEntityID(entityID int) (*ActivityData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.activityData {
+		if data.EntityID == entityID {
+			return copyActivityData(data), nil
+		}
+	}
+	return nil, ErrActivityEntityNotFound
+}
+
+func (db *MemoryDatabase) GetSagaDataByEntityID(entityID int) (*SagaData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.sagaData {
+		if data.EntityID == entityID {
+			return copySagaData(data), nil
+		}
+	}
+	return nil, ErrSagaEntityNotFound
+}
+
+func (db *MemoryDatabase) GetSideEffectDataByEntityID(entityID int) (*SideEffectData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.sideEffectData {
+		if data.EntityID == entityID {
+			return copySideEffectData(data), nil
+		}
+	}
+	return nil, ErrSideEffectEntityNotFound
+}
+
+func (db *MemoryDatabase) AddWorkflowExecutionData(executionID int, data *WorkflowExecutionData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.workflowExecutionDataCounter++
+	data.ID = db.workflowExecutionDataCounter
+	data.ExecutionID = executionID
+	db.workflowExecutionData[data.ID] = copyWorkflowExecutionData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddActivityExecutionData(executionID int, data *ActivityExecutionData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.activityExecutionDataCounter++
+	data.ID = db.activityExecutionDataCounter
+	data.ExecutionID = executionID
+	db.activityExecutionData[data.ID] = copyActivityExecutionData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddSagaExecutionData(executionID int, data *SagaExecutionData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sagaExecutionDataCounter++
+	data.ID = db.sagaExecutionDataCounter
+	data.ExecutionID = executionID
+	db.sagaExecutionData[data.ID] = copySagaExecutionData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) AddSideEffectExecutionData(executionID int, data *SideEffectExecutionData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.sideEffectExecutionDataCounter++
+	data.ID = db.sideEffectExecutionDataCounter
+	data.ExecutionID = executionID
+	db.sideEffectExecutionData[data.ID] = copySideEffectExecutionData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) GetWorkflowExecutionData(id int) (*WorkflowExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.workflowExecutionData[id]; exists {
+		return copyWorkflowExecutionData(data), nil
+	}
+	return nil, ErrWorkflowExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetActivityExecutionData(id int) (*ActivityExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.activityExecutionData[id]; exists {
+		return copyActivityExecutionData(data), nil
+	}
+	return nil, ErrActivityExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetSagaExecutionData(id int) (*SagaExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.sagaExecutionData[id]; exists {
+		return copySagaExecutionData(data), nil
+	}
+	return nil, ErrSagaExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetSideEffectExecutionData(id int) (*SideEffectExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if data, exists := db.sideEffectExecutionData[id]; exists {
+		return copySideEffectExecutionData(data), nil
+	}
+	return nil, ErrSideEffectExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetWorkflowExecutionDataByExecutionID(executionID int) (*WorkflowExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.workflowExecutionData {
+		if data.ExecutionID == executionID {
+			return copyWorkflowExecutionData(data), nil
+		}
+	}
+	return nil, ErrWorkflowExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetActivityExecutionDataByExecutionID(executionID int) (*ActivityExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.activityExecutionData {
+		if data.ExecutionID == executionID {
+			return copyActivityExecutionData(data), nil
+		}
+	}
+	return nil, ErrActivityExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetSagaExecutionDataByExecutionID(executionID int) (*SagaExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.sagaExecutionData {
+		if data.ExecutionID == executionID {
+			return copySagaExecutionData(data), nil
+		}
+	}
+	return nil, ErrSagaExecutionNotFound
+}
+
+func (db *MemoryDatabase) GetSideEffectExecutionDataByExecutionID(executionID int) (*SideEffectExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.sideEffectExecutionData {
+		if data.ExecutionID == executionID {
+			return copySideEffectExecutionData(data), nil
+		}
+	}
+	return nil, ErrSideEffectExecutionNotFound
+}
+
+// Has functions for Data operations
+func (db *MemoryDatabase) HasRun(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.runs[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasVersion(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.versions[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasHierarchy(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.hierarchies[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasQueue(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.queues[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasQueueName(name string) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.queueNames[name]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasWorkflowEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.workflowEntities[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasActivityEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.activityEntities[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSagaEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sagaEntities[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sideEffectEntities[id]
+	return exists, nil
+}
+
+// Has functions for Execution operations
+func (db *MemoryDatabase) HasWorkflowExecution(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.workflowExecutions[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasActivityExecution(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.activityExecutions[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSagaExecution(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sagaExecutions[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectExecution(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sideEffectExecutions[id]
+	return exists, nil
+}
+
+// Has functions for Data operations
+func (db *MemoryDatabase) HasWorkflowData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.workflowData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasActivityData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.activityData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSagaData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sagaData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sideEffectData[id]
+	return exists, nil
+}
+
+// Has functions for Data by EntityID operations
+func (db *MemoryDatabase) HasWorkflowDataByEntityID(entityID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.workflowData {
+		if data.EntityID == entityID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasActivityDataByEntityID(entityID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.activityData {
+		if data.EntityID == entityID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasSagaDataByEntityID(entityID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.sagaData {
+		if data.EntityID == entityID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectDataByEntityID(entityID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.sideEffectData {
+		if data.EntityID == entityID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// Has functions for Execution Data operations
+func (db *MemoryDatabase) HasWorkflowExecutionData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.workflowExecutionData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasActivityExecutionData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.activityExecutionData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSagaExecutionData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sagaExecutionData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectExecutionData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.sideEffectExecutionData[id]
+	return exists, nil
+}
+
+// Has functions for Execution Data by ExecutionID operations
+func (db *MemoryDatabase) HasWorkflowExecutionDataByExecutionID(executionID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.workflowExecutionData {
+		if data.ExecutionID == executionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasActivityExecutionDataByExecutionID(executionID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.activityExecutionData {
+		if data.ExecutionID == executionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasSagaExecutionDataByExecutionID(executionID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.sagaExecutionData {
+		if data.ExecutionID == executionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) HasSideEffectExecutionDataByExecutionID(executionID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	for _, data := range db.sideEffectExecutionData {
+		if data.ExecutionID == executionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) GetWorkflowExecutionLatestByEntityID(entityID int) (*WorkflowExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var latestExec *WorkflowExecution
+	var latestTime time.Time
+
+	for _, exec := range db.workflowExecutions {
+		if exec.EntityID == entityID {
+			if latestExec == nil || exec.CreatedAt.After(latestTime) {
+				latestExec = exec
+				latestTime = exec.CreatedAt
+			}
+		}
+	}
+
+	if latestExec == nil {
+		return nil, ErrWorkflowExecutionNotFound
+	}
+
+	return copyWorkflowExecution(latestExec), nil
 }

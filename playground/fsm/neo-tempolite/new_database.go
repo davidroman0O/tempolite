@@ -27,8 +27,35 @@ var (
 	ErrQueueExists                 = errors.New("queue already exists")
 )
 
+// State and Trigger definitions
+type state string
+
+const (
+	StateIdle          state = "Idle"
+	StateExecuting     state = "Executing"
+	StateCompleted     state = "Completed"
+	StateFailed        state = "Failed"
+	StateRetried       state = "Retried"
+	StatePaused        state = "Paused"
+	StateTransactions  state = "Transactions"
+	StateCompensations state = "Compensations"
+)
+
+type trigger string
+
+const (
+	TriggerStart      trigger = "Start"
+	TriggerComplete   trigger = "Complete"
+	TriggerFail       trigger = "Fail"
+	TriggerPause      trigger = "Pause"
+	TriggerResume     trigger = "Resume"
+	TriggerCompensate trigger = "Compensate"
+)
+
 // Core types and constants remain the same
 var DefaultVersion int = 0
+
+var DefaultQueue string = "default"
 
 // Status and Type enums remain the same as before
 type RunStatus string
@@ -55,27 +82,29 @@ var (
 type EntityStatus string
 
 const (
-	StatusPending   EntityStatus = "Pending"
-	StatusQueued    EntityStatus = "Queued"
-	StatusRunning   EntityStatus = "Running"
-	StatusPaused    EntityStatus = "Paused"
-	StatusCancelled EntityStatus = "Cancelled"
-	StatusCompleted EntityStatus = "Completed"
-	StatusFailed    EntityStatus = "Failed"
+	StatusPending     EntityStatus = "Pending"
+	StatusQueued      EntityStatus = "Queued"
+	StatusRunning     EntityStatus = "Running"
+	StatusPaused      EntityStatus = "Paused"
+	StatusCancelled   EntityStatus = "Cancelled"
+	StatusCompleted   EntityStatus = "Completed"
+	StatusFailed      EntityStatus = "Failed"
+	StatusCompensated EntityStatus = "Compensated"
 )
 
 // ExecutionStatus defines the status of an execution
 type ExecutionStatus string
 
 const (
-	ExecutionStatusPending   ExecutionStatus = "Pending"
-	ExecutionStatusQueued    ExecutionStatus = "Queued"
-	ExecutionStatusRunning   ExecutionStatus = "Running"
-	ExecutionStatusRetried   ExecutionStatus = "Retried"
-	ExecutionStatusPaused    ExecutionStatus = "Paused"
-	ExecutionStatusCancelled ExecutionStatus = "Cancelled"
-	ExecutionStatusCompleted ExecutionStatus = "Completed"
-	ExecutionStatusFailed    ExecutionStatus = "Failed"
+	ExecutionStatusPending     ExecutionStatus = "Pending"
+	ExecutionStatusQueued      ExecutionStatus = "Queued"
+	ExecutionStatusRunning     ExecutionStatus = "Running"
+	ExecutionStatusRetried     ExecutionStatus = "Retried"
+	ExecutionStatusPaused      ExecutionStatus = "Paused"
+	ExecutionStatusCancelled   ExecutionStatus = "Cancelled"
+	ExecutionStatusCompleted   ExecutionStatus = "Completed"
+	ExecutionStatusFailed      ExecutionStatus = "Failed"
+	ExecutionStatusCompensated ExecutionStatus = "Compensated"
 )
 
 // Base entity options
@@ -458,7 +487,7 @@ type SideEffectExecutionDataPropertySetter func(*SideEffectExecutionData) (SideE
 // Core workflow options and types
 type WorkflowOptions struct {
 	Queue            string
-	RetryPolicy      RetryPolicy
+	RetryPolicy      *RetryPolicy
 	VersionOverrides map[string]int
 }
 
@@ -565,7 +594,6 @@ type BaseEntity struct {
 	RunID       int
 	RetryPolicy retryPolicyInternal
 	RetryState  RetryState
-	HandlerInfo HandlerInfo
 }
 
 // Entity Data structures
@@ -577,6 +605,7 @@ type WorkflowData struct {
 	Resumable bool     `json:"resumable"`
 	Inputs    [][]byte `json:"inputs,omitempty"`
 	Attempt   int      `json:"attempt"`
+	IsRoot    bool     `json:"is_root"`
 }
 
 type ActivityData struct {
@@ -644,7 +673,7 @@ type BaseExecution struct {
 	Error       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	Attempt     int
+	Attempt     int // TODO: why do i need that already?
 }
 
 // Execution Data structures
@@ -699,106 +728,179 @@ type SideEffectExecution struct {
 
 // Database interface
 type Database interface {
-	// Run operations
-	AddRun(run *Run) (int, error)
-	GetRun(id int, opts ...RunGetOption) (*Run, error)
-	UpdateRun(run *Run) error
-	GetRunProperties(id int, getters ...RunPropertyGetter) error
-	SetRunProperties(id int, setters ...RunPropertySetter) error
 
-	// Version operations
-	AddVersion(version *Version) (int, error)
-	GetVersion(id int, opts ...VersionGetOption) (*Version, error)
-	UpdateVersion(version *Version) error
-	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
-	SetVersionProperties(id int, setters ...VersionPropertySetter) error
-
-	// Hierarchy operations
-	AddHierarchy(hierarchy *Hierarchy) (int, error)
-	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
-	UpdateHierarchy(hierarchy *Hierarchy) error
-	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
-	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
-
-	// Queue operations
-	AddQueue(queue *Queue) (int, error)
-	GetQueue(id int, opts ...QueueGetOption) (*Queue, error)
-	GetQueueByName(name string, opts ...QueueGetOption) (*Queue, error)
-	UpdateQueue(queue *Queue) error
-	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
-	SetQueueProperties(id int, setters ...QueuePropertySetter) error
-
-	// Workflow Entity operations
+	// WORKFLOW-RELATED OPERATIONS
+	// Workflow Entity
 	AddWorkflowEntity(entity *WorkflowEntity) (int, error)
 	GetWorkflowEntity(id int, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error)
+	HasWorkflowEntity(id int) (bool, error)
 	UpdateWorkflowEntity(entity *WorkflowEntity) error
 	GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error
 	SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error
 
-	// Activity Entity operations
+	// Workflow Data
+	AddWorkflowData(entityID int, data *WorkflowData) (int, error)
+	GetWorkflowData(id int) (*WorkflowData, error)
+	HasWorkflowData(id int) (bool, error)
+	GetWorkflowDataByEntityID(entityID int) (*WorkflowData, error)
+	HasWorkflowDataByEntityID(entityID int) (bool, error)
+	GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error
+	SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error
+
+	// Workflow Execution
+	AddWorkflowExecution(exec *WorkflowExecution) (int, error)
+	GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
+	HasWorkflowExecution(id int) (bool, error)
+	GetWorkflowExecutionLatestByEntityID(entityID int) (*WorkflowExecution, error)
+	GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error
+	SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error
+
+	// Workflow Execution Data
+	AddWorkflowExecutionData(executionID int, data *WorkflowExecutionData) (int, error)
+	GetWorkflowExecutionData(id int) (*WorkflowExecutionData, error)
+	HasWorkflowExecutionData(id int) (bool, error)
+	GetWorkflowExecutionDataByExecutionID(executionID int) (*WorkflowExecutionData, error)
+	HasWorkflowExecutionDataByExecutionID(executionID int) (bool, error)
+	GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error
+	SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error
+
+	// ACTIVITY-RELATED OPERATIONS
+	// Activity Entity
 	AddActivityEntity(entity *ActivityEntity) (int, error)
 	GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error)
+	HasActivityEntity(id int) (bool, error)
 	UpdateActivityEntity(entity *ActivityEntity) error
 	GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error
 	SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error
 
-	// Saga Entity operations
+	// Activity Data
+	AddActivityData(entityID int, data *ActivityData) (int, error)
+	GetActivityData(id int) (*ActivityData, error)
+	HasActivityData(id int) (bool, error)
+	GetActivityDataByEntityID(entityID int) (*ActivityData, error)
+	HasActivityDataByEntityID(entityID int) (bool, error)
+	GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error
+	SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error
+
+	// Activity Execution
+	AddActivityExecution(exec *ActivityExecution) (int, error)
+	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
+	HasActivityExecution(id int) (bool, error)
+	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
+	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
+
+	// Activity Execution Data
+	AddActivityExecutionData(executionID int, data *ActivityExecutionData) (int, error)
+	GetActivityExecutionData(id int) (*ActivityExecutionData, error)
+	HasActivityExecutionData(id int) (bool, error)
+	GetActivityExecutionDataByExecutionID(executionID int) (*ActivityExecutionData, error)
+	HasActivityExecutionDataByExecutionID(executionID int) (bool, error)
+	GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error
+	SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error
+
+	// SAGA-RELATED OPERATIONS
+	// Saga Entity
 	AddSagaEntity(entity *SagaEntity) (int, error)
 	GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error)
+	HasSagaEntity(id int) (bool, error)
 	UpdateSagaEntity(entity *SagaEntity) error
 	GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error
 	SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error
 
-	// SideEffect Entity operations
+	// Saga Data
+	AddSagaData(entityID int, data *SagaData) (int, error)
+	GetSagaData(id int) (*SagaData, error)
+	HasSagaData(id int) (bool, error)
+	GetSagaDataByEntityID(entityID int) (*SagaData, error)
+	HasSagaDataByEntityID(entityID int) (bool, error)
+	GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error
+	SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error
+
+	// Saga Execution
+	AddSagaExecution(exec *SagaExecution) (int, error)
+	GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error)
+	HasSagaExecution(id int) (bool, error)
+	GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error
+	SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error
+
+	// Saga Execution Data
+	AddSagaExecutionData(executionID int, data *SagaExecutionData) (int, error)
+	GetSagaExecutionData(id int) (*SagaExecutionData, error)
+	HasSagaExecutionData(id int) (bool, error)
+	GetSagaExecutionDataByExecutionID(executionID int) (*SagaExecutionData, error)
+	HasSagaExecutionDataByExecutionID(executionID int) (bool, error)
+	GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error
+	SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error
+
+	// SIDE-EFFECT-RELATED OPERATIONS
+	// SideEffect Entity
 	AddSideEffectEntity(entity *SideEffectEntity) (int, error)
 	GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error)
+	HasSideEffectEntity(id int) (bool, error)
 	UpdateSideEffectEntity(entity *SideEffectEntity) error
 	GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error
 	SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error
 
-	// Workflow Execution operations
-	AddWorkflowExecution(exec *WorkflowExecution) (int, error)
-	GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
-	GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error
-	SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error
-
-	// Activity Execution operations
-	AddActivityExecution(exec *ActivityExecution) (int, error)
-	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
-	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
-	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
-
-	// Saga Execution operations
-	AddSagaExecution(exec *SagaExecution) (int, error)
-	GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error)
-	GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error
-	SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error
-
-	// SideEffect Execution operations
-	AddSideEffectExecution(exec *SideEffectExecution) (int, error)
-	GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
-	GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error
-	SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error
-
-	// Data properties operations
-	GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error
-	SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error
-	GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error
-	SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error
-	GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error
-	SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error
+	// SideEffect Data
+	AddSideEffectData(entityID int, data *SideEffectData) (int, error)
+	GetSideEffectData(id int) (*SideEffectData, error)
+	HasSideEffectData(id int) (bool, error)
+	GetSideEffectDataByEntityID(entityID int) (*SideEffectData, error)
+	HasSideEffectDataByEntityID(entityID int) (bool, error)
 	GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error
 	SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error
 
-	// Execution Data properties operations
-	GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error
-	SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error
-	GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error
-	SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error
-	GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error
-	SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error
+	// SideEffect Execution
+	AddSideEffectExecution(exec *SideEffectExecution) (int, error)
+	GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
+	HasSideEffectExecution(id int) (bool, error)
+	GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error
+	SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error
+
+	// SideEffect Execution Data
+	AddSideEffectExecutionData(executionID int, data *SideEffectExecutionData) (int, error)
+	GetSideEffectExecutionData(id int) (*SideEffectExecutionData, error)
+	HasSideEffectExecutionData(id int) (bool, error)
+	GetSideEffectExecutionDataByExecutionID(executionID int) (*SideEffectExecutionData, error)
+	HasSideEffectExecutionDataByExecutionID(executionID int) (bool, error)
 	GetSideEffectExecutionDataProperties(entityID int, getters ...SideEffectExecutionDataPropertyGetter) error
 	SetSideEffectExecutionDataProperties(entityID int, setters ...SideEffectExecutionDataPropertySetter) error
+
+	// RUN-RELATED OPERATIONS
+	AddRun(run *Run) (int, error)
+	GetRun(id int, opts ...RunGetOption) (*Run, error)
+	HasRun(id int) (bool, error)
+	UpdateRun(run *Run) error
+	GetRunProperties(id int, getters ...RunPropertyGetter) error
+	SetRunProperties(id int, setters ...RunPropertySetter) error
+
+	// VERSION-RELATED OPERATIONS
+	AddVersion(version *Version) (int, error)
+	GetVersion(id int, opts ...VersionGetOption) (*Version, error)
+	HasVersion(id int) (bool, error)
+	UpdateVersion(version *Version) error
+	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
+	SetVersionProperties(id int, setters ...VersionPropertySetter) error
+
+	// HIERARCHY-RELATED OPERATIONS
+	AddHierarchy(hierarchy *Hierarchy) (int, error)
+	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
+	HasHierarchy(id int) (bool, error)
+	UpdateHierarchy(hierarchy *Hierarchy) error
+	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
+	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
+	// specific one, might refactor that
+	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
+
+	// QUEUE-RELATED OPERATIONS
+	AddQueue(queue *Queue) (int, error)
+	GetQueue(id int, opts ...QueueGetOption) (*Queue, error)
+	GetQueueByName(name string, opts ...QueueGetOption) (*Queue, error)
+	HasQueue(id int) (bool, error)
+	HasQueueName(name string) (bool, error)
+	UpdateQueue(queue *Queue) error
+	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
+	SetQueueProperties(id int, setters ...QueuePropertySetter) error
 }
 
 // RetryPolicy helper functions
@@ -1045,13 +1147,13 @@ func copyBaseEntity(base *BaseEntity) *BaseEntity {
 		HandlerName: base.HandlerName,
 		Type:        base.Type,
 		Status:      base.Status,
+		QueueID:     base.QueueID,
 		StepID:      base.StepID,
 		CreatedAt:   base.CreatedAt,
 		UpdatedAt:   base.UpdatedAt,
 		RunID:       base.RunID,
 		RetryPolicy: base.RetryPolicy,
 		RetryState:  base.RetryState,
-		HandlerInfo: base.HandlerInfo,
 	}
 }
 
@@ -1286,6 +1388,7 @@ func copyWorkflowEntity(entity *WorkflowEntity) *WorkflowEntity {
 	copy := WorkflowEntity{
 		BaseEntity:   *copyBaseEntity(&entity.BaseEntity),
 		WorkflowData: copyWorkflowData(entity.WorkflowData),
+		Edges:        copyWorkflowEntityEdges(entity.Edges),
 	}
 
 	return &copy

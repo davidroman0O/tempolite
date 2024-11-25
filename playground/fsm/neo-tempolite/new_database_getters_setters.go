@@ -307,6 +307,16 @@ func GetWorkflowDataResumable(resumable *bool) WorkflowDataPropertyGetter {
 	}
 }
 
+func GetWorkflowDataIsRoot(isroot *bool) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		*isroot = d.IsRoot
+		return nil, nil
+	}
+}
+
 func GetWorkflowDataInputs(inputs *[][]byte) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
@@ -660,16 +670,6 @@ func GetWorkflowEntityRetryState(state *RetryState) WorkflowEntityPropertyGetter
 	}
 }
 
-func GetWorkflowEntityHandlerInfo(info *HandlerInfo) WorkflowEntityPropertyGetter {
-	return func(e *WorkflowEntity) (WorkflowEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("workflow entity is nil")
-		}
-		*info = e.HandlerInfo
-		return nil, nil
-	}
-}
-
 func SetWorkflowEntityStatus(status EntityStatus) WorkflowEntityPropertySetter {
 	return func(e *WorkflowEntity) (WorkflowEntityPropertySetterOption, error) {
 		if e == nil {
@@ -729,16 +729,6 @@ func SetWorkflowEntityRetryState(state RetryState) WorkflowEntityPropertySetter 
 			return nil, errors.New("workflow entity is nil")
 		}
 		e.RetryState = state
-		return nil, nil
-	}
-}
-
-func SetWorkflowEntityHandlerInfo(info HandlerInfo) WorkflowEntityPropertySetter {
-	return func(e *WorkflowEntity) (WorkflowEntityPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("workflow entity is nil")
-		}
-		e.HandlerInfo = info
 		return nil, nil
 	}
 }
@@ -1092,16 +1082,6 @@ func GetActivityEntityRetryState(state *RetryState) ActivityEntityPropertyGetter
 	}
 }
 
-func GetActivityEntityHandlerInfo(info *HandlerInfo) ActivityEntityPropertyGetter {
-	return func(e *ActivityEntity) (ActivityEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("activity entity is nil")
-		}
-		*info = e.HandlerInfo
-		return nil, nil
-	}
-}
-
 func SetActivityEntityStatus(status EntityStatus) ActivityEntityPropertySetter {
 	return func(e *ActivityEntity) (ActivityEntityPropertySetterOption, error) {
 		if e == nil {
@@ -1161,16 +1141,6 @@ func SetActivityEntityRetryState(state RetryState) ActivityEntityPropertySetter 
 			return nil, errors.New("activity entity is nil")
 		}
 		e.RetryState = state
-		return nil, nil
-	}
-}
-
-func SetActivityEntityHandlerInfo(info HandlerInfo) ActivityEntityPropertySetter {
-	return func(e *ActivityEntity) (ActivityEntityPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("activity entity is nil")
-		}
-		e.HandlerInfo = info
 		return nil, nil
 	}
 }
@@ -1550,16 +1520,6 @@ func GetSagaEntityRetryState(state *RetryState) SagaEntityPropertyGetter {
 	}
 }
 
-func GetSagaEntityHandlerInfo(info *HandlerInfo) SagaEntityPropertyGetter {
-	return func(e *SagaEntity) (SagaEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("saga entity is nil")
-		}
-		*info = e.HandlerInfo
-		return nil, nil
-	}
-}
-
 func SetSagaEntityStatus(status EntityStatus) SagaEntityPropertySetter {
 	return func(e *SagaEntity) (SagaEntityPropertySetterOption, error) {
 		if e == nil {
@@ -1616,16 +1576,6 @@ func SetSagaEntityRetryState(state RetryState) SagaEntityPropertySetter {
 			return nil, errors.New("saga entity is nil")
 		}
 		e.RetryState = state
-		return nil, nil
-	}
-}
-
-func SetSagaEntityHandlerInfo(info HandlerInfo) SagaEntityPropertySetter {
-	return func(e *SagaEntity) (SagaEntityPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("saga entity is nil")
-		}
-		e.HandlerInfo = info
 		return nil, nil
 	}
 }
@@ -1890,7 +1840,7 @@ func SetSagaExecutionDataLastHeartbeat(lastHeartbeat time.Time) SagaExecutionDat
 	}
 }
 
-func SetSagaExecutionDataOutput(output [][]byte) SagaExecutionDataPropertySetter {
+func SetSagaExecutionDataOutputs(output [][]byte) SagaExecutionDataPropertySetter {
 	return func(d *SagaExecutionData) (SagaExecutionDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga execution data is nil")
@@ -2012,16 +1962,6 @@ func GetSideEffectEntityRetryState(state *RetryState) SideEffectEntityPropertyGe
 	}
 }
 
-func GetSideEffectEntityHandlerInfo(info *HandlerInfo) SideEffectEntityPropertyGetter {
-	return func(e *SideEffectEntity) (SideEffectEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("side effect entity is nil")
-		}
-		*info = e.HandlerInfo
-		return nil, nil
-	}
-}
-
 func SetSideEffectEntityStatus(status EntityStatus) SideEffectEntityPropertySetter {
 	return func(e *SideEffectEntity) (SideEffectEntityPropertySetterOption, error) {
 		if e == nil {
@@ -2078,16 +2018,6 @@ func SetSideEffectEntityRetryState(state RetryState) SideEffectEntityPropertySet
 			return nil, errors.New("side effect entity is nil")
 		}
 		e.RetryState = state
-		return nil, nil
-	}
-}
-
-func SetSideEffectEntityHandlerInfo(info HandlerInfo) SideEffectEntityPropertySetter {
-	return func(e *SideEffectEntity) (SideEffectEntityPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("side effect entity is nil")
-		}
-		e.HandlerInfo = info
 		return nil, nil
 	}
 }
@@ -2736,16 +2666,6 @@ func GetBaseEntityRetryState(state *RetryState) BaseEntityPropertyGetter {
 	}
 }
 
-func GetBaseEntityHandlerInfo(info *HandlerInfo) BaseEntityPropertyGetter {
-	return func(e *BaseEntity) (BaseEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base entity is nil")
-		}
-		*info = e.HandlerInfo
-		return nil, nil
-	}
-}
-
 func SetBaseEntityHandlerName(name string) BaseEntityPropertySetter {
 	return func(e *BaseEntity) (BaseEntityPropertySetterOption, error) {
 		if e == nil {
@@ -2832,16 +2752,6 @@ func SetBaseEntityRetryState(state RetryState) BaseEntityPropertySetter {
 			return nil, errors.New("base entity is nil")
 		}
 		e.RetryState = state
-		return nil, nil
-	}
-}
-
-func SetBaseEntityHandlerInfo(info HandlerInfo) BaseEntityPropertySetter {
-	return func(e *BaseEntity) (BaseEntityPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base entity is nil")
-		}
-		e.HandlerInfo = info
 		return nil, nil
 	}
 }
@@ -3201,5 +3111,89 @@ func SetActivityDataScheduledFor(scheduledFor time.Time) ActivityDataPropertySet
 		}
 		d.ScheduledFor = &scheduledFor
 		return nil, nil
+	}
+}
+
+func WorkflowExecutionWithData() WorkflowExecutionGetOption {
+	return func(opts *WorkflowExecutionGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func ActivityExecutionWithData() ActivityExecutionGetOption {
+	return func(opts *ActivityExecutionGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func SideEffectExecutionWithData() SideEffectExecutionGetOption {
+	return func(opts *SideEffectExecutionGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func SagaExecutionWithData() SagaExecutionGetOption {
+	return func(opts *SagaExecutionGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func WorkflowEntityWithData() WorkflowEntityGetOption {
+	return func(opts *WorkflowEntityGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func WorkflowEntityWithVersion() WorkflowEntityGetOption {
+	return func(opts *WorkflowEntityGetterOptions) error {
+		opts.IncludeVersion = true
+		return nil
+	}
+}
+
+func WorkflowEntityWithQueue() WorkflowEntityGetOption {
+	return func(opts *WorkflowEntityGetterOptions) error {
+		opts.IncludeQueue = true
+		return nil
+	}
+}
+
+func WorkflowEntityWithChildren() WorkflowEntityGetOption {
+	return func(opts *WorkflowEntityGetterOptions) error {
+		opts.IncludeChildren = true
+		return nil
+	}
+}
+
+func WorkflowEntityWithRun() WorkflowEntityGetOption {
+	return func(opts *WorkflowEntityGetterOptions) error {
+		opts.IncludeRun = true
+		return nil
+	}
+}
+
+func ActivityEntityWithData() ActivityEntityGetOption {
+	return func(opts *ActivityEntityGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func SideEffectEntityWithData() SideEffectEntityGetOption {
+	return func(opts *SideEffectEntityGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func SagaEntityWithData() SagaEntityGetOption {
+	return func(opts *SagaEntityGetterOptions) error {
+		opts.IncludeData = true
+		return nil
 	}
 }
