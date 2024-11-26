@@ -755,6 +755,7 @@ type Database interface {
 	// Workflow Execution
 	AddWorkflowExecution(exec *WorkflowExecution) (int, error)
 	GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
+	GetWorkflowExecutions(entityID int) ([]*WorkflowExecution, error)
 	HasWorkflowExecution(id int) (bool, error)
 	GetWorkflowExecutionLatestByEntityID(entityID int) (*WorkflowExecution, error)
 	GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error
@@ -791,6 +792,7 @@ type Database interface {
 	AddActivityExecution(exec *ActivityExecution) (int, error)
 	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
 	HasActivityExecution(id int) (bool, error)
+	GetActivityExecutions(entityID int) ([]*ActivityExecution, error)
 	GetActivityExecutionLatestByEntityID(entityID int) (*ActivityExecution, error)
 	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
 	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
@@ -898,6 +900,7 @@ type Database interface {
 	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
 	// specific one, might refactor that
 	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
+	GetHierarchiesByParentEntity(parentEntityID int) ([]*Hierarchy, error)
 
 	// QUEUE-RELATED OPERATIONS
 	AddQueue(queue *Queue) (int, error)

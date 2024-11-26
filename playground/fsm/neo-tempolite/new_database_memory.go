@@ -1170,6 +1170,19 @@ func (db *MemoryDatabase) GetWorkflowExecution(id int, opts ...WorkflowExecution
 	return copyWorkflowExecution(exec), nil
 }
 
+func (db *MemoryDatabase) GetWorkflowExecutions(entityID int) ([]*WorkflowExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	executions := make([]*WorkflowExecution, 0)
+	for _, exec := range db.workflowExecutions {
+		if exec.EntityID == entityID {
+			executions = append(executions, copyWorkflowExecution(exec))
+		}
+	}
+	return executions, nil
+}
+
 func (db *MemoryDatabase) GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
@@ -1196,6 +1209,19 @@ func (db *MemoryDatabase) GetActivityExecution(id int, opts ...ActivityExecution
 	}
 
 	return copyActivityExecution(exec), nil
+}
+
+func (db *MemoryDatabase) GetActivityExecutions(entityID int) ([]*ActivityExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	executions := make([]*ActivityExecution, 0)
+	for _, exec := range db.activityExecutions {
+		if exec.EntityID == entityID {
+			executions = append(executions, copyActivityExecution(exec))
+		}
+	}
+	return executions, nil
 }
 
 func (db *MemoryDatabase) GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error) {
@@ -2074,6 +2100,20 @@ func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPro
 	}
 
 	return nil
+}
+
+func (db *MemoryDatabase) GetHierarchiesByParentEntity(parentEntityID int) ([]*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	hierarchies := make([]*Hierarchy, 0)
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID {
+			hierarchies = append(hierarchies, copyHierarchy(hierarchy))
+		}
+	}
+
+	return hierarchies, nil
 }
 
 func (db *MemoryDatabase) GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error) {
