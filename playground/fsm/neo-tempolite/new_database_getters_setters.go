@@ -335,16 +335,6 @@ func GetWorkflowDataInputs(inputs *[][]byte) WorkflowDataPropertyGetter {
 	}
 }
 
-func GetWorkflowDataAttempt(attempt *int) WorkflowDataPropertyGetter {
-	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("workflow data is nil")
-		}
-		*attempt = d.Attempt
-		return nil, nil
-	}
-}
-
 func SetWorkflowDataEntityID(entityID int) WorkflowDataPropertySetter {
 	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
 		if d == nil {
@@ -396,16 +386,6 @@ func SetWorkflowDataInputs(inputs [][]byte) WorkflowDataPropertySetter {
 			copy(inputCopy, input)
 			d.Inputs[i] = inputCopy
 		}
-		return nil, nil
-	}
-}
-
-func SetWorkflowDataAttempt(attempt int) WorkflowDataPropertySetter {
-	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("workflow data is nil")
-		}
-		d.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -809,16 +789,6 @@ func GetWorkflowExecutionError(errStr *string) WorkflowExecutionPropertyGetter {
 	}
 }
 
-func GetWorkflowExecutionAttempt(attempt *int) WorkflowExecutionPropertyGetter {
-	return func(e *WorkflowExecution) (WorkflowExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("workflow execution is nil")
-		}
-		*attempt = e.Attempt
-		return nil, nil
-	}
-}
-
 func SetWorkflowExecutionEntityID(entityID int) WorkflowExecutionPropertySetter {
 	return func(e *WorkflowExecution) (WorkflowExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -879,16 +849,6 @@ func SetWorkflowExecutionError(err string) WorkflowExecutionPropertySetter {
 	}
 }
 
-func SetWorkflowExecutionAttempt(attempt int) WorkflowExecutionPropertySetter {
-	return func(e *WorkflowExecution) (WorkflowExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("workflow execution is nil")
-		}
-		e.Attempt = attempt
-		return nil, nil
-	}
-}
-
 // ActivityData property getters/setters
 func GetActivityDataID(id *int) ActivityDataPropertyGetter {
 	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
@@ -906,36 +866,6 @@ func GetActivityDataEntityID(entityID *int) ActivityDataPropertyGetter {
 			return nil, errors.New("activity data is nil")
 		}
 		*entityID = d.EntityID
-		return nil, nil
-	}
-}
-
-func GetActivityDataTimeout(timeout *time.Duration) ActivityDataPropertyGetter {
-	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		*timeout = time.Duration(d.Timeout)
-		return nil, nil
-	}
-}
-
-func GetActivityDataMaxAttempts(maxAttempts *int) ActivityDataPropertyGetter {
-	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		*maxAttempts = d.MaxAttempts
-		return nil, nil
-	}
-}
-
-func GetActivityDataAttempt(attempt *int) ActivityDataPropertyGetter {
-	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		*attempt = d.Attempt
 		return nil, nil
 	}
 }
@@ -964,36 +894,6 @@ func SetActivityDataEntityID(entityID int) ActivityDataPropertySetter {
 			return nil, errors.New("activity data is nil")
 		}
 		d.EntityID = entityID
-		return nil, nil
-	}
-}
-
-func SetActivityDataTimeout(timeout time.Duration) ActivityDataPropertySetter {
-	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		d.Timeout = int64(timeout)
-		return nil, nil
-	}
-}
-
-func SetActivityDataMaxAttempts(maxAttempts int) ActivityDataPropertySetter {
-	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		d.MaxAttempts = maxAttempts
-		return nil, nil
-	}
-}
-
-func SetActivityDataAttempt(attempt int) ActivityDataPropertySetter {
-	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		d.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -1245,16 +1145,6 @@ func GetActivityExecutionError(errStr *string) ActivityExecutionPropertyGetter {
 	}
 }
 
-func GetActivityExecutionAttempt(attempt *int) ActivityExecutionPropertyGetter {
-	return func(e *ActivityExecution) (ActivityExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("activity execution is nil")
-		}
-		*attempt = e.Attempt
-		return nil, nil
-	}
-}
-
 func SetActivityExecutionEntityID(entityID int) ActivityExecutionPropertySetter {
 	return func(e *ActivityExecution) (ActivityExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -1311,16 +1201,6 @@ func SetActivityExecutionError(err string) ActivityExecutionPropertySetter {
 			return nil, errors.New("activity execution is nil")
 		}
 		e.Error = err
-		return nil, nil
-	}
-}
-
-func SetActivityExecutionAttempt(attempt int) ActivityExecutionPropertySetter {
-	return func(e *ActivityExecution) (ActivityExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("activity execution is nil")
-		}
-		e.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -1679,16 +1559,6 @@ func GetSagaExecutionError(errStr *string) SagaExecutionPropertyGetter {
 	}
 }
 
-func GetSagaExecutionAttempt(attempt *int) SagaExecutionPropertyGetter {
-	return func(e *SagaExecution) (SagaExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("saga execution is nil")
-		}
-		*attempt = e.Attempt
-		return nil, nil
-	}
-}
-
 func SetSagaExecutionEntityID(entityID int) SagaExecutionPropertySetter {
 	return func(e *SagaExecution) (SagaExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -1745,16 +1615,6 @@ func SetSagaExecutionError(err string) SagaExecutionPropertySetter {
 			return nil, errors.New("saga execution is nil")
 		}
 		e.Error = err
-		return nil, nil
-	}
-}
-
-func SetSagaExecutionAttempt(attempt int) SagaExecutionPropertySetter {
-	return func(e *SagaExecution) (SagaExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("saga execution is nil")
-		}
-		e.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -2122,16 +1982,6 @@ func GetSideEffectExecutionError(errStr *string) SideEffectExecutionPropertyGett
 	}
 }
 
-func GetSideEffectExecutionAttempt(attempt *int) SideEffectExecutionPropertyGetter {
-	return func(e *SideEffectExecution) (SideEffectExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("side effect execution is nil")
-		}
-		*attempt = e.Attempt
-		return nil, nil
-	}
-}
-
 func SetSideEffectExecutionEntityID(entityID int) SideEffectExecutionPropertySetter {
 	return func(e *SideEffectExecution) (SideEffectExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -2188,16 +2038,6 @@ func SetSideEffectExecutionError(err string) SideEffectExecutionPropertySetter {
 			return nil, errors.New("side effect execution is nil")
 		}
 		e.Error = err
-		return nil, nil
-	}
-}
-
-func SetSideEffectExecutionAttempt(attempt int) SideEffectExecutionPropertySetter {
-	return func(e *SideEffectExecution) (SideEffectExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("side effect execution is nil")
-		}
-		e.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -2370,6 +2210,7 @@ func SetQueueEntities(entities []*WorkflowEntity) QueuePropertySetter {
 }
 
 // Hierarchy property getters/setters
+
 func GetHierarchyID(id *int) HierarchyPropertyGetter {
 	return func(h *Hierarchy) (HierarchyPropertyGetterOption, error) {
 		if h == nil {
@@ -2848,16 +2689,6 @@ func GetBaseExecutionUpdatedAt(updatedAt *time.Time) BaseExecutionPropertyGetter
 	}
 }
 
-func GetBaseExecutionAttempt(attempt *int) BaseExecutionPropertyGetter {
-	return func(e *BaseExecution) (BaseExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base execution is nil")
-		}
-		*attempt = e.Attempt
-		return nil, nil
-	}
-}
-
 func SetBaseExecutionEntityID(entityID int) BaseExecutionPropertySetter {
 	return func(e *BaseExecution) (BaseExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -2924,16 +2755,6 @@ func SetBaseExecutionUpdatedAt(updatedAt time.Time) BaseExecutionPropertySetter 
 			return nil, errors.New("base execution is nil")
 		}
 		e.UpdatedAt = updatedAt
-		return nil, nil
-	}
-}
-
-func SetBaseExecutionAttempt(attempt int) BaseExecutionPropertySetter {
-	return func(e *BaseExecution) (BaseExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base execution is nil")
-		}
-		e.Attempt = attempt
 		return nil, nil
 	}
 }
@@ -3077,18 +2898,6 @@ func GetActivityDataOutput(output *[][]byte) ActivityDataPropertyGetter {
 	}
 }
 
-func GetActivityDataScheduledFor(scheduledFor *time.Time) ActivityDataPropertyGetter {
-	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		if d.ScheduledFor != nil {
-			*scheduledFor = *d.ScheduledFor
-		}
-		return nil, nil
-	}
-}
-
 func SetActivityDataOutput(output [][]byte) ActivityDataPropertySetter {
 	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
 		if d == nil {
@@ -3100,16 +2909,6 @@ func SetActivityDataOutput(output [][]byte) ActivityDataPropertySetter {
 			copy(outputCopy, out)
 			d.Output[i] = outputCopy
 		}
-		return nil, nil
-	}
-}
-
-func SetActivityDataScheduledFor(scheduledFor time.Time) ActivityDataPropertySetter {
-	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("activity data is nil")
-		}
-		d.ScheduledFor = &scheduledFor
 		return nil, nil
 	}
 }

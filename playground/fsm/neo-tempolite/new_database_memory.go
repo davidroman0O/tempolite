@@ -2038,6 +2038,19 @@ func (db *MemoryDatabase) GetHierarchyProperties(id int, getters ...HierarchyPro
 	return nil
 }
 
+func (db *MemoryDatabase) GetHierarchyByParentEntity(parentEntityID int, childStepID string, specificType EntityType) (*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID && hierarchy.ChildStepID == childStepID && hierarchy.ChildType == specificType {
+			return copyHierarchy(hierarchy), nil
+		}
+	}
+
+	return nil, ErrHierarchyNotFound
+}
+
 func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -2842,4 +2855,27 @@ func (db *MemoryDatabase) GetWorkflowExecutionLatestByEntityID(entityID int) (*W
 	}
 
 	return copyWorkflowExecution(latestExec), nil
+}
+
+func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID int) (*ActivityExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var latestExec *ActivityExecution
+	var latestTime time.Time
+
+	for _, exec := range db.activityExecutions {
+		if exec.EntityID == entityID {
+			if latestExec == nil || exec.CreatedAt.After(latestTime) {
+				latestExec = exec
+				latestTime = exec.CreatedAt
+			}
+		}
+	}
+
+	if latestExec == nil {
+		return nil, ErrActivityExecutionNotFound
+	}
+
+	return copyActivityExecution(latestExec), nil
 }

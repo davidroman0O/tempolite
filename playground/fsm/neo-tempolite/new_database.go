@@ -104,6 +104,7 @@ const (
 	ExecutionStatusCancelled   ExecutionStatus = "Cancelled"
 	ExecutionStatusCompleted   ExecutionStatus = "Completed"
 	ExecutionStatusFailed      ExecutionStatus = "Failed"
+	ExecutionStatusPanicked    ExecutionStatus = "Panicked"
 	ExecutionStatusCompensated ExecutionStatus = "Compensated"
 )
 
@@ -209,7 +210,15 @@ type VersionSetterOptions struct {
 	// Add more options as needed
 }
 
+type hierarchyTripleIdentity struct {
+	ParentEntityID int        // if a parent
+	ChildStepID    string     // got this child step id
+	SpecificType   EntityType // of this type
+	// then we should have a unique hierarchy, therefore might find a result
+}
+
 type HierarchyGetterOptions struct {
+	ChildrenEntityOf *hierarchyTripleIdentity
 	// Add flags as needed
 }
 
@@ -511,7 +520,8 @@ type RetryPolicy struct {
 }
 
 type RetryState struct {
-	Attempts int `json:"attempts"`
+	Attempts int   `json:"attempts"`
+	Timeout  int64 `json:"timeout,omitempty"`
 }
 
 type retryPolicyInternal struct {
@@ -604,19 +614,14 @@ type WorkflowData struct {
 	Paused    bool     `json:"paused"`
 	Resumable bool     `json:"resumable"`
 	Inputs    [][]byte `json:"inputs,omitempty"`
-	Attempt   int      `json:"attempt"`
 	IsRoot    bool     `json:"is_root"`
 }
 
 type ActivityData struct {
-	ID           int        `json:"id,omitempty"`
-	EntityID     int        `json:"entity_id,omitempty"`
-	Timeout      int64      `json:"timeout,omitempty"`
-	MaxAttempts  int        `json:"max_attempts"`
-	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
-	Inputs       [][]byte   `json:"inputs,omitempty"`
-	Output       [][]byte   `json:"output,omitempty"`
-	Attempt      int        `json:"attempt"`
+	ID       int      `json:"id,omitempty"`
+	EntityID int      `json:"entity_id,omitempty"`
+	Inputs   [][]byte `json:"inputs,omitempty"`
+	Output   [][]byte `json:"output,omitempty"`
 }
 
 type SagaData struct {
@@ -673,7 +678,6 @@ type BaseExecution struct {
 	Error       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	Attempt     int // TODO: why do i need that already?
 }
 
 // Execution Data structures
@@ -786,6 +790,7 @@ type Database interface {
 	AddActivityExecution(exec *ActivityExecution) (int, error)
 	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
 	HasActivityExecution(id int) (bool, error)
+	GetActivityExecutionLatestByEntityID(entityID int) (*ActivityExecution, error)
 	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
 	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
 
@@ -885,6 +890,7 @@ type Database interface {
 	// HIERARCHY-RELATED OPERATIONS
 	AddHierarchy(hierarchy *Hierarchy) (int, error)
 	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
+	GetHierarchyByParentEntity(parentEntityID int, childStepID string, specificType EntityType) (*Hierarchy, error)
 	HasHierarchy(id int) (bool, error)
 	UpdateHierarchy(hierarchy *Hierarchy) error
 	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
@@ -906,7 +912,7 @@ type Database interface {
 // RetryPolicy helper functions
 func DefaultRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{
-		MaxAttempts:        1,
+		MaxAttempts:        0, // 0 means no retries
 		InitialInterval:    time.Second,
 		BackoffCoefficient: 2.0,
 		MaxInterval:        5 * time.Minute,
@@ -915,7 +921,7 @@ func DefaultRetryPolicy() *RetryPolicy {
 
 func DefaultRetryPolicyInternal() *retryPolicyInternal {
 	return &retryPolicyInternal{
-		MaxAttempts:        1,
+		MaxAttempts:        0, // 0 means no retries
 		InitialInterval:    time.Second.Nanoseconds(),
 		BackoffCoefficient: 2.0,
 		MaxInterval:        (5 * time.Minute).Nanoseconds(),
@@ -1250,11 +1256,6 @@ func copyActivityData(data *ActivityData) *ActivityData {
 			copy(outputCopy, output)
 			c.Output[i] = outputCopy
 		}
-	}
-
-	if data.ScheduledFor != nil {
-		scheduledForCopy := *data.ScheduledFor
-		c.ScheduledFor = &scheduledForCopy
 	}
 
 	return &c
