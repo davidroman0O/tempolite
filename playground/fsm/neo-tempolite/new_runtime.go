@@ -1500,7 +1500,6 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 			wi.workflowID,
 			SetWorkflowEntityStatus(StatusPaused),
 		); err != nil {
-		wi.mu.Unlock()
 		return fmt.Errorf("failed to set workflow entity status: %w", err)
 	}
 
@@ -1532,7 +1531,6 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 			wi.workflowID,
 			SetWorkflowEntityStatus(StatusPaused),
 		); err != nil {
-		wi.mu.Unlock()
 		return fmt.Errorf("failed to set workflow entity status: %w", err)
 	}
 
@@ -1541,7 +1539,6 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 			wi.workflowID,
 			SetWorkflowDataPaused(true),
 		); err != nil {
-		wi.mu.Unlock()
 		return fmt.Errorf("failed to set workflow data paused: %w", err)
 	}
 
