@@ -272,6 +272,9 @@ func GetWorkflowDataContinuedFrom(continuedFrom *int) WorkflowDataPropertyGetter
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
 		}
+		if d.ContinuedFrom == nil {
+			return nil, nil
+		}
 		*continuedFrom = *d.ContinuedFrom
 		return nil, nil
 	}

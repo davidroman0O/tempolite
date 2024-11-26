@@ -1,6 +1,8 @@
 package tempolite
 
 import (
+	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
@@ -136,6 +138,76 @@ func NewMemoryDatabase() *MemoryDatabase {
 	db.queueNames["default"] = 1
 
 	return db
+}
+
+func (db *MemoryDatabase) SaveAsJSON(path string) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	data := struct {
+		Runs                    map[int]*Run
+		Versions                map[int]*Version
+		Hierarchies             map[int]*Hierarchy
+		Queues                  map[int]*Queue
+		QueueNames              map[string]int
+		WorkflowEntities        map[int]*WorkflowEntity
+		ActivityEntities        map[int]*ActivityEntity
+		SagaEntities            map[int]*SagaEntity
+		SideEffectEntities      map[int]*SideEffectEntity
+		WorkflowData            map[int]*WorkflowData
+		ActivityData            map[int]*ActivityData
+		SagaData                map[int]*SagaData
+		SideEffectData          map[int]*SideEffectData
+		WorkflowExecutions      map[int]*WorkflowExecution
+		ActivityExecutions      map[int]*ActivityExecution
+		SagaExecutions          map[int]*SagaExecution
+		SideEffectExecutions    map[int]*SideEffectExecution
+		WorkflowExecutionData   map[int]*WorkflowExecutionData
+		ActivityExecutionData   map[int]*ActivityExecutionData
+		SagaExecutionData       map[int]*SagaExecutionData
+		SideEffectExecutionData map[int]*SideEffectExecutionData
+		EntityToWorkflow        map[int]int
+		WorkflowToChildren      map[int]map[EntityType][]int
+		WorkflowToVersion       map[int][]int
+		WorkflowToQueue         map[int]int
+		QueueToWorkflows        map[int][]int
+		RunToWorkflows          map[int][]int
+	}{
+		Runs:                    db.runs,
+		Versions:                db.versions,
+		Hierarchies:             db.hierarchies,
+		Queues:                  db.queues,
+		QueueNames:              db.queueNames,
+		WorkflowEntities:        db.workflowEntities,
+		ActivityEntities:        db.activityEntities,
+		SagaEntities:            db.sagaEntities,
+		SideEffectEntities:      db.sideEffectEntities,
+		WorkflowData:            db.workflowData,
+		ActivityData:            db.activityData,
+		SagaData:                db.sagaData,
+		SideEffectData:          db.sideEffectData,
+		WorkflowExecutions:      db.workflowExecutions,
+		ActivityExecutions:      db.activityExecutions,
+		SagaExecutions:          db.sagaExecutions,
+		SideEffectExecutions:    db.sideEffectExecutions,
+		WorkflowExecutionData:   db.workflowExecutionData,
+		ActivityExecutionData:   db.activityExecutionData,
+		SagaExecutionData:       db.sagaExecutionData,
+		SideEffectExecutionData: db.sideEffectExecutionData,
+		EntityToWorkflow:        db.entityToWorkflow,
+		WorkflowToChildren:      db.workflowToChildren,
+		WorkflowToVersion:       db.workflowToVersion,
+		WorkflowToQueue:         db.workflowToQueue,
+		QueueToWorkflows:        db.queueToWorkflows,
+		RunToWorkflows:          db.runToWorkflows,
+	}
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, jsonData, 0644)
 }
 
 func (db *MemoryDatabase) AddRun(run *Run) (int, error) {

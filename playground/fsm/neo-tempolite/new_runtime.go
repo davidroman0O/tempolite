@@ -40,7 +40,11 @@ type Future interface {
 	setEntityID(entityID int)
 	setError(err error)
 	setResult(results []interface{})
+	setContinueAs(continueAs int)
 	WorkflowID() int
+	ContinuedAsNew() bool
+	ContinuedAs() int
+	IsPaused() bool
 }
 
 // TransactionContext provides context for transaction execution in Sagas.
@@ -233,6 +237,27 @@ func (ctx WorkflowContext) checkPause() error {
 	return nil
 }
 
+// ContinueAsNew allows a workflow to continue as new with the given function and arguments.
+func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...interface{}) error {
+
+	if options == nil {
+		options = &WorkflowOptions{}
+	}
+
+	if options.Queue == "" {
+		options.Queue = ctx.options.Queue
+	}
+
+	if options.RetryPolicy == nil {
+		options.RetryPolicy = DefaultRetryPolicy()
+	}
+
+	return &ContinueAsNewError{
+		Options: options,
+		Args:    args,
+	}
+}
+
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
 	ctx      context.Context
@@ -256,8 +281,6 @@ type WorkflowInstance struct {
 	executionID int
 	dataID      int
 	queueID     int
-
-	continueAsNew *ContinueAsNewError
 
 	parentExecutionID int
 	parentEntityID    int
@@ -359,6 +382,7 @@ type RuntimeFuture struct {
 	done       chan struct{}
 	workflowID int
 	once       sync.Once
+	continueAs int
 }
 
 func (f *RuntimeFuture) WorkflowID() int {
@@ -369,6 +393,31 @@ func NewRuntimeFuture() *RuntimeFuture {
 	return &RuntimeFuture{
 		done: make(chan struct{}),
 	}
+}
+
+func (f *RuntimeFuture) ContinuedAs() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.continueAs
+}
+
+func (f *RuntimeFuture) ContinuedAsNew() bool {
+	return f.ContinuedAs() != 0
+}
+
+func (f *RuntimeFuture) setContinueAs(continueAs int) {
+	f.mu.Lock()
+	f.continueAs = continueAs
+	f.mu.Unlock()
+}
+
+func (f *RuntimeFuture) IsPaused() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if errors.Is(f.err, ErrPaused) {
+		return true
+	}
+	return false
 }
 
 func (f *RuntimeFuture) setEntityID(entityID int) {
@@ -879,11 +928,12 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 	o.addWorkflowInstance(instance)
 
 	// We don't start the FSM within the same goroutine as the caller
-	if isRoot {
-		go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
-	} else {
-		instance.Start(inputs) // sub-workflow directly starts
-	}
+	// if isRoot {
+	// 	go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
+	// 	} else {
+	// 		instance.Start(inputs) // sub-workflow directly starts
+	// 	}
+	go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
 
 	return future, nil
 }
@@ -1102,6 +1152,14 @@ func (wi *WorkflowInstance) executeWithRetry(inputs []interface{}) error {
 			return nil
 		}
 
+		var continueAsNewErr *ContinueAsNewError
+		var ok bool
+		if continueAsNewErr, ok = workflowErr.(*ContinueAsNewError); ok {
+			log.Printf("Running workflow returned a ContinueAsNew")
+			// We treat it as normal completion, return nil to proceed
+			workflowErr = nil
+		}
+
 		if workflowErr == nil {
 			// Success
 			wi.mu.Lock()
@@ -1111,7 +1169,7 @@ func (wi *WorkflowInstance) executeWithRetry(inputs []interface{}) error {
 				return fmt.Errorf("failed to set workflow execution status: %w", err)
 			}
 
-			wi.fsm.Fire(TriggerComplete, ouputs)
+			wi.fsm.Fire(TriggerComplete, ouputs, continueAsNewErr)
 			log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) completed successfully", wi.stepID, wi.workflowID, wi.executionID)
 			wi.mu.Unlock()
 			return nil
@@ -1252,30 +1310,32 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs []interfa
 
 	errInterface := results[numOut-1].Interface()
 
+	var continueAsNewErr *ContinueAsNewError
+	var ok bool
+	if continueAsNewErr, ok = errInterface.(*ContinueAsNewError); ok {
+		log.Printf("Workflow requested ContinueAsNew")
+		// We treat it as normal completion, return nil to proceed
+		errInterface = nil
+	}
+
 	if errInterface != nil {
-		if continueErr, ok := errInterface.(*ContinueAsNewError); ok {
-			log.Printf("Workflow requested ContinueAsNew")
-			// We treat it as normal completion, return nil to proceed
-			return nil, continueErr
-		} else {
-			log.Printf("Workflow returned error: %v", errInterface)
+		log.Printf("Workflow returned error: %v", errInterface)
 
-			realError := errInterface.(error)
+		realError := errInterface.(error)
 
-			// Update execution error
-			if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionError(realError.Error())); err != nil {
-				wi.mu.Unlock()
-				return nil, fmt.Errorf("failed to set workflow execution status: %w", err)
-			}
-
-			// Emptied the output data
-			if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
-				wi.mu.Unlock()
-				return nil, fmt.Errorf("failed to set workflow execution data outputs: %w", err)
-			}
-
-			return nil, realError
+		// Update execution error
+		if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionError(realError.Error())); err != nil {
+			wi.mu.Unlock()
+			return nil, fmt.Errorf("failed to set workflow execution status: %w", err)
 		}
+
+		// Emptied the output data
+		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
+			wi.mu.Unlock()
+			return nil, fmt.Errorf("failed to set workflow execution data outputs: %w", err)
+		}
+
+		return nil, realError
 	} else {
 		outputs := []interface{}{}
 		if numOut > 1 {
@@ -1299,18 +1359,23 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs []interfa
 			return nil, fmt.Errorf("failed to set workflow execution data outputs: %w", err)
 		}
 
-		return outputs, nil
+		return outputs, continueAsNewErr
 	}
 }
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) error {
 	log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called", wi.stepID, wi.workflowID)
 
-	if len(args) != 1 {
-		return fmt.Errorf("WorkfloInstance onCompleted expected 1 argument, got %d", len(args))
+	if len(args) != 2 {
+		return fmt.Errorf("WorkfloInstance onCompleted expected 2 argument, got %d", len(args))
 	}
 
 	outputs := args[0].([]interface{})
+	var continueAsNewErr *ContinueAsNewError
+	var ok bool
+	if continueAsNewErr, ok = args[1].(*ContinueAsNewError); ok {
+		log.Printf("WorkflowInstance %s (Entity ID: %d) onCompleted called with ContinueAsNew", wi.stepID, wi.workflowID)
+	}
 
 	var err error
 	var isRoot bool
@@ -1322,14 +1387,14 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 	// Handle ContinueAsNew
 	// We re-create a new workflow entity to that related to that workflow
 	// It will run on another worker on it's own, we are use preparing it
-	if wi.continueAsNew != nil {
+	if continueAsNewErr != nil {
 
 		wi.mu.Lock()
 		handler := wi.handler
 		wi.mu.Unlock()
 
 		// Convert inputs to [][]byte
-		inputBytes, err := convertInputsForSerialization(wi.continueAsNew.Args)
+		inputBytes, err := convertInputsForSerialization(continueAsNewErr.Args)
 		if err != nil {
 			log.Printf("Error converting inputs in ContinueAsNew: %v", err)
 			if wi.future != nil {
@@ -1339,7 +1404,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 		}
 
 		// Convert API RetryPolicy to internal retry policy
-		internalRetryPolicy := ToInternalRetryPolicy(wi.continueAsNew.Options.RetryPolicy)
+		internalRetryPolicy := ToInternalRetryPolicy(continueAsNewErr.Options.RetryPolicy)
 
 		copyID := wi.workflowID
 
@@ -1374,78 +1439,8 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 			return err
 		}
 
-		var workflowExecutionID int
-		if workflowExecutionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
-			BaseExecution: BaseExecution{
-				Status:   ExecutionStatusPending,
-				EntityID: workflowID,
-			},
-			WorkflowExecutionData: &WorkflowExecutionData{},
-		}); err != nil {
-			log.Printf("Error adding workflow execution: %v", err)
-			return err
-		}
-
-		// if !isRoot {
-		if _, err = wi.db.
-			AddHierarchy(&Hierarchy{
-				RunID:             wi.runID,
-				ParentEntityID:    wi.parentEntityID,
-				ParentExecutionID: wi.parentExecutionID,
-				ChildEntityID:     workflowID,
-				ChildExecutionID:  workflowExecutionID,
-				ParentStepID:      wi.stepID,
-				ChildStepID:       wi.stepID, // both use the same since it's a continue as new
-				ParentType:        EntityWorkflow,
-				ChildType:         EntityWorkflow,
-			}); err != nil {
-			log.Printf("Error adding hierarchy: %v", err)
-			return err
-		}
-		// }
-
-		// var queueName string = DefaultQueue
-		// if err = wi.db.GetQueueProperties(wi.queueID, GetQueueName(&queueName)); err != nil {
-		// 	log.Printf("Error getting queue properties: %v", err)
-		// 	return err
-		// }
-
-		// // Create a new WorkflowInstance
-		// newInstance := &WorkflowInstance{
-		// 	ctx:      wi.ctx,
-		// 	db:       wi.db,
-		// 	tracker:  wi.tracker,
-		// 	state:    wi.state,
-		// 	registry: wi.registry,
-		// 	debug:    wi.debug,
-
-		// 	inputs: wi.continueAsNew.Args,
-		// 	stepID: wi.stepID,
-
-		// 	runID:       wi.runID,
-		// 	workflowID:  workflowID,
-		// 	executionID: workflowExecutionID,
-		// 	queueID:     wi.queueID,
-
-		// 	parentStepID:      wi.stepID,
-		// 	parentEntityID:    wi.workflowID,
-		// 	parentExecutionID: wi.executionID,
-
-		// 	handler: handler,
-
-		// 	options: WorkflowOptions{
-		// 		RetryPolicy: &RetryPolicy{
-		// 			MaxAttempts:        internalRetryPolicy.MaxAttempts,
-		// 			InitialInterval:    time.Duration(internalRetryPolicy.InitialInterval),
-		// 			BackoffCoefficient: internalRetryPolicy.BackoffCoefficient,
-		// 			MaxInterval:        time.Duration(internalRetryPolicy.MaxInterval),
-		// 		},
-		// 		Queue: queueName,
-		// 		// VersionOverrides: , // TODO: implement in WorkflowOption and save it
-		// 	},
-		// }
-
-		return nil
+		// we alert the the workflow instance that we are continuing as new
+		wi.future.setContinueAs(workflowID)
 	}
 
 	// Normal completion

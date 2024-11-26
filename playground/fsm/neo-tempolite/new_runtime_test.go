@@ -390,3 +390,74 @@ func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
 		}
 	}
 }
+
+func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	var counterContinueAsNew atomic.Int32
+
+	wrfl := func(ctx WorkflowContext) (int, error) {
+		fmt.Println("Hello, World!", counterContinueAsNew.Load())
+		if counterContinueAsNew.Load() == 0 {
+			counterContinueAsNew.Add(1)
+			return 42, ctx.ContinueAsNew(nil)
+		}
+		return 48, nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // which is the default already
+		},
+	})
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	firstRes := 0
+
+	if err := future.Get(&firstRes); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+
+	if !future.ContinuedAsNew() {
+		t.Fatalf("expected true, got false")
+	}
+
+	if firstRes != 42 {
+		t.Fatalf("expected 42, got %d", firstRes)
+	}
+
+	// The orchestrator provide a function to allow you to execute any entity
+	// A workflow continued as new is just a new workflow to execute
+	future, err := o.ExecuteWithEntity(future.ContinuedAs())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	secondRes := 0
+
+	if err := future.Get(&secondRes); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+
+	if secondRes != 48 {
+		t.Fatalf("expected 48, got %d", secondRes)
+	}
+
+	if future.ContinuedAsNew() {
+		t.Fatalf("expected false, got true")
+	}
+
+	db.SaveAsJSON("continue_as_new.json")
+}
