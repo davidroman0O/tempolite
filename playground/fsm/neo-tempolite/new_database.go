@@ -608,13 +608,14 @@ type BaseEntity struct {
 
 // Entity Data structures
 type WorkflowData struct {
-	ID        int      `json:"id,omitempty"`
-	EntityID  int      `json:"entity_id,omitempty"`
-	Duration  string   `json:"duration,omitempty"`
-	Paused    bool     `json:"paused"`
-	Resumable bool     `json:"resumable"`
-	Inputs    [][]byte `json:"inputs,omitempty"`
-	IsRoot    bool     `json:"is_root"`
+	ID            int      `json:"id,omitempty"`
+	EntityID      int      `json:"entity_id,omitempty"`
+	Duration      string   `json:"duration,omitempty"`
+	Paused        bool     `json:"paused"`
+	Resumable     bool     `json:"resumable"`
+	Inputs        [][]byte `json:"inputs,omitempty"`
+	IsRoot        bool     `json:"is_root"`
+	ContinuedFrom *int     `json:"continued_from,omitempty"`
 }
 
 type ActivityData struct {
@@ -912,7 +913,7 @@ type Database interface {
 // RetryPolicy helper functions
 func DefaultRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{
-		MaxAttempts:        0, // 0 means no retries
+		MaxAttempts:        1, // 1 means no retries
 		InitialInterval:    time.Second,
 		BackoffCoefficient: 2.0,
 		MaxInterval:        5 * time.Minute,
@@ -921,11 +922,28 @@ func DefaultRetryPolicy() *RetryPolicy {
 
 func DefaultRetryPolicyInternal() *retryPolicyInternal {
 	return &retryPolicyInternal{
-		MaxAttempts:        0, // 0 means no retries
+		MaxAttempts:        1, // 1 means no retries
 		InitialInterval:    time.Second.Nanoseconds(),
 		BackoffCoefficient: 2.0,
 		MaxInterval:        (5 * time.Minute).Nanoseconds(),
 	}
+}
+
+func getRetryPolicyOrDefault(options *RetryPolicy) (maxAttempts int, initialInterval time.Duration, backoffCoefficient float64, maxInterval time.Duration) {
+	if options != nil {
+		rp := options
+		maxAttempts = rp.MaxAttempts
+		initialInterval = rp.InitialInterval
+		backoffCoefficient = rp.BackoffCoefficient
+		maxInterval = rp.MaxInterval
+	} else {
+		def := DefaultRetryPolicy()
+		maxAttempts = def.MaxAttempts
+		initialInterval = def.InitialInterval
+		backoffCoefficient = def.BackoffCoefficient
+		maxInterval = def.MaxInterval
+	}
+	return
 }
 
 func ToInternalRetryPolicy(rp *RetryPolicy) *retryPolicyInternal {

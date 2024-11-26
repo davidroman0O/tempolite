@@ -267,6 +267,16 @@ func GetWorkflowDataID(id *int) WorkflowDataPropertyGetter {
 	}
 }
 
+func GetWorkflowDataContinuedFrom(continuedFrom *int) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		*continuedFrom = d.ContinuedFrom
+		return nil, nil
+	}
+}
+
 func GetWorkflowDataEntityID(entityID *int) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
@@ -341,6 +351,16 @@ func SetWorkflowDataEntityID(entityID int) WorkflowDataPropertySetter {
 			return nil, errors.New("workflow data is nil")
 		}
 		d.EntityID = entityID
+		return nil, nil
+	}
+}
+
+func SetWorkflowDataContinuedFrom(continuedFrom int) WorkflowDataPropertySetter {
+	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		d.ContinuedFrom = continuedFrom
 		return nil, nil
 	}
 }
