@@ -654,10 +654,8 @@ func GetWorkflowEntityRetryPolicy(policy *RetryPolicy) WorkflowEntityPropertyGet
 			return nil, errors.New("workflow entity is nil")
 		}
 		*policy = RetryPolicy{
-			MaxAttempts:        e.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(e.RetryPolicy.InitialInterval),
-			BackoffCoefficient: e.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(e.RetryPolicy.MaxInterval),
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
 		}
 		return nil, nil
 	}
@@ -986,10 +984,8 @@ func GetActivityEntityRetryPolicy(policy *RetryPolicy) ActivityEntityPropertyGet
 			return nil, errors.New("activity entity is nil")
 		}
 		*policy = RetryPolicy{
-			MaxAttempts:        e.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(e.RetryPolicy.InitialInterval),
-			BackoffCoefficient: e.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(e.RetryPolicy.MaxInterval),
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
 		}
 		return nil, nil
 	}
@@ -1404,10 +1400,8 @@ func GetSagaEntityRetryPolicy(policy *RetryPolicy) SagaEntityPropertyGetter {
 			return nil, errors.New("saga entity is nil")
 		}
 		*policy = RetryPolicy{
-			MaxAttempts:        e.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(e.RetryPolicy.InitialInterval),
-			BackoffCoefficient: e.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(e.RetryPolicy.MaxInterval),
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
 		}
 		return nil, nil
 	}
@@ -1826,10 +1820,8 @@ func GetSideEffectEntityRetryPolicy(policy *RetryPolicy) SideEffectEntityPropert
 			return nil, errors.New("side effect entity is nil")
 		}
 		*policy = RetryPolicy{
-			MaxAttempts:        e.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(e.RetryPolicy.InitialInterval),
-			BackoffCoefficient: e.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(e.RetryPolicy.MaxInterval),
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
 		}
 		return nil, nil
 	}
@@ -2511,10 +2503,8 @@ func GetBaseEntityRetryPolicy(policy *RetryPolicy) BaseEntityPropertyGetter {
 			return nil, errors.New("base entity is nil")
 		}
 		*policy = RetryPolicy{
-			MaxAttempts:        e.RetryPolicy.MaxAttempts,
-			InitialInterval:    time.Duration(e.RetryPolicy.InitialInterval),
-			BackoffCoefficient: e.RetryPolicy.BackoffCoefficient,
-			MaxInterval:        time.Duration(e.RetryPolicy.MaxInterval),
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
 		}
 		return nil, nil
 	}
@@ -3017,5 +3007,89 @@ func SagaEntityWithData() SagaEntityGetOption {
 	return func(opts *SagaEntityGetterOptions) error {
 		opts.IncludeData = true
 		return nil
+	}
+}
+
+// WorkflowExecution StackTrace getters/setters
+func GetWorkflowExecutionStackTrace(stackTrace **string) WorkflowExecutionPropertyGetter {
+	return func(e *WorkflowExecution) (WorkflowExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("workflow execution is nil")
+		}
+		*stackTrace = e.StackTrace
+		return nil, nil
+	}
+}
+
+func SetWorkflowExecutionStackTrace(stackTrace string) WorkflowExecutionPropertySetter {
+	return func(e *WorkflowExecution) (WorkflowExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("workflow execution is nil")
+		}
+		e.StackTrace = &stackTrace
+		return nil, nil
+	}
+}
+
+// ActivityExecution StackTrace getters/setters
+func GetActivityExecutionStackTrace(stackTrace **string) ActivityExecutionPropertyGetter {
+	return func(e *ActivityExecution) (ActivityExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("activity execution is nil")
+		}
+		*stackTrace = e.StackTrace
+		return nil, nil
+	}
+}
+
+func SetActivityExecutionStackTrace(stackTrace string) ActivityExecutionPropertySetter {
+	return func(e *ActivityExecution) (ActivityExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("activity execution is nil")
+		}
+		e.StackTrace = &stackTrace
+		return nil, nil
+	}
+}
+
+// SideEffectExecution StackTrace getters/setters
+func GetSideEffectExecutionStackTrace(stackTrace **string) SideEffectExecutionPropertyGetter {
+	return func(e *SideEffectExecution) (SideEffectExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("side effect execution is nil")
+		}
+		*stackTrace = e.StackTrace
+		return nil, nil
+	}
+}
+
+func SetSideEffectExecutionStackTrace(stackTrace string) SideEffectExecutionPropertySetter {
+	return func(e *SideEffectExecution) (SideEffectExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("side effect execution is nil")
+		}
+		e.StackTrace = &stackTrace
+		return nil, nil
+	}
+}
+
+// SagaExecution StackTrace getters/setters
+func GetSagaExecutionStackTrace(stackTrace **string) SagaExecutionPropertyGetter {
+	return func(e *SagaExecution) (SagaExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("saga execution is nil")
+		}
+		*stackTrace = e.StackTrace
+		return nil, nil
+	}
+}
+
+func SetSagaExecutionStackTrace(stackTrace string) SagaExecutionPropertySetter {
+	return func(e *SagaExecution) (SagaExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("saga execution is nil")
+		}
+		e.StackTrace = &stackTrace
+		return nil, nil
 	}
 }

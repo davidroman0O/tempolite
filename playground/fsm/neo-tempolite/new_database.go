@@ -39,6 +39,7 @@ const (
 	StatePaused        state = "Paused"
 	StateTransactions  state = "Transactions"
 	StateCompensations state = "Compensations"
+	StateFinalize      state = "Finalize"
 )
 
 type trigger string
@@ -50,12 +51,27 @@ const (
 	TriggerPause      trigger = "Pause"
 	TriggerResume     trigger = "Resume"
 	TriggerCompensate trigger = "Compensate"
+	TriggerFinalize   trigger = "Finalize"
 )
 
 // Core types and constants remain the same
 var DefaultVersion int = 0
 
 var DefaultQueue string = "default"
+
+type WorkflowOutput struct {
+	Outputs              []interface{}
+	ContinueAsNewOptions *WorkflowOptions
+	ContinueAsNewArgs    []interface{}
+	Paused               bool
+	StrackTrace          *string
+}
+
+type ActivityOutput struct {
+	Outputs     []interface{}
+	StrackTrace *string
+	Paused      bool
+}
 
 // Status and Type enums remain the same as before
 type RunStatus string
@@ -104,7 +120,6 @@ const (
 	ExecutionStatusCancelled   ExecutionStatus = "Cancelled"
 	ExecutionStatusCompleted   ExecutionStatus = "Completed"
 	ExecutionStatusFailed      ExecutionStatus = "Failed"
-	ExecutionStatusPanicked    ExecutionStatus = "Panicked"
 	ExecutionStatusCompensated ExecutionStatus = "Compensated"
 )
 
@@ -505,7 +520,7 @@ type ContinueAsNewError struct {
 	Args    []interface{}
 }
 
-func (e *ContinueAsNewError) Error() string {
+func (e ContinueAsNewError) Error() string {
 	return "workflow is continuing as new"
 }
 
@@ -513,22 +528,18 @@ var ErrPaused = errors.New("execution paused")
 
 // RetryPolicy and state
 type RetryPolicy struct {
-	MaxAttempts        int
-	InitialInterval    time.Duration
-	BackoffCoefficient float64
-	MaxInterval        time.Duration
+	MaxAttempts uint64
+	MaxInterval time.Duration
 }
 
 type RetryState struct {
-	Attempts int   `json:"attempts"`
-	Timeout  int64 `json:"timeout,omitempty"`
+	Attempts uint64 `json:"attempts"`
+	Timeout  int64  `json:"timeout,omitempty"`
 }
 
 type retryPolicyInternal struct {
-	MaxAttempts        int     `json:"max_attempts"`
-	InitialInterval    int64   `json:"initial_interval"`
-	BackoffCoefficient float64 `json:"backoff_coefficient"`
-	MaxInterval        int64   `json:"max_interval"`
+	MaxAttempts uint64 `json:"max_attempts"`
+	MaxInterval int64  `json:"max_interval"`
 }
 
 // Handler types
@@ -677,6 +688,7 @@ type BaseExecution struct {
 	CompletedAt *time.Time
 	Status      ExecutionStatus
 	Error       string
+	StackTrace  *string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -916,34 +928,34 @@ type Database interface {
 // RetryPolicy helper functions
 func DefaultRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{
-		MaxAttempts:        1, // 1 means no retries
-		InitialInterval:    time.Second,
-		BackoffCoefficient: 2.0,
-		MaxInterval:        5 * time.Minute,
+		MaxAttempts: 1, // 1 means no retries
+		MaxInterval: 100 * time.Millisecond,
 	}
 }
 
 func DefaultRetryPolicyInternal() *retryPolicyInternal {
 	return &retryPolicyInternal{
-		MaxAttempts:        1, // 1 means no retries
-		InitialInterval:    time.Second.Nanoseconds(),
-		BackoffCoefficient: 2.0,
-		MaxInterval:        (5 * time.Minute).Nanoseconds(),
+		MaxAttempts: 1, // 1 means no retries
+		MaxInterval: (100 * time.Millisecond).Nanoseconds(),
 	}
 }
 
-func getRetryPolicyOrDefault(options *RetryPolicy) (maxAttempts int, initialInterval time.Duration, backoffCoefficient float64, maxInterval time.Duration) {
+func getRetryPolicyOrDefault(options *RetryPolicy) (maxAttempts uint64, maxInterval time.Duration) {
+	def := DefaultRetryPolicy()
 	if options != nil {
-		rp := options
-		maxAttempts = rp.MaxAttempts
-		initialInterval = rp.InitialInterval
-		backoffCoefficient = rp.BackoffCoefficient
-		maxInterval = rp.MaxInterval
-	} else {
-		def := DefaultRetryPolicy()
+		maxInterval = def.MaxInterval
 		maxAttempts = def.MaxAttempts
-		initialInterval = def.InitialInterval
-		backoffCoefficient = def.BackoffCoefficient
+		// fmt.Println("options.MaxAttempts", options.MaxAttempts, "def.MaxAttempts", def.MaxAttempts, options.MaxAttempts != def.MaxAttempts)
+		if options.MaxAttempts != def.MaxAttempts {
+			maxAttempts = options.MaxAttempts
+		} else {
+		}
+		// fmt.Println("options.MaxInterval", options.MaxInterval, "def.MaxInterval", def.MaxInterval, options.MaxInterval != def.MaxInterval && options.MaxInterval > 0)
+		if options.MaxInterval != def.MaxInterval && options.MaxInterval > 0 {
+			maxInterval = options.MaxInterval
+		}
+	} else {
+		maxAttempts = def.MaxAttempts
 		maxInterval = def.MaxInterval
 	}
 	return
@@ -958,21 +970,14 @@ func ToInternalRetryPolicy(rp *RetryPolicy) *retryPolicyInternal {
 	if rp.MaxAttempts == 0 {
 		rp.MaxAttempts = 1
 	}
-	if rp.InitialInterval == 0 {
-		rp.InitialInterval = time.Second
-	}
-	if rp.BackoffCoefficient == 0 {
-		rp.BackoffCoefficient = 2.0
-	}
+
 	if rp.MaxInterval == 0 {
 		rp.MaxInterval = 5 * time.Minute
 	}
 
 	return &retryPolicyInternal{
-		MaxAttempts:        rp.MaxAttempts,
-		InitialInterval:    rp.InitialInterval.Nanoseconds(),
-		BackoffCoefficient: rp.BackoffCoefficient,
-		MaxInterval:        rp.MaxInterval.Nanoseconds(),
+		MaxAttempts: rp.MaxAttempts,
+		MaxInterval: rp.MaxInterval.Nanoseconds(),
 	}
 }
 

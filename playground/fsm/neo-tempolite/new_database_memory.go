@@ -3,6 +3,7 @@ package tempolite
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -204,6 +205,11 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
+		return err
+	}
+
+	// make sure the folder exists or create it
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 

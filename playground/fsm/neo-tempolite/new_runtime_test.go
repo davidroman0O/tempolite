@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"errors"
 )
@@ -14,6 +15,8 @@ func TestUnitPrepareRootWorkflowEntity(t *testing.T) {
 	ctx := context.Background()
 	db := NewMemoryDatabase()
 	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity.json")
 
 	o := NewOrchestrator(ctx, db, registry)
 
@@ -32,12 +35,37 @@ func TestUnitPrepareRootWorkflowEntity(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		}
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowEntityPanic(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_entity_panic.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -64,12 +92,37 @@ func TestUnitPrepareRootWorkflowEntityPanic(t *testing.T) {
 		t.Fatalf("error shouldn't be nil")
 	}
 
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusFailed {
+		t.Fatalf("expected %s, got %s", StatusFailed, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 2 {
+		t.Fatalf("expected 2 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusFailed {
+			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
+		}
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowEntityFailOnce(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_entity_fail_once.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -110,6 +163,24 @@ func TestUnitPrepareRootWorkflowEntityFailOnce(t *testing.T) {
 	if len(executions) != 2 {
 		t.Fatalf("expected 2 executions, got %d", len(executions))
 	}
+
+	found := false
+	for _, exec := range executions {
+		if exec.ID == 1 {
+			found = true
+			if exec.Status != ExecutionStatusFailed {
+				t.Fatalf("expected %s, got %s", ExecutionStatusFailed, exec.Status)
+			}
+			if exec.Error == "" {
+				t.Fatalf("expected error, got nil")
+			}
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected execution with ID 1, got none")
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowActivityEntity(t *testing.T) {
@@ -195,6 +266,7 @@ func TestUnitPrepareRootWorkflowActivityEntityFailureOnce(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_activity_entity_fail_once.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -355,6 +427,7 @@ func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_activity_entity_panic.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -373,11 +446,7 @@ func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
 		return nil
 	}
 
-	future := o.Execute(wrfl, &WorkflowOptions{
-		RetryPolicy: &RetryPolicy{
-			MaxAttempts: 1, // which is the default already
-		},
-	})
+	future := o.Execute(wrfl, nil)
 
 	if future == nil {
 		t.Fatal("future is nil")
@@ -459,5 +528,66 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		t.Fatalf("expected false, got true")
 	}
 
-	db.SaveAsJSON("continue_as_new.json")
+	db.SaveAsJSON("./json/continue_as_new.json")
+}
+
+func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+	defer db.SaveAsJSON("./json/workflow_pause_resume.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	act := func(ctx ActivityContext, number int) error {
+		fmt.Println("Activity, World!", number)
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		if err := ctx.Activity("activity1", act, nil, 1).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity2", act, nil, 2).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity3", act, nil, 3).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity4", act, nil, 4).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // which is the default already
+		},
+	})
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	<-time.After(time.Second)
+
+	o.Pause()
+
+	o.WaitActive()
+
+	db.SaveAsJSON("./json/workflow_paused.json")
+
+	future = o.Resume(future.WorkflowID())
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
 }
