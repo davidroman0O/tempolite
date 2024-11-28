@@ -784,8 +784,9 @@ type Database interface {
 
 	// ACTIVITY-RELATED OPERATIONS
 	// Activity Entity
-	AddActivityEntity(entity *ActivityEntity) (int, error)
+	AddActivityEntity(entity *ActivityEntity, parentWorkflowID int) (int, error)
 	GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error)
+	GetActivityEntities(workflowID int, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error)
 	HasActivityEntity(id int) (bool, error)
 	UpdateActivityEntity(entity *ActivityEntity) error
 	GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error
@@ -820,8 +821,9 @@ type Database interface {
 
 	// SAGA-RELATED OPERATIONS
 	// Saga Entity
-	AddSagaEntity(entity *SagaEntity) (int, error)
+	AddSagaEntity(entity *SagaEntity, parentWorkflowID int) (int, error)
 	GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error)
+	GetSagaEntities(workflowID int, opts ...SagaEntityGetOption) ([]*SagaEntity, error)
 	HasSagaEntity(id int) (bool, error)
 	UpdateSagaEntity(entity *SagaEntity) error
 	GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error
@@ -854,8 +856,9 @@ type Database interface {
 
 	// SIDE-EFFECT-RELATED OPERATIONS
 	// SideEffect Entity
-	AddSideEffectEntity(entity *SideEffectEntity) (int, error)
+	AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID int) (int, error)
 	GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error)
+	GetSideEffectEntities(workflowID int, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error)
 	HasSideEffectEntity(id int) (bool, error)
 	UpdateSideEffectEntity(entity *SideEffectEntity) error
 	GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error
@@ -906,6 +909,7 @@ type Database interface {
 	AddHierarchy(hierarchy *Hierarchy) (int, error)
 	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
 	GetHierarchyByParentEntity(parentEntityID int, childStepID string, specificType EntityType) (*Hierarchy, error)
+	GetHierarchiesByParentEntityAndStep(parentEntityID int, childStepID string, specificType EntityType) ([]*Hierarchy, error)
 	HasHierarchy(id int) (bool, error)
 	UpdateHierarchy(hierarchy *Hierarchy) error
 	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error

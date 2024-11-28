@@ -458,12 +458,37 @@ func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
 			t.Fatalf("expected ErrActivityPanicked, got %v", err)
 		}
 	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusFailed {
+		t.Fatalf("expected %s, got %s", StatusFailed, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+
+	for _, a := range activities {
+		if a.Status != StatusFailed {
+			t.Fatalf("expected %s, got %s", StatusFailed, a.Status)
+		}
+	}
 }
 
 func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/continue_as_new.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -528,7 +553,6 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		t.Fatalf("expected false, got true")
 	}
 
-	db.SaveAsJSON("./json/continue_as_new.json")
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
@@ -589,6 +613,79 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnitPrepareRootWorkflowActivityEntityDetectContextCancellation(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+	defer db.SaveAsJSON("./json/workflow_context_cancel.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	var contextCancelledDetected atomic.Bool
+	var pauseTriggered atomic.Bool
+
+	act := func(ctx ActivityContext, number int) error {
+		fmt.Println("Activity, World!", number)
+		duration := 10 * time.Second
+		if pauseTriggered.Load() {
+			duration = 1 * time.Second
+		}
+		select {
+		case <-ctx.Done():
+			fmt.Println("activity detected context cancellation")
+			contextCancelledDetected.Store(true)
+			return ctx.Err()
+		case <-time.After(duration):
+			return nil
+		}
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		if err := ctx.Activity("activity1", act, nil, 1).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity2", act, nil, 2).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity3", act, nil, 3).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity4", act, nil, 4).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // which is the default already
+		},
+	})
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	<-time.After(time.Second)
+
+	pauseTriggered.Store(true)
+	o.Cancel()
+
+	o.WaitActive()
+
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	}
+
+	if !contextCancelledDetected.Load() {
+		t.Fatalf("expected true, got false")
 	}
 }
 

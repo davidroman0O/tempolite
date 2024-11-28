@@ -782,7 +782,7 @@ func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...Workflo
 	return nil
 }
 
-func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity) (int, error) {
+func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity, parentWorkflowID int) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -800,6 +800,21 @@ func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity) (int, error)
 	entity.UpdatedAt = entity.CreatedAt
 
 	db.activityEntities[entity.ID] = copyActivityEntity(entity)
+
+	// Initialize the map if it doesn't exist
+	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
+		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
+	}
+	// Initialize the activity slice if it doesn't exist
+	if _, ok := db.workflowToChildren[parentWorkflowID][EntityActivity]; !ok {
+		db.workflowToChildren[parentWorkflowID][EntityActivity] = make([]int, 0)
+	}
+	// Add the activity ID to the slice
+	db.workflowToChildren[parentWorkflowID][EntityActivity] = append(
+		db.workflowToChildren[parentWorkflowID][EntityActivity],
+		entity.ID,
+	)
+
 	return entity.ID, nil
 }
 
@@ -850,6 +865,29 @@ func (db *MemoryDatabase) GetActivityEntity(id int, opts ...ActivityEntityGetOpt
 	}
 
 	return copyActivityEntity(entity), nil
+}
+
+func (db *MemoryDatabase) GetActivityEntities(workflowID int, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	activityIDs, ok := db.workflowToChildren[workflowID][EntityActivity]
+	if !ok {
+		return nil, nil
+	}
+
+	entities := make([]*ActivityEntity, 0, len(activityIDs))
+	for _, id := range activityIDs {
+
+		entity, err := db.GetActivityEntity(id)
+		if err != nil {
+			return nil, err
+		}
+
+		entities = append(entities, entity)
+	}
+
+	return entities, nil
 }
 
 func (db *MemoryDatabase) GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error {
@@ -928,7 +966,7 @@ func (db *MemoryDatabase) SetActivityEntityProperties(id int, setters ...Activit
 	return nil
 }
 
-func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity) (int, error) {
+func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity, parentWorkflowID int) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -946,7 +984,43 @@ func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity) (int, error) {
 	entity.UpdatedAt = entity.CreatedAt
 
 	db.sagaEntities[entity.ID] = copySagaEntity(entity)
+
+	// Initialize maps if needed
+	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
+		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
+	}
+	if _, ok := db.workflowToChildren[parentWorkflowID][EntitySaga]; !ok {
+		db.workflowToChildren[parentWorkflowID][EntitySaga] = make([]int, 0)
+	}
+
+	// Add to relationship map
+	db.workflowToChildren[parentWorkflowID][EntitySaga] = append(
+		db.workflowToChildren[parentWorkflowID][EntitySaga],
+		entity.ID,
+	)
+
 	return entity.ID, nil
+}
+
+func (db *MemoryDatabase) GetSagaEntities(workflowID int, opts ...SagaEntityGetOption) ([]*SagaEntity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	sagaIDs, ok := db.workflowToChildren[workflowID][EntitySaga]
+	if !ok {
+		return nil, nil
+	}
+
+	entities := make([]*SagaEntity, 0, len(sagaIDs))
+	for _, id := range sagaIDs {
+		entity, err := db.GetSagaEntity(id)
+		if err != nil {
+			return nil, err
+		}
+		entities = append(entities, entity)
+	}
+
+	return entities, nil
 }
 
 func (db *MemoryDatabase) AddSagaExecution(exec *SagaExecution) (int, error) {
@@ -1074,7 +1148,7 @@ func (db *MemoryDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityP
 	return nil
 }
 
-func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity) (int, error) {
+func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID int) (int, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -1092,7 +1166,43 @@ func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity) (int, er
 	entity.UpdatedAt = entity.CreatedAt
 
 	db.sideEffectEntities[entity.ID] = copySideEffectEntity(entity)
+
+	// Initialize maps if needed
+	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
+		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
+	}
+	if _, ok := db.workflowToChildren[parentWorkflowID][EntitySideEffect]; !ok {
+		db.workflowToChildren[parentWorkflowID][EntitySideEffect] = make([]int, 0)
+	}
+
+	// Add to relationship map
+	db.workflowToChildren[parentWorkflowID][EntitySideEffect] = append(
+		db.workflowToChildren[parentWorkflowID][EntitySideEffect],
+		entity.ID,
+	)
+
 	return entity.ID, nil
+}
+
+func (db *MemoryDatabase) GetSideEffectEntities(workflowID int, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	sideEffectIDs, ok := db.workflowToChildren[workflowID][EntitySideEffect]
+	if !ok {
+		return nil, nil
+	}
+
+	entities := make([]*SideEffectEntity, 0, len(sideEffectIDs))
+	for _, id := range sideEffectIDs {
+		entity, err := db.GetSideEffectEntity(id)
+		if err != nil {
+			return nil, err
+		}
+		entities = append(entities, entity)
+	}
+
+	return entities, nil
 }
 
 func (db *MemoryDatabase) AddSideEffectExecution(exec *SideEffectExecution) (int, error) {
@@ -2153,6 +2263,26 @@ func (db *MemoryDatabase) GetHierarchyByParentEntity(parentEntityID int, childSt
 	}
 
 	return nil, ErrHierarchyNotFound
+}
+
+func (db *MemoryDatabase) GetHierarchiesByParentEntityAndStep(parentEntityID int, childStepID string, specificType EntityType) ([]*Hierarchy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var results []*Hierarchy
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == parentEntityID &&
+			hierarchy.ChildStepID == childStepID &&
+			hierarchy.ChildType == specificType {
+			results = append(results, copyHierarchy(hierarchy))
+		}
+	}
+
+	if len(results) == 0 {
+		return nil, ErrHierarchyNotFound
+	}
+
+	return results, nil
 }
 
 func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
