@@ -314,9 +314,6 @@ type ActivityInstance struct {
 
 	handler HandlerInfo
 
-	// results []interface{}
-	// err     error
-
 	fsm *stateless.StateMachine
 
 	options ActivityOptions
@@ -327,8 +324,8 @@ type ActivityInstance struct {
 	workflowID  int
 	entityID    int
 	executionID int
-	// dataID      int
-	queueID int
+	dataID      int
+	queueID     int
 
 	parentExecutionID int
 	parentEntityID    int
@@ -756,7 +753,7 @@ func (o *Orchestrator) Pause() {
 	o.pausedMu.Lock()
 	defer o.pausedMu.Unlock()
 	o.paused = true
-	log.Printf("Orchestrator paused")
+	log.Printf("Orchestrator requested a pause")
 }
 
 func (o *Orchestrator) WaitActive() {
@@ -982,8 +979,6 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 		return nil, fmt.Errorf("failed to get queue %s: %w", queueName, err)
 	}
 
-	pp.Println(queue)
-
 	var workflowID int
 	// We're not even storing the HandlerInfo since it is a runtime thing
 	if workflowID, err = o.db.
@@ -1138,12 +1133,6 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
 	o.addWorkflowInstance(instance)
 
 	// We don't start the FSM within the same goroutine as the caller
-	// if isRoot {
-	// 	go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
-	// 	} else {
-	// 		instance.Start(inputs) // sub-workflow directly starts
-	// 	}
-
 	go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
 
 	return future, nil
@@ -1317,7 +1306,9 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
 	// Start the FSM without holding wi.mu
 	if err := fsm.Fire(TriggerStart, inputs); err != nil {
-		log.Printf("Error starting workflow: %v", err)
+		if !errors.Is(err, ErrPaused) {
+			log.Printf("Error starting workflow: %v", err)
+		}
 	}
 
 	var isRoot bool
@@ -1347,19 +1338,18 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 		return fmt.Errorf("WorkflowInstance executeActivity expected 1 argument, got %d", len(args))
 	}
 	var err error
+	var inputs []interface{}
+	var ok bool
+
 	var maxAttempts uint64
 	var maxInterval time.Duration
-
 	var retryState RetryState
-	// var paused bool
-	// var resumable bool
 
-	// pp.Println(wi.options.RetryPolicy)
 	maxAttempts, maxInterval = getRetryPolicyOrDefault(wi.options.RetryPolicy)
 
-	inputs := args[0].([]interface{})
-
-	// fmt.Println("MaxAttempts", maxAttempts, "MaxInterval", maxInterval)
+	if inputs, ok = args[0].([]interface{}); !ok {
+		return fmt.Errorf("WorkflowInstance executeActivity expected argument to be []interface{}, got %T", args[0])
+	}
 
 	var isRoot bool
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
@@ -1407,6 +1397,8 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 
 			// Run the real workflow
 			workflowOutput, workflowErr := wi.runWorkflow(inputs)
+
+			fmt.Println("ERROR ", workflowErr)
 
 			// success case
 			if workflowErr == nil {
@@ -1596,7 +1588,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		// could be a fake error to trigger a pause
 		if errors.Is(realError, ErrPaused) {
 			log.Printf("Workflow requested pause")
-			errInterface = nil
+			realError = nil // mute the error
 			pausedDetected = true
 		}
 	}
@@ -1664,7 +1656,11 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 		return fmt.Errorf("WorkflowInstance onCompleted expected 1 argument, got %d", len(args))
 	}
 
-	workflowOutput := args[0].(*WorkflowOutput)
+	var ok bool
+	var workflowOutput *WorkflowOutput
+	if workflowOutput, ok = args[0].(*WorkflowOutput); !ok {
+		return fmt.Errorf("WorkflowInstance onCompleted expected argument to be *WorkflowOutput, got %T", args[0])
+	}
 
 	var err error
 
@@ -1854,7 +1850,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		}
 	}
 
-	fmt.Println("Hierarchy found", hierarchy)
+	// fmt.Println("Hierarchy found", hierarchy)
 
 	// We might have a result from a previous execution
 	if hierarchy != nil {
@@ -1940,6 +1936,12 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 
 	future.setEntityID(activityEntityID)
 
+	var data *ActivityData
+	if data, err = ctx.db.GetActivityDataByEntityID(activityEntityID); err != nil {
+		log.Printf("Error getting activity data: %v", err)
+		future.setError(err)
+	}
+
 	activityInstance := &ActivityInstance{
 		ctx:     ctx.ctx,
 		db:      ctx.db,
@@ -1959,6 +1961,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		stepID:      stepID,
 		entityID:    activityEntityID,
 		executionID: 0, // will be set later
+		dataID:      data.ID,
 		queueID:     ctx.queueID,
 		runID:       ctx.runID,
 	}
@@ -2016,13 +2019,16 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 	var err error
 	var maxAttempts uint64
 	var maxInterval time.Duration
-
+	var inputs []interface{}
+	var ok bool
 	var retryState RetryState
 
 	// pp.Println(wi.options.RetryPolicy)
 	maxAttempts, maxInterval = getRetryPolicyOrDefault(ai.options.RetryPolicy)
 
-	inputs := args[0].([]interface{})
+	if inputs, ok = args[0].([]interface{}); !ok {
+		return fmt.Errorf("ActivityInstance executeActivity expected argument to be []interface{}, got %T", args[0])
+	}
 
 	if err := retry.Do(
 		ai.ctx,
@@ -2143,188 +2149,6 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 	return nil
 }
 
-// TODO: we need to copy the same algorithm as the workflowinstance here
-// func (ai *ActivityInstance) executeWithRetry(inputs []interface{}) error {
-// 	var err error
-
-// 	var retryState RetryState
-// 	var maxAttempts uint64
-// 	// var maxInterval time.Duration
-// 	fmt.Println("ActivityInstance executeWithRetry called")
-
-// 	ai.mu.Lock()
-// 	if ai.parentExecutionID == 0 {
-// 		fmt.Println("ActivityInstance parentExecutionID is required (cannot execute an activity without a parent)")
-// 		return fmt.Errorf("activity parentExecutionID is required (cannot execute an activity without a parent)")
-// 	}
-
-// 	// maxAttempts, maxInterval = getRetryPolicyOrDefault(ai.options.RetryPolicy)
-
-// 	if err = ai.db.GetActivityEntityProperties(ai.entityID, GetActivityEntityRetryState(&retryState)); err != nil {
-// 		return err
-// 	}
-// 	ai.mu.Unlock()
-
-// 	fmt.Println("ActivityInstance executeWithRetry loop retrystate:", retryState)
-// 	for {
-// 		ai.mu.Lock()
-// 		if ai.state.isPaused() {
-// 			// It means that will have to put the Activity from Paused -> Pending and let the orchestrator execute
-// 			log.Printf("ActivityInstance %s is paused", ai.stepID)
-// 			ai.fsm.Fire(TriggerPause)
-// 			ai.mu.Unlock()
-// 			return nil
-// 		}
-// 		ai.mu.Unlock()
-
-// 		// Check if maximum attempts have been reached
-// 		ai.mu.Lock()
-// 		if retryState.Attempts > maxAttempts {
-// 			// Only execution here
-// 			if err = ai.db.SetActivityExecutionProperties(
-// 				ai.executionID,
-// 				SetActivityExecutionStatus(ExecutionStatusFailed),
-// 				SetActivityExecutionError(fmt.Errorf("activity %s failed after %d attempts", ai.stepID, retryState.Attempts-1).Error()),
-// 			); err != nil {
-// 				ai.mu.Unlock()
-// 				return fmt.Errorf("failed to set activity execution status: %w", err)
-// 			}
-
-// 			ai.fsm.Fire(TriggerFail, err)
-// 			log.Printf("Activity %s (Entity ID: %d) failed after %d attempts", ai.stepID, ai.entityID, retryState.Attempts-1)
-// 			ai.mu.Unlock()
-// 			return nil
-// 		}
-// 		ai.mu.Unlock()
-
-// 		// now we can create and set the execution id
-// 		var activityExecutionID int
-// 		if activityExecutionID, err = ai.db.AddActivityExecution(&ActivityExecution{
-// 			BaseExecution: BaseExecution{
-// 				EntityID: ai.entityID,
-// 				Status:   ExecutionStatusRunning,
-// 			},
-// 			ActivityExecutionData: &ActivityExecutionData{},
-// 		}); err != nil {
-// 			ai.mu.Lock()
-// 			log.Printf("Error adding execution: %v", err)
-// 			ai.fsm.Fire(TriggerFail, err)
-// 			ai.mu.Unlock()
-// 			return err
-// 		}
-
-// 		ai.mu.Lock()
-// 		ai.executionID = activityExecutionID // Store execution ID
-
-// 		// Hierarchy
-// 		if _, err = ai.db.AddHierarchy(&Hierarchy{
-// 			RunID:             ai.runID,
-// 			ParentStepID:      ai.parentStepID,
-// 			ParentEntityID:    ai.parentEntityID,
-// 			ParentExecutionID: ai.parentExecutionID,
-// 			ChildStepID:       ai.stepID,
-// 			ChildEntityID:     ai.entityID,
-// 			ChildExecutionID:  ai.executionID,
-// 			ParentType:        EntityWorkflow,
-// 			ChildType:         EntityActivity,
-// 		}); err != nil {
-// 			ai.mu.Unlock()
-// 			return fmt.Errorf("failed to add hierarchy: %w", err)
-// 		}
-
-// 		// Update RetryState
-// 		if retryState.Attempts <= maxAttempts {
-// 			if err = ai.db.SetActivityEntityProperties(
-// 				ai.entityID,
-// 				SetActivityEntityRetryState(retryState),
-// 			); err != nil {
-// 				ai.mu.Unlock()
-// 				return fmt.Errorf("failed to set activity properties: %w", err)
-// 			}
-// 		}
-
-// 		log.Printf("Executing activity %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.entityID, ai.executionID)
-// 		ai.mu.Unlock()
-
-// 		outputs, activityErr := ai.runActivity(inputs)
-// 		fmt.Println("run activity", err)
-// 		if errors.Is(err, ErrPaused) {
-// 			// TODO: IS THAT EVEN A CASE?! I DON'T THINK SO
-// 			// REVIEW AND DELETE
-// 			ai.mu.Lock()
-// 			if err = ai.db.SetActivityEntityProperties(
-// 				ai.entityID,
-// 				SetActivityEntityStatus(StatusPaused),
-// 			); err != nil {
-// 				ai.mu.Unlock()
-// 				return fmt.Errorf("failed to set Activity entity status: %w", err)
-// 			}
-// 			ai.fsm.Fire(TriggerPause)
-// 			ai.mu.Unlock()
-// 			return nil
-// 		}
-
-// 		if activityErr == nil {
-// 			// Success
-// 			ai.mu.Lock()
-
-// 			if err = ai.db.SetActivityExecutionProperties(
-// 				ai.executionID,
-// 				SetActivityExecutionStatus(ExecutionStatusCompleted),
-// 			); err != nil {
-// 				ai.mu.Unlock()
-// 				return fmt.Errorf("failed to set activity execution status: %w", err)
-// 			}
-
-// 			ai.fsm.Fire(TriggerComplete, outputs)
-// 			ai.mu.Unlock()
-// 			return nil
-// 		} else {
-// 			// Failed
-// 			// We should only intervene in the Execution part
-// 			ai.mu.Lock()
-
-// 			setters := []ActivityExecutionPropertySetter{
-// 				SetActivityExecutionStatus(ExecutionStatusFailed),
-// 				SetActivityExecutionError(activityErr.Error()),
-// 			}
-
-// 			if outputs.StrackTrace != nil {
-// 				setters = append(setters, SetActivityExecutionStackTrace(*outputs.StrackTrace))
-// 			}
-
-// 			if err = ai.db.SetActivityExecutionProperties(
-// 				ai.executionID,
-// 				setters...,
-// 			); err != nil {
-// 				ai.mu.Unlock()
-// 				return fmt.Errorf("failed to set activity execution status: %w", err)
-// 			}
-
-// 			// retry management
-// 			if retryState.Attempts < maxAttempts {
-// 				// Calculate next interval
-// 				// nextInterval := time.Duration(float64(initialInterval) * math.Pow(backoffCoefficient, float64(retryState.Attempts-1)))
-// 				// if nextInterval > maxInterval {
-// 				// 	nextInterval = maxInterval
-// 				// }
-// 				// log.Printf("Retrying activity %s (Entity ID: %d, Execution ID: %d), attempt %d/%d after %v",
-// 				// 	ai.stepID, ai.entityID, ai.executionID, retryState.Attempts+1, maxAttempts, nextInterval)
-// 				ai.mu.Unlock()
-// 				// time.Sleep(nextInterval)
-// 			} else {
-// 				// Max attempts reached
-// 				ai.fsm.Fire(TriggerFail, activityErr)
-// 				ai.mu.Unlock()
-// 				return nil
-// 			}
-// 		}
-
-// 		// Increment attempt for next iteration
-// 		retryState.Attempts++
-// 	}
-// }
-
 // Sub-function within executeWithRetry
 func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *ActivityOutput, err error) {
 	log.Printf("ActivityInstance %s (Entity ID: %d, Execution ID: %d)", ai.stepID, ai.entityID, ai.entityID)
@@ -2366,7 +2190,6 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 			ai.mu.Lock()
 			// allow the caller to know about the panic
-			// err = errors.Join(ErrActivityPanicked, &PanicError{StackTrace: stackTrace})
 			err = ErrActivityPanicked
 			outputs = &ActivityOutput{
 				StrackTrace: &stackTrace,

@@ -591,3 +591,71 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUnitPrepareRootWorkflowActivityEntityPauseResumeWithFailure(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+	defer db.SaveAsJSON("./json/workflow_pause_resume_with_failure.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	act := func(ctx ActivityContext, number int) error {
+		fmt.Println("Activity, World!", number)
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	var failure atomic.Bool
+	failure.Store(true)
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		if err := ctx.Activity("activity1", act, nil, 1).Get(); err != nil {
+			return err
+		}
+		if failure.Load() {
+			failure.Store(false)
+			return fmt.Errorf("on purpose")
+		}
+		if err := ctx.Activity("activity2", act, nil, 2).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity3", act, nil, 3).Get(); err != nil {
+			return err
+		}
+		if err := ctx.Activity("activity4", act, nil, 4).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // which is the default already
+		},
+	})
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	<-time.After(time.Second)
+
+	o.Pause()
+
+	o.WaitActive()
+
+	db.SaveAsJSON("./json/workflow_paused_with_failure.json")
+
+	future = o.Resume(future.WorkflowID())
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+}
