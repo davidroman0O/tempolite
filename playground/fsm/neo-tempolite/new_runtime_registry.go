@@ -196,3 +196,66 @@ func (r *Registry) RegisterActivity(activityFunc interface{}) (HandlerInfo, erro
 func getFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
+
+// TODO: trigger an error if the side effect got a `error` a return value
+func (r *Registry) RegisterSideEffect(sideEffectFunc interface{}) (HandlerInfo, error) {
+	funcName := getFunctionName(sideEffectFunc)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check if already registered
+	if handler, ok := r.sideEffects[funcName]; ok {
+		return handler, nil
+	}
+
+	handlerType := reflect.TypeOf(sideEffectFunc)
+	if handlerType.Kind() != reflect.Func {
+		return HandlerInfo{}, fmt.Errorf("side effect must be a function")
+	}
+
+	if handlerType.NumIn() != 0 {
+		return HandlerInfo{}, fmt.Errorf("side effect function must take no parameters")
+	}
+
+	numOut := handlerType.NumOut()
+	if numOut == 0 {
+		return HandlerInfo{}, fmt.Errorf("side effect function must return at least one value")
+	}
+
+	returnTypes := make([]reflect.Type, numOut)
+	returnKinds := make([]reflect.Kind, numOut)
+	for i := 0; i < numOut; i++ {
+		returnTypes[i] = handlerType.Out(i)
+		returnKinds[i] = handlerType.Out(i).Kind()
+	}
+
+	handler := HandlerInfo{
+		HandlerName:     funcName,
+		HandlerLongName: HandlerIdentity(funcName),
+		Handler:         sideEffectFunc,
+		ReturnTypes:     returnTypes,
+		ReturnKinds:     returnKinds,
+		NumIn:           0,
+		NumOut:          numOut,
+	}
+
+	r.sideEffects[funcName] = handler
+	return handler, nil
+}
+
+func (r *Registry) GetSideEffect(name string) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	handler, ok := r.sideEffects[name]
+	return handler, ok
+}
+
+func (r *Registry) GetSideEffectFunc(f interface{}) (HandlerInfo, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	name := getFunctionName(f)
+	handler, ok := r.sideEffects[name]
+	return handler, ok
+}

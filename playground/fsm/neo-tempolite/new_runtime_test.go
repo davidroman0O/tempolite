@@ -1091,3 +1091,158 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResumeWithFailure(t *testing.
 		}
 	}
 }
+
+func TestUnitPrepareRootWorkflowSideEffect(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_sideeffect.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+
+		var value int
+		if err := ctx.SideEffect("sideeffect", func() int {
+			fmt.Println("SideEffect, World!")
+			return 42
+		}).Get(&value); err != nil {
+			return err
+		}
+
+		fmt.Println("Hello, World!", value)
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		}
+	}
+
+}
+
+func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_sideeffect_panic.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+
+		var value int
+		if err := ctx.SideEffect("sideeffect", func() int {
+			fmt.Println("SideEffect, World!")
+			panic("on purpose")
+			return 42
+		}).Get(&value); err != nil {
+			return err
+		}
+
+		fmt.Println("Hello, World!", value)
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrWorkflowFailed) {
+			t.Fatalf("expected %v, got %v", ErrWorkflowFailed, err)
+		}
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusFailed {
+		t.Fatalf("expected %s, got %s", StatusFailed, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 2 {
+		t.Fatalf("expected 2 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusFailed {
+			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
+		}
+	}
+
+	sideeffects, err := db.GetSideEffectEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideeffects) != 1 {
+		t.Fatalf("expected 1 sideeffect, got %d", len(sideeffects))
+	}
+
+	for _, v := range sideeffects {
+		if v.Status != StatusFailed {
+			t.Fatalf("expected %s, got %s", StatusFailed, v.Status)
+		}
+
+		execs, err := db.GetSideEffectExecutions(v.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(execs) != 2 {
+			t.Fatalf("expected 2 executions, got %d", len(execs))
+		}
+
+		for _, e := range execs {
+			if e.Status != ExecutionStatusFailed {
+				t.Fatalf("expected %s, got %s", ExecutionStatusFailed, e.Status)
+			}
+		}
+	}
+
+}

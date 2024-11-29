@@ -20,6 +20,8 @@ var (
 	ErrActivityExecutionNotFound   = errors.New("activity execution not found")
 	ErrSagaExecutionNotFound       = errors.New("saga execution not found")
 	ErrSideEffectExecutionNotFound = errors.New("side effect execution not found")
+	ErrSideEffectPanicked          = errors.New("side effect panicked")
+	ErrSideEffectFailed            = errors.New("side effect failed")
 	ErrRunNotFound                 = errors.New("run not found")
 	ErrVersionNotFound             = errors.New("version not found")
 	ErrHierarchyNotFound           = errors.New("hierarchy not found")
@@ -877,6 +879,7 @@ type Database interface {
 	AddSideEffectExecution(exec *SideEffectExecution) (int, error)
 	GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
 	HasSideEffectExecution(id int) (bool, error)
+	GetSideEffectExecutions(entityID int) ([]*SideEffectExecution, error)
 	GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error
 	SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error
 

@@ -1468,6 +1468,19 @@ func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecu
 	return copySideEffectExecution(exec), nil
 }
 
+func (db *MemoryDatabase) GetSideEffectExecutions(entityID int) ([]*SideEffectExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	executions := make([]*SideEffectExecution, 0)
+	for _, exec := range db.sideEffectExecutions {
+		if exec.EntityID == entityID {
+			executions = append(executions, copySideEffectExecution(exec))
+		}
+	}
+	return executions, nil
+}
+
 // Activity Data properties
 func (db *MemoryDatabase) GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error {
 	db.mu.RLock()

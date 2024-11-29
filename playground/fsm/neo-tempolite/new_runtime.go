@@ -333,32 +333,32 @@ type ActivityInstance struct {
 	parentStepID      string
 }
 
-// SideEffectInstance represents an instance of a side effect execution.
-type SideEffectInstance struct {
-	ctx   context.Context
-	mu    deadlock.Mutex
-	debug Debug
+// // SideEffectInstance represents an instance of a side effect execution.
+// type SideEffectInstance struct {
+// 	ctx   context.Context
+// 	mu    deadlock.Mutex
+// 	debug Debug
 
-	handlerName    string
-	handler        HandlerInfo
-	returnTypes    []reflect.Type // since we're doing it on-the-fly
-	sideEffectFunc interface{}
+// 	handlerName    string
+// 	handler        HandlerInfo
+// 	returnTypes    []reflect.Type // since we're doing it on-the-fly
+// 	sideEffectFunc interface{}
 
-	results []interface{}
-	err     error
+// 	results []interface{}
+// 	err     error
 
-	fsm    *stateless.StateMachine
-	future *Future
+// 	fsm    *stateless.StateMachine
+// 	future *Future
 
-	stepID      string
-	workflowID  int
-	entityID    int
-	executionID int
+// 	stepID      string
+// 	workflowID  int
+// 	entityID    int
+// 	executionID int
 
-	parentExecutionID int
-	parentEntityID    int
-	parentStepID      string
-}
+// 	parentExecutionID int
+// 	parentEntityID    int
+// 	parentStepID      string
+// }
 
 // SagaInstance represents an instance of a saga execution.
 type SagaInstance struct {
@@ -2395,5 +2395,386 @@ func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error 
 	if ai.future != nil {
 		ai.future.setError(ErrPaused)
 	}
+	return nil
+}
+
+/////////////////////////////////// Side Effects
+
+type SideEffectOutput struct {
+	Outputs     []interface{}
+	StrackTrace *string
+	Paused      bool
+}
+
+func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) Future {
+	var err error
+
+	if err = ctx.checkPause(); err != nil {
+		log.Printf("WorkflowContext.SideEffect paused at stepID: %s", stepID)
+		future := NewRuntimeFuture()
+		future.setError(err)
+		return future
+	}
+
+	log.Printf("WorkflowContext.SideEffect called with stepID: %s", getFunctionName(sideEffectFunc))
+	future := NewRuntimeFuture()
+
+	// Register side effect on-the-fly
+	handler, err := ctx.registry.RegisterSideEffect(sideEffectFunc)
+	if err != nil {
+		log.Printf("Error registering side effect: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	var sideEffectEntityID int
+
+	// First check if there's an existing side effect entity for this workflow and step
+	var sideEffectEntities []*SideEffectEntity
+	if sideEffectEntities, err = ctx.db.GetSideEffectEntities(ctx.workflowID, SideEffectEntityWithData()); err != nil {
+		if !errors.Is(err, ErrSideEffectEntityNotFound) {
+			future.setError(err)
+			return future
+		}
+	}
+
+	// Find matching entity by stepID
+	var entity *SideEffectEntity
+	for _, e := range sideEffectEntities {
+		if e.StepID == stepID {
+			entity = e
+			sideEffectEntityID = e.ID
+			break
+		}
+	}
+
+	// If no entity exists, create one
+	if entity == nil {
+		if sideEffectEntityID, err = ctx.db.AddSideEffectEntity(&SideEffectEntity{
+			BaseEntity: BaseEntity{
+				RunID:       ctx.runID,
+				QueueID:     ctx.queueID,
+				Type:        EntitySideEffect,
+				HandlerName: handler.HandlerName,
+				Status:      StatusPending,
+				RetryPolicy: retryPolicyInternal{
+					MaxAttempts: 0, // No retries for side effects
+					MaxInterval: time.Second.Nanoseconds(),
+				},
+				RetryState: RetryState{Attempts: 0},
+				StepID:     stepID,
+			},
+			SideEffectData: &SideEffectData{},
+		}, ctx.workflowID); err != nil {
+			log.Printf("Error adding side effect entity: %v", err)
+			future.setError(err)
+			return future
+		}
+	}
+
+	future.setEntityID(sideEffectEntityID)
+
+	var data *SideEffectData
+	if data, err = ctx.db.GetSideEffectDataByEntityID(sideEffectEntityID); err != nil {
+		log.Printf("Error getting side effect data: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	instance := &SideEffectInstance{
+		ctx:     ctx.ctx,
+		db:      ctx.db,
+		tracker: ctx.tracker,
+		state:   ctx.state,
+		debug:   ctx.debug,
+
+		parentExecutionID: ctx.workflowExecutionID,
+		parentEntityID:    ctx.workflowID,
+		parentStepID:      ctx.stepID,
+
+		handler: handler,
+		future:  future,
+
+		workflowID:  ctx.workflowID,
+		stepID:      stepID,
+		entityID:    sideEffectEntityID,
+		executionID: 0, // will be set later
+		dataID:      data.ID,
+		runID:       ctx.runID,
+	}
+
+	ctx.tracker.addSideEffectInstance(instance)
+	instance.Start()
+
+	return future
+}
+
+type SideEffectInstance struct {
+	ctx     context.Context
+	mu      deadlock.Mutex
+	db      Database
+	tracker InstanceTracker
+	state   StateTracker
+	debug   Debug
+
+	handler HandlerInfo
+	future  Future
+	fsm     *stateless.StateMachine
+
+	stepID            string
+	runID             int
+	workflowID        int
+	entityID          int
+	dataID            int
+	executionID       int
+	parentExecutionID int
+	parentEntityID    int
+	parentStepID      string
+}
+
+func (si *SideEffectInstance) Start() {
+	si.mu.Lock()
+	si.fsm = stateless.NewStateMachine(StateIdle)
+	fsm := si.fsm
+	si.mu.Unlock()
+
+	fsm.Configure(StateIdle).
+		Permit(TriggerStart, StateExecuting).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateExecuting).
+		OnEntry(si.executeSideEffect).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateFailed).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateCompleted).
+		OnEntry(si.onCompleted)
+
+	fsm.Configure(StateFailed).
+		OnEntry(si.onFailed)
+
+	fsm.Configure(StatePaused).
+		OnEntry(si.onPaused).
+		Permit(TriggerResume, StateExecuting)
+
+	if err := fsm.Fire(TriggerStart); err != nil {
+		if !errors.Is(err, ErrPaused) {
+			log.Printf("Error starting side effect: %v", err)
+		}
+	}
+}
+
+func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...interface{}) error {
+	var err error
+
+	// Create execution before trying side effect
+	if si.executionID, err = si.db.AddSideEffectExecution(&SideEffectExecution{
+		BaseExecution: BaseExecution{
+			EntityID: si.entityID,
+			Status:   ExecutionStatusRunning,
+		},
+		SideEffectExecutionData: &SideEffectExecutionData{},
+	}); err != nil {
+		if si.future != nil {
+			si.future.setError(err)
+		}
+		return err
+	}
+
+	// Add hierarchy
+	if _, err = si.db.AddHierarchy(&Hierarchy{
+		RunID:             si.runID,
+		ParentStepID:      si.parentStepID,
+		ParentEntityID:    si.parentEntityID,
+		ParentExecutionID: si.parentExecutionID,
+		ChildStepID:       si.stepID,
+		ChildEntityID:     si.entityID,
+		ChildExecutionID:  si.executionID,
+		ParentType:        EntityWorkflow,
+		ChildType:         EntitySideEffect,
+	}); err != nil {
+		if si.future != nil {
+			si.future.setError(fmt.Errorf("failed to add hierarchy: %w", err))
+		}
+		return fmt.Errorf("failed to add hierarchy: %w", err)
+	}
+
+	// Run side effect just once
+	output, execErr := si.runSideEffect()
+
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
+	if execErr == nil {
+		if err = si.db.SetSideEffectExecutionProperties(
+			si.executionID,
+			SetSideEffectExecutionStatus(ExecutionStatusCompleted)); err != nil {
+			if si.future != nil {
+				si.future.setError(err)
+			}
+			return err
+		}
+
+		if si.future != nil {
+			si.future.setResult(output.Outputs)
+		}
+		si.fsm.Fire(TriggerComplete, output)
+		return nil
+	}
+
+	// Handle error case
+	setters := []SideEffectExecutionPropertySetter{
+		SetSideEffectExecutionStatus(ExecutionStatusFailed),
+		SetSideEffectExecutionError(execErr.Error()),
+	}
+
+	if output != nil && output.StrackTrace != nil {
+		setters = append(setters, SetSideEffectExecutionStackTrace(*output.StrackTrace))
+	}
+
+	if err = si.db.SetSideEffectExecutionProperties(si.executionID, setters...); err != nil {
+		if si.future != nil {
+			si.future.setError(execErr)
+		}
+		return execErr
+	}
+
+	if err = si.db.SetSideEffectEntityProperties(
+		si.entityID,
+		SetSideEffectEntityStatus(StatusFailed)); err != nil {
+		if si.future != nil {
+			si.future.setError(execErr)
+		}
+		return execErr
+	}
+
+	if si.future != nil {
+		si.future.setError(execErr)
+	}
+	si.fsm.Fire(TriggerFail, execErr)
+	return execErr
+}
+
+func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+
+			if si.debug.canStackTrace() {
+				fmt.Println(stackTrace)
+			}
+
+			err = ErrSideEffectPanicked
+		}
+	}()
+
+	select {
+	case <-si.ctx.Done():
+		return nil, si.ctx.Err()
+	default:
+	}
+
+	results := reflect.ValueOf(si.handler.Handler).Call(nil)
+	outputs := make([]interface{}, len(results))
+	for i, res := range results {
+		outputs[i] = res.Interface()
+	}
+
+	outputBytes, err := convertOutputsForSerialization(outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = si.db.SetSideEffectExecutionDataProperties(
+		si.entityID,
+		SetSideEffectExecutionDataOutputs(outputBytes)); err != nil {
+		return nil, err
+	}
+
+	return &SideEffectOutput{
+		Outputs: outputs,
+	}, nil
+}
+
+func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}) error {
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onCompleted called", si.stepID, si.entityID)
+	if len(args) != 1 {
+		return fmt.Errorf("SideEffectInstance onCompleted expected 1 argument")
+	}
+
+	var ok bool
+	var sideEffectOutput *SideEffectOutput
+	if sideEffectOutput, ok = args[0].(*SideEffectOutput); !ok {
+		return fmt.Errorf("SideEffectInstance onCompleted expected *SideEffectOutput")
+	}
+
+	if err := si.db.SetSideEffectEntityProperties(
+		si.entityID,
+		SetSideEffectEntityStatus(StatusCompleted)); err != nil {
+		return err
+	}
+
+	if si.future != nil {
+		si.future.setResult(sideEffectOutput.Outputs)
+	}
+
+	return nil
+}
+
+func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) error {
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onFailed called", si.stepID, si.entityID)
+	if len(args) != 1 {
+		return fmt.Errorf("activity instance onFailed expected 1 argument, got %d", len(args))
+	}
+
+	err := args[0].(error)
+
+	if si.future != nil {
+		si.future.setError(errors.Join(ErrSideEffectFailed, err))
+	}
+
+	if si.ctx.Err() != nil {
+		if errors.Is(si.ctx.Err(), context.Canceled) {
+			if err := si.db.SetSideEffectExecutionProperties(
+				si.executionID,
+				SetSideEffectExecutionStatus(ExecutionStatusCancelled)); err != nil {
+				return err
+			}
+			if err := si.db.SetSideEffectEntityProperties(
+				si.entityID,
+				SetSideEffectEntityStatus(StatusCancelled)); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	if err := si.db.SetSideEffectEntityProperties(
+		si.entityID,
+		SetSideEffectEntityStatus(StatusFailed)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
+	log.Printf("SideEffectInstance %s (Entity ID: %d) onPaused called", si.stepID, si.entityID)
+	if si.future != nil {
+		si.future.setError(ErrPaused)
+	}
+
+	var err error
+	// Tell the orchestrator to manage the case
+	if err = si.tracker.onPause(); err != nil {
+		if si.future != nil {
+			si.future.setError(err)
+		}
+		return fmt.Errorf("failed to pause orchestrator: %w", err)
+	}
+
 	return nil
 }
