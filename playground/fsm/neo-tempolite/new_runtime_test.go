@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"errors"
+
+	"github.com/k0kubun/pp/v3"
 )
 
 func TestUnitPrepareRootWorkflowEntity(t *testing.T) {
@@ -187,6 +189,7 @@ func TestUnitPrepareRootWorkflowActivityEntity(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_activity_entity.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -217,12 +220,32 @@ func TestUnitPrepareRootWorkflowActivityEntity(t *testing.T) {
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityWithOuputs(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+	defer db.SaveAsJSON("./json/workflow_activity_entity_with_outputs.json")
 	registry := NewRegistry()
 
 	o := NewOrchestrator(ctx, db, registry)
@@ -259,6 +282,83 @@ func TestUnitPrepareRootWorkflowActivityEntityWithOuputs(t *testing.T) {
 
 	if finalRes != 421 {
 		t.Fatalf("expected 421, got %d", finalRes)
+	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+
+	exects, err := db.GetActivityExecutions(activities[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := db.GetActivityExecutionData(exects[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pp.Println(data)
+
+	handler, ok := o.registry.GetActivityFunc(act)
+	if !ok {
+		t.Fatal("activity not found")
+	}
+
+	output, err := convertOutputsFromSerialization(handler, data.Outputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("output", output)
+
+	if len(output) != 1 {
+		t.Fatalf("expected 1 output, got %d", len(output))
+	}
+
+	if output[0].(int) != 420 {
+		t.Fatalf("expected 420, got %d", output[0].(int))
+	}
+
+	workflowData, err := db.GetWorkflowExecutionData(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(workflowData.Outputs) != 1 {
+		t.Fatalf("expected 1 workflow data, got %d", len(workflowData.Outputs))
+	}
+
+	handlerWork, ok := o.registry.GetWorkflow(getFunctionName(wrfl))
+	if !ok {
+		t.Fatal("workflow not found")
+	}
+
+	workflowoutput, err := convertOutputsFromSerialization(handlerWork, workflowData.Outputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(workflowoutput) != 1 {
+		t.Fatalf("expected 1 workflow output, got %d", len(workflowoutput))
+	}
+
+	if workflowoutput[0].(int) != 421 {
+		t.Fatalf("expected 421, got %d", workflowoutput[0].(int))
 	}
 }
 
@@ -504,23 +604,23 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		return 48, nil
 	}
 
-	future := o.Execute(wrfl, &WorkflowOptions{
+	futureFirst := o.Execute(wrfl, &WorkflowOptions{
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts: 1, // which is the default already
 		},
 	})
 
-	if future == nil {
-		t.Fatal("future is nil")
+	if futureFirst == nil {
+		t.Fatal("futureFirst is nil")
 	}
 
 	firstRes := 0
 
-	if err := future.Get(&firstRes); err != nil {
+	if err := futureFirst.Get(&firstRes); err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
 
-	if !future.ContinuedAsNew() {
+	if !futureFirst.ContinuedAsNew() {
 		t.Fatalf("expected true, got false")
 	}
 
@@ -530,18 +630,18 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 
 	// The orchestrator provide a function to allow you to execute any entity
 	// A workflow continued as new is just a new workflow to execute
-	future, err := o.ExecuteWithEntity(future.ContinuedAs())
+	futureSecond, err := o.ExecuteWithEntity(futureFirst.ContinuedAs())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if future == nil {
-		t.Fatal("future is nil")
+	if futureSecond == nil {
+		t.Fatal("futureSecond is nil")
 	}
 
 	secondRes := 0
 
-	if err := future.Get(&secondRes); err != nil {
+	if err := futureSecond.Get(&secondRes); err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
 
@@ -549,10 +649,55 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		t.Fatalf("expected 48, got %d", secondRes)
 	}
 
-	if future.ContinuedAsNew() {
+	if futureSecond.ContinuedAsNew() {
 		t.Fatalf("expected false, got true")
 	}
 
+	first, err := db.GetWorkflowEntity(futureFirst.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := db.GetWorkflowEntity(futureSecond.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if first.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, first.Status)
+	}
+
+	if second.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, second.Status)
+	}
+
+	if first.ID == second.ID {
+		t.Fatalf("expected different IDs, got the same")
+	}
+
+	execFirst, err := db.GetWorkflowExecutions(first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execSecond, err := db.GetWorkflowExecutions(second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execFirst) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execFirst))
+	}
+
+	if len(execSecond) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execSecond))
+	}
+
+	if execFirst[0].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, execFirst[0].Status)
+	}
+
+	if execSecond[0].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, execSecond[0].Status)
+	}
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {

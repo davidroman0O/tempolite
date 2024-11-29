@@ -2291,8 +2291,6 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 		return nil, err
 	}
 
-	fmt.Println("RESULTS", results)
-
 	errInterface := results[numOut-1].Interface()
 	if errInterface != nil {
 		log.Printf("Activity returned error: %v", errInterface)
