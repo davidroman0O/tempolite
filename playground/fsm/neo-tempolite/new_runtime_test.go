@@ -521,6 +521,52 @@ func TestUnitPrepareRootWorkflowActivityEntityWithOutputFailureOnce(t *testing.T
 		t.Fatalf("expected 2 workflow call, got %d", counterWorkflowCalled.Load())
 	}
 
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+
+	exects, err := db.GetActivityExecutions(activities[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := db.GetActivityExecutionData(exects[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler, ok := o.registry.GetActivityFunc(act)
+	if !ok {
+		t.Fatal("activity not found")
+	}
+
+	outputBytes, err := convertOutputsFromSerialization(handler, data.Outputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(outputBytes) != 1 {
+		t.Fatalf("expected 1 output, got %d", len(outputBytes))
+	}
+
+	if outputBytes[0].(int) != 420 {
+		t.Fatalf("expected 420, got %d", outputBytes[0].(int))
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
@@ -759,6 +805,48 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 4 {
+		t.Fatalf("expected 4 activities, got %d", len(activities))
+	}
+
+	for _, a := range activities {
+		if a.Status != StatusCompleted {
+			t.Fatalf("expected %s, got %s", StatusCompleted, a.Status)
+		}
+		execs, err := db.GetActivityExecutions(a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(execs) != 1 {
+			t.Fatalf("expected 1 execution, got %d", len(execs))
+		}
+	}
+
+	workflowExecs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(workflowExecs) != 2 {
+		t.Fatalf("expected 2 executions, got %d", len(workflowExecs))
+	}
+
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityDetectContextCancellation(t *testing.T) {
@@ -832,6 +920,43 @@ func TestUnitPrepareRootWorkflowActivityEntityDetectContextCancellation(t *testi
 	if !contextCancelledDetected.Load() {
 		t.Fatalf("expected true, got false")
 	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCancelled {
+		t.Fatalf("expected %s, got %s", StatusCancelled, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// at least one
+	if len(activities) == 0 {
+		t.Fatalf("expected at least 1 activity, got 0")
+	}
+
+	for _, a := range activities {
+		if a.Status != StatusCancelled {
+			t.Fatalf("expected %s, got %s", StatusCancelled, a.Status)
+		}
+		execs, err := db.GetActivityExecutions(a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(execs) != 1 {
+			t.Fatalf("expected 1 execution, got %d", len(execs))
+		}
+
+		if execs[0].Status != ExecutionStatusCancelled {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCancelled, execs[0].Status)
+		}
+	}
 }
 
 func TestUnitPrepareRootWorkflowActivityEntityPauseResumeWithFailure(t *testing.T) {
@@ -899,5 +1024,70 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResumeWithFailure(t *testing.
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
+	}
+
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
+
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(activities) != 4 {
+		t.Fatalf("expected 4 activities, got %d", len(activities))
+	}
+
+	for _, a := range activities {
+		if a.Status != StatusCompleted {
+			t.Fatalf("expected %s, got %s", StatusCompleted, a.Status)
+		}
+		execs, err := db.GetActivityExecutions(a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(execs) != 1 {
+			t.Fatalf("expected 1 execution, got %d", len(execs))
+		}
+
+		for _, e := range execs {
+			if e.Status != ExecutionStatusCompleted {
+				t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, e.Status)
+			}
+		}
+	}
+
+	workflowExecs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(workflowExecs) != 3 {
+		t.Fatalf("expected 3 executions, got %d", len(workflowExecs))
+	}
+
+	for _, e := range workflowExecs {
+		if e.ID == 1 {
+			if e.Status != ExecutionStatusFailed {
+				t.Fatalf("expected %s, got %s", ExecutionStatusFailed, e.Status)
+			}
+		}
+		if e.ID == 2 {
+			if e.Status != ExecutionStatusPaused {
+				t.Fatalf("expected %s, got %s", ExecutionStatusPaused, e.Status)
+			}
+		}
+		if e.ID > 2 {
+			if e.Status != ExecutionStatusCompleted {
+				t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, e.Status)
+			}
+		}
 	}
 }

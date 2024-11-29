@@ -1407,8 +1407,6 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 			// Run the real workflow
 			workflowOutput, workflowErr := wi.runWorkflow(inputs)
 
-			fmt.Println("ERROR ", workflowErr)
-
 			// success case
 			if workflowErr == nil {
 				// Success
@@ -1983,8 +1981,6 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		future.setEntityID(activityEntityID)
 	}
 
-	fmt.Println("ActivityID", activityEntityID)
-
 	var data *ActivityData
 	if data, err = ctx.db.GetActivityDataByEntityID(activityEntityID); err != nil {
 		log.Printf("Error getting activity data: %v", err)
@@ -2125,8 +2121,6 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 
 			// run the real activity
 			activityOutput, activityErr := ai.runActivity(inputs)
-
-			fmt.Println("RETURN ACTIVTY", activityOutput, activityErr)
 
 			if activityErr == nil {
 
