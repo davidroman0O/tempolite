@@ -1246,3 +1246,292 @@ func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
 	}
 
 }
+
+func TestUnitPrepareRootWorkflowPanicSideEffect(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_panic_sideeffect.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+
+		var value int
+		if err := ctx.SideEffect("sideeffect", func() int {
+			fmt.Println("SideEffect, World!")
+			return 42
+		}).Get(&value); err != nil {
+			return err
+		}
+		panic("on purpose")
+
+		fmt.Println("Hello, World!", value)
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrWorkflowFailed) {
+			t.Fatalf("expected %v, got %v", ErrWorkflowFailed, err)
+		}
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusFailed {
+		t.Fatalf("expected %s, got %s", StatusFailed, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 2 {
+		t.Fatalf("expected 2 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusFailed {
+			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
+		}
+	}
+
+	sideeffects, err := db.GetSideEffectEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideeffects) != 1 {
+		t.Fatalf("expected 1 sideeffect, got %d", len(sideeffects))
+	}
+
+	for _, v := range sideeffects {
+		if v.Status != StatusCompleted {
+			t.Fatalf("expected %s, got %s", StatusCompleted, v.Status)
+		}
+
+		execs, err := db.GetSideEffectExecutions(v.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(execs) != 2 {
+			t.Fatalf("expected 2 executions, got %d", len(execs))
+		}
+
+		for _, e := range execs {
+			if e.Status != ExecutionStatusCompleted {
+				t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, e.Status)
+			}
+		}
+	}
+
+}
+
+type sagaStep struct {
+	fail bool
+}
+
+func (s *sagaStep) Transaction(ctx TransactionContext) error {
+	if s.fail {
+		return fmt.Errorf("on purpose")
+	}
+	fmt.Println("Transaction, World!")
+	return nil
+}
+
+func (s *sagaStep) Compensation(ctx CompensationContext) error {
+	fmt.Println("Compensation, World!")
+	return nil
+}
+
+func TestUnitPrepareRootWorkflowEntitySaga(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_saga.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+
+		def, err := NewSaga().
+			AddStep(&sagaStep{}).
+			Build()
+		if err != nil {
+			return err
+		}
+
+		if err := ctx.Saga("saga", def).Get(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		}
+	}
+
+}
+
+func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_saga_compensate.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+
+		def, err := NewSaga().
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("Transaction, World!")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("Compensation, World!")
+					return nil
+				},
+			).
+			Add(
+				func(tc TransactionContext) error {
+					fmt.Println("Second Transaction, World!")
+					return nil
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Second Compensation, World!")
+					return nil
+				},
+			).
+			Add(
+				func(ctx TransactionContext) error {
+					val := 42
+					if err := ctx.Store("something", &val); err != nil {
+						return err
+					}
+					val = 420
+					if err := ctx.Store("something2", &val); err != nil {
+						return err
+					}
+					fmt.Println("Third Transaction, World!")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					var value int
+					if err := ctx.Load("something", &value); err != nil {
+						return err
+					}
+					fmt.Println("Third Compensation, World!", value)
+					return nil
+				},
+			).
+			AddStep(&sagaStep{fail: true}).
+			Add(
+				func(tc TransactionContext) error {
+					fmt.Println("Fifth Transaction, World!")
+					return nil
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Fifth Compensation, World!")
+					return nil
+				},
+			).
+			Build()
+		if err != nil {
+			return err
+		}
+
+		if err := ctx.Saga("saga", def).Get(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		}
+	}
+
+}

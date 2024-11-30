@@ -1,6 +1,7 @@
 package tempolite
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/qmuntal/stateless"
 	"github.com/sasha-s/go-deadlock"
 	"github.com/sethvargo/go-retry"
+	"github.com/stephenfire/go-rtl"
 	"go.uber.org/automaxprocs/maxprocs"
 )
 
@@ -59,19 +61,88 @@ type Future interface {
 	IsPaused() bool
 }
 
-// TransactionContext provides context for transaction execution in Sagas.
 type TransactionContext struct {
-	ctx context.Context
+	ctx         context.Context
+	db          Database
+	contextID   int
+	executionID int
+	stepIndex   int
 }
 
-// CompensationContext provides context for compensation execution in Sagas.
+func (tc *TransactionContext) Store(key string, value interface{}) error {
+	if reflect.TypeOf(value).Kind() != reflect.Ptr {
+		return fmt.Errorf("value must be a pointer")
+	}
+
+	buf := new(bytes.Buffer)
+	if err := rtl.Encode(reflect.ValueOf(value).Elem().Interface(), buf); err != nil {
+		return fmt.Errorf("failed to encode value: %w", err)
+	}
+
+	_, err := tc.db.SetSagaValue(tc.executionID, key, buf.Bytes())
+	return err
+}
+
+func (tc *TransactionContext) Load(key string, value interface{}) error {
+	if reflect.TypeOf(value).Kind() != reflect.Ptr {
+		return fmt.Errorf("value must be a pointer")
+	}
+
+	data, err := tc.db.GetSagaValueByExecutionID(tc.executionID, key)
+	if err != nil {
+		return fmt.Errorf("failed to get value: %w", err)
+	}
+
+	return rtl.Decode(bytes.NewBuffer(data), value)
+}
+
 type CompensationContext struct {
-	ctx context.Context
+	ctx         context.Context
+	db          Database
+	contextID   int
+	executionID int
+	stepIndex   int
+}
+
+func (cc *CompensationContext) Load(key string, value interface{}) error {
+	if reflect.TypeOf(value).Kind() != reflect.Ptr {
+		return fmt.Errorf("value must be a pointer")
+	}
+
+	data, err := cc.db.GetSagaValueByExecutionID(cc.executionID, key)
+	if err != nil {
+		return fmt.Errorf("failed to get value: %w", err)
+	}
+
+	return rtl.Decode(bytes.NewBuffer(data), value)
+}
+
+// GetStepIndex returns the current step index
+func (tc *TransactionContext) GetStepIndex() int {
+	return tc.stepIndex
+}
+
+// GetStepIndex returns the current step index
+func (cc *CompensationContext) GetStepIndex() int {
+	return cc.stepIndex
 }
 
 type SagaStep interface {
-	Transaction(ctx TransactionContext) (interface{}, error)
-	Compensation(ctx CompensationContext) (interface{}, error)
+	Transaction(ctx TransactionContext) error
+	Compensation(ctx CompensationContext) error
+}
+
+type FunctionStep struct {
+	transactionFn  func(ctx TransactionContext) error
+	compensationFn func(ctx CompensationContext) error
+}
+
+func (s *FunctionStep) Transaction(ctx TransactionContext) error {
+	return s.transactionFn(ctx)
+}
+
+func (s *FunctionStep) Compensation(ctx CompensationContext) error {
+	return s.compensationFn(ctx)
 }
 
 type SagaDefinition struct {
@@ -93,6 +164,14 @@ func NewSaga() *SagaDefinitionBuilder {
 	return &SagaDefinitionBuilder{
 		steps: make([]SagaStep, 0),
 	}
+}
+
+func (b *SagaDefinitionBuilder) Add(transaction func(TransactionContext) error, compensation func(CompensationContext) error) *SagaDefinitionBuilder {
+	b.steps = append(b.steps, &FunctionStep{
+		transactionFn:  transaction,
+		compensationFn: compensation,
+	})
+	return b
 }
 
 // AddStep adds a saga step to the builder.
@@ -156,14 +235,25 @@ func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 			typeName = "*" + typeName
 		}
 
-		transactionInfo, err := analyzeMethod(transactionMethod, typeName)
-		if err != nil {
-			return nil, fmt.Errorf("error analyzing Transaction method for step %d: %w", i, err)
+		// Note: Since Transaction/Compensation now only return error, we modify the analysis
+		transactionInfo := HandlerInfo{
+			HandlerName:     typeName + ".Transaction",
+			HandlerLongName: HandlerIdentity(typeName),
+			Handler:         transactionMethod.Func.Interface(),
+			ParamTypes:      []reflect.Type{reflect.TypeOf(TransactionContext{})},
+			ReturnTypes:     []reflect.Type{}, // No return types except error
+			NumIn:           1,
+			NumOut:          0,
 		}
 
-		compensationInfo, err := analyzeMethod(compensationMethod, typeName)
-		if err != nil {
-			return nil, fmt.Errorf("error analyzing Compensation method for step %d: %w", i, err)
+		compensationInfo := HandlerInfo{
+			HandlerName:     typeName + ".Compensation",
+			HandlerLongName: HandlerIdentity(typeName),
+			Handler:         compensationMethod.Func.Interface(),
+			ParamTypes:      []reflect.Type{reflect.TypeOf(CompensationContext{})},
+			ReturnTypes:     []reflect.Type{}, // No return types except error
+			NumIn:           1,
+			NumOut:          0,
 		}
 
 		sagaInfo.TransactionInfo[i] = transactionInfo
@@ -361,28 +451,28 @@ type ActivityInstance struct {
 // }
 
 // SagaInstance represents an instance of a saga execution.
-type SagaInstance struct {
-	ctx   context.Context
-	mu    deadlock.Mutex
-	debug Debug
+// type SagaInstance struct {
+// 	ctx   context.Context
+// 	mu    deadlock.Mutex
+// 	debug Debug
 
-	saga        SagaDefinition
-	fsm         *stateless.StateMachine
-	future      Future
-	currentStep int
+// 	saga        SagaDefinition
+// 	fsm         *stateless.StateMachine
+// 	future      Future
+// 	currentStep int
 
-	err error
+// 	err error
 
-	compensations []int // Indices of steps to compensate
+// 	compensations []int // Indices of steps to compensate
 
-	stepID      string
-	workflowID  int
-	executionID int
+// 	stepID      string
+// 	workflowID  int
+// 	executionID int
 
-	parentExecutionID int
-	parentEntityID    int
-	parentStepID      string
-}
+// 	parentExecutionID int
+// 	parentEntityID    int
+// 	parentStepID      string
+// }
 
 // Future implementation of direct calling
 type RuntimeFuture struct {
@@ -2776,5 +2866,333 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 		return fmt.Errorf("failed to pause orchestrator: %w", err)
 	}
 
+	return nil
+}
+
+//////////////////////////////////// SAGA
+
+func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
+	var err error
+
+	if err = ctx.checkPause(); err != nil {
+		log.Printf("WorkflowContext.Saga paused at stepID: %s", stepID)
+		future := NewRuntimeFuture()
+		future.setError(err)
+		return future
+	}
+
+	log.Printf("WorkflowContext.Saga called with stepID: %s", stepID)
+	future := NewRuntimeFuture()
+
+	// Convert API RetryPolicy to internal retry policy
+	internalRetryPolicy := DefaultRetryPolicyInternal()
+
+	// Create a new Entity without ID (database assigns it)
+	entity := &SagaEntity{
+		BaseEntity: BaseEntity{
+			StepID:      stepID,
+			Status:      StatusPending,
+			Type:        EntitySaga,
+			RunID:       ctx.runID,
+			QueueID:     ctx.queueID,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			RetryPolicy: *internalRetryPolicy,
+			RetryState:  RetryState{Attempts: 0},
+		},
+		SagaData: &SagaData{},
+	}
+
+	// Add the entity to the database with parent workflow link
+	var entityID int
+	if entityID, err = ctx.db.AddSagaEntity(entity, ctx.workflowID); err != nil {
+		log.Printf("Error adding saga entity: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	var data *SagaData
+	if data, err = ctx.db.GetSagaDataByEntityID(entityID); err != nil {
+		log.Printf("Error getting saga data: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	// Prepare to create the saga instance
+	sagaInstance := &SagaInstance{
+		ctx:               ctx.ctx,
+		db:                ctx.db,
+		tracker:           ctx.tracker,
+		state:             ctx.state,
+		debug:             ctx.debug,
+		saga:              saga,
+		stepID:            stepID,
+		runID:             ctx.runID,
+		workflowID:        ctx.workflowID,
+		entityID:          entityID,
+		dataID:            data.ID,
+		queueID:           ctx.queueID,
+		future:            future,
+		parentExecutionID: ctx.workflowExecutionID,
+		parentEntityID:    ctx.workflowID,
+		parentStepID:      ctx.stepID,
+	}
+
+	future.setEntityID(entityID)
+
+	// Start the saga instance
+	ctx.tracker.addSagaInstance(sagaInstance)
+	sagaInstance.Start()
+
+	return future
+}
+
+// SagaInstance represents an instance of a saga execution.
+type SagaInstance struct {
+	ctx     context.Context
+	mu      deadlock.Mutex
+	db      Database
+	tracker InstanceTracker
+	state   StateTracker
+	debug   Debug
+
+	handler HandlerInfo
+	saga    *SagaDefinition
+	fsm     *stateless.StateMachine
+	future  Future
+
+	stepID      string
+	runID       int
+	workflowID  int
+	entityID    int
+	executionID int
+	dataID      int
+	queueID     int
+
+	parentExecutionID int
+	parentEntityID    int
+	parentStepID      string
+}
+
+func (si *SagaInstance) Start() {
+	si.mu.Lock()
+	si.fsm = stateless.NewStateMachine(StateIdle)
+	fsm := si.fsm
+	si.mu.Unlock()
+
+	fsm.Configure(StateIdle).
+		Permit(TriggerStart, StateExecuting).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateExecuting).
+		OnEntry(si.executeSaga).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateFailed).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateCompleted).
+		OnEntry(si.onCompleted)
+
+	fsm.Configure(StateFailed).
+		OnEntry(si.onFailed)
+
+	fsm.Configure(StatePaused).
+		OnEntry(si.onPaused).
+		Permit(TriggerResume, StateExecuting)
+
+	log.Printf("Starting saga: %s (Entity ID: %d)", si.stepID, si.entityID)
+
+	// Start the FSM without holding the lock
+	if err := fsm.Fire(TriggerStart); err != nil {
+		if !errors.Is(err, ErrPaused) {
+			log.Printf("Error starting saga: %v", err)
+		}
+	}
+}
+
+func (si *SagaInstance) executeSaga(_ context.Context, args ...interface{}) error {
+	if err := si.db.SetSagaEntityProperties(
+		si.entityID,
+		SetSagaEntityStatus(StatusRunning)); err != nil {
+		return fmt.Errorf("failed to update saga status: %w", err)
+	}
+
+	var executedSteps []int
+
+	// Execute transactions
+	for stepIdx := 0; stepIdx < len(si.saga.Steps); stepIdx++ {
+		if err := si.checkPause(); err != nil {
+			return err
+		}
+
+		stepExec := &SagaExecution{
+			BaseExecution: BaseExecution{
+				EntityID: si.entityID,
+				Status:   ExecutionStatusRunning,
+			},
+			ExecutionType: ExecutionTypeTransaction,
+			SagaExecutionData: &SagaExecutionData{
+				StepIndex: stepIdx,
+			},
+		}
+
+		var stepExecID int
+		var err error
+		if stepExecID, err = si.db.AddSagaExecution(stepExec); err != nil {
+			return fmt.Errorf("failed to add step execution: %w", err)
+		}
+
+		step := si.saga.Steps[stepIdx]
+		txContext := TransactionContext{
+			ctx:         si.ctx,
+			db:          si.db,
+			executionID: stepExecID, // Using the step execution ID directly
+			stepIndex:   stepIdx,
+		}
+
+		err = step.Transaction(txContext)
+		if err != nil {
+			if updateErr := si.db.SetSagaExecutionProperties(
+				stepExecID,
+				SetSagaExecutionStatus(ExecutionStatusFailed),
+				SetSagaExecutionError(err.Error())); updateErr != nil {
+				log.Printf("Failed to update failed step execution: %v", updateErr)
+			}
+
+			compensationErr := si.executeCompensations(executedSteps) // Removed contextID parameter
+			if compensationErr != nil {
+				log.Printf("Error during compensation: %v", compensationErr)
+			}
+
+			finalStatus := StatusFailed
+			if compensationErr == nil {
+				finalStatus = StatusCompensated
+			}
+
+			if updateErr := si.db.SetSagaEntityProperties(
+				si.entityID,
+				SetSagaEntityStatus(finalStatus)); updateErr != nil {
+				log.Printf("Failed to update saga status: %v", updateErr)
+			}
+
+			si.fsm.Fire(TriggerFail, err)
+			return nil
+		}
+
+		if err := si.db.SetSagaExecutionProperties(
+			stepExecID,
+			SetSagaExecutionStatus(ExecutionStatusCompleted)); err != nil {
+			return fmt.Errorf("failed to update step execution status: %w", err)
+		}
+
+		executedSteps = append(executedSteps, stepExecID) // Store execution ID instead of step index
+	}
+
+	if err := si.db.SetSagaEntityProperties(
+		si.entityID,
+		SetSagaEntityStatus(StatusCompleted)); err != nil {
+		return fmt.Errorf("failed to update saga status: %w", err)
+	}
+
+	si.fsm.Fire(TriggerComplete)
+	return nil
+}
+
+func (si *SagaInstance) executeCompensations(executionIDs []int) error {
+	var lastError error
+
+	for i := len(executionIDs) - 1; i >= 0; i-- {
+		execID := executionIDs[i]
+
+		compExec := &SagaExecution{
+			BaseExecution: BaseExecution{
+				EntityID: si.entityID,
+				Status:   ExecutionStatusRunning,
+			},
+			ExecutionType: ExecutionTypeCompensation,
+			SagaExecutionData: &SagaExecutionData{
+				StepIndex: i, // Keep track of original step index
+			},
+		}
+
+		var compExecID int
+		var err error
+		if compExecID, err = si.db.AddSagaExecution(compExec); err != nil {
+			return fmt.Errorf("failed to add compensation execution: %w", err)
+		}
+
+		step := si.saga.Steps[i]
+		compContext := CompensationContext{
+			ctx:         si.ctx,
+			db:          si.db,
+			executionID: execID, // Use the original transaction's execution ID
+			stepIndex:   i,
+		}
+
+		err = step.Compensation(compContext)
+		if err != nil {
+			lastError = err
+			if updateErr := si.db.SetSagaExecutionProperties(
+				compExecID,
+				SetSagaExecutionStatus(ExecutionStatusFailed),
+				SetSagaExecutionError(err.Error())); updateErr != nil {
+				log.Printf("Failed to update failed compensation execution: %v", updateErr)
+			}
+			continue
+		}
+
+		if err := si.db.SetSagaExecutionProperties(
+			compExecID,
+			SetSagaExecutionStatus(ExecutionStatusCompleted)); err != nil {
+			return fmt.Errorf("failed to update compensation execution status: %w", err)
+		}
+	}
+
+	return lastError
+}
+
+func (si *SagaInstance) checkPause() error {
+	if si.state.isPaused() {
+		if err := si.db.SetSagaEntityProperties(
+			si.entityID,
+			SetSagaEntityStatus(StatusPaused)); err != nil {
+			return fmt.Errorf("failed to update saga status: %w", err)
+		}
+		si.fsm.Fire(TriggerPause)
+		return ErrPaused
+	}
+	return nil
+}
+
+func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
+	if err := si.db.SetSagaEntityProperties(
+		si.entityID,
+		SetSagaEntityStatus(StatusCompleted)); err != nil {
+		return fmt.Errorf("failed to update saga status: %w", err)
+	}
+
+	if si.future != nil {
+		si.future.setResult(nil) // Could be extended to return aggregated results if needed
+	}
+	return nil
+}
+
+func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
+	if err := si.db.SetSagaEntityProperties(
+		si.entityID,
+		SetSagaEntityStatus(StatusFailed)); err != nil {
+		return fmt.Errorf("failed to update saga status: %w", err)
+	}
+
+	if si.future != nil {
+		si.future.setError(fmt.Errorf("saga %s failed", si.stepID))
+	}
+	return nil
+}
+
+func (si *SagaInstance) onPaused(_ context.Context, _ ...interface{}) error {
+	if si.future != nil {
+		si.future.setError(ErrPaused)
+	}
 	return nil
 }

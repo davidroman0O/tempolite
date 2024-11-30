@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -42,6 +43,9 @@ type MemoryDatabase struct {
 	activityExecutionDataCounter   int
 	sagaExecutionDataCounter       int
 	sideEffectExecutionDataCounter int
+
+	// Saga specific
+	sagaValues map[int]map[string]*SagaValue // executionID -> key -> value
 
 	// Core maps
 	runs        map[int]*Run
@@ -116,6 +120,9 @@ func NewMemoryDatabase() *MemoryDatabase {
 		sagaExecutionData:       make(map[int]*SagaExecutionData),
 		sideEffectExecutionData: make(map[int]*SideEffectExecutionData),
 
+		// Saga context specific
+		sagaValues: make(map[int]map[string]*SagaValue),
+
 		// Relationship maps
 		entityToWorkflow:   make(map[int]int),
 		workflowToChildren: make(map[int]map[EntityType][]int),
@@ -173,6 +180,7 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		WorkflowToQueue         map[int]int
 		QueueToWorkflows        map[int][]int
 		RunToWorkflows          map[int][]int
+		SagaValues              map[int]map[string]*SagaValue
 	}{
 		Runs:                    db.runs,
 		Versions:                db.versions,
@@ -201,6 +209,7 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		WorkflowToQueue:         db.workflowToQueue,
 		QueueToWorkflows:        db.queueToWorkflows,
 		RunToWorkflows:          db.runToWorkflows,
+		SagaValues:              db.sagaValues,
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -3139,4 +3148,55 @@ func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID int) (*A
 	}
 
 	return copyActivityExecution(latestExec), nil
+}
+
+func (db *MemoryDatabase) SetSagaValue(executionID int, key string, value []byte) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Initialize map for this execution if it doesn't exist
+	if _, exists := db.sagaValues[executionID]; !exists {
+		db.sagaValues[executionID] = make(map[string]*SagaValue)
+	}
+
+	// Create new saga value
+	sagaValue := &SagaValue{
+		ID:          len(db.sagaValues[executionID]) + 1, // Simple ID generation
+		ExecutionID: executionID,
+		Key:         key,
+		Value:       value,
+	}
+
+	// Store it
+	db.sagaValues[executionID][key] = sagaValue
+
+	return sagaValue.ID, nil
+}
+
+func (db *MemoryDatabase) GetSagaValue(id int, key string) ([]byte, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	// Since we're not maintaining a separate ID-based index,
+	// we need to search through all values
+	for _, keyMap := range db.sagaValues {
+		if value, exists := keyMap[key]; exists && value.ID == id {
+			return value.Value, nil
+		}
+	}
+
+	return nil, fmt.Errorf("saga value not found for id %d and key %s", id, key)
+}
+
+func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID int, key string) ([]byte, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if keyMap, exists := db.sagaValues[executionID]; exists {
+		if value, exists := keyMap[key]; exists {
+			return value.Value, nil
+		}
+	}
+
+	return nil, fmt.Errorf("saga value not found for execution %d and key %s", executionID, key)
 }

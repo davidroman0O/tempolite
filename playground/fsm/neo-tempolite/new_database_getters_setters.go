@@ -1288,65 +1288,12 @@ func GetSagaDataEntityID(entityID *int) SagaDataPropertyGetter {
 	}
 }
 
-func GetSagaDataCompensating(compensating *bool) SagaDataPropertyGetter {
-	return func(d *SagaData) (SagaDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga data is nil")
-		}
-		*compensating = d.Compensating
-		return nil, nil
-	}
-}
-
-func GetSagaDataCompensationData(data *[][]byte) SagaDataPropertyGetter {
-	return func(d *SagaData) (SagaDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga data is nil")
-		}
-		*data = make([][]byte, len(d.CompensationData))
-		for i, cd := range d.CompensationData {
-			dataCopy := make([]byte, len(cd))
-			copy(dataCopy, cd)
-			(*data)[i] = dataCopy
-		}
-		return func(opts *SagaDataGetterOptions) error {
-			opts.IncludeCompensationData = true
-			return nil
-		}, nil
-	}
-}
-
 func SetSagaDataEntityID(entityID int) SagaDataPropertySetter {
 	return func(d *SagaData) (SagaDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga data is nil")
 		}
 		d.EntityID = entityID
-		return nil, nil
-	}
-}
-
-func SetSagaDataCompensating(compensating bool) SagaDataPropertySetter {
-	return func(d *SagaData) (SagaDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga data is nil")
-		}
-		d.Compensating = compensating
-		return nil, nil
-	}
-}
-
-func SetSagaDataCompensationData(data [][]byte) SagaDataPropertySetter {
-	return func(d *SagaData) (SagaDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga data is nil")
-		}
-		d.CompensationData = make([][]byte, len(data))
-		for i, cd := range data {
-			dataCopy := make([]byte, len(cd))
-			copy(dataCopy, cd)
-			d.CompensationData[i] = dataCopy
-		}
 		return nil, nil
 	}
 }
@@ -1669,34 +1616,6 @@ func GetSagaExecutionDataLastHeartbeat(lastHeartbeat *time.Time) SagaExecutionDa
 	}
 }
 
-func GetSagaExecutionDataOutput(output *[][]byte) SagaExecutionDataPropertyGetter {
-	return func(d *SagaExecutionData) (SagaExecutionDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga execution data is nil")
-		}
-		*output = make([][]byte, len(d.Output))
-		for i, out := range d.Output {
-			outCopy := make([]byte, len(out))
-			copy(outCopy, out)
-			(*output)[i] = outCopy
-		}
-		return func(opts *SagaExecutionDataGetterOptions) error {
-			opts.IncludeOutput = true
-			return nil
-		}, nil
-	}
-}
-
-func GetSagaExecutionDataHasOutput(hasOutput *bool) SagaExecutionDataPropertyGetter {
-	return func(d *SagaExecutionData) (SagaExecutionDataPropertyGetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga execution data is nil")
-		}
-		*hasOutput = d.HasOutput
-		return nil, nil
-	}
-}
-
 func SetSagaExecutionDataExecutionID(executionID int) SagaExecutionDataPropertySetter {
 	return func(d *SagaExecutionData) (SagaExecutionDataPropertySetterOption, error) {
 		if d == nil {
@@ -1713,31 +1632,6 @@ func SetSagaExecutionDataLastHeartbeat(lastHeartbeat time.Time) SagaExecutionDat
 			return nil, errors.New("saga execution data is nil")
 		}
 		d.LastHeartbeat = &lastHeartbeat
-		return nil, nil
-	}
-}
-
-func SetSagaExecutionDataOutputs(output [][]byte) SagaExecutionDataPropertySetter {
-	return func(d *SagaExecutionData) (SagaExecutionDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga execution data is nil")
-		}
-		d.Output = make([][]byte, len(output))
-		for i, out := range output {
-			outCopy := make([]byte, len(out))
-			copy(outCopy, out)
-			d.Output[i] = outCopy
-		}
-		return nil, nil
-	}
-}
-
-func SetSagaExecutionDataHasOutput(hasOutput bool) SagaExecutionDataPropertySetter {
-	return func(d *SagaExecutionData) (SagaExecutionDataPropertySetterOption, error) {
-		if d == nil {
-			return nil, errors.New("saga execution data is nil")
-		}
-		d.HasOutput = hasOutput
 		return nil, nil
 	}
 }
@@ -3090,6 +2984,16 @@ func SetSagaExecutionStackTrace(stackTrace string) SagaExecutionPropertySetter {
 			return nil, errors.New("saga execution is nil")
 		}
 		e.StackTrace = &stackTrace
+		return nil, nil
+	}
+}
+
+func GetSagaExecutionType(execType *ExecutionType) SagaExecutionPropertyGetter {
+	return func(e *SagaExecution) (SagaExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("saga execution is nil")
+		}
+		*execType = e.ExecutionType
 		return nil, nil
 	}
 }

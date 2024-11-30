@@ -27,6 +27,7 @@ var (
 	ErrHierarchyNotFound           = errors.New("hierarchy not found")
 	ErrQueueNotFound               = errors.New("queue not found")
 	ErrQueueExists                 = errors.New("queue already exists")
+	ErrSagaValueNotFound           = errors.New("saga value not found")
 )
 
 // State and Trigger definitions
@@ -123,6 +124,14 @@ const (
 	ExecutionStatusCompleted   ExecutionStatus = "Completed"
 	ExecutionStatusFailed      ExecutionStatus = "Failed"
 	ExecutionStatusCompensated ExecutionStatus = "Compensated"
+)
+
+// Add to existing ExecutionType
+type ExecutionType string
+
+const (
+	ExecutionTypeTransaction  ExecutionType = "transaction"
+	ExecutionTypeCompensation ExecutionType = "compensation"
 )
 
 // Base entity options
@@ -639,10 +648,8 @@ type ActivityData struct {
 }
 
 type SagaData struct {
-	ID               int      `json:"id,omitempty"`
-	EntityID         int      `json:"entity_id,omitempty"`
-	Compensating     bool     `json:"compensating"`
-	CompensationData [][]byte `json:"compensation_data,omitempty"`
+	ID       int `json:"id,omitempty"`
+	EntityID int `json:"entity_id,omitempty"`
 }
 
 type SideEffectData struct {
@@ -714,8 +721,14 @@ type SagaExecutionData struct {
 	ID            int        `json:"id,omitempty"`
 	ExecutionID   int        `json:"execution_id,omitempty"`
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	Output        [][]byte   `json:"output,omitempty"`
-	HasOutput     bool       `json:"hasOutput"`
+	StepIndex     int        `json:"step_index"` // Which step this execution is for
+}
+
+type SagaValue struct {
+	ID          int    `json:"id,omitempty"`
+	ExecutionID int    `json:"executionID"`
+	Key         string `json:"key"`
+	Value       []byte `json:"value"` // TODO: this is WRONG
 }
 
 type SideEffectExecutionData struct {
@@ -737,9 +750,9 @@ type ActivityExecution struct {
 
 type SagaExecution struct {
 	BaseExecution
+	ExecutionType     ExecutionType `json:"execution_type"` // transaction or compensation
 	SagaExecutionData *SagaExecutionData
 }
-
 type SideEffectExecution struct {
 	BaseExecution
 	SideEffectExecutionData *SideEffectExecutionData
@@ -856,6 +869,11 @@ type Database interface {
 	GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error
 	SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error
 
+	// Saga Context operations
+	SetSagaValue(executionID int, key string, value []byte) (int, error) // return the ID of the sagaValue
+	GetSagaValue(id int, key string) ([]byte, error)
+	GetSagaValueByExecutionID(executionID int, key string) ([]byte, error) // using the executionID plus key to access it
+
 	// SIDE-EFFECT-RELATED OPERATIONS
 	// SideEffect Entity
 	AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID int) (int, error)
@@ -935,14 +953,14 @@ type Database interface {
 // RetryPolicy helper functions
 func DefaultRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{
-		MaxAttempts: 1, // 1 means no retries
+		MaxAttempts: 0, // 0 means no retries
 		MaxInterval: 100 * time.Millisecond,
 	}
 }
 
 func DefaultRetryPolicyInternal() *retryPolicyInternal {
 	return &retryPolicyInternal{
-		MaxAttempts: 1, // 1 means no retries
+		MaxAttempts: 0, // 0 means no retries
 		MaxInterval: (100 * time.Millisecond).Nanoseconds(),
 	}
 }
@@ -1298,19 +1316,52 @@ func copySagaData(data *SagaData) *SagaData {
 	if data == nil {
 		return nil
 	}
+	return &SagaData{
+		ID:       data.ID,
+		EntityID: data.EntityID,
+	}
+}
 
-	c := *data
-
-	if data.CompensationData != nil {
-		c.CompensationData = make([][]byte, len(data.CompensationData))
-		for i, cd := range data.CompensationData {
-			cdCopy := make([]byte, len(cd))
-			copy(cdCopy, cd)
-			c.CompensationData[i] = cdCopy
-		}
+func copySagaExecutionData(data *SagaExecutionData) *SagaExecutionData {
+	if data == nil {
+		return nil
 	}
 
-	return &c
+	c := &SagaExecutionData{
+		ID:          data.ID,
+		ExecutionID: data.ExecutionID,
+		StepIndex:   data.StepIndex,
+	}
+
+	if data.LastHeartbeat != nil {
+		heartbeatCopy := *data.LastHeartbeat
+		c.LastHeartbeat = &heartbeatCopy
+	}
+
+	return c
+}
+
+func copySagaExecution(exec *SagaExecution) *SagaExecution {
+	if exec == nil {
+		return nil
+	}
+
+	return &SagaExecution{
+		BaseExecution:     *copyBaseExecution(&exec.BaseExecution),
+		ExecutionType:     exec.ExecutionType,
+		SagaExecutionData: copySagaExecutionData(exec.SagaExecutionData),
+	}
+}
+
+func copySagaEntity(entity *SagaEntity) *SagaEntity {
+	if entity == nil {
+		return nil
+	}
+
+	return &SagaEntity{
+		BaseEntity: *copyBaseEntity(&entity.BaseEntity),
+		SagaData:   copySagaData(entity.SagaData),
+	}
 }
 
 func copySideEffectData(data *SideEffectData) *SideEffectData {
@@ -1370,30 +1421,6 @@ func copyActivityExecutionData(data *ActivityExecutionData) *ActivityExecutionDa
 	return &c
 }
 
-func copySagaExecutionData(data *SagaExecutionData) *SagaExecutionData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	if data.LastHeartbeat != nil {
-		heartbeatCopy := *data.LastHeartbeat
-		c.LastHeartbeat = &heartbeatCopy
-	}
-
-	if data.Output != nil {
-		c.Output = make([][]byte, len(data.Output))
-		for i, output := range data.Output {
-			outputCopy := make([]byte, len(output))
-			copy(outputCopy, output)
-			c.Output[i] = outputCopy
-		}
-	}
-
-	return &c
-}
-
 func copySideEffectExecutionData(data *SideEffectExecutionData) *SideEffectExecutionData {
 	if data == nil {
 		return nil
@@ -1441,19 +1468,6 @@ func copyActivityEntity(entity *ActivityEntity) *ActivityEntity {
 	return &copy
 }
 
-func copySagaEntity(entity *SagaEntity) *SagaEntity {
-	if entity == nil {
-		return nil
-	}
-
-	copy := SagaEntity{
-		BaseEntity: *copyBaseEntity(&entity.BaseEntity),
-		SagaData:   copySagaData(entity.SagaData),
-	}
-
-	return &copy
-}
-
 func copySideEffectEntity(entity *SideEffectEntity) *SideEffectEntity {
 	if entity == nil {
 		return nil
@@ -1489,19 +1503,6 @@ func copyActivityExecution(exec *ActivityExecution) *ActivityExecution {
 	copy := ActivityExecution{
 		BaseExecution:         *copyBaseExecution(&exec.BaseExecution),
 		ActivityExecutionData: copyActivityExecutionData(exec.ActivityExecutionData),
-	}
-
-	return &copy
-}
-
-func copySagaExecution(exec *SagaExecution) *SagaExecution {
-	if exec == nil {
-		return nil
-	}
-
-	copy := SagaExecution{
-		BaseExecution:     *copyBaseExecution(&exec.BaseExecution),
-		SagaExecutionData: copySagaExecutionData(exec.SagaExecutionData),
 	}
 
 	return &copy
