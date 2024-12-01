@@ -3011,7 +3011,39 @@ func (si *SagaInstance) Start() {
 		log.Printf("Error starting saga: %v", err)
 	}
 }
-func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{}) error {
+
+func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{}) (err error) {
+	// Capture panics at the function level
+	defer func() {
+		if r := recover(); r != nil {
+			// Capture the stack trace
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+
+			if si.debug.canStackTrace() {
+				fmt.Println(stackTrace)
+			}
+
+			// Update last execution status to failed
+			lastExec, _ := si.db.GetSagaExecutions(si.entityID)
+			if len(lastExec) > 0 {
+				lastStepID := lastExec[len(lastExec)-1].ID
+				if updateErr := si.db.SetSagaExecutionProperties(
+					lastStepID,
+					SetSagaExecutionStatus(ExecutionStatusFailed),
+					SetSagaExecutionError(fmt.Sprintf("panic: %v", r)),
+					SetSagaExecutionStackTrace(stackTrace)); updateErr != nil {
+					log.Printf("Failed to update execution after panic: %v", updateErr)
+				}
+			}
+
+			// Trigger compensation with the panic error
+			panicErr := fmt.Errorf("step panicked: %v", r)
+			si.fsm.Fire(TriggerCompensate, panicErr)
+		}
+	}()
+
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusRunning)); err != nil {

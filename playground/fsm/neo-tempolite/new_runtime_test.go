@@ -1608,3 +1608,130 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 		t.Fatal("expected saga value 'something2' to exist")
 	}
 }
+
+func TestUnitSagaTransactionPanic(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_saga_transaction_panic.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+		def, err := NewSaga().
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("First Transaction")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("First Compensation")
+					return nil
+				},
+			).
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("Second Transaction")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("Second Compensation")
+					return nil
+				},
+			).
+			Add(
+				func(ctx TransactionContext) error {
+					panic("panic during transaction")
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("Third Compensation")
+					return nil
+				},
+			).Build()
+		if err != nil {
+			return err
+		}
+
+		if err := ctx.Saga("saga", def).Get(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrSagaFailed) && !errors.Is(err, ErrSagaCompensated) {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestUnitSagaCompensationPanic(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_saga_compensation_panic.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	wrfl := func(ctx WorkflowContext) error {
+		def, err := NewSaga().
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("First Transaction")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("First Compensation")
+					return nil
+				},
+			).
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("Second Transaction")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					panic("panic during compensation")
+				},
+			).
+			Add(
+				func(ctx TransactionContext) error {
+					return fmt.Errorf("trigger compensation")
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("Third Compensation")
+					return nil
+				},
+			).Build()
+		if err != nil {
+			return err
+		}
+
+		if err := ctx.Saga("saga", def).Get(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrSagaFailed) {
+			t.Fatal(err)
+		}
+	}
+}
