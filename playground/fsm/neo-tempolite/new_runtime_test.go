@@ -3,6 +3,7 @@ package tempolite
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1299,14 +1300,14 @@ func TestUnitPrepareRootWorkflowPanicSideEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(execs) != 2 {
-		t.Fatalf("expected 2 execution, got %d", len(execs))
+	// Expect only 1 execution since we don't want retries by default
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
 
-	for _, v := range execs {
-		if v.Status != ExecutionStatusFailed {
-			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
-		}
+	// Single execution should be failed
+	if execs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected %s, got %s", ExecutionStatusFailed, execs[0].Status)
 	}
 
 	sideeffects, err := db.GetSideEffectEntities(future.WorkflowID())
@@ -1328,17 +1329,110 @@ func TestUnitPrepareRootWorkflowPanicSideEffect(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(execs) != 2 {
-			t.Fatalf("expected 2 executions, got %d", len(execs))
+		// Side effect should also only have 1 execution
+		if len(execs) != 1 {
+			t.Fatalf("expected 1 execution, got %d", len(execs))
 		}
 
-		for _, e := range execs {
-			if e.Status != ExecutionStatusCompleted {
-				t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, e.Status)
-			}
+		if execs[0].Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, execs[0].Status)
 		}
 	}
+}
 
+func TestUnitPrepareRootWorkflowPanicWithRetry(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_panic_sideeffect_with_retry.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	hasPanicked := atomic.Bool{}
+	sideEffectCount := atomic.Int32{}
+
+	wrfl := func(ctx WorkflowContext) error {
+		var value int
+		// The side effect should be using workflow context to track its result
+		// and avoid re-execution during retry
+		if err := ctx.SideEffect("sideeffect", func() int {
+			newCount := sideEffectCount.Add(1)
+			fmt.Printf("SideEffect executed %d time(s)\n", newCount)
+			if newCount > 1 {
+				t.Error("Side effect executed more than once")
+			}
+			return 42
+		}).Get(&value); err != nil {
+			return err
+		}
+
+		if !hasPanicked.Swap(true) {
+			panic("on purpose")
+		}
+
+		fmt.Println("Hello, World!", value)
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1,
+			MaxInterval: 100 * time.Millisecond,
+		},
+	})
+
+	if err := future.Get(); err != nil {
+		t.Fatal("workflow should succeed on retry")
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The RetryState.Attempts should be 1 (one retry)
+	if workflow.RetryState.Attempts != 1 {
+		t.Fatalf("expected 1 retry attempt, got %d", workflow.RetryState.Attempts)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should still have 2 executions - initial + 1 retry
+	if len(execs) != 2 {
+		t.Fatalf("expected 2 executions, got %d", len(execs))
+	}
+
+	// First execution should be failed due to panic
+	if execs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected first execution %s, got %s", ExecutionStatusFailed, execs[0].Status)
+	}
+	if execs[0].Error != "workflow panicked" {
+		t.Fatalf("expected error 'workflow panicked', got '%s'", execs[0].Error)
+	}
+
+	// Second execution should be completed
+	if execs[1].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected second execution %s, got %s", ExecutionStatusCompleted, execs[1].Status)
+	}
+
+	// Verify side effect was executed exactly once via the atomic counter
+	if count := sideEffectCount.Load(); count != 1 {
+		t.Fatalf("expected side effect to execute once, got %d executions", count)
+	}
+
+	// Check side effect entities and executions
+	sideeffects, err := db.GetSideEffectEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideeffects) != 1 {
+		t.Fatalf("expected 1 sideeffect entity, got %d", len(sideeffects))
+	}
 }
 
 type sagaStep struct {
@@ -1700,11 +1794,13 @@ func TestUnitSagaCompensationPanic(t *testing.T) {
 					return nil
 				},
 				func(ctx CompensationContext) error {
+					fmt.Println("Second Compensation")
 					panic("panic during compensation")
 				},
 			).
 			Add(
 				func(ctx TransactionContext) error {
+					fmt.Println("third transaction error")
 					return fmt.Errorf("trigger compensation")
 				},
 				func(ctx CompensationContext) error {
@@ -1729,9 +1825,87 @@ func TestUnitSagaCompensationPanic(t *testing.T) {
 		t.Fatal("future is nil")
 	}
 
+	// Check error propagation
 	if err := future.Get(); err != nil {
 		if !errors.Is(err, ErrSagaFailed) {
 			t.Fatal(err)
 		}
+	}
+
+	// Check workflow status
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workflow.Status != StatusFailed {
+		t.Errorf("expected workflow status Failed, got %s", workflow.Status)
+	}
+
+	// Get saga entity
+	sagaEntities, err := db.GetSagaEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sagaEntities) != 1 {
+		t.Fatalf("expected 1 saga entity, got %d", len(sagaEntities))
+	}
+	saga := sagaEntities[0]
+	if saga.Status != StatusFailed {
+		t.Errorf("expected saga status Failed, got %s", saga.Status)
+	}
+
+	// Check saga executions
+	sagaExecutions, err := db.GetSagaExecutions(saga.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 4 executions total:
+	// - 3 transactions (last one failed)
+	// - 1 compensation (panicked)
+	if len(sagaExecutions) != 4 {
+		t.Fatalf("expected 4 saga executions, got %d", len(sagaExecutions))
+	}
+
+	// Check transaction executions
+	var transactionExecutions []*SagaExecution
+	var compensationExecutions []*SagaExecution
+	for _, exec := range sagaExecutions {
+		if exec.ExecutionType == ExecutionTypeTransaction {
+			transactionExecutions = append(transactionExecutions, exec)
+		} else {
+			compensationExecutions = append(compensationExecutions, exec)
+		}
+	}
+
+	// Verify transactions
+	if len(transactionExecutions) != 3 {
+		t.Fatalf("expected 3 transaction executions, got %d", len(transactionExecutions))
+	}
+	// First two transactions should be completed
+	for i := 0; i < 2; i++ {
+		if transactionExecutions[i].Status != ExecutionStatusCompleted {
+			t.Errorf("transaction %d: expected status Completed, got %s", i, transactionExecutions[i].Status)
+		}
+	}
+	// Last transaction should be failed with our trigger error
+	lastTx := transactionExecutions[2]
+	if lastTx.Status != ExecutionStatusFailed || lastTx.Error != "trigger compensation" {
+		t.Errorf("last transaction: expected Failed status with 'trigger compensation' error, got %s with error %s", lastTx.Status, lastTx.Error)
+	}
+
+	// Verify compensation
+	if len(compensationExecutions) != 1 {
+		t.Fatalf("expected 1 compensation execution, got %d", len(compensationExecutions))
+	}
+	compExec := compensationExecutions[0]
+	if compExec.Status != ExecutionStatusFailed {
+		t.Errorf("compensation: expected status Failed, got %s", compExec.Status)
+	}
+	if compExec.StackTrace == nil {
+		t.Error("compensation: expected stack trace for panic, got nil")
+	}
+	if !strings.Contains(compExec.Error, "panic: panic during compensation") {
+		t.Errorf("compensation: expected panic error message, got %s", compExec.Error)
 	}
 }

@@ -3113,7 +3113,44 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 	return nil
 }
 
-func (si *SagaInstance) executeCompensations(_ context.Context, args ...interface{}) error {
+func (si *SagaInstance) executeCompensations(_ context.Context, args ...interface{}) (err error) {
+	// Recover from panics in the compensation phase
+	defer func() {
+		if r := recover(); r != nil {
+			// Capture the stack trace
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+
+			if si.debug.canStackTrace() {
+				fmt.Println(stackTrace)
+			}
+
+			// Update last execution status to failed
+			lastExec, _ := si.db.GetSagaExecutions(si.entityID)
+			if len(lastExec) > 0 {
+				lastStepID := lastExec[len(lastExec)-1].ID
+				if updateErr := si.db.SetSagaExecutionProperties(
+					lastStepID,
+					SetSagaExecutionStatus(ExecutionStatusFailed),
+					SetSagaExecutionError(fmt.Sprintf("panic: %v", r)),
+					SetSagaExecutionStackTrace(stackTrace)); updateErr != nil {
+					log.Printf("Failed to update execution after compensation panic: %v", updateErr)
+				}
+			}
+
+			// Set saga to failed status
+			if err := si.db.SetSagaEntityProperties(
+				si.entityID,
+				SetSagaEntityStatus(StatusFailed)); err != nil {
+				log.Printf("Failed to update saga status after compensation panic: %v", err)
+			}
+
+			// Critical failure - compensation panicked
+			si.fsm.Fire(TriggerFail, fmt.Errorf("compensation panicked: %v", r))
+		}
+	}()
+
 	// Extract the original transaction error if it was passed
 	var transactionErr error
 	if len(args) > 0 {
@@ -3197,7 +3234,13 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 	}
 
 	if compensationFailed {
-		// Pass both the original transaction error and compensation errors to the fail state
+		// Set saga to failed status since compensation failed
+		if err := si.db.SetSagaEntityProperties(
+			si.entityID,
+			SetSagaEntityStatus(StatusFailed)); err != nil {
+			log.Printf("Failed to update saga status after compensation failure: %v", err)
+		}
+
 		si.fsm.Fire(TriggerFail, errors.Join(transactionErr, compensationErr))
 		return nil
 	}
@@ -3210,7 +3253,6 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 		return nil
 	}
 
-	// Even though compensation succeeded, we still want to preserve the original error
 	si.fsm.Fire(TriggerComplete, transactionErr)
 	return nil
 }
