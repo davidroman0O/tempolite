@@ -2539,7 +2539,39 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		}
 	}
 
-	// If no entity exists, create one
+	// If we found an existing entity, check for completed executions
+	if entity != nil {
+		execs, err := ctx.db.GetSideEffectExecutions(entity.ID)
+		if err != nil {
+			future.setError(err)
+			return future
+		}
+
+		// Look for a successful execution
+		for _, exec := range execs {
+			if exec.Status == ExecutionStatusCompleted {
+				// Get the execution data
+				execData, err := ctx.db.GetSideEffectExecutionDataByExecutionID(exec.ID)
+				if err != nil {
+					future.setError(err)
+					return future
+				}
+				if execData != nil && len(execData.Outputs) > 0 {
+					// Reuse the existing result
+					outputs, err := convertOutputsFromSerialization(handler, execData.Outputs)
+					if err != nil {
+						future.setError(err)
+						return future
+					}
+					future.setEntityID(sideEffectEntityID)
+					future.setResult(outputs)
+					return future
+				}
+			}
+		}
+	}
+
+	// No existing completed execution found, proceed with creating new entity/execution
 	if entity == nil {
 		if sideEffectEntityID, err = ctx.db.AddSideEffectEntity(&SideEffectEntity{
 			BaseEntity: BaseEntity{

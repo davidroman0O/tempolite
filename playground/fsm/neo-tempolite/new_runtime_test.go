@@ -3,6 +3,7 @@ package tempolite
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1155,7 +1156,6 @@ func TestUnitPrepareRootWorkflowSideEffect(t *testing.T) {
 }
 
 func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
-
 	ctx := context.Background()
 	db := NewMemoryDatabase()
 	registry := NewRegistry()
@@ -1165,7 +1165,6 @@ func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
 	o := NewOrchestrator(ctx, db, registry)
 
 	wrfl := func(ctx WorkflowContext) error {
-
 		var value int
 		if err := ctx.SideEffect("sideeffect", func() int {
 			fmt.Println("SideEffect, World!")
@@ -1176,11 +1175,15 @@ func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
 		}
 
 		fmt.Println("Hello, World!", value)
-
 		return nil
 	}
 
-	future := o.Execute(wrfl, nil)
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // Add one retry
+			MaxInterval: 100 * time.Millisecond,
+		},
+	})
 
 	if future == nil {
 		t.Fatal("future is nil")
@@ -1201,18 +1204,30 @@ func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
 		t.Fatalf("expected %s, got %s", StatusFailed, workflow.Status)
 	}
 
+	if workflow.RetryState.Attempts != 2 { // Initial attempt + 1 retry
+		t.Fatalf("expected 2 attempts, got %d", workflow.RetryState.Attempts)
+	}
+
 	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(execs) != 2 {
-		t.Fatalf("expected 2 execution, got %d", len(execs))
+		t.Fatalf("expected 2 executions, got %d", len(execs))
 	}
 
-	for _, v := range execs {
-		if v.Status != ExecutionStatusFailed {
-			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
+	// Sort executions by creation time to ensure correct order
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].CreatedAt.Before(execs[j].CreatedAt)
+	})
+
+	for _, exec := range execs {
+		if exec.Status != ExecutionStatusFailed {
+			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, exec.Status)
+		}
+		if !strings.Contains(exec.Error, "side effect panicked") {
+			t.Fatalf("expected error containing 'side effect panicked', got '%s'", exec.Error)
 		}
 	}
 
@@ -1222,30 +1237,37 @@ func TestUnitPrepareRootWorkflowSideEffectPanic(t *testing.T) {
 	}
 
 	if len(sideeffects) != 1 {
-		t.Fatalf("expected 1 sideeffect, got %d", len(sideeffects))
+		t.Fatalf("expected 1 sideeffect entity, got %d", len(sideeffects))
 	}
 
-	for _, v := range sideeffects {
-		if v.Status != StatusFailed {
-			t.Fatalf("expected %s, got %s", StatusFailed, v.Status)
+	for _, se := range sideeffects {
+		if se.Status != StatusFailed {
+			t.Fatalf("expected %s, got %s", StatusFailed, se.Status)
 		}
 
-		execs, err := db.GetSideEffectExecutions(v.ID)
+		seExecs, err := db.GetSideEffectExecutions(se.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if len(execs) != 2 {
-			t.Fatalf("expected 2 executions, got %d", len(execs))
+		if len(seExecs) != 2 {
+			t.Fatalf("expected 2 side effect executions, got %d", len(seExecs))
 		}
 
-		for _, e := range execs {
-			if e.Status != ExecutionStatusFailed {
-				t.Fatalf("expected %s, got %s", ExecutionStatusFailed, e.Status)
+		// Sort side effect executions
+		sort.Slice(seExecs, func(i, j int) bool {
+			return seExecs[i].CreatedAt.Before(seExecs[j].CreatedAt)
+		})
+
+		for _, seExec := range seExecs {
+			if seExec.Status != ExecutionStatusFailed {
+				t.Fatalf("expected %s, got %s", ExecutionStatusFailed, seExec.Status)
+			}
+			if !strings.Contains(seExec.Error, "side effect panicked") {
+				t.Fatalf("expected error containing 'side effect panicked', got '%s'", seExec.Error)
 			}
 		}
 	}
-
 }
 
 func TestUnitPrepareRootWorkflowPanicSideEffect(t *testing.T) {
@@ -1401,10 +1423,15 @@ func TestUnitPrepareRootWorkflowPanicWithRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Should still have 2 executions - initial + 1 retry
+	// Should have 2 executions - initial + 1 retry
 	if len(execs) != 2 {
 		t.Fatalf("expected 2 executions, got %d", len(execs))
 	}
+
+	// Sort executions by creation time to ensure correct order
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].CreatedAt.Before(execs[j].CreatedAt)
+	})
 
 	// First execution should be failed due to panic
 	if execs[0].Status != ExecutionStatusFailed {
