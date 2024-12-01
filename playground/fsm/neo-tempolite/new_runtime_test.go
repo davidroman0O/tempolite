@@ -1372,6 +1372,16 @@ func TestUnitPrepareRootWorkflowEntitySaga(t *testing.T) {
 		fmt.Println("Hello, World!")
 
 		def, err := NewSaga().
+			Add(
+				func(ctx TransactionContext) error {
+					fmt.Println("Transaction, World!")
+					return nil
+				},
+				func(ctx CompensationContext) error {
+					fmt.Println("Compensation, World!")
+					return nil
+				},
+			).
 			AddStep(&sagaStep{}).
 			Build()
 		if err != nil {
@@ -1431,6 +1441,11 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 
 	o := NewOrchestrator(ctx, db, registry)
 
+	// Workflow should be FAILED
+	// Saga that compensates should be COMPENSATED
+	// Saga that succeed should be COMPLETED
+	// Saga that panics during a compensation should be FAILED
+	// Saga cannot be retried, Saga cannot be paused
 	wrfl := func(ctx WorkflowContext) error {
 		fmt.Println("Hello, World!")
 
@@ -1507,7 +1522,9 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 	}
 
 	if err := future.Get(); err != nil {
-		t.Fatal(err)
+		if !errors.Is(err, ErrSagaFailed) {
+			t.Fatal(err)
+		}
 	}
 
 	workflow, err := db.GetWorkflowEntity(future.WorkflowID())

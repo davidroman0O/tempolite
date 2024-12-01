@@ -28,6 +28,7 @@ var (
 	ErrQueueNotFound               = errors.New("queue not found")
 	ErrQueueExists                 = errors.New("queue already exists")
 	ErrSagaValueNotFound           = errors.New("saga value not found")
+	ErrSagaFailed                  = errors.New("saga failed")
 )
 
 // State and Trigger definitions

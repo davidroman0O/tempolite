@@ -2948,6 +2948,10 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 }
 
 // SagaInstance represents an instance of a saga execution.
+// Saga that compensates should have the status COMPENSATED
+// Saga that succeed should have the status COMPLETED
+// Saga that panics during a compensation should have the status FAILED (that means it's very very critical)
+// Saga cannot be retried, Saga cannot be paused
 type SagaInstance struct {
 	ctx     context.Context
 	mu      deadlock.Mutex
@@ -3185,7 +3189,7 @@ func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
 	}
 
 	if si.future != nil {
-		si.future.setError(fmt.Errorf("saga %s failed", si.stepID))
+		si.future.setError(errors.Join(ErrSagaFailed, fmt.Errorf("saga %s failed", si.stepID)))
 	}
 	return nil
 }
