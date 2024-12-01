@@ -1432,7 +1432,6 @@ func TestUnitPrepareRootWorkflowEntitySaga(t *testing.T) {
 }
 
 func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
-
 	ctx := context.Background()
 	db := NewMemoryDatabase()
 	registry := NewRegistry()
@@ -1441,11 +1440,6 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 
 	o := NewOrchestrator(ctx, db, registry)
 
-	// Workflow should be FAILED
-	// Saga that compensates should be COMPENSATED
-	// Saga that succeed should be COMPLETED
-	// Saga that panics during a compensation should be FAILED
-	// Saga cannot be retried, Saga cannot be paused
 	wrfl := func(ctx WorkflowContext) error {
 		fmt.Println("Hello, World!")
 
@@ -1522,33 +1516,95 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 	}
 
 	if err := future.Get(); err != nil {
-		if !errors.Is(err, ErrSagaFailed) {
+		if !errors.Is(err, ErrSagaFailed) && !errors.Is(err, ErrSagaCompensated) {
 			t.Fatal(err)
 		}
 	}
 
+	// Check workflow status
 	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if workflow.Status != StatusCompleted {
-		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	if workflow.Status != StatusFailed {
+		t.Fatalf("expected workflow status %s, got %s", StatusFailed, workflow.Status)
 	}
 
-	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	// Get saga entity
+	sagaEntities, err := db.GetSagaEntities(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(execs) != 1 {
-		t.Fatalf("expected 1 execution, got %d", len(execs))
+	if len(sagaEntities) != 1 {
+		t.Fatalf("expected 1 saga entity, got %d", len(sagaEntities))
 	}
 
-	for _, v := range execs {
-		if v.Status != ExecutionStatusCompleted {
-			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+	sagaEntity := sagaEntities[0]
+	if sagaEntity.Status != StatusCompensated {
+		t.Fatalf("expected saga status %s, got %s", StatusCompensated, sagaEntity.Status)
+	}
+
+	// Check saga executions
+	sagaExecutions, err := db.GetSagaExecutions(sagaEntity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 7 executions total: 4 transactions (last one failed) + 3 compensations
+	if len(sagaExecutions) != 7 {
+		t.Fatalf("expected 7 saga executions, got %d", len(sagaExecutions))
+	}
+
+	// Check transaction executions
+	transactionExecutions := make([]*SagaExecution, 0)
+	compensationExecutions := make([]*SagaExecution, 0)
+	for _, exec := range sagaExecutions {
+		if exec.ExecutionType == ExecutionTypeTransaction {
+			transactionExecutions = append(transactionExecutions, exec)
+		} else {
+			compensationExecutions = append(compensationExecutions, exec)
 		}
 	}
 
+	// Should have 4 transaction executions
+	if len(transactionExecutions) != 4 {
+		t.Fatalf("expected 4 transaction executions, got %d", len(transactionExecutions))
+	}
+
+	// Check failed transaction
+	failedTx := transactionExecutions[3] // The fourth transaction should be the failed one
+	if failedTx.Status != ExecutionStatusFailed || failedTx.Error != "on purpose" {
+		t.Fatalf("expected failed transaction with 'on purpose' error, got status %s with error %s", failedTx.Status, failedTx.Error)
+	}
+
+	// Should have 3 compensation executions (for the first 3 successful transactions)
+	if len(compensationExecutions) != 3 {
+		t.Fatalf("expected 3 compensation executions, got %d", len(compensationExecutions))
+	}
+
+	// All compensations should be completed
+	for i, comp := range compensationExecutions {
+		if comp.Status != ExecutionStatusCompleted {
+			t.Fatalf("compensation execution %d: expected status %s, got %s", i, ExecutionStatusCompleted, comp.Status)
+		}
+	}
+
+	// Check saga values
+	val, err := db.GetSagaValueByExecutionID(3, "something")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(val) == 0 {
+		t.Fatal("expected saga value 'something' to exist")
+	}
+
+	val, err = db.GetSagaValueByExecutionID(3, "something2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(val) == 0 {
+		t.Fatal("expected saga value 'something2' to exist")
+	}
 }

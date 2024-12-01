@@ -8,6 +8,7 @@ import (
 	"log"
 	"reflect"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -2985,14 +2986,18 @@ func (si *SagaInstance) Start() {
 	si.mu.Unlock()
 
 	fsm.Configure(StateIdle).
-		Permit(TriggerStart, StateExecuting).
-		Permit(TriggerPause, StatePaused)
+		Permit(TriggerStart, StateTransactions)
 
-	fsm.Configure(StateExecuting).
-		OnEntry(si.executeSaga).
+	fsm.Configure(StateTransactions).
+		OnEntry(si.executeTransactions).
 		Permit(TriggerComplete, StateCompleted).
-		Permit(TriggerFail, StateFailed).
-		Permit(TriggerPause, StatePaused)
+		Permit(TriggerCompensate, StateCompensations).
+		Permit(TriggerFail, StateFailed)
+
+	fsm.Configure(StateCompensations).
+		OnEntry(si.executeCompensations).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateFailed)
 
 	fsm.Configure(StateCompleted).
 		OnEntry(si.onCompleted)
@@ -3000,35 +3005,22 @@ func (si *SagaInstance) Start() {
 	fsm.Configure(StateFailed).
 		OnEntry(si.onFailed)
 
-	fsm.Configure(StatePaused).
-		OnEntry(si.onPaused).
-		Permit(TriggerResume, StateExecuting)
-
 	log.Printf("Starting saga: %s (Entity ID: %d)", si.stepID, si.entityID)
 
-	// Start the FSM without holding the lock
 	if err := fsm.Fire(TriggerStart); err != nil {
-		if !errors.Is(err, ErrPaused) {
-			log.Printf("Error starting saga: %v", err)
-		}
+		log.Printf("Error starting saga: %v", err)
 	}
 }
-
-func (si *SagaInstance) executeSaga(_ context.Context, args ...interface{}) error {
+func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{}) error {
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusRunning)); err != nil {
-		return fmt.Errorf("failed to update saga status: %w", err)
+		si.fsm.Fire(TriggerFail, err)
+		return nil
 	}
-
-	var executedSteps []int
 
 	// Execute transactions
 	for stepIdx := 0; stepIdx < len(si.saga.Steps); stepIdx++ {
-		if err := si.checkPause(); err != nil {
-			return err
-		}
-
 		stepExec := &SagaExecution{
 			BaseExecution: BaseExecution{
 				EntityID: si.entityID,
@@ -3043,14 +3035,15 @@ func (si *SagaInstance) executeSaga(_ context.Context, args ...interface{}) erro
 		var stepExecID int
 		var err error
 		if stepExecID, err = si.db.AddSagaExecution(stepExec); err != nil {
-			return fmt.Errorf("failed to add step execution: %w", err)
+			si.fsm.Fire(TriggerFail, err)
+			return nil
 		}
 
 		step := si.saga.Steps[stepIdx]
 		txContext := TransactionContext{
 			ctx:         si.ctx,
 			db:          si.db,
-			executionID: stepExecID, // Using the step execution ID directly
+			executionID: stepExecID,
 			stepIndex:   stepIdx,
 		}
 
@@ -3063,50 +3056,65 @@ func (si *SagaInstance) executeSaga(_ context.Context, args ...interface{}) erro
 				log.Printf("Failed to update failed step execution: %v", updateErr)
 			}
 
-			compensationErr := si.executeCompensations(executedSteps) // Removed contextID parameter
-			if compensationErr != nil {
-				log.Printf("Error during compensation: %v", compensationErr)
-			}
-
-			finalStatus := StatusFailed
-			if compensationErr == nil {
-				finalStatus = StatusCompensated
-			}
-
-			if updateErr := si.db.SetSagaEntityProperties(
-				si.entityID,
-				SetSagaEntityStatus(finalStatus)); updateErr != nil {
-				log.Printf("Failed to update saga status: %v", updateErr)
-			}
-
-			si.fsm.Fire(TriggerFail, err)
+			// Pass the error to the compensation state
+			si.fsm.Fire(TriggerCompensate, err)
 			return nil
 		}
 
 		if err := si.db.SetSagaExecutionProperties(
 			stepExecID,
 			SetSagaExecutionStatus(ExecutionStatusCompleted)); err != nil {
-			return fmt.Errorf("failed to update step execution status: %w", err)
+			si.fsm.Fire(TriggerFail, err)
+			return nil
 		}
-
-		executedSteps = append(executedSteps, stepExecID) // Store execution ID instead of step index
 	}
 
+	// All steps completed successfully
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusCompleted)); err != nil {
-		return fmt.Errorf("failed to update saga status: %w", err)
+		si.fsm.Fire(TriggerFail, err)
+		return nil
 	}
 
 	si.fsm.Fire(TriggerComplete)
 	return nil
 }
 
-func (si *SagaInstance) executeCompensations(executionIDs []int) error {
-	var lastError error
+func (si *SagaInstance) executeCompensations(_ context.Context, args ...interface{}) error {
+	// Extract the original transaction error if it was passed
+	var transactionErr error
+	if len(args) > 0 {
+		if err, ok := args[0].(error); ok {
+			transactionErr = err
+		}
+	}
 
-	for i := len(executionIDs) - 1; i >= 0; i-- {
-		execID := executionIDs[i]
+	executions, err := si.db.GetSagaExecutions(si.entityID)
+	if err != nil {
+		si.fsm.Fire(TriggerFail, errors.Join(transactionErr, err))
+		return nil
+	}
+
+	// Filter and sort completed transaction executions
+	var completedTransactions []*SagaExecution
+	for _, exec := range executions {
+		if exec.Status == ExecutionStatusCompleted && exec.ExecutionType == ExecutionTypeTransaction {
+			completedTransactions = append(completedTransactions, exec)
+		}
+	}
+
+	// Sort by StepIndex in descending order for reverse compensation
+	sort.Slice(completedTransactions, func(i, j int) bool {
+		return completedTransactions[i].SagaExecutionData.StepIndex > completedTransactions[j].SagaExecutionData.StepIndex
+	})
+
+	compensationFailed := false
+	var compensationErr error
+
+	// Execute compensations in reverse order
+	for _, txExec := range completedTransactions {
+		stepIdx := txExec.SagaExecutionData.StepIndex
 
 		compExec := &SagaExecution{
 			BaseExecution: BaseExecution{
@@ -3115,32 +3123,35 @@ func (si *SagaInstance) executeCompensations(executionIDs []int) error {
 			},
 			ExecutionType: ExecutionTypeCompensation,
 			SagaExecutionData: &SagaExecutionData{
-				StepIndex: i, // Keep track of original step index
+				StepIndex: stepIdx,
 			},
 		}
 
 		var compExecID int
-		var err error
 		if compExecID, err = si.db.AddSagaExecution(compExec); err != nil {
-			return fmt.Errorf("failed to add compensation execution: %w", err)
+			compensationFailed = true
+			compensationErr = errors.Join(compensationErr, err)
+			continue
 		}
 
-		step := si.saga.Steps[i]
+		step := si.saga.Steps[stepIdx]
 		compContext := CompensationContext{
 			ctx:         si.ctx,
 			db:          si.db,
-			executionID: execID, // Use the original transaction's execution ID
-			stepIndex:   i,
+			executionID: txExec.ID,
+			stepIndex:   stepIdx,
 		}
 
 		err = step.Compensation(compContext)
 		if err != nil {
-			lastError = err
+			compensationFailed = true
+			compensationErr = errors.Join(compensationErr, err)
+
 			if updateErr := si.db.SetSagaExecutionProperties(
 				compExecID,
 				SetSagaExecutionStatus(ExecutionStatusFailed),
 				SetSagaExecutionError(err.Error())); updateErr != nil {
-				log.Printf("Failed to update failed compensation execution: %v", updateErr)
+				log.Printf("Failed to update compensation execution status: %v", updateErr)
 			}
 			continue
 		}
@@ -3148,55 +3159,73 @@ func (si *SagaInstance) executeCompensations(executionIDs []int) error {
 		if err := si.db.SetSagaExecutionProperties(
 			compExecID,
 			SetSagaExecutionStatus(ExecutionStatusCompleted)); err != nil {
-			return fmt.Errorf("failed to update compensation execution status: %w", err)
+			compensationFailed = true
+			compensationErr = errors.Join(compensationErr, err)
 		}
 	}
 
-	return lastError
+	if compensationFailed {
+		// Pass both the original transaction error and compensation errors to the fail state
+		si.fsm.Fire(TriggerFail, errors.Join(transactionErr, compensationErr))
+		return nil
+	}
+
+	// All compensations completed successfully
+	if err := si.db.SetSagaEntityProperties(
+		si.entityID,
+		SetSagaEntityStatus(StatusCompensated)); err != nil {
+		si.fsm.Fire(TriggerFail, errors.Join(transactionErr, err))
+		return nil
+	}
+
+	// Even though compensation succeeded, we still want to preserve the original error
+	si.fsm.Fire(TriggerComplete, transactionErr)
+	return nil
 }
 
-func (si *SagaInstance) checkPause() error {
-	if si.state.isPaused() {
-		if err := si.db.SetSagaEntityProperties(
-			si.entityID,
-			SetSagaEntityStatus(StatusPaused)); err != nil {
-			return fmt.Errorf("failed to update saga status: %w", err)
+func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) error {
+	var status EntityStatus
+	if err := si.db.GetSagaEntityProperties(
+		si.entityID,
+		GetSagaEntityStatus(&status)); err != nil {
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	if si.future != nil {
+		if status == StatusCompensated {
+			// If we have a transaction error from the previous state, include it
+			var transactionErr error
+			if len(args) > 0 {
+				if err, ok := args[0].(error); ok {
+					transactionErr = err
+				}
+			}
+			si.future.setError(errors.Join(ErrSagaCompensated, transactionErr))
+		} else {
+			si.future.setResult(nil)
 		}
-		si.fsm.Fire(TriggerPause)
-		return ErrPaused
 	}
 	return nil
 }
 
-func (si *SagaInstance) onCompleted(_ context.Context, _ ...interface{}) error {
-	if err := si.db.SetSagaEntityProperties(
+func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
+	var err error
+	if len(args) > 0 {
+		if e, ok := args[0].(error); ok {
+			err = e
+		}
+	}
+
+	// Mark saga as failed
+	if updateErr := si.db.SetSagaEntityProperties(
 		si.entityID,
-		SetSagaEntityStatus(StatusCompleted)); err != nil {
-		return fmt.Errorf("failed to update saga status: %w", err)
+		SetSagaEntityStatus(StatusFailed)); updateErr != nil {
+		return fmt.Errorf("failed to update saga status: %w", updateErr)
 	}
 
 	if si.future != nil {
-		si.future.setResult(nil) // Could be extended to return aggregated results if needed
-	}
-	return nil
-}
-
-func (si *SagaInstance) onFailed(_ context.Context, _ ...interface{}) error {
-	if err := si.db.SetSagaEntityProperties(
-		si.entityID,
-		SetSagaEntityStatus(StatusFailed)); err != nil {
-		return fmt.Errorf("failed to update saga status: %w", err)
-	}
-
-	if si.future != nil {
-		si.future.setError(errors.Join(ErrSagaFailed, fmt.Errorf("saga %s failed", si.stepID)))
-	}
-	return nil
-}
-
-func (si *SagaInstance) onPaused(_ context.Context, _ ...interface{}) error {
-	if si.future != nil {
-		si.future.setError(ErrPaused)
+		si.future.setError(errors.Join(ErrSagaFailed, err))
 	}
 	return nil
 }

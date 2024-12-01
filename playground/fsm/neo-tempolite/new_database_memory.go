@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -1447,6 +1448,29 @@ func (db *MemoryDatabase) GetSagaExecution(id int, opts ...SagaExecutionGetOptio
 	}
 
 	return copySagaExecution(exec), nil
+}
+
+func (db *MemoryDatabase) GetSagaExecutions(entityID int) ([]*SagaExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	executions := make([]*SagaExecution, 0)
+	for _, exec := range db.sagaExecutions {
+		if exec.EntityID == entityID {
+			executions = append(executions, copySagaExecution(exec))
+		}
+	}
+
+	if len(executions) == 0 {
+		return nil, ErrSagaExecutionNotFound
+	}
+
+	// Sort by creation time to maintain execution order
+	sort.Slice(executions, func(i, j int) bool {
+		return executions[i].CreatedAt.Before(executions[j].CreatedAt)
+	})
+
+	return executions, nil
 }
 
 func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error) {

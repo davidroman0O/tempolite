@@ -29,6 +29,7 @@ var (
 	ErrQueueExists                 = errors.New("queue already exists")
 	ErrSagaValueNotFound           = errors.New("saga value not found")
 	ErrSagaFailed                  = errors.New("saga failed")
+	ErrSagaCompensated             = errors.New("saga compensated")
 )
 
 // State and Trigger definitions
@@ -857,6 +858,7 @@ type Database interface {
 	// Saga Execution
 	AddSagaExecution(exec *SagaExecution) (int, error)
 	GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error)
+	GetSagaExecutions(entityID int) ([]*SagaExecution, error)
 	HasSagaExecution(id int) (bool, error)
 	GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error
 	SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error
