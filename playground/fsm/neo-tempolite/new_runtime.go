@@ -397,91 +397,6 @@ type WorkflowInstance struct {
 	parentStepID      string
 }
 
-type ActivityOptions struct {
-	RetryPolicy *RetryPolicy
-}
-
-// ActivityInstance represents an instance of an activity execution.
-type ActivityInstance struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	mu      deadlock.Mutex
-	db      Database
-	tracker InstanceTracker
-	state   StateTracker
-	debug   Debug
-
-	handler HandlerInfo
-
-	fsm *stateless.StateMachine
-
-	options ActivityOptions
-	future  Future
-
-	runID       int
-	stepID      string
-	workflowID  int
-	entityID    int
-	executionID int
-	dataID      int
-	queueID     int
-
-	parentExecutionID int
-	parentEntityID    int
-	parentStepID      string
-}
-
-// // SideEffectInstance represents an instance of a side effect execution.
-// type SideEffectInstance struct {
-// 	ctx   context.Context
-// 	mu    deadlock.Mutex
-// 	debug Debug
-
-// 	handlerName    string
-// 	handler        HandlerInfo
-// 	returnTypes    []reflect.Type // since we're doing it on-the-fly
-// 	sideEffectFunc interface{}
-
-// 	results []interface{}
-// 	err     error
-
-// 	fsm    *stateless.StateMachine
-// 	future *Future
-
-// 	stepID      string
-// 	workflowID  int
-// 	entityID    int
-// 	executionID int
-
-// 	parentExecutionID int
-// 	parentEntityID    int
-// 	parentStepID      string
-// }
-
-// SagaInstance represents an instance of a saga execution.
-// type SagaInstance struct {
-// 	ctx   context.Context
-// 	mu    deadlock.Mutex
-// 	debug Debug
-
-// 	saga        SagaDefinition
-// 	fsm         *stateless.StateMachine
-// 	future      Future
-// 	currentStep int
-
-// 	err error
-
-// 	compensations []int // Indices of steps to compensate
-
-// 	stepID      string
-// 	workflowID  int
-// 	executionID int
-
-// 	parentExecutionID int
-// 	parentEntityID    int
-// 	parentStepID      string
-// }
-
 // Future implementation of direct calling
 type RuntimeFuture struct {
 	mu         sync.Mutex
@@ -2148,6 +2063,40 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	activityInstance.Start(inputs) // synchronous because we want to know when it's done for real, the future will sent back the data anyway
 
 	return future
+}
+
+type ActivityOptions struct {
+	RetryPolicy *RetryPolicy
+}
+
+// ActivityInstance represents an instance of an activity execution.
+type ActivityInstance struct {
+	ctx     context.Context
+	cancel  context.CancelFunc
+	mu      deadlock.Mutex
+	db      Database
+	tracker InstanceTracker
+	state   StateTracker
+	debug   Debug
+
+	handler HandlerInfo
+
+	fsm *stateless.StateMachine
+
+	options ActivityOptions
+	future  Future
+
+	runID       int
+	stepID      string
+	workflowID  int
+	entityID    int
+	executionID int
+	dataID      int
+	queueID     int
+
+	parentExecutionID int
+	parentEntityID    int
+	parentStepID      string
 }
 
 func (ai *ActivityInstance) Start(inputs []interface{}) {
