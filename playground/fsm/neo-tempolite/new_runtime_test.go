@@ -2120,3 +2120,740 @@ func TestUnitSequentialSagasWithManualCompensation(t *testing.T) {
 		t.Error("saga1_value not found")
 	}
 }
+
+func TestUnitSagaSkipOnWorkflowRetry(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_saga_skip_on_retry.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	// Use atomic values to track calls
+	var sagaCallCount atomic.Int64
+	var workflowAttempts atomic.Int64
+
+	wrfl := func(ctx WorkflowContext) error {
+		workflowAttempts.Add(1)
+
+		// First run the saga
+		saga, err := NewSaga().
+			Add(
+				func(tc TransactionContext) error {
+					sagaCallCount.Add(1)
+					fmt.Println("Saga Transaction called, count:", sagaCallCount.Load())
+					val := 42
+					if err := tc.Store("test_value", &val); err != nil {
+						return err
+					}
+					return nil
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Saga Compensation")
+					return nil
+				},
+			).Build()
+		if err != nil {
+			return err
+		}
+
+		// Execute saga - should succeed
+		sagaFuture := ctx.Saga("test_saga", saga)
+		if err := sagaFuture.Get(); err != nil {
+			return err
+		}
+
+		// After saga succeeds, fail the workflow on first attempt
+		attempt := workflowAttempts.Load()
+		if attempt == 1 {
+			return fmt.Errorf("deliberate workflow failure on attempt %d", attempt)
+		}
+
+		// Second attempt should succeed
+		return nil
+	}
+
+	// Configure workflow with retry policy
+	options := &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // Allow one retry
+			MaxInterval: 100 * time.Millisecond,
+		},
+	}
+
+	future := o.Execute(wrfl, options)
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	// Wait for completion
+	err := future.Get()
+	if err != nil {
+		t.Fatalf("unexpected workflow error: %v", err)
+	}
+
+	// Verify workflow attempts
+	attempts := workflowAttempts.Load()
+	if attempts != 2 {
+		t.Errorf("expected 2 workflow attempts, got %d", attempts)
+	}
+
+	// Verify saga was called exactly once
+	sagaCalls := sagaCallCount.Load()
+	if sagaCalls != 1 {
+		t.Errorf("expected saga to be called exactly once, got %d calls", sagaCalls)
+	}
+
+	// Verify workflow final state
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workflow.Status != StatusCompleted {
+		t.Errorf("expected workflow status Completed, got %s", workflow.Status)
+	}
+
+	// Get saga entity
+	sagaEntities, err := db.GetSagaEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sagaEntities) != 1 {
+		t.Fatalf("expected 1 saga entity, got %d", len(sagaEntities))
+	}
+
+	saga := sagaEntities[0]
+	if saga.Status != StatusCompleted {
+		t.Errorf("expected saga status Completed, got %s", saga.Status)
+	}
+
+	// Verify saga executions - should have exactly 1 transaction
+	sagaExecutions, err := db.GetSagaExecutions(saga.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var txCount int
+	for _, exec := range sagaExecutions {
+		if exec.ExecutionType == ExecutionTypeTransaction {
+			txCount++
+			if exec.Status != ExecutionStatusCompleted {
+				t.Errorf("saga transaction: expected status %s, got %s",
+					ExecutionStatusCompleted, exec.Status)
+			}
+		}
+	}
+
+	if txCount != 1 {
+		t.Errorf("expected exactly 1 saga transaction, got %d", txCount)
+	}
+
+	// Verify saga value was stored and preserved across retry
+	val, err := db.GetSagaValueByExecutionID(saga.ID, "test_value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(val) == 0 {
+		t.Error("test_value not found")
+	}
+}
+
+func TestUnitPrepareRootWorkflowSubWorkflowEntity(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_subworkflow_entity.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	subwrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello,sub-World!")
+		return nil
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		if err := ctx.Workflow("sub", subwrfl, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Get the root workflow entity
+	rootWorkflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify root workflow properties
+	if rootWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected root workflow status %s, got %s", StatusCompleted, rootWorkflow.Status)
+	}
+	if !rootWorkflow.WorkflowData.IsRoot {
+		t.Fatal("expected root workflow IsRoot to be true")
+	}
+
+	// Get root workflow executions
+	rootExecs, err := db.GetWorkflowExecutions(rootWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootExecs) != 1 {
+		t.Fatalf("expected 1 root execution, got %d", len(rootExecs))
+	}
+	if rootExecs[0].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected root execution status %s, got %s", ExecutionStatusCompleted, rootExecs[0].Status)
+	}
+
+	// Get hierarchies to find subworkflow
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(rootWorkflow.ID, "sub", EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy, got %d", len(hierarchies))
+	}
+
+	hierarchy := hierarchies[0]
+	// Verify hierarchy properties
+	if hierarchy.ParentType != EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s", EntityWorkflow, hierarchy.ParentType)
+	}
+	if hierarchy.ChildType != EntityWorkflow {
+		t.Fatalf("expected child type %s, got %s", EntityWorkflow, hierarchy.ChildType)
+	}
+	if hierarchy.ParentEntityID != rootWorkflow.ID {
+		t.Fatalf("expected parent entity ID %d, got %d", rootWorkflow.ID, hierarchy.ParentEntityID)
+	}
+
+	// Get and verify subworkflow
+	subWorkflow, err := db.GetWorkflowEntity(hierarchy.ChildEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected sub-workflow status %s, got %s", StatusCompleted, subWorkflow.Status)
+	}
+	if subWorkflow.WorkflowData.IsRoot {
+		t.Fatal("expected sub-workflow IsRoot to be false")
+	}
+	if subWorkflow.StepID != "sub" {
+		t.Fatalf("expected sub-workflow stepID 'sub', got %s", subWorkflow.StepID)
+	}
+
+	// Get and verify subworkflow executions
+	subExecs, err := db.GetWorkflowExecutions(subWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(subExecs) != 1 {
+		t.Fatalf("expected 1 sub-workflow execution, got %d", len(subExecs))
+	}
+	if subExecs[0].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected sub-workflow execution status %s, got %s", ExecutionStatusCompleted, subExecs[0].Status)
+	}
+
+	// Verify execution IDs in hierarchy
+	if hierarchy.ParentExecutionID != rootExecs[0].ID {
+		t.Fatalf("expected hierarchy parent execution ID %d, got %d", rootExecs[0].ID, hierarchy.ParentExecutionID)
+	}
+	if hierarchy.ChildExecutionID != subExecs[0].ID {
+		t.Fatalf("expected hierarchy child execution ID %d, got %d", subExecs[0].ID, hierarchy.ChildExecutionID)
+	}
+}
+
+func TestUnitSubWorkflowError(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_subworkflow_error.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	expectedErr := errors.New("sub-workflow error")
+
+	subwrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello from failing sub-workflow!")
+		return expectedErr
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello from root workflow!")
+		if err := ctx.Workflow("sub", subwrfl, nil).Get(); err != nil {
+			// Should propagate error up
+			return fmt.Errorf("sub-workflow failed: %w", err)
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	// Get() should return error from root workflow
+	err := future.Get()
+	if err == nil {
+		t.Fatal("expected error from future.Get(), got nil")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error to contain %v, got %v", expectedErr, err)
+	}
+
+	// Get the root workflow entity
+	rootWorkflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Root workflow should be failed since sub-workflow failed
+	if rootWorkflow.Status != StatusFailed {
+		t.Fatalf("expected root workflow status %s, got %s", StatusFailed, rootWorkflow.Status)
+	}
+	if !rootWorkflow.WorkflowData.IsRoot {
+		t.Fatal("expected root workflow IsRoot to be true")
+	}
+
+	// Get root workflow executions
+	rootExecs, err := db.GetWorkflowExecutions(rootWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootExecs) != 1 {
+		t.Fatalf("expected 1 root execution, got %d", len(rootExecs))
+	}
+	if rootExecs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected root execution status %s, got %s", ExecutionStatusFailed, rootExecs[0].Status)
+	}
+	// Root execution should contain error message
+	if rootExecs[0].Error == "" {
+		t.Fatal("expected root execution to have error message")
+	}
+
+	// Get hierarchies to find subworkflow
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(rootWorkflow.ID, "sub", EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy, got %d", len(hierarchies))
+	}
+
+	hierarchy := hierarchies[0]
+	// Verify hierarchy still maintains correct types
+	if hierarchy.ParentType != EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s", EntityWorkflow, hierarchy.ParentType)
+	}
+	if hierarchy.ChildType != EntityWorkflow {
+		t.Fatalf("expected child type %s, got %s", EntityWorkflow, hierarchy.ChildType)
+	}
+
+	// Get and verify subworkflow status
+	subWorkflow, err := db.GetWorkflowEntity(hierarchy.ChildEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subWorkflow.Status != StatusFailed {
+		t.Fatalf("expected sub-workflow status %s, got %s", StatusFailed, subWorkflow.Status)
+	}
+	if subWorkflow.WorkflowData.IsRoot {
+		t.Fatal("expected sub-workflow IsRoot to be false")
+	}
+	if subWorkflow.StepID != "sub" {
+		t.Fatalf("expected sub-workflow stepID 'sub', got %s", subWorkflow.StepID)
+	}
+
+	// Get and verify subworkflow executions
+	subExecs, err := db.GetWorkflowExecutions(subWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(subExecs) != 1 {
+		t.Fatalf("expected 1 sub-workflow execution, got %d", len(subExecs))
+	}
+	if subExecs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected sub-workflow execution status %s, got %s", ExecutionStatusFailed, subExecs[0].Status)
+	}
+	// Sub-workflow execution should contain original error
+	if subExecs[0].Error != expectedErr.Error() {
+		t.Fatalf("expected sub-workflow execution error %q, got %q", expectedErr.Error(), subExecs[0].Error)
+	}
+
+	// Verify execution IDs in hierarchy
+	if hierarchy.ParentExecutionID != rootExecs[0].ID {
+		t.Fatalf("expected hierarchy parent execution ID %d, got %d", rootExecs[0].ID, hierarchy.ParentExecutionID)
+	}
+	if hierarchy.ChildExecutionID != subExecs[0].ID {
+		t.Fatalf("expected hierarchy child execution ID %d, got %d", subExecs[0].ID, hierarchy.ChildExecutionID)
+	}
+}
+
+func TestUnitSubWorkflowRetrySuccess(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_subworkflow_retry_success.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	// Counter to track retry attempts
+	attempts := 0
+	subwrfl := func(ctx WorkflowContext) error {
+		attempts++
+		fmt.Printf("Sub-workflow attempt %d\n", attempts)
+		if attempts == 1 {
+			return errors.New("first attempt fails")
+		}
+		// Second attempt succeeds
+		return nil
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello from root workflow!")
+		// Configure retry policy for the subworkflow
+		retryPolicy := &RetryPolicy{
+			MaxAttempts: 3,               // Allow up to 3 attempts
+			MaxInterval: time.Second * 1, // 1 second between retries
+		}
+		if err := ctx.Workflow("sub", subwrfl, &WorkflowOptions{
+			RetryPolicy: retryPolicy,
+		}).Get(); err != nil {
+			return fmt.Errorf("sub-workflow failed: %w", err)
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	// Should succeed after retry
+	if err := future.Get(); err != nil {
+		t.Fatalf("expected success after retry, got error: %v", err)
+	}
+
+	// Verify attempts
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+
+	// Get the root workflow entity
+	rootWorkflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Root workflow should be completed
+	if rootWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected root workflow status %s, got %s", StatusCompleted, rootWorkflow.Status)
+	}
+
+	// Get hierarchies to find subworkflow
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(rootWorkflow.ID, "sub", EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy, got %d", len(hierarchies))
+	}
+
+	hierarchy := hierarchies[0]
+
+	// Get and verify subworkflow
+	subWorkflow, err := db.GetWorkflowEntity(hierarchy.ChildEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Final state should be completed
+	if subWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected sub-workflow status %s, got %s", StatusCompleted, subWorkflow.Status)
+	}
+
+	// Verify retry state
+	if subWorkflow.RetryState.Attempts != 1 { // Attempts counter starts at 0
+		t.Fatalf("expected retry attempts 1, got %d", subWorkflow.RetryState.Attempts)
+	}
+
+	// Get and verify all subworkflow executions
+	subExecs, err := db.GetWorkflowExecutions(subWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 2 executions (first failed, second succeeded)
+	if len(subExecs) != 2 {
+		t.Fatalf("expected 2 sub-workflow executions, got %d", len(subExecs))
+	}
+
+	// Sort executions by creation time to verify sequence
+	sort.Slice(subExecs, func(i, j int) bool {
+		return subExecs[i].CreatedAt.Before(subExecs[j].CreatedAt)
+	})
+
+	// Verify first execution failed
+	if subExecs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected first execution status %s, got %s", ExecutionStatusFailed, subExecs[0].Status)
+	}
+	if subExecs[0].Error == "" {
+		t.Fatal("expected first execution to have error message")
+	}
+
+	// Verify second execution succeeded
+	if subExecs[1].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected second execution status %s, got %s", ExecutionStatusCompleted, subExecs[1].Status)
+	}
+	if subExecs[1].Error != "" {
+		t.Fatalf("expected second execution to have no error, got: %s", subExecs[1].Error)
+	}
+
+	// Verify final execution ID in hierarchy matches successful execution
+	if hierarchy.ChildExecutionID != subExecs[1].ID {
+		t.Fatalf("expected hierarchy to reference successful execution ID %d, got %d", subExecs[1].ID, hierarchy.ChildExecutionID)
+	}
+
+	// Get root executions to verify they're still properly linked
+	rootExecs, err := db.GetWorkflowExecutions(rootWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootExecs) != 1 {
+		t.Fatalf("expected 1 root execution, got %d", len(rootExecs))
+	}
+	if rootExecs[0].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected root execution status %s, got %s", ExecutionStatusCompleted, rootExecs[0].Status)
+	}
+
+	// Verify parent/child execution relationship maintained
+	if hierarchy.ParentExecutionID != rootExecs[0].ID {
+		t.Fatalf("expected hierarchy parent execution ID %d, got %d", rootExecs[0].ID, hierarchy.ParentExecutionID)
+	}
+}
+
+func TestUnitSubWorkflowPanic(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_subworkflow_panic.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	subwrfl := func(ctx WorkflowContext) error {
+		fmt.Println("About to panic in sub-workflow!")
+		panic("sub-workflow panic")
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello from root workflow!")
+		if err := ctx.Workflow("sub", subwrfl, nil).Get(); err != nil {
+			return fmt.Errorf("sub-workflow failed: %w", err)
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	// Get() should return panic as error
+	err := future.Get()
+	if err == nil {
+		t.Fatal("expected error from future.Get(), got nil")
+	}
+	if !errors.Is(err, ErrWorkflowPanicked) {
+		t.Fatalf("expected error to be ErrWorkflowPanicked, got %v", err)
+	}
+
+	// Get the root workflow entity
+	rootWorkflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Root workflow should be failed
+	if rootWorkflow.Status != StatusFailed {
+		t.Fatalf("expected root workflow status %s, got %s", StatusFailed, rootWorkflow.Status)
+	}
+
+	// Get hierarchies to find subworkflow
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(rootWorkflow.ID, "sub", EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy, got %d", len(hierarchies))
+	}
+
+	// Get and verify subworkflow
+	subWorkflow, err := db.GetWorkflowEntity(hierarchies[0].ChildEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if subWorkflow.Status != StatusFailed {
+		t.Fatalf("expected sub-workflow status %s, got %s", StatusFailed, subWorkflow.Status)
+	}
+
+	// Get and verify subworkflow executions
+	subExecs, err := db.GetWorkflowExecutions(subWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subExecs) != 1 {
+		t.Fatalf("expected 1 sub-workflow execution, got %d", len(subExecs))
+	}
+
+	// Verify execution details
+	if subExecs[0].Status != ExecutionStatusFailed {
+		t.Fatalf("expected execution status %s, got %s", ExecutionStatusFailed, subExecs[0].Status)
+	}
+	if subExecs[0].StackTrace == nil {
+		t.Fatal("expected stack trace to be present")
+	}
+}
+
+func TestUnitSubWorkflowPanicWithRetrySuccess(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_subworkflow_panic_retry.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	attempts := 0
+	subwrfl := func(ctx WorkflowContext) error {
+		attempts++
+		fmt.Printf("Sub-workflow attempt %d\n", attempts)
+		if attempts == 1 {
+			panic("first attempt panics")
+		}
+		// Second attempt succeeds
+		return nil
+	}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello from root workflow!")
+		retryPolicy := &RetryPolicy{
+			MaxAttempts: 3,
+			MaxInterval: time.Second * 1,
+		}
+		if err := ctx.Workflow("sub", subwrfl, &WorkflowOptions{
+			RetryPolicy: retryPolicy,
+		}).Get(); err != nil {
+			return fmt.Errorf("sub-workflow failed: %w", err)
+		}
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	// Should succeed after retry
+	if err := future.Get(); err != nil {
+		t.Fatalf("expected success after retry, got error: %v", err)
+	}
+
+	// Verify attempts
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+
+	// Get the root workflow entity
+	rootWorkflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Root workflow should be completed
+	if rootWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected root workflow status %s, got %s", StatusCompleted, rootWorkflow.Status)
+	}
+
+	// Get hierarchies to find subworkflow
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(rootWorkflow.ID, "sub", EntityWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get and verify subworkflow
+	subWorkflow, err := db.GetWorkflowEntity(hierarchies[0].ChildEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if subWorkflow.Status != StatusCompleted {
+		t.Fatalf("expected sub-workflow status %s, got %s", StatusCompleted, subWorkflow.Status)
+	}
+
+	// Verify retry state
+	if subWorkflow.RetryState.Attempts != 1 {
+		t.Fatalf("expected retry attempts 1, got %d", subWorkflow.RetryState.Attempts)
+	}
+
+	// Get and verify all executions
+	subExecs, err := db.GetWorkflowExecutions(subWorkflow.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subExecs) != 2 {
+		t.Fatalf("expected 2 sub-workflow executions, got %d", len(subExecs))
+	}
+
+	// Sort executions by creation time
+	sort.Slice(subExecs, func(i, j int) bool {
+		return subExecs[i].CreatedAt.Before(subExecs[j].CreatedAt)
+	})
+
+	// Verify first execution (panic)
+	firstExec := subExecs[0]
+	if firstExec.Status != ExecutionStatusFailed {
+		t.Fatalf("expected first execution status %s, got %s", ExecutionStatusFailed, firstExec.Status)
+	}
+	if firstExec.StackTrace == nil {
+		t.Fatal("expected stack trace in first execution")
+	}
+
+	// Verify second execution (success)
+	secondExec := subExecs[1]
+	if secondExec.Status != ExecutionStatusCompleted {
+		t.Fatalf("expected second execution status %s, got %s", ExecutionStatusCompleted, secondExec.Status)
+	}
+	if secondExec.Error != "" {
+		t.Fatalf("expected no error in successful execution, got: %s", secondExec.Error)
+	}
+	if secondExec.StackTrace != nil {
+		t.Fatal("expected no stack trace in successful execution")
+	}
+
+	// Verify hierarchy points to successful execution
+	if hierarchies[0].ChildExecutionID != secondExec.ID {
+		t.Fatalf("expected hierarchy to reference successful execution ID %d, got %d",
+			secondExec.ID, hierarchies[0].ChildExecutionID)
+	}
+}

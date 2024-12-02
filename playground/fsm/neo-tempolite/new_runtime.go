@@ -317,6 +317,7 @@ func (ac ActivityContext) Err() error {
 }
 
 // WorkflowContext provides context for workflow execution.
+// TODO: add a function to know how much was i retried!
 type WorkflowContext struct {
 	db                  Database
 	registry            *Registry
@@ -1488,20 +1489,32 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 			}
 
 			if !isRoot {
-				// Hierarchy
-				if _, err = wi.db.AddHierarchy(&Hierarchy{
-					RunID:             wi.runID,
-					ParentStepID:      wi.parentStepID,
-					ParentEntityID:    wi.parentEntityID,
-					ParentExecutionID: wi.parentExecutionID,
-					ChildStepID:       wi.stepID,
-					ChildEntityID:     wi.workflowID,
-					ChildExecutionID:  wi.executionID,
-					ParentType:        EntityWorkflow,
-					ChildType:         EntityActivity,
-				}); err != nil {
-					wi.mu.Unlock()
-					return fmt.Errorf("failed to add hierarchy: %w", err)
+				// Check if hierarchy already exists for this execution
+				hierarchies, err := wi.db.GetHierarchiesByChildEntity(wi.workflowID)
+				if err != nil || len(hierarchies) == 0 {
+					// Only create hierarchy if none exists
+					if _, err = wi.db.AddHierarchy(&Hierarchy{
+						RunID:             wi.runID,
+						ParentStepID:      wi.parentStepID,
+						ParentEntityID:    wi.parentEntityID,
+						ParentExecutionID: wi.parentExecutionID,
+						ChildStepID:       wi.stepID,
+						ChildEntityID:     wi.workflowID,
+						ChildExecutionID:  wi.executionID,
+						ParentType:        EntityWorkflow,
+						ChildType:         EntityWorkflow,
+					}); err != nil {
+						wi.mu.Unlock()
+						return fmt.Errorf("failed to add hierarchy: %w", err)
+					}
+				} else {
+					// Update existing hierarchy with new execution ID
+					hierarchy := hierarchies[0]
+					hierarchy.ChildExecutionID = wi.executionID
+					if err = wi.db.UpdateHierarchy(hierarchy); err != nil {
+						wi.mu.Unlock()
+						return fmt.Errorf("failed to update hierarchy: %w", err)
+					}
 				}
 			}
 
@@ -3389,4 +3402,199 @@ func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 		si.future.setError(errors.Join(ErrSagaFailed, err))
 	}
 	return nil
+}
+
+///////////////////////////////////////////////////// Sub Workflow
+
+// Workflow creates or retrieves a sub-workflow associated with this workflow context
+func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
+	var err error
+
+	// Check for pause first, consistent with other context methods
+	if err = ctx.checkPause(); err != nil {
+		log.Printf("WorkflowContext.Workflow paused at stepID: %s", stepID)
+		future := NewRuntimeFuture()
+		future.setError(err)
+		return future
+	}
+
+	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v", stepID, getFunctionName(workflowFunc))
+	future := NewRuntimeFuture()
+
+	// Register workflow on-the-fly (like other components)
+	handler, err := ctx.registry.RegisterWorkflow(workflowFunc)
+	if err != nil {
+		log.Printf("Error registering workflow: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	var workflowEntityID int
+
+	// Check for existing hierarchies like we do for activities/sagas
+	var hierarchies []*Hierarchy
+	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntityWorkflow); err != nil {
+		if !errors.Is(err, ErrHierarchyNotFound) {
+			log.Printf("Error getting hierarchies: %v", err)
+			future.setError(err)
+			return future
+		}
+	}
+
+	// Convert inputs for storage
+	inputBytes, err := convertInputsForSerialization(args)
+	if err != nil {
+		log.Printf("Error converting inputs: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	// If we have existing hierarchies
+	if len(hierarchies) > 0 {
+		workflowEntityID = hierarchies[0].ChildEntityID
+
+		// Check the latest execution for completion
+		var workflowExecution *WorkflowExecution
+		if workflowExecution, err = ctx.db.GetWorkflowExecutionLatestByEntityID(workflowEntityID); err != nil {
+			log.Printf("Error getting workflow execution: %v", err)
+			future.setError(err)
+			return future
+		}
+
+		// If we have a completed execution, return its result
+		if workflowExecution.Status == ExecutionStatusCompleted {
+			log.Printf("Workflow %s (Entity ID: %d) already completed", stepID, workflowEntityID)
+
+			var workflowExecutionData *WorkflowExecutionData
+			if workflowExecutionData, err = ctx.db.GetWorkflowExecutionDataByExecutionID(workflowExecution.ID); err != nil {
+				log.Printf("Error getting workflow execution data: %v", err)
+				future.setError(err)
+				return future
+			}
+
+			outputs, err := convertOutputsFromSerialization(handler, workflowExecutionData.Outputs)
+			if err != nil {
+				log.Printf("Error converting outputs: %v", err)
+				future.setError(err)
+				return future
+			}
+
+			future.setEntityID(workflowEntityID)
+			future.setResult(outputs)
+			return future
+		}
+
+		future.setEntityID(workflowEntityID)
+	} else {
+		// Create new workflow entity as child
+
+		// Convert retry policy if provided
+		var internalRetryPolicy *retryPolicyInternal
+		if options != nil && options.RetryPolicy != nil {
+			internalRetryPolicy = ToInternalRetryPolicy(options.RetryPolicy)
+		} else {
+			internalRetryPolicy = DefaultRetryPolicyInternal()
+		}
+
+		// Use parent's queue if not specified
+		var queueName string = ctx.options.Queue
+		if options != nil && options.Queue != "" {
+			queueName = options.Queue
+		}
+
+		var queue *Queue
+		if queue, err = ctx.db.GetQueueByName(queueName); err != nil {
+			future.setError(fmt.Errorf("failed to get queue %s: %w", queueName, err))
+			return future
+		}
+
+		// Create the workflow entity
+		if workflowEntityID, err = ctx.db.AddWorkflowEntity(&WorkflowEntity{
+			BaseEntity: BaseEntity{
+				RunID:       ctx.runID,
+				QueueID:     queue.ID,
+				Type:        EntityWorkflow,
+				HandlerName: handler.HandlerName,
+				Status:      StatusPending,
+				RetryPolicy: *internalRetryPolicy,
+				RetryState:  RetryState{Attempts: 0},
+				StepID:      stepID,
+			},
+			WorkflowData: &WorkflowData{
+				Inputs:    inputBytes,
+				Paused:    false,
+				Resumable: false,
+				IsRoot:    false, // This is a child workflow
+			},
+		}); err != nil {
+			log.Printf("Error adding workflow entity: %v", err)
+			future.setError(err)
+			return future
+		}
+
+		// Add hierarchy relationship
+		if _, err = ctx.db.AddHierarchy(&Hierarchy{
+			RunID:             ctx.runID,
+			ParentStepID:      ctx.stepID,
+			ParentEntityID:    ctx.workflowID,
+			ParentExecutionID: ctx.workflowExecutionID,
+			ChildStepID:       stepID,
+			ChildEntityID:     workflowEntityID,
+			ParentType:        EntityWorkflow,
+			ChildType:         EntityWorkflow,
+		}); err != nil {
+			future.setError(fmt.Errorf("failed to add hierarchy: %w", err))
+			return future
+		}
+
+		future.setEntityID(workflowEntityID)
+	}
+
+	var data *WorkflowData
+	if data, err = ctx.db.GetWorkflowDataByEntityID(workflowEntityID); err != nil {
+		log.Printf("Error getting workflow data: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	workflowInstance := &WorkflowInstance{
+		ctx:      ctx.ctx,
+		db:       ctx.db,
+		tracker:  ctx.tracker,
+		state:    ctx.state,
+		registry: ctx.registry,
+		debug:    ctx.debug,
+
+		parentExecutionID: ctx.workflowExecutionID,
+		parentEntityID:    ctx.workflowID,
+		parentStepID:      ctx.stepID,
+
+		handler: handler,
+		future:  future,
+
+		workflowID:  workflowEntityID,
+		stepID:      stepID,
+		executionID: 0, // will be set later
+		dataID:      data.ID,
+		queueID:     ctx.queueID,
+		runID:       ctx.runID,
+		options:     ctx.options, // Inherit parent options unless overridden
+	}
+
+	// Override options if provided
+	if options != nil {
+		workflowInstance.options = *options
+	}
+
+	inputs, err := convertInputsFromSerialization(handler, inputBytes)
+	if err != nil {
+		log.Printf("Error converting inputs: %v", err)
+		future.setError(err)
+		return future
+	}
+
+	ctx.tracker.addWorkflowInstance(workflowInstance)
+	workflowInstance.Start(inputs)
+
+	return future
 }
