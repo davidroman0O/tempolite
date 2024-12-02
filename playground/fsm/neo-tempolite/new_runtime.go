@@ -44,10 +44,16 @@ func init() {
 }
 
 var (
-	ErrWorkflowPanicked = errors.New("workflow panicked")
-	ErrActivityPanicked = errors.New("activity panicked")
-	ErrActivityFailed   = errors.New("activity failed")
+	ErrWorkflowPanicked   = errors.New("workflow panicked")
+	ErrActivityPanicked   = errors.New("activity panicked")
+	ErrSideEffectPanicked = errors.New("side effect panicked")
+	ErrSagaPanicked       = errors.New("saga panicked")
+
 	ErrWorkflowFailed   = errors.New("workflow failed")
+	ErrActivityFailed   = errors.New("activity failed")
+	ErrSideEffectFailed = errors.New("side effect failed")
+	ErrSagaFailed       = errors.New("saga failed")
+	ErrSagaCompensated  = errors.New("saga compensated")
 )
 
 type Future interface {

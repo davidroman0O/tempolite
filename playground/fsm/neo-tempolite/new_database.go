@@ -20,16 +20,12 @@ var (
 	ErrActivityExecutionNotFound   = errors.New("activity execution not found")
 	ErrSagaExecutionNotFound       = errors.New("saga execution not found")
 	ErrSideEffectExecutionNotFound = errors.New("side effect execution not found")
-	ErrSideEffectPanicked          = errors.New("side effect panicked")
-	ErrSideEffectFailed            = errors.New("side effect failed")
 	ErrRunNotFound                 = errors.New("run not found")
 	ErrVersionNotFound             = errors.New("version not found")
 	ErrHierarchyNotFound           = errors.New("hierarchy not found")
 	ErrQueueNotFound               = errors.New("queue not found")
 	ErrQueueExists                 = errors.New("queue already exists")
 	ErrSagaValueNotFound           = errors.New("saga value not found")
-	ErrSagaFailed                  = errors.New("saga failed")
-	ErrSagaCompensated             = errors.New("saga compensated")
 )
 
 // State and Trigger definitions

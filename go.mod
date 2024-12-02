@@ -6,15 +6,15 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
-	github.com/sethvargo/go-retry v0.3.0 // indirect
 	golang.org/x/sys v0.23.0 // indirect
 )
 
 require (
 	entgo.io/ent v0.14.1
-	github.com/davidroman0O/comfylite3 v0.0.0-20241111232046-8a763fa15923
+	github.com/davidroman0O/comfylite3 v0.0.0-20241202184119-658448f652a0
 	github.com/k0kubun/pp/v3 v3.3.0
 	github.com/qmuntal/stateless v1.7.1
+	github.com/sethvargo/go-retry v0.3.0
 	github.com/stephenfire/go-rtl v1.2.1
 	github.com/stretchr/testify v1.8.2
 )
@@ -32,9 +32,9 @@ require (
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sasha-s/go-deadlock v0.3.5 // indirect
+	github.com/sasha-s/go-deadlock v0.3.5
 	github.com/zclconf/go-cty v1.8.0 // indirect
-	go.uber.org/automaxprocs v1.6.0 // indirect
+	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/sync v0.8.0
 	golang.org/x/text v0.13.0 // indirect
