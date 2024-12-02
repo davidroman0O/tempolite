@@ -775,6 +775,7 @@ type InstanceTracker interface {
 	addSagaInstance(si *SagaInstance)
 	newRoot(root *WorkflowInstance)
 	reset()
+	findSagaInstance(stepID string) (*SagaInstance, error)
 }
 
 // Orchestrator orchestrates the execution of workflows and activities.
@@ -830,6 +831,15 @@ func (o *Orchestrator) setActive() {
 
 func (o *Orchestrator) setInactive() {
 	o.active.Store(false)
+}
+
+func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
+	for _, saga := range o.sagas {
+		if saga.stepID == stepID {
+			return saga, nil
+		}
+	}
+	return nil, fmt.Errorf("no saga instance found for step: %s", stepID)
 }
 
 func (o *Orchestrator) reset() {
@@ -2915,33 +2925,43 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	}
 
 	log.Printf("WorkflowContext.Saga called with stepID: %s", stepID)
-	future := NewRuntimeFuture()
 
-	// Convert API RetryPolicy to internal retry policy
-	internalRetryPolicy := DefaultRetryPolicyInternal()
-
-	// Create a new Entity without ID (database assigns it)
-	entity := &SagaEntity{
-		BaseEntity: BaseEntity{
-			StepID:      stepID,
-			Status:      StatusPending,
-			Type:        EntitySaga,
-			RunID:       ctx.runID,
-			QueueID:     ctx.queueID,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-			RetryPolicy: *internalRetryPolicy,
-			RetryState:  RetryState{Attempts: 0},
-		},
-		SagaData: &SagaData{},
+	// First check if we already have a saga instance for this stepID
+	if existingSaga, err := ctx.tracker.findSagaInstance(stepID); err == nil {
+		return existingSaga.future
 	}
 
-	// Add the entity to the database with parent workflow link
+	future := NewRuntimeFuture()
+
+	// Get existing saga entity if any through hierarchy
 	var entityID int
-	if entityID, err = ctx.db.AddSagaEntity(entity, ctx.workflowID); err != nil {
-		log.Printf("Error adding saga entity: %v", err)
-		future.setError(err)
-		return future
+	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntitySaga)
+	if err == nil && len(hierarchies) > 0 {
+		// Reuse existing entity
+		entityID = hierarchies[0].ChildEntityID
+	} else {
+		// Create new entity
+		internalRetryPolicy := DefaultRetryPolicyInternal()
+		entity := &SagaEntity{
+			BaseEntity: BaseEntity{
+				StepID:      stepID,
+				Status:      StatusPending,
+				Type:        EntitySaga,
+				RunID:       ctx.runID,
+				QueueID:     ctx.queueID,
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+				RetryPolicy: *internalRetryPolicy,
+				RetryState:  RetryState{Attempts: 0},
+			},
+			SagaData: &SagaData{},
+		}
+
+		if entityID, err = ctx.db.AddSagaEntity(entity, ctx.workflowID); err != nil {
+			log.Printf("Error adding saga entity: %v", err)
+			future.setError(err)
+			return future
+		}
 	}
 
 	var data *SagaData
@@ -2951,7 +2971,7 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 		return future
 	}
 
-	// Prepare to create the saga instance
+	// Create saga instance without starting it
 	sagaInstance := &SagaInstance{
 		ctx:               ctx.ctx,
 		db:                ctx.db,
@@ -2973,11 +2993,45 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 
 	future.setEntityID(entityID)
 
-	// Start the saga instance
+	// Add instance to tracker
 	ctx.tracker.addSagaInstance(sagaInstance)
-	sagaInstance.Start()
+
+	// Only start if not already started/completed
+	var status EntityStatus
+	if err := ctx.db.GetSagaEntityProperties(entityID, GetSagaEntityStatus(&status)); err != nil {
+		future.setError(err)
+		return future
+	}
+
+	if status == StatusPending {
+		sagaInstance.Start()
+	}
 
 	return future
+}
+
+func (ctx WorkflowContext) CompensateSaga(stepID string) error {
+	// Find the saga instance through the tracker
+	sagaInst, err := ctx.tracker.findSagaInstance(stepID)
+	if err != nil {
+		return fmt.Errorf("failed to find saga for step %s: %w", stepID, err)
+	}
+
+	// Verify saga is in completed state
+	var status EntityStatus
+	if err := ctx.db.GetSagaEntityProperties(sagaInst.entityID, GetSagaEntityStatus(&status)); err != nil {
+		return fmt.Errorf("failed to get saga status: %w", err)
+	}
+	if status != StatusCompleted {
+		return fmt.Errorf("cannot compensate saga in %s state", status)
+	}
+
+	// Trigger the FSM compensation
+	if err := sagaInst.fsm.Fire(TriggerCompensate, nil); err != nil {
+		return fmt.Errorf("failed to trigger compensation: %w", err)
+	}
+
+	return nil
 }
 
 // SagaInstance represents an instance of a saga execution.
@@ -3032,7 +3086,8 @@ func (si *SagaInstance) Start() {
 		Permit(TriggerFail, StateFailed)
 
 	fsm.Configure(StateCompleted).
-		OnEntry(si.onCompleted)
+		OnEntry(si.onCompleted).
+		Permit(TriggerCompensate, StateCompensations)
 
 	fsm.Configure(StateFailed).
 		OnEntry(si.onFailed)

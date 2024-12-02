@@ -1936,3 +1936,187 @@ func TestUnitSagaCompensationPanic(t *testing.T) {
 		t.Errorf("compensation: expected panic error message, got %s", compExec.Error)
 	}
 }
+
+func TestUnitSequentialSagasWithManualCompensation(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_entity_sequential_sagas_manual_compensation.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	var saga1ID int
+
+	wrfl := func(ctx WorkflowContext) error {
+		// First saga - should succeed
+		saga1, err := NewSaga().
+			Add(
+				func(tc TransactionContext) error {
+					fmt.Println("Saga1: First Transaction")
+					val := 42
+					if err := tc.Store("saga1_value", &val); err != nil {
+						return err
+					}
+					return nil
+				},
+				func(cc CompensationContext) error {
+					var value int
+					if err := cc.Load("saga1_value", &value); err != nil {
+						return err
+					}
+					fmt.Println("Saga1: First Compensation", value)
+					return nil
+				},
+			).
+			Add(
+				func(tc TransactionContext) error {
+					fmt.Println("Saga1: Second Transaction")
+					return nil
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Saga1: Second Compensation")
+					return nil
+				},
+			).Build()
+		if err != nil {
+			return err
+		}
+
+		future := ctx.Saga("saga1", saga1)
+		saga1ID = future.WorkflowID()
+		if err := future.Get(); err != nil {
+			return err
+		}
+
+		// Second saga - should fail
+		saga2, err := NewSaga().
+			Add(
+				func(tc TransactionContext) error {
+					fmt.Println("Saga2: First Transaction")
+					return nil
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Saga2: First Compensation")
+					return nil
+				},
+			).
+			Add(
+				func(tc TransactionContext) error {
+					err := fmt.Errorf("saga2 deliberate failure")
+					// Make sure this error propagates up
+					fmt.Printf("Saga2: Failed with error: %v\n", err)
+					return err
+				},
+				func(cc CompensationContext) error {
+					fmt.Println("Saga2: Second Compensation")
+					return nil
+				},
+			).Build()
+		if err != nil {
+			return err
+		}
+
+		// Run saga2 and handle its error
+		saga2Future := ctx.Saga("saga2", saga2)
+		if saga2Err := saga2Future.Get(); saga2Err != nil {
+			// When saga2 fails, manually compensate saga1
+			fmt.Printf("Saga2 failed, compensating saga1. Error: %v\n", saga2Err)
+			if compErr := ctx.CompensateSaga("saga1"); compErr != nil {
+				return fmt.Errorf("compensation chain failed: %w (original error: %w)", compErr, saga2Err)
+			}
+			// Make sure we return the original saga2 error to fail the workflow
+			return saga2Err
+		}
+
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	err := future.Get()
+	if err == nil {
+		t.Fatal("expected error from saga2 failure")
+	}
+
+	if !strings.Contains(err.Error(), "saga2 deliberate failure") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify workflow final state is Failed
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workflow.Status != StatusFailed {
+		t.Errorf("expected workflow status Failed, got %s", workflow.Status)
+	}
+
+	// Verify saga1 final state
+	saga1, err := db.GetSagaEntity(saga1ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saga1.Status != StatusCompensated {
+		t.Errorf("saga1: expected status %s, got %s", StatusCompensated, saga1.Status)
+	}
+
+	// Get saga2
+	sagaEntities, err := db.GetSagaEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saga2 *SagaEntity
+	for _, s := range sagaEntities {
+		if s.StepID == "saga2" {
+			saga2 = s
+			break
+		}
+	}
+	if saga2 == nil {
+		t.Fatal("saga2 not found")
+	}
+	if saga2.Status != StatusCompensated {
+		t.Errorf("saga2: expected status %s, got %s", StatusCompensated, saga2.Status)
+	}
+
+	// Verify execution counts
+	saga1Execs, err := db.GetSagaExecutions(saga1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var txCount, compCount int
+	for _, exec := range saga1Execs {
+		if exec.ExecutionType == ExecutionTypeTransaction {
+			txCount++
+			if exec.Status != ExecutionStatusCompleted {
+				t.Errorf("saga1 transaction %d: expected status %s, got %s", exec.ID, ExecutionStatusCompleted, exec.Status)
+			}
+		} else {
+			compCount++
+			if exec.Status != ExecutionStatusCompleted {
+				t.Errorf("saga1 compensation %d: expected status %s, got %s", exec.ID, ExecutionStatusCompleted, exec.Status)
+			}
+		}
+	}
+
+	if txCount != 2 {
+		t.Errorf("saga1: expected 2 transactions, got %d", txCount)
+	}
+	if compCount != 2 {
+		t.Errorf("saga1: expected 2 compensations, got %d", compCount)
+	}
+
+	// Verify saga value was accessible
+	val, err := db.GetSagaValueByExecutionID(saga1.ID, "saga1_value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(val) == 0 {
+		t.Error("saga1_value not found")
+	}
+}
