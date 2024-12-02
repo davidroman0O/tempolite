@@ -412,7 +412,7 @@ func (f *RuntimeFuture) WorkflowID() int {
 	return f.workflowID
 }
 
-func NewRuntimeFuture() *RuntimeFuture {
+func NewRuntimeFuture() Future {
 	return &RuntimeFuture{
 		done: make(chan struct{}),
 	}
@@ -816,7 +816,7 @@ func (o *Orchestrator) canStackTrace() bool {
 	return o.displayStackTrace
 }
 
-func (o *Orchestrator) Resume(entityID int) *RuntimeFuture {
+func (o *Orchestrator) Resume(entityID int) Future {
 	// TODO: add timeout
 	for o.active.Load() { // it is still active, you have to wait
 		<-time.After(100 * time.Millisecond)
@@ -1040,7 +1040,7 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 }
 
 // Execute starts the execution of a workflow directly.
-func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
+func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 	// Create entity and related records
 	entity, err := o.prepareWorkflow(workflowFunc, options, nil, args...)
 	if err != nil {
@@ -1064,7 +1064,7 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 }
 
 // ExecuteWithEntity starts a workflow using an existing entity ID
-func (o *Orchestrator) ExecuteWithEntity(entityID int) (*RuntimeFuture, error) {
+func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	// Get the entity and verify it exists
 	var err error
 
@@ -1887,7 +1887,7 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 
 ///////////// Activity
 
-func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) *RuntimeFuture {
+func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) Future {
 	var err error
 
 	if err = ctx.checkPause(); err != nil {
@@ -3362,7 +3362,7 @@ func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 ///////////////////////////////////////////////////// Sub Workflow
 
 // Workflow creates or retrieves a sub-workflow associated with this workflow context
-func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) *RuntimeFuture {
+func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 	var err error
 
 	// Check for pause first, consistent with other context methods
