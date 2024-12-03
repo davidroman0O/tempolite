@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestQueueCrossBasic(t *testing.T) {
@@ -76,6 +77,57 @@ func TestQueueCrossBasic(t *testing.T) {
 	}
 
 	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteBasicCross(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(2),
+		WithQueue(QueueConfig{
+			Name:        "second",
+			WorkerCount: 1,
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subWork := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, second world!")
+		<-time.After(1 * time.Second)
+		fmt.Println("second done!")
+		return nil
+	}
+
+	wrkfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		if err := ctx.Workflow(
+			"next",
+			subWork,
+			&WorkflowOptions{
+				Queue: "second",
+			}).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(wrkfl, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
 		t.Fatal(err)
 	}
 }

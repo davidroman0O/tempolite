@@ -10,6 +10,7 @@ import (
 
 	"github.com/davidroman0O/retrypool"
 	"github.com/sasha-s/go-deadlock"
+	"golang.org/x/sync/errgroup"
 )
 
 // DatabaseFuture implements the Future interface for cross-queue workflow communication
@@ -398,6 +399,16 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	return q, nil
 }
 
+func (qi *QueueInstance) Close() {
+	qi.Close()
+}
+
+func (qi *QueueInstance) Wait() error {
+	return qi.orchestrators.WaitWithCallback(qi.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+		return queueSize > 0 || processingCount > 0
+	}, time.Second)
+}
+
 func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*DatabaseFuture, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
 
 	workflowEntity, err := prepareWorkflow(qi.registry, qi.database, workflowFunc, options, args...)
@@ -506,211 +517,188 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	return nil
 }
 
-// // Tempolite is the main orchestration engine
-// type Tempolite struct {
-// 	mu             deadlock.RWMutex
-// 	queueInstances map[string]*QueueInstance
-// 	registry       *Registry
-// 	database       Database
-// 	ctx            context.Context
-// 	cancel         context.CancelFunc
-// 	defaultQueue   string
-// }
+// Tempolite is the main orchestration engine
+type Tempolite struct {
+	mu             deadlock.RWMutex
+	queueInstances map[string]*QueueInstance
+	registry       *Registry
+	database       Database
+	ctx            context.Context
+	cancel         context.CancelFunc
+	defaultQueue   string
+}
 
-// // QueueConfig holds configuration for a queue
-// type QueueConfig struct {
-// 	Name        string
-// 	WorkerCount int
-// }
+// QueueConfig holds configuration for a queue
+type QueueConfig struct {
+	Name        string
+	WorkerCount int
+}
 
-// // TempoliteOption is a function type for configuring Tempolite
-// type TempoliteOption func(*Tempolite) error
+// TempoliteOption is a function type for configuring Tempolite
+type TempoliteOption func(*Tempolite) error
 
-// func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
-// 	ctx, cancel := context.WithCancel(ctx)
-// 	t := &Tempolite{
-// 		registry:       NewRegistry(),
-// 		database:       db,
-// 		queueInstances: make(map[string]*QueueInstance),
-// 		ctx:            ctx,
-// 		cancel:         cancel,
-// 		defaultQueue:   "default",
-// 	}
+func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	t := &Tempolite{
+		registry:       NewRegistry(),
+		database:       db,
+		queueInstances: make(map[string]*QueueInstance),
+		ctx:            ctx,
+		cancel:         cancel,
+		defaultQueue:   "default",
+	}
 
-// 	// Apply options before creating default queue
-// 	for _, opt := range options {
-// 		if err := opt(t); err != nil {
-// 			cancel()
-// 			return nil, err
-// 		}
-// 	}
+	// Apply options before creating default queue
+	for _, opt := range options {
+		if err := opt(t); err != nil {
+			cancel()
+			return nil, err
+		}
+	}
 
-// 	// Create default queue if it doesn't exist
-// 	t.mu.Lock()
-// 	if _, exists := t.queueInstances[t.defaultQueue]; !exists {
-// 		if err := t.createQueueLocked(QueueConfig{
-// 			Name:        t.defaultQueue,
-// 			WorkerCount: 1,
-// 		}); err != nil {
-// 			t.mu.Unlock()
-// 			cancel()
-// 			return nil, err
-// 		}
-// 	}
-// 	t.mu.Unlock()
+	// Create default queue if it doesn't exist
+	t.mu.Lock()
+	if _, exists := t.queueInstances[t.defaultQueue]; !exists {
+		if err := t.createQueueLocked(QueueConfig{
+			Name:        t.defaultQueue,
+			WorkerCount: 1,
+		}); err != nil {
+			t.mu.Unlock()
+			cancel()
+			return nil, err
+		}
+	}
+	t.mu.Unlock()
 
-// 	return t, nil
-// }
+	return t, nil
+}
 
-// func (t *Tempolite) createQueueLocked(config QueueConfig) error {
-// 	if config.WorkerCount <= 0 {
-// 		return fmt.Errorf("worker count must be greater than 0")
-// 	}
+func (t *Tempolite) createQueueLocked(config QueueConfig) error {
+	if config.WorkerCount <= 0 {
+		return fmt.Errorf("worker count must be greater than 0")
+	}
 
-// 	// Create queue in database if it doesn't exist
-// 	if _, err := t.database.GetQueueByName(config.Name); err != nil {
-// 		if errors.Is(err, ErrQueueNotFound) {
-// 			queue := &Queue{
-// 				Name:      config.Name,
-// 				CreatedAt: time.Now(),
-// 				UpdatedAt: time.Now(),
-// 			}
-// 			if err := t.database.AddQueue(queue); err != nil {
-// 				return fmt.Errorf("failed to create queue in database: %w", err)
-// 			}
-// 		} else {
-// 			return fmt.Errorf("failed to check queue existence: %w", err)
-// 		}
-// 	}
+	queueInstance, err := NewQueueInstance(t.ctx, t.database, t.registry, config.Name, config.WorkerCount)
+	if err != nil {
+		return fmt.Errorf("failed to create queue instance: %w", err)
+	}
 
-// 	// Create queue instance
-// 	queueCtx, queueCancel := context.WithCancel(t.ctx)
-// 	instance := &QueueInstance{
-// 		name:       config.Name,
-// 		workers:    config.WorkerCount,
-// 		registry:   t.registry,
-// 		database:   t.database,
-// 		ctx:        queueCtx,
-// 		cancel:     queueCancel,
-// 		processing: make(map[int]struct{}),
-// 	}
+	t.queueInstances[config.Name] = queueInstance
+	return nil
+}
 
-// 	// Create worker pool
-// 	workers := make([]retrypool.Worker[*WorkflowTask], config.WorkerCount)
-// 	for i := 0; i < config.WorkerCount; i++ {
-// 		workers[i] = NewQueueWorker(instance)
-// 	}
+func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*DatabaseFuture, error) {
+	t.mu.RLock()
+	queue, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
 
-// 	instance.pool = retrypool.New(queueCtx, workers,
-// 		retrypool.WithAttempts[*WorkflowTask](1),
-// 		retrypool.WithLogLevel[*WorkflowTask](logs.LevelDebug),
-// 		retrypool.WithDelay[*WorkflowTask](time.Second),
-// 	)
+	if !exists {
+		return nil, fmt.Errorf("queue %s not found", queueName)
+	}
 
-// 	t.queueInstances[config.Name] = instance
-// 	go instance.Start()
+	future, _, err := queue.Submit(workflowFunc, options, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to submit workflow to queue %s: %w", queueName, err)
+	}
 
-// 	return nil
-// }
+	return future, nil
+}
 
-// func (t *Tempolite) CreateQueue(config QueueConfig) error {
-// 	t.mu.Lock()
-// 	defer t.mu.Unlock()
-// 	return t.createQueueLocked(config)
-// }
+// ExecuteDefault executes a workflow on the default queue
+func (t *Tempolite) ExecuteDefault(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*DatabaseFuture, error) {
+	return t.Execute(t.defaultQueue, workflowFunc, options, args...)
+}
 
-// func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
-// 	t.mu.Lock()
-// 	defer t.mu.Unlock()
+func (t *Tempolite) CreateQueue(config QueueConfig) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.createQueueLocked(config)
+}
 
-// 	instance, exists := t.queueInstances[queueName]
-// 	if !exists {
-// 		return fmt.Errorf("queue %s not found", queueName)
-// 	}
+func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-// 	instance.mu.Lock()
-// 	defer instance.mu.Unlock()
+	instance, exists := t.queueInstances[queueName]
+	if !exists {
+		return fmt.Errorf("queue %s not found", queueName)
+	}
 
-// 	if delta > 0 {
-// 		// Add workers
-// 		for i := 0; i < delta; i++ {
-// 			worker := NewQueueWorker(instance)
-// 			instance.pool.AddWorker(worker)
-// 		}
-// 		instance.workers += delta
-// 	} else if delta < 0 {
-// 		// Remove workers
-// 		count := -delta
-// 		if count > instance.workers {
-// 			return fmt.Errorf("cannot remove %d workers, only %d available", count, instance.workers)
-// 		}
-// 		workers := instance.pool.ListWorkers()
-// 		for i := 0; i < count && i < len(workers); i++ {
-// 			if err := instance.pool.RemoveWorker(workers[len(workers)-1-i].ID); err != nil {
-// 				return fmt.Errorf("failed to remove worker: %w", err)
-// 			}
-// 		}
-// 		instance.workers -= count
-// 	}
+	instance.mu.Lock()
+	defer instance.mu.Unlock()
 
-// 	return nil
-// }
+	if delta > 0 {
+		// Add workers
+		for i := 0; i < delta; i++ {
+			worker := NewQueueWorker(instance)
+			instance.orchestrators.AddWorker(worker)
+		}
+		instance.count += delta
+	} else if delta < 0 {
+		// Remove workers
+		count := -delta
+		if count > instance.count {
+			return fmt.Errorf("cannot remove %d workers, only %d available", count, instance.count)
+		}
+		workers := instance.orchestrators.ListWorkers()
+		for i := 0; i < count && i < len(workers); i++ {
+			if err := instance.orchestrators.RemoveWorker(workers[len(workers)-1-i].ID); err != nil {
+				return fmt.Errorf("failed to remove worker: %w", err)
+			}
+		}
+		instance.count -= count
+	}
 
-// func (t *Tempolite) Close() error {
-// 	t.cancel()
+	return nil
+}
 
-// 	t.mu.Lock()
-// 	defer t.mu.Unlock()
+func (t *Tempolite) Close() error {
+	t.cancel()
 
-// 	// Close all queues
-// 	var errs []error
-// 	for _, instance := range t.queueInstances {
-// 		instance.mu.Lock()
-// 		instance.cancel()
-// 		if err := instance.pool.Close(); err != nil {
-// 			errs = append(errs, fmt.Errorf("failed to close queue %s: %w", instance.name, err))
-// 		}
-// 		instance.mu.Unlock()
-// 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-// 	if len(errs) > 0 {
-// 		return fmt.Errorf("errors during shutdown: %v", errs)
-// 	}
-// 	return nil
-// }
+	// Close all queues
+	var errs []error
+	for _, instance := range t.queueInstances {
+		if err := instance.orchestrators.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close queue %s: %w", instance.name, err))
+		}
+	}
 
-// func (t *Tempolite) Wait() error {
-// 	shutdown := errgroup.Group{}
+	if len(errs) > 0 {
+		return fmt.Errorf("errors during shutdown: %v", errs)
+	}
+	return nil
+}
 
-// 	t.mu.RLock()
-// 	for _, instance := range t.queueInstances {
-// 		instance := instance
-// 		shutdown.Go(func() error {
-// 			return instance.pool.WaitWithCallback(instance.ctx,
-// 				func(queueSize, processingCount, deadTaskCount int) bool {
-// 					return queueSize > 0 || processingCount > 0
-// 				},
-// 				time.Second,
-// 			)
-// 		})
-// 	}
-// 	t.mu.RUnlock()
+func (t *Tempolite) Wait() error {
+	shutdown := errgroup.Group{}
 
-// 	return shutdown.Wait()
-// }
+	t.mu.RLock()
+	for _, instance := range t.queueInstances {
+		instance := instance
+		shutdown.Go(func() error {
+			return instance.Wait()
+		})
+	}
+	t.mu.RUnlock()
 
-// // Option functions
-// func WithQueue(config QueueConfig) TempoliteOption {
-// 	return func(t *Tempolite) error {
-// 		return t.createQueueLocked(config)
-// 	}
-// }
+	return shutdown.Wait()
+}
 
-// func WithDefaultQueueWorkers(count int) TempoliteOption {
-// 	return func(t *Tempolite) error {
-// 		return t.createQueueLocked(QueueConfig{
-// 			Name:        "default",
-// 			WorkerCount: count,
-// 		})
-// 	}
-// }
+// Option functions
+func WithQueue(config QueueConfig) TempoliteOption {
+	return func(t *Tempolite) error {
+		return t.createQueueLocked(config)
+	}
+}
+
+func WithDefaultQueueWorkers(count int) TempoliteOption {
+	return func(t *Tempolite) error {
+		return t.createQueueLocked(QueueConfig{
+			Name:        "default",
+			WorkerCount: count,
+		})
+	}
+}
