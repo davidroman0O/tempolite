@@ -537,6 +537,27 @@ type QueueConfig struct {
 // TempoliteOption is a function type for configuring Tempolite
 type TempoliteOption func(*Tempolite) error
 
+// createCrossWorkflowHandler creates the handler function for cross-queue workflow communication
+func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
+	return func(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+		t.mu.RLock()
+		queue, exists := t.queueInstances[queueName]
+		t.mu.RUnlock()
+
+		if !exists {
+			future := NewDatabaseFuture(t.ctx, t.database, t.registry)
+			future.setError(fmt.Errorf("queue %s not found", queueName))
+			return future
+		}
+
+		future, _, err := queue.Submit(workflowFunc, options, args...)
+		if err != nil {
+			future.setError(err)
+		}
+		return future
+	}
+}
+
 func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Tempolite{
@@ -578,7 +599,7 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		return fmt.Errorf("worker count must be greater than 0")
 	}
 
-	queueInstance, err := NewQueueInstance(t.ctx, t.database, t.registry, config.Name, config.WorkerCount)
+	queueInstance, err := NewQueueInstance(t.ctx, t.database, t.registry, config.Name, config.WorkerCount, WithCrossWorkflowHandler(t.createCrossWorkflowHandler()))
 	if err != nil {
 		return fmt.Errorf("failed to create queue instance: %w", err)
 	}
