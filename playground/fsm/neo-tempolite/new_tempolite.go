@@ -563,9 +563,13 @@ func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 	return func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 
 		t.mu.Lock()
-		queue := t.queueInstances[queueName]
+		queue, ok := t.queueInstances[queueName]
 		t.mu.Unlock()
 		future := NewDatabaseFuture(t.ctx, t.database, t.registry)
+		if !ok {
+			future.setError(fmt.Errorf("queue %s not found", queueName))
+			return future
+		}
 
 		if err := queue.orchestrators.Submit(retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
 			workflowFunc: workflowFunc,

@@ -368,6 +368,8 @@ func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...inter
 		options.RetryPolicy = DefaultRetryPolicy()
 	}
 
+	// fmt.Println("ContinueAsNew called with options", options.Queue)
+
 	return &ContinueAsNewError{
 		Options: options,
 		Args:    args,
@@ -1687,8 +1689,6 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 			wi.mu.Lock()
 			handler := wi.handler
 			wi.mu.Unlock()
-
-			fmt.Println("Continuing as new workflow", workflowID)
 
 			// Prepare the workflow
 			we, err := prepareWorkflow(
@@ -3319,8 +3319,17 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		return future
 	}
 
+	if options == nil {
+		options = &WorkflowOptions{
+			Queue: ctx.options.Queue,
+		}
+	} else if options.Queue == "" {
+		options.Queue = ctx.options.Queue
+	}
+
+	// fmt.Println("Queue workflow", "queue", options.Queue, "ctx queue", ctx.options.Queue, options.Queue != ctx.options.Queue)
 	// Check if this is a cross-queue workflow
-	if options != nil && options.Queue != "" && options.Queue != ctx.options.Queue {
+	if options != nil && options.Queue != ctx.options.Queue {
 		// If we have a cross-queue handler, use it
 		if ctx.onCrossQueueWorkflow != nil {
 			fmt.Println("Executing cross-queue workflow",

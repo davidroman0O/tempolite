@@ -109,9 +109,133 @@ func TestTempoliteBasicCross(t *testing.T) {
 		if counter.Load() < 5 {
 			counter.Store(counter.Load() + 1)
 			fmt.Println("second ", counter.Load())
-			return ctx.ContinueAsNew(&WorkflowOptions{
+			return ctx.ContinueAsNew(&WorkflowOptions{})
+		}
+		fmt.Println("second done!")
+		return nil
+	}
+
+	wrkfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		if err := ctx.Workflow(
+			"next",
+			subWork,
+			&WorkflowOptions{
 				Queue: "second",
-			})
+			}).Get(); err != nil {
+			return err
+		}
+		fmt.Println("finished!!")
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(wrkfl, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteBasicSubWorkflow(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counter := atomic.Int32{}
+
+	var subWork func(ctx WorkflowContext) error
+
+	subWork = func(ctx WorkflowContext) error {
+		fmt.Println("Hello, second world!")
+		<-time.After(1 * time.Second)
+		if counter.Load() < 5 {
+			counter.Store(counter.Load() + 1)
+			fmt.Println("second ", counter.Load())
+			return ctx.ContinueAsNew(&WorkflowOptions{})
+		}
+		fmt.Println("second done!")
+		return nil
+	}
+
+	wrkfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		if err := ctx.Workflow(
+			"next",
+			subWork,
+			&WorkflowOptions{}).Get(); err != nil {
+			return err
+		}
+		fmt.Println("finished!!")
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(wrkfl, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteBasicSecondQueueSubWorkflow(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10),
+		WithQueue(QueueConfig{
+			Name:        "second",
+			WorkerCount: 10,
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counter := atomic.Int32{}
+
+	var subWork func(ctx WorkflowContext) error
+
+	subWork = func(ctx WorkflowContext) error {
+		fmt.Println("Hello, second world!")
+		<-time.After(1 * time.Second)
+		if counter.Load() < 5 {
+			counter.Store(counter.Load() + 1)
+			fmt.Println("second ", counter.Load())
+			if err := ctx.Workflow("second", subWork, &WorkflowOptions{}).Get(); err != nil {
+				return err
+			}
 		}
 		fmt.Println("second done!")
 		return nil
