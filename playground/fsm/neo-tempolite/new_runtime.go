@@ -69,6 +69,8 @@ type Future interface {
 	IsPaused() bool
 }
 
+type crossWorkflow func(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+
 type TransactionContext struct {
 	ctx         context.Context
 	db          Database
@@ -338,6 +340,8 @@ type WorkflowContext struct {
 	workflowID          int
 	workflowExecutionID int
 	options             WorkflowOptions
+
+	onCrossQueueWorkflow crossWorkflow
 }
 
 func (ctx WorkflowContext) checkPause() error {
@@ -396,6 +400,8 @@ type WorkflowInstance struct {
 	parentExecutionID int
 	parentEntityID    int
 	parentStepID      string
+
+	onCrossWorkflow crossWorkflow
 }
 
 // Future implementation of direct calling
@@ -573,9 +579,23 @@ type Orchestrator struct {
 	active atomic.Bool
 
 	displayStackTrace bool
+
+	onCrossWorkflow crossWorkflow
 }
 
-func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orchestrator {
+type orchestratorConfig struct {
+	onCrossWorkflow crossWorkflow
+}
+
+type OrchestratorOption func(*orchestratorConfig)
+
+func WithCrossWorkflow(fn crossWorkflow) OrchestratorOption {
+	return func(c *orchestratorConfig) {
+		c.onCrossWorkflow = fn
+	}
+}
+
+func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt ...OrchestratorOption) *Orchestrator {
 	log.Printf("NewOrchestrator called")
 	ctx, cancel := context.WithCancel(ctx)
 	o := &Orchestrator{
@@ -586,6 +606,16 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry) *Orch
 
 		displayStackTrace: true,
 	}
+
+	cfg := &orchestratorConfig{}
+	for _, o := range opt {
+		o(cfg)
+	}
+
+	if cfg.onCrossWorkflow != nil {
+		o.onCrossWorkflow = cfg.onCrossWorkflow
+	}
+
 	return o
 }
 
@@ -760,6 +790,8 @@ func (o *Orchestrator) Resume(entityID int) Future {
 		parentExecutionID: parentExecID,
 		parentEntityID:    parentEntityID,
 		parentStepID:      parentStepID,
+
+		onCrossWorkflow: o.onCrossWorkflow,
 	}
 
 	// Create Future and start instance
@@ -970,6 +1002,8 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 			Queue: entity.Edges.Queue.Name,
 			// VersionOverrides: , // TODO: implement in WorkflowOption and save it
 		},
+
+		onCrossWorkflow: o.onCrossWorkflow,
 	}
 
 	// If this is a sub-workflow, set parent info from hierarchies
@@ -1395,6 +1429,8 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		stepID:              wi.stepID,
 		workflowID:          wi.workflowID,
 		workflowExecutionID: wi.executionID,
+
+		onCrossQueueWorkflow: wi.onCrossWorkflow,
 	}
 
 	var workflowInputs [][]byte
@@ -3212,6 +3248,23 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		return future
 	}
 
+	// Check if this is a cross-queue workflow
+	if options != nil && options.Queue != "" && options.Queue != ctx.options.Queue {
+		// If we have a cross-queue handler, use it
+		if ctx.onCrossQueueWorkflow != nil {
+			fmt.Println("Executing cross-queue workflow",
+				"parentQueue", ctx.options.Queue,
+				"targetQueue", options.Queue,
+				"stepID", stepID)
+			return ctx.onCrossQueueWorkflow(options.Queue, workflowFunc, options, args...)
+		}
+		// If no handler is set, return an error
+		future := NewRuntimeFuture()
+		future.setError(fmt.Errorf("cross-queue workflow execution not supported: from %s to %s",
+			ctx.options.Queue, options.Queue))
+		return future
+	}
+
 	log.Printf("WorkflowContext.Workflow called with stepID: %s, workflowFunc: %v", stepID, getFunctionName(workflowFunc))
 	future := NewRuntimeFuture()
 
@@ -3373,6 +3426,8 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		queueID:     ctx.queueID,
 		runID:       ctx.runID,
 		options:     ctx.options, // Inherit parent options unless overridden
+
+		onCrossWorkflow: ctx.onCrossQueueWorkflow,
 	}
 
 	// Override options if provided

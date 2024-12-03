@@ -14,6 +14,7 @@ import (
 
 // DatabaseFuture implements the Future interface for cross-queue workflow communication
 type DatabaseFuture struct {
+	mu         deadlock.Mutex
 	ctx        context.Context
 	entityID   int
 	database   Database
@@ -23,6 +24,7 @@ type DatabaseFuture struct {
 	continueAs int
 }
 
+// Constructor remains the same
 func NewDatabaseFuture(ctx context.Context, database Database, registry *Registry) *DatabaseFuture {
 	return &DatabaseFuture{
 		ctx:      ctx,
@@ -32,14 +34,20 @@ func NewDatabaseFuture(ctx context.Context, database Database, registry *Registr
 }
 
 func (f *DatabaseFuture) setEntityID(entityID int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.entityID = entityID
 }
 
 func (f *DatabaseFuture) setError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.err = err
 }
 
 func (f *DatabaseFuture) WorkflowID() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.entityID
 }
 
@@ -52,22 +60,31 @@ func (f *DatabaseFuture) Get(out ...interface{}) error {
 		case <-f.ctx.Done():
 			return f.ctx.Err()
 		case <-ticker.C:
+			f.mu.Lock()
 			if f.entityID == 0 {
+				f.mu.Unlock()
 				continue
 			}
 			if f.err != nil {
-				defer func() { // if we re-use the same future, we must start from a fresh state
-					f.err = nil
-					f.results = nil
-				}()
-				return f.err
+				err := f.err
+				f.err = nil
+				f.results = nil
+				f.mu.Unlock()
+				return err
 			}
+			f.mu.Unlock()
+
 			if completed := f.checkCompletion(); completed {
-				defer func() { // if we re-use the same future, we must start from a fresh state
-					f.err = nil
-					f.results = nil
-				}()
-				return f.handleResults(out...)
+				f.mu.Lock()
+				err := f.err
+				f.err = nil
+				f.results = nil
+				f.mu.Unlock()
+
+				if err != nil {
+					return err
+				}
+				return f.handleResults(out...) // Pass the local copy to handleResults
 			}
 		}
 	}
@@ -76,73 +93,95 @@ func (f *DatabaseFuture) Get(out ...interface{}) error {
 func (f *DatabaseFuture) checkCompletion() bool {
 	var status EntityStatus
 	if err := f.database.GetWorkflowEntityProperties(f.entityID, GetWorkflowEntityStatus(&status)); err != nil {
+		f.mu.Lock()
 		f.err = fmt.Errorf("failed to get workflow entity: %w", err)
+		f.mu.Unlock()
 		return true
 	}
 
 	switch status {
 	case StatusCompleted:
-		// Get latest execution
 		latestExec, err := f.database.GetWorkflowExecutionLatestByEntityID(f.entityID)
 		if err != nil {
+			f.mu.Lock()
 			f.err = fmt.Errorf("failed to get latest execution: %w", err)
+			f.mu.Unlock()
 			return true
 		}
 
-		// Get execution data with outputs
 		if latestExec.WorkflowExecutionData != nil {
 			var outputs [][]byte
 			if err := f.database.GetWorkflowExecutionDataProperties(latestExec.ID,
 				GetWorkflowExecutionDataOutputs(&outputs)); err != nil {
+				f.mu.Lock()
 				f.err = fmt.Errorf("failed to get execution outputs: %w", err)
+				f.mu.Unlock()
 				return true
 			}
 
 			var handlerName string
 			if err := f.database.GetWorkflowEntityProperties(f.entityID,
 				GetWorkflowEntityHandlerName(&handlerName)); err != nil {
+				f.mu.Lock()
 				f.err = fmt.Errorf("failed to get handler info: %w", err)
+				f.mu.Unlock()
 				return true
 			}
 
-			// Now using registry instead of database to get workflow handler
 			handler, ok := f.registry.GetWorkflow(handlerName)
 			if !ok {
+				f.mu.Lock()
 				f.err = fmt.Errorf("handler %s not found", handlerName)
+				f.mu.Unlock()
 				return true
 			}
 
 			results, err := convertOutputsFromSerialization(handler, outputs)
 			if err != nil {
+				f.mu.Lock()
 				f.err = fmt.Errorf("failed to deserialize outputs: %w", err)
+				f.mu.Unlock()
 				return true
 			}
 
+			f.mu.Lock()
 			f.results = results
+			f.mu.Unlock()
 			return true
 		}
 
 	case StatusFailed:
 		latestExec, err := f.database.GetWorkflowExecutionLatestByEntityID(f.entityID)
 		if err != nil {
+			f.mu.Lock()
 			f.err = fmt.Errorf("failed to get latest execution: %w", err)
+			f.mu.Unlock()
+			return true
+		}
+
+		var execError string
+		if err := f.database.GetWorkflowExecutionProperties(latestExec.ID,
+			GetWorkflowExecutionError(&execError)); err != nil {
+			f.mu.Lock()
+			f.err = fmt.Errorf("failed to get execution error: %w", err)
+			f.mu.Unlock()
 		} else {
-			var execError string
-			if err := f.database.GetWorkflowExecutionProperties(latestExec.ID,
-				GetWorkflowExecutionError(&execError)); err != nil {
-				f.err = fmt.Errorf("failed to get execution error: %w", err)
-			} else {
-				f.err = errors.New(execError)
-			}
+			f.mu.Lock()
+			f.err = errors.New(execError)
+			f.mu.Unlock()
 		}
 		return true
 
 	case StatusPaused:
+		f.mu.Lock()
 		f.err = ErrPaused
+		f.mu.Unlock()
 		return true
 
 	case StatusCancelled:
+		f.mu.Lock()
 		f.err = errors.New("workflow was cancelled")
+		f.mu.Unlock()
 		return true
 	}
 
@@ -150,17 +189,22 @@ func (f *DatabaseFuture) checkCompletion() bool {
 }
 
 func (f *DatabaseFuture) handleResults(out ...interface{}) error {
-	if f.err != nil {
-		return f.err
+	f.mu.Lock()
+	results := f.results
+	err := f.err
+	f.mu.Unlock()
+
+	if err != nil {
+		return err
 	}
 
 	if len(out) == 0 {
 		return nil
 	}
 
-	if len(out) > len(f.results) {
+	if len(out) > len(results) {
 		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)",
-			len(out), len(f.results))
+			len(out), len(results))
 	}
 
 	for i := 0; i < len(out); i++ {
@@ -170,7 +214,7 @@ func (f *DatabaseFuture) handleResults(out ...interface{}) error {
 		}
 		val = val.Elem()
 
-		result := reflect.ValueOf(f.results[i])
+		result := reflect.ValueOf(results[i])
 		if !result.Type().AssignableTo(val.Type()) {
 			return fmt.Errorf("cannot assign type %v to %v for parameter %d",
 				result.Type(), val.Type(), i)
@@ -191,36 +235,54 @@ func (f *DatabaseFuture) GetResults() ([]interface{}, error) {
 		case <-f.ctx.Done():
 			return nil, errors.New("context cancelled")
 		case <-ticker.C:
+			f.mu.Lock()
 			if f.entityID == 0 {
+				f.mu.Unlock()
 				continue
 			}
 			if f.err != nil {
-				return nil, f.err
+				err := f.err
+				f.mu.Unlock()
+				return nil, err
 			}
+			f.mu.Unlock()
+
 			if completed := f.checkCompletion(); completed {
-				if f.err != nil {
-					return nil, f.err
+				f.mu.Lock()
+				err := f.err
+				results := f.results
+				f.mu.Unlock()
+
+				if err != nil {
+					return nil, err
 				}
-				return f.results, nil
+				return results, nil
 			}
-			continue
 		}
 	}
 }
 
 func (f *DatabaseFuture) setResult(results []interface{}) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.results = results
 }
 
 func (f *DatabaseFuture) setContinueAs(continueAs int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.continueAs = continueAs
 }
 
 func (f *DatabaseFuture) ContinuedAsNew() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.continueAs != 0
 }
 
 func (f *DatabaseFuture) ContinuedAs() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.continueAs
 }
 
@@ -262,17 +324,50 @@ type QueueInstance struct {
 
 	orchestrators *retrypool.Pool[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]
 
-	processing map[int]struct{}
+	processingWorkers map[int]struct{}
+	freeWorkers       map[int]struct{}
+
+	onCrossWorkflow crossWorkflow
 }
 
-func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, count int) *QueueInstance {
+type queueConfig struct {
+	onCrossWorkflow crossWorkflow
+}
+
+type queueOption func(*queueConfig)
+
+func WithCrossWorkflowHandler(handler crossWorkflow) queueOption {
+	return func(c *queueConfig) {
+		c.onCrossWorkflow = handler
+	}
+}
+
+func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, count int, opt ...queueOption) (*QueueInstance, error) {
 	q := &QueueInstance{
-		name:       name,
-		count:      count,
-		registry:   registry,
-		database:   db,
-		ctx:        ctx,
-		processing: make(map[int]struct{}),
+		name:              name,
+		count:             count,
+		registry:          registry,
+		database:          db,
+		ctx:               ctx,
+		processingWorkers: make(map[int]struct{}),
+		freeWorkers:       make(map[int]struct{}),
+	}
+
+	cfg := &queueConfig{}
+
+	for _, o := range opt {
+		o(cfg)
+	}
+
+	if cfg.onCrossWorkflow != nil {
+		q.onCrossWorkflow = cfg.onCrossWorkflow
+	}
+
+	_, err := db.AddQueue(&Queue{Name: name})
+	if err != nil {
+		if !errors.Is(err, ErrQueueExists) {
+			return nil, err
+		}
 	}
 
 	workers := []retrypool.Worker[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]{}
@@ -280,10 +375,27 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		workers = append(workers, NewQueueWorker(q))
 	}
 
-	// TODO: add the panic management
-	q.orchestrators = retrypool.New(ctx, workers)
+	q.orchestrators = retrypool.New(
+		ctx,
+		workers,
+		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](3),
+		retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
+		retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+			func(task *retrypool.DeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], idx int) {
+				errs := errors.New("failed to process request")
+				for _, e := range task.Errors {
+					errs = errors.Join(errs, e)
+				}
+				task.Data.CompleteWithError(errs)
+				_, err := q.orchestrators.PullDeadTask(idx)
+				if err != nil {
+					// too bad
+					log.Printf("failed to pull dead task: %v", err)
+				}
+			}),
+	)
 
-	return q
+	return q, nil
 }
 
 func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*DatabaseFuture, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
@@ -315,18 +427,29 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	return dbFuture, task, nil
 }
 
+type onStartFunc func(context.Context)
+type onEndFunc func(context.Context)
+
 // QueueWorker implements the retrypool.Worker interface
 type QueueWorker struct {
 	ID            int
 	queueInstance *QueueInstance
 	orchestrator  *Orchestrator
+
+	onStart onStartFunc
+	onEnd   onEndFunc
 }
 
 func NewQueueWorker(instance *QueueInstance) *QueueWorker {
-	return &QueueWorker{
+	qw := &QueueWorker{
 		queueInstance: instance,
-		orchestrator:  NewOrchestrator(instance.ctx, instance.database, instance.registry),
 	}
+	opts := []OrchestratorOption{}
+	if instance.onCrossWorkflow != nil {
+		opts = append(opts, WithCrossWorkflow(instance.onCrossWorkflow))
+	}
+	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
+	return qw
 }
 
 func (w *QueueWorker) OnStart(ctx context.Context) {
@@ -337,19 +460,19 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 
 	// Mark entity as processing
 	w.queueInstance.mu.Lock()
-	if _, exists := w.queueInstance.processing[task.Request.workflowID]; exists {
+	if _, exists := w.queueInstance.processingWorkers[task.Request.workflowID]; exists {
 		w.queueInstance.mu.Unlock()
 		task.Request.future.setError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		return fmt.Errorf("entity %d is already being processed", task.Request.workflowID)
 	}
-	w.queueInstance.processing[task.Request.workflowID] = struct{}{}
+	w.queueInstance.processingWorkers[task.Request.workflowID] = struct{}{}
 	w.queueInstance.mu.Unlock()
 
 	// Clean up when done
 	defer func() {
 		w.queueInstance.mu.Lock()
-		delete(w.queueInstance.processing, task.Request.workflowID)
+		delete(w.queueInstance.processingWorkers, task.Request.workflowID)
 		w.queueInstance.mu.Unlock()
 	}()
 
