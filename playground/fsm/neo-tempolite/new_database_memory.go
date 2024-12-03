@@ -9,8 +9,6 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/k0kubun/pp/v3"
 )
 
 type MemoryDatabase struct {
@@ -570,8 +568,6 @@ func (db *MemoryDatabase) AddWorkflowEntity(entity *WorkflowEntity) (int, error)
 		db.queueToWorkflows[entity.QueueID] = append(db.queueToWorkflows[entity.QueueID], entity.ID)
 	}
 
-	pp.Println("add", entity)
-
 	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
 	return entity.ID, nil
 }
@@ -612,8 +608,6 @@ func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOpt
 			return nil, err
 		}
 	}
-
-	pp.Println("Get workflow", cfg, entity)
 
 	if cfg.IncludeQueue {
 		if queueID, ok := db.workflowToQueue[id]; ok {

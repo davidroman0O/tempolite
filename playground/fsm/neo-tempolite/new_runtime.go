@@ -58,6 +58,7 @@ var (
 
 type Future interface {
 	Get(out ...interface{}) error
+	GetResults() ([]interface{}, error)
 	setEntityID(entityID int)
 	setError(err error)
 	setResult(results []interface{})
@@ -469,6 +470,21 @@ func (f *RuntimeFuture) setError(err error) {
 	})
 }
 
+func (f *RuntimeFuture) GetResults() ([]interface{}, error) {
+	<-f.done
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	// Return a copy of results to prevent modification
+	results := make([]interface{}, len(f.results))
+	copy(results, f.results)
+	return results, nil
+}
+
 func (f *RuntimeFuture) Get(out ...interface{}) error {
 	<-f.done
 	f.mu.Lock()
@@ -501,180 +517,6 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 	}
 
 	return nil
-}
-
-// Future implementation using the database to track states
-type DatabaseFuture struct {
-	ctx      context.Context
-	entityID int
-	database Database
-	results  []interface{}
-	err      error
-}
-
-func NewDatabaseFuture(ctx context.Context, database Database) *DatabaseFuture {
-	return &DatabaseFuture{
-		ctx:      ctx,
-		database: database,
-	}
-}
-
-func (f *DatabaseFuture) setEntityID(entityID int) {
-	f.entityID = entityID
-}
-
-func (f *DatabaseFuture) setError(err error) {
-	f.err = err
-}
-
-func (f *DatabaseFuture) WorkflowID() int {
-	return f.entityID
-}
-
-func (f *DatabaseFuture) Get(out ...interface{}) error {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-f.ctx.Done():
-			return errors.New("context cancelled")
-		case <-ticker.C:
-			if f.entityID == 0 {
-				continue
-			}
-			if f.err != nil {
-				defer func() { // if we re-use the same future, we must start from a fresh state
-					f.err = nil
-					f.results = nil
-				}()
-				return f.err
-			}
-			if completed := f.checkCompletion(); completed {
-				defer func() { // if we re-use the same future, we must start from a fresh state
-					f.err = nil
-					f.results = nil
-				}()
-				return f.handleResults(out...)
-			}
-			continue
-		}
-	}
-}
-
-func (f *DatabaseFuture) setResult(results []interface{}) {
-	f.results = results
-}
-
-func (f *DatabaseFuture) handleResults(out ...interface{}) error {
-	if f.err != nil {
-		return f.err
-	}
-
-	if len(out) == 0 {
-		return nil
-	}
-
-	if len(out) > len(f.results) {
-		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results))
-	}
-
-	for i := 0; i < len(out); i++ {
-		val := reflect.ValueOf(out[i])
-		if val.Kind() != reflect.Ptr {
-			return fmt.Errorf("output parameter %d must be a pointer", i)
-		}
-		val = val.Elem()
-
-		result := reflect.ValueOf(f.results[i])
-		if !result.Type().AssignableTo(val.Type()) {
-			return fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i)
-		}
-
-		val.Set(result)
-	}
-
-	return nil
-}
-
-func (f *DatabaseFuture) checkCompletion() bool {
-	// var err error
-	// var entity *Entity
-	// if entity, err = f.database.GetEntity(f.entityID); err != nil {
-	// 	f.err = fmt.Errorf("entity not found: %d", f.entityID)
-	// 	return true
-	// }
-
-	// fmt.Println("\t entity", entity.ID, " status: ", entity.Status)
-	// var latestExec *Execution
-	// // TODO: should we check for pause?
-	// switch entity.Status {
-	// case StatusCompleted:
-	// 	// Get results from latest execution
-	// 	if latestExec, err = f.database.GetLatestExecution(f.entityID); err != nil {
-	// 		f.err = err
-	// 		return true
-	// 	}
-
-	// 	var outputs []interface{}
-	// 	if entity.HandlerInfo == nil {
-	// 		f.err = fmt.Errorf("handler info not found for entity %d", entity.ID)
-	// 		return true
-	// 	}
-
-	// 	switch entity.Type {
-	// 	case EntityTypeWorkflow:
-	// 		if latestExec.WorkflowExecutionData != nil && latestExec.WorkflowExecutionData.Outputs != nil {
-	// 			outputs, err = convertOutputsFromSerialization(*entity.HandlerInfo, latestExec.WorkflowExecutionData.Outputs)
-	// 			if err != nil {
-	// 				f.err = err
-	// 				return true
-	// 			}
-	// 			f.results = outputs
-	// 		}
-	// 	case EntityTypeActivity:
-	// 		if latestExec.ActivityExecutionData != nil && latestExec.ActivityExecutionData.Outputs != nil {
-	// 			outputs, err = convertOutputsFromSerialization(*entity.HandlerInfo, latestExec.ActivityExecutionData.Outputs)
-	// 			if err != nil {
-	// 				f.err = err
-	// 				return true
-	// 			}
-	// 			f.results = outputs
-	// 		}
-	// 	case EntityTypeSideEffect:
-	// 		if latestExec.SideEffectExecutionData != nil && latestExec.SideEffectExecutionData.Outputs != nil {
-	// 			outputs, err = convertOutputsFromSerialization(*entity.HandlerInfo, latestExec.SideEffectExecutionData.Outputs)
-	// 			if err != nil {
-	// 				f.err = err
-	// 				return true
-	// 			}
-	// 			f.results = outputs
-	// 		}
-	// 	default:
-	// 		f.err = fmt.Errorf("unsupported entity type: %s", entity.Type)
-	// 		return true
-	// 	}
-
-	// 	// If outputs are successfully retrieved
-	// 	return true
-	// case StatusFailed:
-	// 	if latestExec, err = f.database.GetLatestExecution(f.entityID); err != nil {
-	// 		f.err = err
-	// 		return true
-	// 	}
-
-	// 	f.err = errors.New(latestExec.Error)
-
-	// 	return true
-	// case StatusPaused:
-	// 	f.err = ErrPaused
-	// 	return true
-	// case StatusCancelled:
-	// 	f.err = errors.New("workflow was cancelled")
-	// 	return true
-	// }
-
-	return false
 }
 
 type StateTracker interface {
@@ -962,13 +804,11 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	return future
 }
 
-type workflowPreparationOptions struct{}
-
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
-func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions *WorkflowOptions, preparationOptions *workflowPreparationOptions, args ...interface{}) (*WorkflowEntity, error) {
+func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, args ...interface{}) (*WorkflowEntity, error) {
 
 	// Register workflow if needed
-	handler, err := o.registry.RegisterWorkflow(workflowFunc)
+	handler, err := registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register workflow: %w", err)
 	}
@@ -980,12 +820,11 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 	}
 
 	// Create or get Run
-	if o.runID == 0 {
-		if o.runID, err = o.db.AddRun(&Run{
-			Status: RunStatusPending,
-		}); err != nil {
-			return nil, fmt.Errorf("failed to create run: %w", err)
-		}
+	var runID int
+	if runID, err = db.AddRun(&Run{
+		Status: RunStatusPending,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to create run: %w", err)
 	}
 
 	// Convert retry policy if provided
@@ -1007,13 +846,13 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 	}
 
 	var queue *Queue
-	if queue, err = o.db.GetQueueByName(queueName); err != nil {
+	if queue, err = db.GetQueueByName(queueName); err != nil {
 		return nil, fmt.Errorf("failed to get queue %s: %w", queueName, err)
 	}
 
 	var workflowID int
 	// We're not even storing the HandlerInfo since it is a runtime thing
-	if workflowID, err = o.db.
+	if workflowID, err = db.
 		AddWorkflowEntity(
 			&WorkflowEntity{
 				BaseEntity: BaseEntity{
@@ -1022,7 +861,7 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 					Type:        EntityWorkflow,
 					QueueID:     queue.ID,
 					StepID:      "root",
-					RunID:       o.runID,
+					RunID:       runID,
 					RetryPolicy: *retryPolicy,
 					RetryState:  RetryState{Attempts: 0},
 				},
@@ -1036,13 +875,13 @@ func (o *Orchestrator) prepareWorkflow(workflowFunc interface{}, workflowOptions
 		return nil, fmt.Errorf("failed to add workflow entity: %w", err)
 	}
 
-	return o.db.GetWorkflowEntity(workflowID)
+	return db.GetWorkflowEntity(workflowID)
 }
 
 // Execute starts the execution of a workflow directly.
 func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 	// Create entity and related records
-	entity, err := o.prepareWorkflow(workflowFunc, options, nil, args...)
+	entity, err := prepareWorkflow(o.registry, o.db, workflowFunc, options, args...)
 	if err != nil {
 		future := NewRuntimeFuture()
 		future.setError(err)
