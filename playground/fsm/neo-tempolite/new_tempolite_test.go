@@ -3,6 +3,7 @@ package tempolite
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -92,15 +93,31 @@ func TestTempoliteBasicCross(t *testing.T) {
 		WithDefaultQueueWorkers(2),
 		WithQueue(QueueConfig{
 			Name:        "second",
-			WorkerCount: 1,
+			WorkerCount: 2,
 		}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	subWork := func(ctx WorkflowContext) error {
+	counter := atomic.Int32{}
+
+	var subWork func(ctx WorkflowContext) error
+
+	subWork = func(ctx WorkflowContext) error {
 		fmt.Println("Hello, second world!")
 		<-time.After(1 * time.Second)
+		if counter.Load() < 5 {
+			counter.Store(counter.Load() + 1)
+			// if err := ctx.Workflow(
+			// 	"next",
+			// 	subWork,
+			// 	&WorkflowOptions{
+			// 		Queue: "second",
+			// 	}).Get(); err != nil {
+			// 	return err
+			// }
+			return ctx.ContinueAsNew(nil)
+		}
 		fmt.Println("second done!")
 		return nil
 	}
@@ -124,6 +141,10 @@ func TestTempoliteBasicCross(t *testing.T) {
 	}
 
 	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
 		t.Fatal(err)
 	}
 

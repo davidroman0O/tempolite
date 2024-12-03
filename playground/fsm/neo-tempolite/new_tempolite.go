@@ -399,8 +399,13 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	return q, nil
 }
 
-func (qi *QueueInstance) Close() {
-	qi.Close()
+func (qi *QueueInstance) Close() error {
+	if err := qi.orchestrators.Close(); err != nil {
+		if err != context.Canceled {
+			return fmt.Errorf("failed to close orchestrators: %w", err)
+		}
+	}
+	return nil
 }
 
 func (qi *QueueInstance) Wait() error {
@@ -682,9 +687,7 @@ func (t *Tempolite) Close() error {
 	// Close all queues
 	var errs []error
 	for _, instance := range t.queueInstances {
-		if err := instance.orchestrators.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close queue %s: %w", instance.name, err))
-		}
+		instance.Close()
 	}
 
 	if len(errs) > 0 {
