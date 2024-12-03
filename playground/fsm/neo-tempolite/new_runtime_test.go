@@ -668,17 +668,13 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		t.Fatalf("expected nil, got %v", err)
 	}
 
-	if !futureFirst.ContinuedAsNew() {
-		t.Fatalf("expected true, got false")
-	}
-
 	if firstRes != 42 {
 		t.Fatalf("expected 42, got %d", firstRes)
 	}
 
 	// The orchestrator provide a function to allow you to execute any entity
 	// A workflow continued as new is just a new workflow to execute
-	futureSecond, err := o.ExecuteWithEntity(futureFirst.ContinuedAs())
+	futureSecond, err := o.ExecuteWithEntity(2) // TODO: should have a function to get pending workflows
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -695,10 +691,6 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 
 	if secondRes != 48 {
 		t.Fatalf("expected 48, got %d", secondRes)
-	}
-
-	if futureSecond.ContinuedAsNew() {
-		t.Fatalf("expected false, got true")
 	}
 
 	first, err := db.GetWorkflowEntity(futureFirst.WorkflowID())

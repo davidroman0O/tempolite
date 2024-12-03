@@ -628,14 +628,15 @@ type BaseEntity struct {
 
 // Entity Data structures
 type WorkflowData struct {
-	ID            int      `json:"id,omitempty"`
-	EntityID      int      `json:"entity_id,omitempty"`
-	Duration      string   `json:"duration,omitempty"`
-	Paused        bool     `json:"paused"`
-	Resumable     bool     `json:"resumable"`
-	Inputs        [][]byte `json:"inputs,omitempty"`
-	IsRoot        bool     `json:"is_root"`
-	ContinuedFrom *int     `json:"continued_from,omitempty"`
+	ID                     int      `json:"id,omitempty"`
+	EntityID               int      `json:"entity_id,omitempty"`
+	Duration               string   `json:"duration,omitempty"`
+	Paused                 bool     `json:"paused"`
+	Resumable              bool     `json:"resumable"`
+	Inputs                 [][]byte `json:"inputs,omitempty"`
+	IsRoot                 bool     `json:"is_root"`
+	ContinuedFrom          *int     `json:"continued_from,omitempty"`
+	ContinuedExecutionFrom *int     `json:"continued_execution_from,omitempty"`
 }
 
 type ActivityData struct {

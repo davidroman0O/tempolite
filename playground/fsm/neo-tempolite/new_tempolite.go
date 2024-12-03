@@ -15,14 +15,13 @@ import (
 
 // DatabaseFuture implements the Future interface for cross-queue workflow communication
 type DatabaseFuture struct {
-	mu         deadlock.Mutex
-	ctx        context.Context
-	entityID   int
-	database   Database
-	registry   *Registry
-	results    []interface{}
-	err        error
-	continueAs int
+	mu       deadlock.Mutex
+	ctx      context.Context
+	entityID int
+	database Database
+	registry *Registry
+	results  []interface{}
+	err      error
 }
 
 // Constructor remains the same
@@ -269,24 +268,6 @@ func (f *DatabaseFuture) setResult(results []interface{}) {
 	f.results = results
 }
 
-func (f *DatabaseFuture) setContinueAs(continueAs int) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.continueAs = continueAs
-}
-
-func (f *DatabaseFuture) ContinuedAsNew() bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.continueAs != 0
-}
-
-func (f *DatabaseFuture) ContinuedAs() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.continueAs
-}
-
 func (f *DatabaseFuture) IsPaused() bool {
 	var status EntityStatus
 	err := f.database.GetWorkflowEntityProperties(f.entityID, GetWorkflowEntityStatus(&status))
@@ -304,6 +285,7 @@ type WorkflowRequest struct {
 	args         []interface{}    // Arguments for the workflow
 	future       *DatabaseFuture  // Future for tracking execution
 	queueName    string           // Name of the queue this task belongs to
+	continued    bool
 }
 
 type WorkflowResponse struct {
@@ -329,10 +311,12 @@ type QueueInstance struct {
 	freeWorkers       map[int]struct{}
 
 	onCrossWorkflow crossWorkflow
+	onContinueAsNew continueAsNew
 }
 
 type queueConfig struct {
 	onCrossWorkflow crossWorkflow
+	onContinueAsNew continueAsNew
 }
 
 type queueOption func(*queueConfig)
@@ -340,6 +324,12 @@ type queueOption func(*queueConfig)
 func WithCrossWorkflowHandler(handler crossWorkflow) queueOption {
 	return func(c *queueConfig) {
 		c.onCrossWorkflow = handler
+	}
+}
+
+func WithContinueAsNewHandler(handler continueAsNew) queueOption {
+	return func(c *queueConfig) {
+		c.onContinueAsNew = handler
 	}
 }
 
@@ -362,6 +352,9 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 
 	if cfg.onCrossWorkflow != nil {
 		q.onCrossWorkflow = cfg.onCrossWorkflow
+	}
+	if cfg.onContinueAsNew != nil {
+		q.onContinueAsNew = cfg.onContinueAsNew
 	}
 
 	_, err := db.AddQueue(&Queue{Name: name})
@@ -416,7 +409,7 @@ func (qi *QueueInstance) Wait() error {
 
 func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) (*DatabaseFuture, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
 
-	workflowEntity, err := prepareWorkflow(qi.registry, qi.database, workflowFunc, options, args...)
+	workflowEntity, err := prepareWorkflow(qi.registry, qi.database, workflowFunc, options, nil, args...)
 	if err != nil {
 		log.Printf("failed to prepare workflow: %v", err)
 		return nil, nil, err
@@ -463,6 +456,9 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 	opts := []OrchestratorOption{}
 	if instance.onCrossWorkflow != nil {
 		opts = append(opts, WithCrossWorkflow(instance.onCrossWorkflow))
+	}
+	if instance.onContinueAsNew != nil {
+		opts = append(opts, WithContinueAsNew(instance.onContinueAsNew))
 	}
 	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
 	return qw
@@ -563,6 +559,30 @@ func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
 	}
 }
 
+func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
+	return func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+
+		t.mu.Lock()
+		queue := t.queueInstances[queueName]
+		t.mu.Unlock()
+		future := NewDatabaseFuture(t.ctx, t.database, t.registry)
+
+		if err := queue.orchestrators.Submit(retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+			workflowFunc: workflowFunc,
+			options:      options,
+			workflowID:   workflowID,
+			args:         args,
+			future:       future,
+			queueName:    queueName,
+			continued:    true,
+		})); err != nil {
+			future.setError(err)
+		}
+
+		return future
+	}
+}
+
 func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Tempolite{
@@ -604,7 +624,15 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		return fmt.Errorf("worker count must be greater than 0")
 	}
 
-	queueInstance, err := NewQueueInstance(t.ctx, t.database, t.registry, config.Name, config.WorkerCount, WithCrossWorkflowHandler(t.createCrossWorkflowHandler()))
+	queueInstance, err := NewQueueInstance(
+		t.ctx,
+		t.database,
+		t.registry,
+		config.Name,
+		config.WorkerCount,
+		WithCrossWorkflowHandler(t.createCrossWorkflowHandler()),
+		WithContinueAsNewHandler(t.createContinueAsNewHandler()),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create queue instance: %w", err)
 	}

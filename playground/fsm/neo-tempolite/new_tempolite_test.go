@@ -90,10 +90,10 @@ func TestTempoliteBasicCross(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(2),
+		WithDefaultQueueWorkers(10),
 		WithQueue(QueueConfig{
 			Name:        "second",
-			WorkerCount: 2,
+			WorkerCount: 10,
 		}))
 	if err != nil {
 		t.Fatal(err)
@@ -108,15 +108,10 @@ func TestTempoliteBasicCross(t *testing.T) {
 		<-time.After(1 * time.Second)
 		if counter.Load() < 5 {
 			counter.Store(counter.Load() + 1)
-			// if err := ctx.Workflow(
-			// 	"next",
-			// 	subWork,
-			// 	&WorkflowOptions{
-			// 		Queue: "second",
-			// 	}).Get(); err != nil {
-			// 	return err
-			// }
-			return ctx.ContinueAsNew(nil)
+			fmt.Println("second ", counter.Load())
+			return ctx.ContinueAsNew(&WorkflowOptions{
+				Queue: "second",
+			})
 		}
 		fmt.Println("second done!")
 		return nil
@@ -132,6 +127,7 @@ func TestTempoliteBasicCross(t *testing.T) {
 			}).Get(); err != nil {
 			return err
 		}
+		fmt.Println("finished!!")
 		return nil
 	}
 
