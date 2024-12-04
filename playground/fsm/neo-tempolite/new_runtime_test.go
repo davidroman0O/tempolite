@@ -786,7 +786,9 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResume(t *testing.T) {
 
 	o.Pause()
 
-	o.WaitActive()
+	if err := o.WaitFor(future.WorkflowID(), StatusPaused); err != nil {
+		t.Fatal(err)
+	}
 
 	db.SaveAsJSON("./json/workflow_paused.json")
 
@@ -903,7 +905,9 @@ func TestUnitPrepareRootWorkflowActivityEntityDetectContextCancellation(t *testi
 	pauseTriggered.Store(true)
 	o.Cancel()
 
-	o.WaitActive()
+	if err := o.WaitFor(future.WorkflowID(), StatusCancelled); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := future.Get(); err != nil {
 		if !errors.Is(err, context.Canceled) {
@@ -1006,7 +1010,9 @@ func TestUnitPrepareRootWorkflowActivityEntityPauseResumeWithFailure(t *testing.
 
 	o.Pause()
 
-	o.WaitActive()
+	if err := o.WaitFor(future.WorkflowID(), StatusPaused); err != nil {
+		t.Fatal(err)
+	}
 
 	db.SaveAsJSON("./json/workflow_paused_with_failure.json")
 
@@ -2964,7 +2970,9 @@ func TestWorkflowSignalPanic(t *testing.T) {
 	}
 
 	if err := future.Get(); err != nil {
-		t.Fatal(err)
+		if !errors.Is(err, ErrWorkflowPanicked) {
+			t.Fatal(err)
+		}
 	}
 
 	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
@@ -2972,8 +2980,8 @@ func TestWorkflowSignalPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if workflow.Status != StatusCompleted {
-		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	if workflow.Status != StatusFailed {
+		t.Fatalf("expected %s, got %s", StatusFailed, workflow.Status)
 	}
 
 	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
@@ -2986,8 +2994,8 @@ func TestWorkflowSignalPanic(t *testing.T) {
 	}
 
 	for _, v := range execs {
-		if v.Status != ExecutionStatusCompleted {
-			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		if v.Status != ExecutionStatusFailed {
+			t.Fatalf("expected %s, got %s", ExecutionStatusFailed, v.Status)
 		}
 	}
 

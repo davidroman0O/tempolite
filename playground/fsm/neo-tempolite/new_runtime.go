@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/k0kubun/pp/v3"
@@ -519,10 +518,10 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 
 type StateTracker interface {
 	isPaused() bool
-	isActive() bool
+	// isActive() bool
 	setUnpause()
-	setActive()
-	setInactive()
+	// setActive()
+	// setInactive()
 }
 
 type Debug interface {
@@ -568,7 +567,7 @@ type Orchestrator struct {
 	paused   bool
 	pausedMu deadlock.Mutex
 
-	active atomic.Bool
+	// active atomic.Bool
 
 	displayStackTrace bool
 
@@ -633,13 +632,13 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 	return o
 }
 
-func (o *Orchestrator) setActive() {
-	o.active.Store(true)
-}
+// func (o *Orchestrator) setActive() {
+// 	o.active.Store(true)
+// }
 
-func (o *Orchestrator) setInactive() {
-	o.active.Store(false)
-}
+// func (o *Orchestrator) setInactive() {
+// 	o.active.Store(false)
+// }
 
 func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
 	for _, saga := range o.sagas {
@@ -674,11 +673,35 @@ func (o *Orchestrator) Cancel() {
 	o.cancel()
 }
 
-func (o *Orchestrator) WaitActive() {
-	for o.active.Load() { // it is still active, you have to wait
+func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
+	o.mu.Lock()
+	var status EntityStatus
+	if err := o.db.GetWorkflowEntityProperties(id, GetWorkflowEntityStatus(&status)); err != nil {
+		log.Printf("Error getting status: %v", err)
+		return "", err
+	}
+	o.mu.Unlock()
+	return status, nil
+}
+
+func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
+	for {
+		s, err := o.GetStatus(id)
+		if err != nil {
+			return err
+		}
+		if s == status {
+			return nil
+		}
 		<-time.After(100 * time.Millisecond)
 	}
 }
+
+// func (o *Orchestrator) WaitActive() {
+// for o.active.Load() { // it is still active, you have to wait
+// 	<-time.After(100 * time.Millisecond)
+// }
+// }
 
 func (o *Orchestrator) isPaused() bool {
 	o.pausedMu.Lock()
@@ -692,9 +715,9 @@ func (o *Orchestrator) setUnpause() {
 	o.paused = false
 }
 
-func (o *Orchestrator) isActive() bool {
-	return o.active.Load()
-}
+// func (o *Orchestrator) isActive() bool {
+// 	return o.active.Load()
+// }
 
 func (o *Orchestrator) canStackTrace() bool {
 	o.mu.Lock()
@@ -704,9 +727,9 @@ func (o *Orchestrator) canStackTrace() bool {
 
 func (o *Orchestrator) Resume(entityID int) Future {
 	// TODO: add timeout
-	for o.active.Load() { // it is still active, you have to wait
-		<-time.After(100 * time.Millisecond)
-	}
+	// for o.active.Load() { // it is still active, you have to wait
+	// 	<-time.After(100 * time.Millisecond)
+	// }
 
 	var err error
 
@@ -718,7 +741,6 @@ func (o *Orchestrator) Resume(entityID int) Future {
 		return future
 	}
 
-	fmt.Println("status", status)
 	if status != StatusPaused {
 		future := NewRuntimeFuture()
 		future.setError(fmt.Errorf("workflow is not paused"))
@@ -1101,7 +1123,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	// 	return nil, fmt.Errorf("orchestrator is already active")
 	// }
 
-	o.setActive()
+	// o.setActive()
 
 	o.addWorkflowInstance(instance)
 
@@ -1292,10 +1314,10 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
 	// free up the orchestrator
 	if isRoot {
-		// set to inactive
-		if wi.state.isActive() {
-			wi.state.setInactive()
-		}
+		// // set to inactive
+		// if wi.state.isActive() {
+		// 	wi.state.setInactive()
+		// }
 		// if was paused, then we know it is definietly paused
 		// we can remove the paused state
 		if wi.state.isPaused() {
