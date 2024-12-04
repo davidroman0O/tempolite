@@ -44,6 +44,12 @@ type MemoryDatabase struct {
 	sagaExecutionDataCounter       int
 	sideEffectExecutionDataCounter int
 
+	// Signal counters
+	signalEntityCounter        int
+	signalExecutionCounter     int
+	signalDataCounter          int
+	signalExecutionDataCounter int
+
 	// Saga specific
 	sagaValues map[int]map[string]*SagaValue // executionID -> key -> value
 
@@ -77,6 +83,12 @@ type MemoryDatabase struct {
 	activityExecutionData   map[int]*ActivityExecutionData
 	sagaExecutionData       map[int]*SagaExecutionData
 	sideEffectExecutionData map[int]*SideEffectExecutionData
+
+	// Signal maps
+	signalEntities      map[int]*SignalEntity
+	signalExecutions    map[int]*SignalExecution
+	signalData          map[int]*SignalData
+	signalExecutionData map[int]*SignalExecutionData
 
 	// Relationship maps
 	entityToWorkflow   map[int]int                  // entity ID -> workflow ID
@@ -119,6 +131,12 @@ func NewMemoryDatabase() *MemoryDatabase {
 		activityExecutionData:   make(map[int]*ActivityExecutionData),
 		sagaExecutionData:       make(map[int]*SagaExecutionData),
 		sideEffectExecutionData: make(map[int]*SideEffectExecutionData),
+
+		// Signal maps
+		signalEntities:      make(map[int]*SignalEntity),
+		signalExecutions:    make(map[int]*SignalExecution),
+		signalData:          make(map[int]*SignalData),
+		signalExecutionData: make(map[int]*SignalExecutionData),
 
 		// Saga context specific
 		sagaValues: make(map[int]map[string]*SagaValue),
@@ -181,6 +199,10 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		QueueToWorkflows        map[int][]int
 		RunToWorkflows          map[int][]int
 		SagaValues              map[int]map[string]*SagaValue
+		SignalEntities          map[int]*SignalEntity
+		SignalExecutions        map[int]*SignalExecution
+		SignalData              map[int]*SignalData
+		SignalExecutionData     map[int]*SignalExecutionData
 	}{
 		Runs:                    db.runs,
 		Versions:                db.versions,
@@ -210,6 +232,10 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		QueueToWorkflows:        db.queueToWorkflows,
 		RunToWorkflows:          db.runToWorkflows,
 		SagaValues:              db.sagaValues,
+		SignalEntities:          db.signalEntities,
+		SignalExecutions:        db.signalExecutions,
+		SignalData:              db.signalData,
+		SignalExecutionData:     db.signalExecutionData,
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -3226,4 +3252,550 @@ func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID int, key string)
 	}
 
 	return nil, fmt.Errorf("saga value not found for execution %d and key %s", executionID, key)
+}
+
+// Signal Entity operations
+func (db *MemoryDatabase) AddSignalEntity(entity *SignalEntity, parentWorkflowID int) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.signalEntityCounter++
+	entity.ID = db.signalEntityCounter
+
+	if entity.SignalData != nil {
+		db.signalDataCounter++
+		entity.SignalData.ID = db.signalDataCounter
+		entity.SignalData.EntityID = entity.ID
+		db.signalData[entity.SignalData.ID] = copySignalData(entity.SignalData)
+	}
+
+	entity.CreatedAt = time.Now()
+	entity.UpdatedAt = entity.CreatedAt
+
+	db.signalEntities[entity.ID] = copySignalEntity(entity)
+
+	return entity.ID, nil
+}
+
+func (db *MemoryDatabase) GetSignalEntity(id int, opts ...SignalEntityGetOption) (*SignalEntity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	entity, exists := db.signalEntities[id]
+	if !exists {
+		return nil, fmt.Errorf("signal entity not found")
+	}
+
+	cfg := &SignalEntityGetterOptions{}
+	for _, opt := range opts {
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.IncludeData {
+		for _, d := range db.signalData {
+			if d.EntityID == id {
+				entity.SignalData = copySignalData(d)
+				break
+			}
+		}
+	}
+
+	return copySignalEntity(entity), nil
+}
+
+func (db *MemoryDatabase) GetSignalEntities(workflowID int, opts ...SignalEntityGetOption) ([]*SignalEntity, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	// Get hierarchies for workflow->signal relationships
+	var entities []*SignalEntity
+	for _, hierarchy := range db.hierarchies {
+		if hierarchy.ParentEntityID == workflowID && hierarchy.ChildType == EntitySignal {
+			if entity, exists := db.signalEntities[hierarchy.ChildEntityID]; exists {
+				entities = append(entities, copySignalEntity(entity))
+			}
+		}
+	}
+
+	return entities, nil
+}
+
+// Signal Execution operations
+func (db *MemoryDatabase) AddSignalExecution(exec *SignalExecution) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.signalExecutionCounter++
+	exec.ID = db.signalExecutionCounter
+
+	if exec.SignalExecutionData != nil {
+		db.signalExecutionDataCounter++
+		exec.SignalExecutionData.ID = db.signalExecutionDataCounter
+		exec.SignalExecutionData.ExecutionID = exec.ID
+		db.signalExecutionData[exec.SignalExecutionData.ID] = copySignalExecutionData(exec.SignalExecutionData)
+	}
+
+	exec.CreatedAt = time.Now()
+	exec.UpdatedAt = exec.CreatedAt
+
+	db.signalExecutions[exec.ID] = copySignalExecution(exec)
+	return exec.ID, nil
+}
+
+func (db *MemoryDatabase) GetSignalExecution(id int, opts ...SignalExecutionGetOption) (*SignalExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.signalExecutions[id]
+	if !exists {
+		return nil, fmt.Errorf("signal execution not found")
+	}
+
+	cfg := &SignalExecutionGetterOptions{}
+	for _, opt := range opts {
+		if err := opt(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.IncludeData {
+		for _, d := range db.signalExecutionData {
+			if d.ExecutionID == id {
+				exec.SignalExecutionData = copySignalExecutionData(d)
+				break
+			}
+		}
+	}
+
+	return copySignalExecution(exec), nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutions(entityID int) ([]*SignalExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var executions []*SignalExecution
+	for _, exec := range db.signalExecutions {
+		if exec.EntityID == entityID {
+			executions = append(executions, copySignalExecution(exec))
+		}
+	}
+
+	return executions, nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionLatestByEntityID(entityID int) (*SignalExecution, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var latest *SignalExecution
+	var latestTime time.Time
+
+	for _, exec := range db.signalExecutions {
+		if exec.EntityID == entityID {
+			if latest == nil || exec.CreatedAt.After(latestTime) {
+				latest = exec
+				latestTime = exec.CreatedAt
+			}
+		}
+	}
+
+	if latest == nil {
+		return nil, fmt.Errorf("no signal execution found")
+	}
+
+	return copySignalExecution(latest), nil
+}
+
+// Has operations
+func (db *MemoryDatabase) HasSignalEntity(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.signalEntities[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSignalExecution(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.signalExecutions[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSignalData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.signalData[id]
+	return exists, nil
+}
+
+func (db *MemoryDatabase) HasSignalExecutionData(id int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, exists := db.signalExecutionData[id]
+	return exists, nil
+}
+
+// Property operations
+func (db *MemoryDatabase) GetSignalEntityProperties(id int, getters ...SignalEntityPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	entity, exists := db.signalEntities[id]
+	if !exists {
+		return fmt.Errorf("signal entity not found")
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(entity)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalEntityGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.signalData {
+					if d.EntityID == id {
+						entity.SignalData = copySignalData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalEntityProperties(id int, setters ...SignalEntityPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	entity, exists := db.signalEntities[id]
+	if !exists {
+		return fmt.Errorf("signal entity not found")
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(entity)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalEntitySetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	entity.UpdatedAt = time.Now()
+	return nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionProperties(id int, getters ...SignalExecutionPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	exec, exists := db.signalExecutions[id]
+	if !exists {
+		return fmt.Errorf("signal execution not found")
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalExecutionGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+
+			if opts.IncludeData {
+				for _, d := range db.signalExecutionData {
+					if d.ExecutionID == id {
+						exec.SignalExecutionData = copySignalExecutionData(d)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalExecutionProperties(id int, setters ...SignalExecutionPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	exec, exists := db.signalExecutions[id]
+	if !exists {
+		return fmt.Errorf("signal execution not found")
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(exec)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalExecutionSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	exec.UpdatedAt = time.Now()
+	return nil
+}
+
+// Updates to MemoryDatabase implementation
+
+// Missing Signal Data operations
+func (db *MemoryDatabase) AddSignalData(entityID int, data *SignalData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.signalDataCounter++
+	data.ID = db.signalDataCounter
+	data.EntityID = entityID
+
+	db.signalData[data.ID] = copySignalData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) GetSignalData(id int) (*SignalData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	data, exists := db.signalData[id]
+	if !exists {
+		return nil, fmt.Errorf("signal data not found")
+	}
+
+	return copySignalData(data), nil
+}
+
+func (db *MemoryDatabase) GetSignalDataByEntityID(entityID int) (*SignalData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.signalData {
+		if data.EntityID == entityID {
+			return copySignalData(data), nil
+		}
+	}
+	return nil, fmt.Errorf("signal data not found for entity")
+}
+
+func (db *MemoryDatabase) HasSignalDataByEntityID(entityID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.signalData {
+		if data.EntityID == entityID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) GetSignalDataProperties(entityID int, getters ...SignalDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SignalData
+	for _, d := range db.signalData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return fmt.Errorf("signal data not found")
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalDataProperties(entityID int, setters ...SignalDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SignalData
+	for _, d := range db.signalData {
+		if d.EntityID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return fmt.Errorf("signal data not found")
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Missing Signal Execution Data operations
+func (db *MemoryDatabase) AddSignalExecutionData(executionID int, data *SignalExecutionData) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.signalExecutionDataCounter++
+	data.ID = db.signalExecutionDataCounter
+	data.ExecutionID = executionID
+
+	db.signalExecutionData[data.ID] = copySignalExecutionData(data)
+	return data.ID, nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionData(id int) (*SignalExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	data, exists := db.signalExecutionData[id]
+	if !exists {
+		return nil, fmt.Errorf("signal execution data not found")
+	}
+
+	return copySignalExecutionData(data), nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionDataByExecutionID(executionID int) (*SignalExecutionData, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.signalExecutionData {
+		if data.ExecutionID == executionID {
+			return copySignalExecutionData(data), nil
+		}
+	}
+	return nil, fmt.Errorf("signal execution data not found for execution")
+}
+
+func (db *MemoryDatabase) HasSignalExecutionDataByExecutionID(executionID int) (bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, data := range db.signalExecutionData {
+		if data.ExecutionID == executionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionDataProperties(entityID int, getters ...SignalExecutionDataPropertyGetter) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var data *SignalExecutionData
+	for _, d := range db.signalExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	for _, getter := range getters {
+		opt, err := getter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalExecutionDataGetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalExecutionDataProperties(entityID int, setters ...SignalExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var data *SignalExecutionData
+	for _, d := range db.signalExecutionData {
+		if d.ExecutionID == entityID {
+			data = d
+			break
+		}
+	}
+
+	if data == nil {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	for _, setter := range setters {
+		opt, err := setter(data)
+		if err != nil {
+			return err
+		}
+		if opt != nil {
+			opts := &SignalExecutionDataSetterOptions{}
+			if err := opt(opts); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) UpdateSignalEntity(entity *SignalEntity) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if _, exists := db.signalEntities[entity.ID]; !exists {
+		return fmt.Errorf("signal entity not found")
+	}
+
+	entity.UpdatedAt = time.Now()
+	db.signalEntities[entity.ID] = copySignalEntity(entity)
+	return nil
 }

@@ -2997,3 +2997,405 @@ func GetSagaExecutionType(execType *ExecutionType) SagaExecutionPropertyGetter {
 		return nil, nil
 	}
 }
+
+// Signal Entity Property getters/setters
+func GetSignalEntityStatus(status *EntityStatus) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*status = e.Status
+		return nil, nil
+	}
+}
+
+func GetSignalEntityHandlerName(name *string) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*name = e.HandlerName
+		return nil, nil
+	}
+}
+
+func GetSignalEntityStepID(stepID *string) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*stepID = e.StepID
+		return nil, nil
+	}
+}
+
+func GetSignalEntityRunID(runID *int) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*runID = e.RunID
+		return nil, nil
+	}
+}
+
+func GetSignalEntityRetryPolicy(policy *RetryPolicy) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*policy = RetryPolicy{
+			MaxAttempts: e.RetryPolicy.MaxAttempts,
+			MaxInterval: time.Duration(e.RetryPolicy.MaxInterval),
+		}
+		return nil, nil
+	}
+}
+
+func GetSignalEntityRetryState(state *RetryState) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*state = e.RetryState
+		return nil, nil
+	}
+}
+
+func GetSignalEntityData(data **SignalData) SignalEntityPropertyGetter {
+	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		*data = e.SignalData
+		return func(opts *SignalEntityGetterOptions) error {
+			opts.IncludeData = true
+			return nil
+		}, nil
+	}
+}
+
+func SetSignalEntityStatus(status EntityStatus) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.Status = status
+		return nil, nil
+	}
+}
+
+func SetSignalEntityHandlerName(name string) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.HandlerName = name
+		return nil, nil
+	}
+}
+
+func SetSignalEntityStepID(stepID string) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.StepID = stepID
+		return nil, nil
+	}
+}
+
+func SetSignalEntityRunID(runID int) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.RunID = runID
+		return nil, nil
+	}
+}
+
+func SetSignalEntityRetryPolicy(policy RetryPolicy) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.RetryPolicy = *ToInternalRetryPolicy(&policy)
+		return nil, nil
+	}
+}
+
+func SetSignalEntityRetryState(state RetryState) SignalEntityPropertySetter {
+	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal entity is nil")
+		}
+		e.RetryState = state
+		return nil, nil
+	}
+}
+
+// Signal Data Property getters/setters
+func GetSignalDataID(id *int) SignalDataPropertyGetter {
+	return func(d *SignalData) (SignalDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal data is nil")
+		}
+		*id = d.ID
+		return nil, nil
+	}
+}
+
+func GetSignalDataEntityID(entityID *int) SignalDataPropertyGetter {
+	return func(d *SignalData) (SignalDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal data is nil")
+		}
+		*entityID = d.EntityID
+		return nil, nil
+	}
+}
+
+func GetSignalDataName(name *string) SignalDataPropertyGetter {
+	return func(d *SignalData) (SignalDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal data is nil")
+		}
+		*name = d.Name
+		return nil, nil
+	}
+}
+
+func SetSignalDataEntityID(entityID int) SignalDataPropertySetter {
+	return func(d *SignalData) (SignalDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal data is nil")
+		}
+		d.EntityID = entityID
+		return nil, nil
+	}
+}
+
+func SetSignalDataName(name string) SignalDataPropertySetter {
+	return func(d *SignalData) (SignalDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal data is nil")
+		}
+		d.Name = name
+		return nil, nil
+	}
+}
+
+// Signal Execution Property getters/setters
+func GetSignalExecutionID(id *int) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*id = e.ID
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionEntityID(entityID *int) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*entityID = e.EntityID
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionStatus(status *ExecutionStatus) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*status = e.Status
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionStartedAt(startedAt *time.Time) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*startedAt = e.StartedAt
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionCompletedAt(completedAt *time.Time) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		if e.CompletedAt != nil {
+			*completedAt = *e.CompletedAt
+		}
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionError(errStr *string) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*errStr = e.Error
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionStackTrace(stackTrace **string) SignalExecutionPropertyGetter {
+	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		*stackTrace = e.StackTrace
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionStatus(status ExecutionStatus) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		e.Status = status
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionStartedAt(startedAt time.Time) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		e.StartedAt = startedAt
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionCompletedAt(completedAt time.Time) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		e.CompletedAt = &completedAt
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionError(err string) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		e.Error = err
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionStackTrace(stackTrace string) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
+		}
+		e.StackTrace = &stackTrace
+		return nil, nil
+	}
+}
+
+// Signal Execution Data Property getters/setters
+func GetSignalExecutionDataID(id *int) SignalExecutionDataPropertyGetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		*id = d.ID
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionDataExecutionID(executionID *int) SignalExecutionDataPropertyGetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		*executionID = d.ExecutionID
+		return nil, nil
+	}
+}
+
+func GetSignalExecutionDataValue(value *[]byte) SignalExecutionDataPropertyGetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		*value = make([]byte, len(d.Value))
+		copy(*value, d.Value)
+		return func(opts *SignalExecutionDataGetterOptions) error {
+			opts.IncludeValue = true
+			return nil
+		}, nil
+	}
+}
+
+func GetSignalExecutionKind(kind *uint) SignalExecutionDataPropertyGetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		*kind = d.Kind
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionDataExecutionID(executionID int) SignalExecutionDataPropertySetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		d.ExecutionID = executionID
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionDataValue(value []byte) SignalExecutionDataPropertySetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		d.Value = make([]byte, len(value))
+		copy(d.Value, value)
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionKind(kind uint) SignalExecutionDataPropertySetter {
+	return func(d *SignalExecutionData) (SignalExecutionDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("signal execution data is nil")
+		}
+		d.Kind = kind
+		return nil, nil
+	}
+}
+
+// Convenience options
+func SignalEntityWithData() SignalEntityGetOption {
+	return func(opts *SignalEntityGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}
+
+func SignalExecutionWithData() SignalExecutionGetOption {
+	return func(opts *SignalExecutionGetterOptions) error {
+		opts.IncludeData = true
+		return nil
+	}
+}

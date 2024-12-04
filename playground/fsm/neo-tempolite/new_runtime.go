@@ -70,6 +70,8 @@ type crossWorkflow func(queueName string, workflowID int, workflowFunc interface
 
 type continueAsNew func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
+type signalNew func(workflowID int, signal string) Future
+
 type TransactionContext struct {
 	ctx         context.Context
 	db          Database
@@ -342,6 +344,7 @@ type WorkflowContext struct {
 
 	onCrossQueueWorkflow crossWorkflow
 	onContinueAsNew      continueAsNew
+	onSignalNew          signalNew
 }
 
 func (ctx WorkflowContext) checkPause() error {
@@ -406,6 +409,7 @@ type WorkflowInstance struct {
 
 	onCrossWorkflow crossWorkflow
 	onContinueAsNew continueAsNew
+	onSignalNew     signalNew
 }
 
 // Future implementation of direct calling
@@ -570,11 +574,13 @@ type Orchestrator struct {
 
 	onCrossWorkflow crossWorkflow
 	onContinueAsNew continueAsNew
+	onSignalNew     signalNew
 }
 
 type orchestratorConfig struct {
 	onCrossWorkflow crossWorkflow
 	onContinueAsNew continueAsNew
+	onSignalNew     signalNew
 }
 
 type OrchestratorOption func(*orchestratorConfig)
@@ -588,6 +594,12 @@ func WithCrossWorkflow(fn crossWorkflow) OrchestratorOption {
 func WithContinueAsNew(fn continueAsNew) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onContinueAsNew = fn
+	}
+}
+
+func WithSignalCallback(fn signalNew) OrchestratorOption {
+	return func(c *orchestratorConfig) {
+		c.onSignalNew = fn
 	}
 }
 
@@ -613,6 +625,9 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 	}
 	if cfg.onContinueAsNew != nil {
 		o.onContinueAsNew = cfg.onContinueAsNew
+	}
+	if cfg.onSignalNew != nil {
+		o.onSignalNew = cfg.onSignalNew
 	}
 
 	return o
@@ -792,6 +807,7 @@ func (o *Orchestrator) Resume(entityID int) Future {
 
 		onCrossWorkflow: o.onCrossWorkflow,
 		onContinueAsNew: o.onContinueAsNew,
+		onSignalNew:     o.onSignalNew,
 	}
 
 	// Create Future and start instance
@@ -802,10 +818,10 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	// Very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
 
-	if o.isActive() {
-		future.setError(fmt.Errorf("orchestrator is already active"))
-		return future
-	}
+	// if !o.isActive() {
+	// 	future.setError(fmt.Errorf("orchestrator is stopping"))
+	// 	return future
+	// }
 
 	o.setUnpause()
 	o.reset()
@@ -1055,6 +1071,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 
 		onCrossWorkflow: o.onCrossWorkflow,
 		onContinueAsNew: o.onContinueAsNew,
+		onSignalNew:     o.onSignalNew,
 	}
 
 	// If this is a sub-workflow, set parent info from hierarchies
@@ -1079,10 +1096,10 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	// Very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
 
-	if o.active.Load() {
-		future.setError(fmt.Errorf("orchestrator is already active"))
-		return nil, fmt.Errorf("orchestrator is already active")
-	}
+	// if !o.isActive() {
+	// 	future.setError(fmt.Errorf("orchestrator is already active"))
+	// 	return nil, fmt.Errorf("orchestrator is already active")
+	// }
 
 	o.setActive()
 
@@ -1492,6 +1509,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 
 		onCrossQueueWorkflow: wi.onCrossWorkflow,
 		onContinueAsNew:      wi.onContinueAsNew,
+		onSignalNew:          wi.onSignalNew,
 	}
 
 	var workflowInputs [][]byte
@@ -3523,6 +3541,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 		onCrossWorkflow: ctx.onCrossQueueWorkflow,
 		onContinueAsNew: ctx.onContinueAsNew,
+		onSignalNew:     ctx.onSignalNew,
 	}
 
 	// Override options if provided
@@ -3541,4 +3560,314 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	workflowInstance.Start(inputs)
 
 	return future
+}
+
+// /////////////////////////////////////////////////// Signals
+// Signal allows workflow to receive named signals with type-safe output
+func (ctx WorkflowContext) Signal(name string, output interface{}) error {
+	// Validate output is a pointer
+	if reflect.TypeOf(output).Kind() != reflect.Ptr {
+		return fmt.Errorf("output must be a pointer")
+	}
+	outputType := reflect.TypeOf(output).Elem()
+
+	// First check existing hierarchies for completed signals
+	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, name, EntitySignal)
+	if err == nil && len(hierarchies) > 0 {
+		for _, h := range hierarchies {
+			var status EntityStatus
+			if err := ctx.db.GetSignalEntityProperties(h.ChildEntityID,
+				GetSignalEntityStatus(&status)); err == nil && status == StatusCompleted {
+				// Get existing successful signal
+				if exec, err := ctx.db.GetSignalExecutionLatestByEntityID(h.ChildEntityID); err == nil {
+					if data, err := ctx.db.GetSignalExecutionDataByExecutionID(exec.ID); err == nil &&
+						data != nil && len(data.Value) > 0 {
+
+						// Convert stored value to requested type
+						result, err := convertSingleOutputFromSerialization(outputType, data.Value)
+						if err != nil {
+							return fmt.Errorf("failed to decode signal value: %w", err)
+						}
+
+						// Set output value
+						reflect.ValueOf(output).Elem().Set(reflect.ValueOf(result))
+						return nil
+					}
+				}
+			}
+		}
+	}
+
+	// Create new signal instance
+	instance := &SignalInstance{
+		ctx:     ctx.ctx,
+		db:      ctx.db,
+		tracker: ctx.tracker,
+		state:   ctx.state,
+		debug:   ctx.debug,
+
+		runID:             ctx.runID,
+		parentExecutionID: ctx.workflowExecutionID,
+		parentEntityID:    ctx.workflowID,
+		parentStepID:      ctx.stepID,
+		queueID:           ctx.queueID,
+
+		output:     output,
+		outputType: outputType,
+		name:       name,
+		onSignal:   ctx.onSignalNew,
+		done:       make(chan error, 1),
+	}
+
+	return instance.Start()
+}
+
+type SignalInstance struct {
+	ctx     context.Context
+	db      Database
+	tracker InstanceTracker
+	state   StateTracker
+	debug   Debug
+	fsm     *stateless.StateMachine
+	mu      deadlock.Mutex
+
+	runID             int
+	entityID          int
+	executionID       int
+	name              string
+	parentExecutionID int
+	parentEntityID    int
+	parentStepID      string
+	queueID           int
+
+	output     interface{}
+	outputType reflect.Type
+	done       chan error
+
+	onSignal signalNew
+}
+
+func (si *SignalInstance) Start() error {
+	si.mu.Lock()
+	si.fsm = stateless.NewStateMachine(StateIdle)
+	fsm := si.fsm
+	si.mu.Unlock()
+
+	fsm.Configure(StateIdle).
+		Permit(TriggerStart, StateExecuting).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateExecuting).
+		OnEntry(si.executeSignal).
+		Permit(TriggerComplete, StateCompleted).
+		Permit(TriggerFail, StateFailed).
+		Permit(TriggerPause, StatePaused)
+
+	fsm.Configure(StateCompleted).
+		OnEntry(si.onCompleted)
+
+	fsm.Configure(StateFailed).
+		OnEntry(si.onFailed)
+
+	fsm.Configure(StatePaused).
+		OnEntry(si.onPaused).
+		Permit(TriggerResume, StateExecuting)
+
+	if err := fsm.Fire(TriggerStart); err != nil {
+		return fmt.Errorf("failed to start signal: %w", err)
+	}
+
+	return <-si.done
+}
+
+func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) error {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 4096)
+			n := runtime.Stack(buf, false)
+			stackTrace := string(buf[:n])
+
+			if si.debug.canStackTrace() {
+				fmt.Println(stackTrace)
+			}
+
+			si.mu.Lock()
+			err := fmt.Errorf("signal panicked: %v", r)
+			si.done <- err
+			si.fsm.Fire(TriggerFail, err)
+			si.mu.Unlock()
+		}
+	}()
+
+	// Create entity
+	entityID, err := si.db.AddSignalEntity(&SignalEntity{
+		BaseEntity: BaseEntity{
+			RunID:       si.runID,
+			QueueID:     si.queueID,
+			Type:        EntitySignal,
+			HandlerName: si.name,
+			Status:      StatusPending,
+			RetryPolicy: retryPolicyInternal{MaxAttempts: 0},
+			RetryState:  RetryState{Attempts: 0},
+			StepID:      si.name,
+		},
+		SignalData: &SignalData{
+			Name: si.name,
+		},
+	}, si.parentEntityID)
+
+	if err != nil {
+		err = fmt.Errorf("failed to create signal entity: %w", err)
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+	si.entityID = entityID
+
+	// Create execution
+	exec := &SignalExecution{
+		BaseExecution: BaseExecution{
+			EntityID: si.entityID,
+			Status:   ExecutionStatusRunning,
+		},
+		SignalExecutionData: &SignalExecutionData{},
+	}
+
+	if si.executionID, err = si.db.AddSignalExecution(exec); err != nil {
+		err = fmt.Errorf("failed to add signal execution: %w", err)
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	// Create hierarchy
+	if _, err = si.db.AddHierarchy(&Hierarchy{
+		RunID:             si.runID,
+		ParentStepID:      si.parentStepID,
+		ParentEntityID:    si.parentEntityID,
+		ParentExecutionID: si.parentExecutionID,
+		ChildStepID:       si.name,
+		ChildEntityID:     si.entityID,
+		ChildExecutionID:  si.executionID,
+		ParentType:        EntityWorkflow,
+		ChildType:         EntitySignal,
+	}); err != nil {
+		err = fmt.Errorf("failed to add hierarchy: %w", err)
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	if si.onSignal == nil {
+		err = fmt.Errorf("signal handler not implemented")
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	future := si.onSignal(si.parentEntityID, si.name)
+	res, err := future.GetResults()
+	if err != nil {
+		err = fmt.Errorf("unable to process signal: %w", err)
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	if len(res) > 0 {
+		valueBytes, err := convertOutputsForSerialization(res)
+		if err != nil {
+			err = fmt.Errorf("failed to serialize signal value: %w", err)
+			si.done <- err
+			si.fsm.Fire(TriggerFail, err)
+			return nil
+		}
+
+		// Store value
+		if err := si.db.SetSignalExecutionDataProperties(
+			si.executionID,
+			SetSignalExecutionDataValue(valueBytes[0])); err != nil {
+			err = fmt.Errorf("failed to store signal value: %w", err)
+			si.done <- err
+			si.fsm.Fire(TriggerFail, err)
+			return nil
+		}
+
+		// Convert and set output
+		result, err := convertSingleOutputFromSerialization(si.outputType, valueBytes[0])
+		if err != nil {
+			err = fmt.Errorf("failed to convert signal value: %w", err)
+			si.done <- err
+			si.fsm.Fire(TriggerFail, err)
+			return nil
+		}
+
+		reflect.ValueOf(si.output).Elem().Set(reflect.ValueOf(result))
+	}
+
+	si.done <- nil
+	si.fsm.Fire(TriggerComplete)
+	return nil
+}
+
+func (si *SignalInstance) onCompleted(_ context.Context, args ...interface{}) error {
+	if err := si.db.SetSignalEntityProperties(
+		si.entityID,
+		SetSignalEntityStatus(StatusCompleted)); err != nil {
+		return fmt.Errorf("failed to set signal entity status: %w", err)
+	}
+
+	if err := si.db.SetSignalExecutionProperties(
+		si.executionID,
+		SetSignalExecutionStatus(ExecutionStatusCompleted)); err != nil {
+		return fmt.Errorf("failed to set signal execution status: %w", err)
+	}
+
+	return nil
+}
+
+func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error {
+	var err error
+	if len(args) > 0 {
+		err = args[0].(error)
+	}
+
+	if si.ctx.Err() != nil {
+		if errors.Is(si.ctx.Err(), context.Canceled) {
+			if err := si.db.SetSignalExecutionProperties(
+				si.executionID,
+				SetSignalExecutionStatus(ExecutionStatusCancelled)); err != nil {
+				return err
+			}
+			if err := si.db.SetSignalEntityProperties(
+				si.entityID,
+				SetSignalEntityStatus(StatusCancelled)); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	if err := si.db.SetSignalEntityProperties(
+		si.entityID,
+		SetSignalEntityStatus(StatusFailed)); err != nil {
+		return err
+	}
+
+	if err := si.db.SetSignalExecutionProperties(
+		si.executionID,
+		SetSignalExecutionStatus(ExecutionStatusFailed),
+		SetSignalExecutionError(err.Error())); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
+	var err error
+	if err = si.tracker.onPause(); err != nil {
+		return fmt.Errorf("failed to pause orchestrator: %w", err)
+	}
+	return nil
 }

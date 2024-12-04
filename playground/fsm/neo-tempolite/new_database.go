@@ -93,6 +93,7 @@ var (
 	EntityActivity   EntityType = "activity"
 	EntitySaga       EntityType = "saga"
 	EntitySideEffect EntityType = "side_effect"
+	EntitySignal     EntityType = "signal"
 )
 
 // EntityStatus defines the status of the entity
@@ -361,6 +362,42 @@ type SideEffectExecutionSetterOptions struct {
 	// Add options as needed
 }
 
+// Signal entity options
+type SignalEntityGetterOptions struct {
+	IncludeData bool
+}
+
+type SignalEntitySetterOptions struct {
+}
+
+type SignalEntityGetOption func(*SignalEntityGetterOptions) error
+
+// Signal execution options
+type SignalExecutionGetterOptions struct {
+	IncludeData bool
+}
+
+type SignalExecutionSetterOptions struct {
+}
+
+type SignalExecutionGetOption func(*SignalExecutionGetterOptions) error
+
+// Signal data options
+type SignalDataGetterOptions struct {
+	IncludeName bool
+}
+
+type SignalDataSetterOptions struct {
+}
+
+// Signal execution data options
+type SignalExecutionDataGetterOptions struct {
+	IncludeValue bool
+}
+
+type SignalExecutionDataSetterOptions struct {
+}
+
 // Option get functions
 type WorkflowEntityGetOption func(*WorkflowEntityGetterOptions) error
 type ActivityEntityGetOption func(*ActivityEntityGetterOptions) error
@@ -516,6 +553,27 @@ type SagaExecutionDataPropertySetter func(*SagaExecutionData) (SagaExecutionData
 
 type SideEffectExecutionDataPropertyGetter func(*SideEffectExecutionData) (SideEffectExecutionDataPropertyGetterOption, error)
 type SideEffectExecutionDataPropertySetter func(*SideEffectExecutionData) (SideEffectExecutionDataPropertySetterOption, error)
+
+// Signals
+type SignalEntityPropertyGetter func(*SignalEntity) (SignalEntityPropertyGetterOption, error)
+type SignalEntityPropertySetter func(*SignalEntity) (SignalEntityPropertySetterOption, error)
+type SignalEntityPropertyGetterOption func(*SignalEntityGetterOptions) error
+type SignalEntityPropertySetterOption func(*SignalEntitySetterOptions) error
+
+type SignalDataPropertyGetter func(*SignalData) (SignalDataPropertyGetterOption, error)
+type SignalDataPropertySetter func(*SignalData) (SignalDataPropertySetterOption, error)
+type SignalDataPropertyGetterOption func(*SignalDataGetterOptions) error
+type SignalDataPropertySetterOption func(*SignalDataSetterOptions) error
+
+type SignalExecutionPropertyGetter func(*SignalExecution) (SignalExecutionPropertyGetterOption, error)
+type SignalExecutionPropertySetter func(*SignalExecution) (SignalExecutionPropertySetterOption, error)
+type SignalExecutionPropertyGetterOption func(*SignalExecutionGetterOptions) error
+type SignalExecutionPropertySetterOption func(*SignalExecutionSetterOptions) error
+
+type SignalExecutionDataPropertyGetter func(*SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error)
+type SignalExecutionDataPropertySetter func(*SignalExecutionData) (SignalExecutionDataPropertySetterOption, error)
+type SignalExecutionDataPropertyGetterOption func(*SignalExecutionDataGetterOptions) error
+type SignalExecutionDataPropertySetterOption func(*SignalExecutionDataSetterOptions) error
 
 // Core workflow options and types
 type WorkflowOptions struct {
@@ -688,6 +746,16 @@ type SideEffectEntity struct {
 	SideEffectData *SideEffectData
 }
 
+type SignalEntity struct {
+	BaseEntity
+	SignalData *SignalData
+}
+
+type SignalExecution struct {
+	BaseExecution
+	SignalExecutionData *SignalExecutionData
+}
+
 // Base execution type
 type BaseExecution struct {
 	ID          int
@@ -723,11 +791,25 @@ type SagaExecutionData struct {
 	StepIndex     int        `json:"step_index"` // Which step this execution is for
 }
 
+type SignalData struct {
+	ID       int    `json:"id,omitempty"`
+	EntityID int    `json:"entity_id,omitempty"`
+	Name     string `json:"name"`
+}
+
+type SignalExecutionData struct {
+	ID          int    `json:"id,omitempty"`
+	ExecutionID int    `json:"execution_id,omitempty"`
+	Value       []byte `json:"value,omitempty"`
+	Kind        uint   `json:"kind"`
+}
+
 type SagaValue struct {
 	ID          int    `json:"id,omitempty"`
 	ExecutionID int    `json:"executionID"`
 	Key         string `json:"key"`
-	Value       []byte `json:"value"` // TODO: this is WRONG
+
+	Value []byte `json:"value"` // TODO: this is WRONG
 }
 
 type SideEffectExecutionData struct {
@@ -948,6 +1030,42 @@ type Database interface {
 	UpdateQueue(queue *Queue) error
 	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
 	SetQueueProperties(id int, setters ...QueuePropertySetter) error
+
+	// Signal Entity operations
+	AddSignalEntity(entity *SignalEntity, parentWorkflowID int) (int, error)
+	GetSignalEntity(id int, opts ...SignalEntityGetOption) (*SignalEntity, error)
+	GetSignalEntities(workflowID int, opts ...SignalEntityGetOption) ([]*SignalEntity, error)
+	HasSignalEntity(id int) (bool, error)
+	UpdateSignalEntity(entity *SignalEntity) error
+	GetSignalEntityProperties(id int, getters ...SignalEntityPropertyGetter) error
+	SetSignalEntityProperties(id int, setters ...SignalEntityPropertySetter) error
+
+	// Signal Data
+	AddSignalData(entityID int, data *SignalData) (int, error)
+	GetSignalData(id int) (*SignalData, error)
+	HasSignalData(id int) (bool, error)
+	GetSignalDataByEntityID(entityID int) (*SignalData, error)
+	HasSignalDataByEntityID(entityID int) (bool, error)
+	GetSignalDataProperties(entityID int, getters ...SignalDataPropertyGetter) error
+	SetSignalDataProperties(entityID int, setters ...SignalDataPropertySetter) error
+
+	// Signal Execution
+	AddSignalExecution(exec *SignalExecution) (int, error)
+	GetSignalExecution(id int, opts ...SignalExecutionGetOption) (*SignalExecution, error)
+	GetSignalExecutions(entityID int) ([]*SignalExecution, error)
+	HasSignalExecution(id int) (bool, error)
+	GetSignalExecutionLatestByEntityID(entityID int) (*SignalExecution, error)
+	GetSignalExecutionProperties(id int, getters ...SignalExecutionPropertyGetter) error
+	SetSignalExecutionProperties(id int, setters ...SignalExecutionPropertySetter) error
+
+	// Signal Execution Data
+	AddSignalExecutionData(executionID int, data *SignalExecutionData) (int, error)
+	GetSignalExecutionData(id int) (*SignalExecutionData, error)
+	HasSignalExecutionData(id int) (bool, error)
+	GetSignalExecutionDataByExecutionID(executionID int) (*SignalExecutionData, error)
+	HasSignalExecutionDataByExecutionID(executionID int) (bool, error)
+	GetSignalExecutionDataProperties(entityID int, getters ...SignalExecutionDataPropertyGetter) error
+	SetSignalExecutionDataProperties(entityID int, setters ...SignalExecutionDataPropertySetter) error
 }
 
 // RetryPolicy helper functions
@@ -1078,6 +1196,18 @@ func convertOutputsFromSerialization(handlerInfo HandlerInfo, executionOutputs [
 	}
 
 	return output, nil
+}
+
+func convertOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
+	buf := bytes.NewBuffer(executionOutput)
+
+	decodedObj := reflect.New(outputType).Interface()
+
+	if err := rtl.Decode(buf, decodedObj); err != nil {
+		return nil, err
+	}
+
+	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
 }
 
 func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutput []byte) (interface{}, error) {
@@ -1510,4 +1640,54 @@ func copySideEffectExecution(exec *SideEffectExecution) *SideEffectExecution {
 	}
 
 	return &copy
+}
+
+func copySignalEntity(entity *SignalEntity) *SignalEntity {
+	if entity == nil {
+		return nil
+	}
+	copy := *entity
+
+	if entity.SignalData != nil {
+		copy.SignalData = copySignalData(entity.SignalData)
+	}
+
+	return &copy
+}
+
+func copySignalData(data *SignalData) *SignalData {
+	if data == nil {
+		return nil
+	}
+	copy := *data
+	return &copy
+}
+
+func copySignalExecution(exec *SignalExecution) *SignalExecution {
+	if exec == nil {
+		return nil
+	}
+	copy := SignalExecution{
+		BaseExecution: *copyBaseExecution(&exec.BaseExecution),
+	}
+
+	if exec.SignalExecutionData != nil {
+		copy.SignalExecutionData = copySignalExecutionData(exec.SignalExecutionData)
+	}
+
+	return &copy
+}
+
+func copySignalExecutionData(data *SignalExecutionData) *SignalExecutionData {
+	if data == nil {
+		return nil
+	}
+	c := *data
+
+	if data.Value != nil {
+		c.Value = make([]byte, len(data.Value))
+		copy(c.Value, data.Value)
+	}
+
+	return &c
 }
