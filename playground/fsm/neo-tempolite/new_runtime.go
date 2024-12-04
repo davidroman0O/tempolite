@@ -597,7 +597,7 @@ func WithContinueAsNew(fn continueAsNew) OrchestratorOption {
 	}
 }
 
-func WithSignalCallback(fn signalNew) OrchestratorOption {
+func WithSignalNew(fn signalNew) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onSignalNew = fn
 	}
@@ -3563,6 +3563,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 }
 
 // /////////////////////////////////////////////////// Signals
+
 // Signal allows workflow to receive named signals with type-safe output
 func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 	// Validate output is a pointer

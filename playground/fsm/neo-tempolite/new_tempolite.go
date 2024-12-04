@@ -47,11 +47,13 @@ type QueueInstance struct {
 
 	onCrossWorkflow crossWorkflow
 	onContinueAsNew continueAsNew
+	onSignalNew     signalNew
 }
 
 type queueConfig struct {
 	onCrossWorkflow crossWorkflow
 	onContinueAsNew continueAsNew
+	onSignalNew     signalNew
 }
 
 type queueOption func(*queueConfig)
@@ -65,6 +67,12 @@ func WithCrossWorkflowHandler(handler crossWorkflow) queueOption {
 func WithContinueAsNewHandler(handler continueAsNew) queueOption {
 	return func(c *queueConfig) {
 		c.onContinueAsNew = handler
+	}
+}
+
+func WithSignalNewHandler(handler signalNew) queueOption {
+	return func(c *queueConfig) {
+		c.onSignalNew = handler
 	}
 }
 
@@ -90,6 +98,9 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	}
 	if cfg.onContinueAsNew != nil {
 		q.onContinueAsNew = cfg.onContinueAsNew
+	}
+	if cfg.onSignalNew != nil {
+		q.onSignalNew = cfg.onSignalNew
 	}
 
 	_, err := db.AddQueue(&Queue{Name: name})
@@ -195,6 +206,9 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 	if instance.onContinueAsNew != nil {
 		opts = append(opts, WithContinueAsNew(instance.onContinueAsNew))
 	}
+	if instance.onSignalNew != nil {
+		opts = append(opts, WithSignalNew(instance.onSignalNew))
+	}
 	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
 	return qw
 }
@@ -262,6 +276,8 @@ type Tempolite struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	defaultQueue   string
+
+	signals map[string]Future
 }
 
 // QueueConfig holds configuration for a queue
@@ -343,6 +359,30 @@ func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 	}
 }
 
+func (t *Tempolite) createSignalNewHandler() signalNew {
+	return func(workflowID int, signal string) Future {
+
+		t.mu.Lock()
+		future := NewRuntimeFuture()
+		future.setEntityID(workflowID)
+		t.signals[signal] = future
+		t.mu.Unlock()
+
+		return future
+	}
+}
+
+func (t *Tempolite) PublishSignal(workflowID int, signal string, value interface{}) error {
+	t.mu.RLock()
+	future, ok := t.signals[signal]
+	t.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("signal %s not found", signal)
+	}
+	future.setResult([]interface{}{value})
+	return nil
+}
+
 func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempolite, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Tempolite{
@@ -352,6 +392,7 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 		ctx:            ctx,
 		cancel:         cancel,
 		defaultQueue:   "default",
+		signals:        make(map[string]Future),
 	}
 
 	// Apply options before creating default queue
@@ -392,6 +433,7 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		config.WorkerCount,
 		WithCrossWorkflowHandler(t.createCrossWorkflowHandler()),
 		WithContinueAsNewHandler(t.createContinueAsNewHandler()),
+		WithSignalNewHandler(t.createSignalNewHandler()),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create queue instance: %w", err)
@@ -514,268 +556,3 @@ func WithDefaultQueueWorkers(count int) TempoliteOption {
 		})
 	}
 }
-
-// // It seems that DatabaseFuture is not necessary anymore
-// // DatabaseFuture implements the Future interface for cross-queue workflow communication
-// type DatabaseFuture struct {
-// 	mu       deadlock.Mutex
-// 	ctx      context.Context
-// 	entityID int
-// 	database Database
-// 	registry *Registry
-// 	results  []interface{}
-// 	err      error
-// }
-
-// // Constructor remains the same
-// func NewDatabaseFuture(ctx context.Context, database Database, registry *Registry) *DatabaseFuture {
-// 	return &DatabaseFuture{
-// 		ctx:      ctx,
-// 		database: database,
-// 		registry: registry,
-// 	}
-// }
-
-// func (f *DatabaseFuture) setEntityID(entityID int) {
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
-// 	f.entityID = entityID
-// }
-
-// func (f *DatabaseFuture) setError(err error) {
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
-// 	f.err = err
-// }
-
-// func (f *DatabaseFuture) WorkflowID() int {
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
-// 	return f.entityID
-// }
-
-// func (f *DatabaseFuture) Get(out ...interface{}) error {
-// 	ticker := time.NewTicker(time.Millisecond)
-// 	defer ticker.Stop()
-
-// 	for {
-// 		select {
-// 		case <-f.ctx.Done():
-// 			return f.ctx.Err()
-// 		case <-ticker.C:
-// 			f.mu.Lock()
-// 			if f.entityID == 0 {
-// 				f.mu.Unlock()
-// 				continue
-// 			}
-// 			if f.err != nil {
-// 				err := f.err
-// 				f.err = nil
-// 				f.results = nil
-// 				f.mu.Unlock()
-// 				return err
-// 			}
-// 			f.mu.Unlock()
-
-// 			if completed := f.checkCompletion(); completed {
-// 				f.mu.Lock()
-// 				err := f.err
-// 				f.err = nil
-// 				f.results = nil
-// 				f.mu.Unlock()
-
-// 				if err != nil {
-// 					return err
-// 				}
-// 				return f.handleResults(out...) // Pass the local copy to handleResults
-// 			}
-// 		}
-// 	}
-// }
-
-// func (f *DatabaseFuture) checkCompletion() bool {
-// 	var status EntityStatus
-// 	if err := f.database.GetWorkflowEntityProperties(f.entityID, GetWorkflowEntityStatus(&status)); err != nil {
-// 		f.mu.Lock()
-// 		f.err = fmt.Errorf("failed to get workflow entity: %w", err)
-// 		f.mu.Unlock()
-// 		return true
-// 	}
-
-// 	switch status {
-// 	case StatusCompleted:
-// 		latestExec, err := f.database.GetWorkflowExecutionLatestByEntityID(f.entityID)
-// 		if err != nil {
-// 			f.mu.Lock()
-// 			f.err = fmt.Errorf("failed to get latest execution: %w", err)
-// 			f.mu.Unlock()
-// 			return true
-// 		}
-
-// 		if latestExec.WorkflowExecutionData != nil {
-// 			var outputs [][]byte
-// 			if err := f.database.GetWorkflowExecutionDataProperties(latestExec.ID,
-// 				GetWorkflowExecutionDataOutputs(&outputs)); err != nil {
-// 				f.mu.Lock()
-// 				f.err = fmt.Errorf("failed to get execution outputs: %w", err)
-// 				f.mu.Unlock()
-// 				return true
-// 			}
-
-// 			var handlerName string
-// 			if err := f.database.GetWorkflowEntityProperties(f.entityID,
-// 				GetWorkflowEntityHandlerName(&handlerName)); err != nil {
-// 				f.mu.Lock()
-// 				f.err = fmt.Errorf("failed to get handler info: %w", err)
-// 				f.mu.Unlock()
-// 				return true
-// 			}
-
-// 			handler, ok := f.registry.GetWorkflow(handlerName)
-// 			if !ok {
-// 				f.mu.Lock()
-// 				f.err = fmt.Errorf("handler %s not found", handlerName)
-// 				f.mu.Unlock()
-// 				return true
-// 			}
-
-// 			results, err := convertOutputsFromSerialization(handler, outputs)
-// 			if err != nil {
-// 				f.mu.Lock()
-// 				f.err = fmt.Errorf("failed to deserialize outputs: %w", err)
-// 				f.mu.Unlock()
-// 				return true
-// 			}
-
-// 			f.mu.Lock()
-// 			f.results = results
-// 			f.mu.Unlock()
-// 			return true
-// 		}
-
-// 	case StatusFailed:
-// 		latestExec, err := f.database.GetWorkflowExecutionLatestByEntityID(f.entityID)
-// 		if err != nil {
-// 			f.mu.Lock()
-// 			f.err = fmt.Errorf("failed to get latest execution: %w", err)
-// 			f.mu.Unlock()
-// 			return true
-// 		}
-
-// 		var execError string
-// 		if err := f.database.GetWorkflowExecutionProperties(latestExec.ID,
-// 			GetWorkflowExecutionError(&execError)); err != nil {
-// 			f.mu.Lock()
-// 			f.err = fmt.Errorf("failed to get execution error: %w", err)
-// 			f.mu.Unlock()
-// 		} else {
-// 			f.mu.Lock()
-// 			f.err = errors.New(execError)
-// 			f.mu.Unlock()
-// 		}
-// 		return true
-
-// 	case StatusPaused:
-// 		f.mu.Lock()
-// 		f.err = ErrPaused
-// 		f.mu.Unlock()
-// 		return true
-
-// 	case StatusCancelled:
-// 		f.mu.Lock()
-// 		f.err = errors.New("workflow was cancelled")
-// 		f.mu.Unlock()
-// 		return true
-// 	}
-
-// 	return false
-// }
-
-// func (f *DatabaseFuture) handleResults(out ...interface{}) error {
-// 	f.mu.Lock()
-// 	results := f.results
-// 	err := f.err
-// 	f.mu.Unlock()
-
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if len(out) == 0 {
-// 		return nil
-// 	}
-
-// 	if len(out) > len(results) {
-// 		return fmt.Errorf("number of outputs (%d) exceeds number of results (%d)",
-// 			len(out), len(results))
-// 	}
-
-// 	for i := 0; i < len(out); i++ {
-// 		val := reflect.ValueOf(out[i])
-// 		if val.Kind() != reflect.Ptr {
-// 			return fmt.Errorf("output parameter %d must be a pointer", i)
-// 		}
-// 		val = val.Elem()
-
-// 		result := reflect.ValueOf(results[i])
-// 		if !result.Type().AssignableTo(val.Type()) {
-// 			return fmt.Errorf("cannot assign type %v to %v for parameter %d",
-// 				result.Type(), val.Type(), i)
-// 		}
-
-// 		val.Set(result)
-// 	}
-
-// 	return nil
-// }
-
-// func (f *DatabaseFuture) GetResults() ([]interface{}, error) {
-// 	ticker := time.NewTicker(100 * time.Millisecond)
-// 	defer ticker.Stop()
-
-// 	for {
-// 		select {
-// 		case <-f.ctx.Done():
-// 			return nil, errors.New("context cancelled")
-// 		case <-ticker.C:
-// 			f.mu.Lock()
-// 			if f.entityID == 0 {
-// 				f.mu.Unlock()
-// 				continue
-// 			}
-// 			if f.err != nil {
-// 				err := f.err
-// 				f.mu.Unlock()
-// 				return nil, err
-// 			}
-// 			f.mu.Unlock()
-
-// 			if completed := f.checkCompletion(); completed {
-// 				f.mu.Lock()
-// 				err := f.err
-// 				results := f.results
-// 				f.mu.Unlock()
-
-// 				if err != nil {
-// 					return nil, err
-// 				}
-// 				return results, nil
-// 			}
-// 		}
-// 	}
-// }
-
-// func (f *DatabaseFuture) setResult(results []interface{}) {
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
-// 	f.results = results
-// }
-
-// func (f *DatabaseFuture) IsPaused() bool {
-// 	var status EntityStatus
-// 	err := f.database.GetWorkflowEntityProperties(f.entityID, GetWorkflowEntityStatus(&status))
-// 	if err != nil {
-// 		return false
-// 	}
-// 	return status == StatusPaused
-// }

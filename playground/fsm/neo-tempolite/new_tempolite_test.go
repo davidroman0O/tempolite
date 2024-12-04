@@ -367,3 +367,51 @@ func TestFreeFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTempoliteSignal(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	// defer db.SaveAsJSON("./json/tempolite_freeflow.json")
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(1),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workflowFunc := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		var life int
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("finished!!", life)
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		<-time.After(1 * time.Second)
+		tp.PublishSignal(future.WorkflowID(), "life", 42)
+	}()
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}

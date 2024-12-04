@@ -2862,7 +2862,7 @@ func TestWorkflowSignal(t *testing.T) {
 		ctx,
 		db,
 		registry,
-		WithSignalCallback(func(workflowID int, signal string) Future {
+		WithSignalNew(func(workflowID int, signal string) Future {
 			fmt.Println("Signal received:", signal)
 			<-time.After(100 * time.Millisecond)
 			future := NewRuntimeFuture()
@@ -2877,6 +2877,78 @@ func TestWorkflowSignal(t *testing.T) {
 		if err := ctx.Signal("life", &life); err != nil {
 			return err
 		}
+		fmt.Println("Life, the universe, and everything:", life)
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("again:", life)
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	for _, v := range execs {
+		if v.Status != ExecutionStatusCompleted {
+			t.Fatalf("expected %s, got %s", ExecutionStatusCompleted, v.Status)
+		}
+	}
+
+}
+
+func TestWorkflowSignalPanic(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_signal_panic.json")
+
+	o := NewOrchestrator(
+		ctx,
+		db,
+		registry,
+		WithSignalNew(func(workflowID int, signal string) Future {
+			fmt.Println("Signal received:", signal)
+			<-time.After(100 * time.Millisecond)
+			future := NewRuntimeFuture()
+			future.setResult([]interface{}{42})
+			fmt.Println("Signal processed")
+			return future
+		}))
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		var life int
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		panic("deliberate panic")
 		fmt.Println("Life, the universe, and everything:", life)
 		if err := ctx.Signal("life", &life); err != nil {
 			return err
