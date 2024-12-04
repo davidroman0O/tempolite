@@ -991,15 +991,6 @@ func ToInternalRetryPolicy(rp *RetryPolicy) *retryPolicyInternal {
 		return DefaultRetryPolicyInternal()
 	}
 
-	// Fill default values if zero
-	if rp.MaxAttempts == 0 {
-		rp.MaxAttempts = 1
-	}
-
-	if rp.MaxInterval == 0 {
-		rp.MaxInterval = 5 * time.Minute
-	}
-
 	return &retryPolicyInternal{
 		MaxAttempts: rp.MaxAttempts,
 		MaxInterval: rp.MaxInterval.Nanoseconds(),

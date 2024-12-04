@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/davidroman0O/retrypool"
 )
 
 func TestQueueCrossBasic(t *testing.T) {
@@ -17,22 +19,45 @@ func TestQueueCrossBasic(t *testing.T) {
 	var defaultQ *QueueInstance
 	var secondQ *QueueInstance
 
-	var onCross crossWorkflow = func(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var onCross crossWorkflow = func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 
 		queue, err := db.GetQueueByName(queueName)
 		if err != nil {
-			future := NewDatabaseFuture(ctx, db, registry)
+			future := NewRuntimeFuture()
 			future.setError(err)
 			return future
 		}
 
-		var future Future
+		future := NewRuntimeFuture()
+
 		if queue.Name == "default" {
-			future, _, err = defaultQ.Submit(workflowFunc, options, args...)
+			if err := defaultQ.orchestrators.Submit(
+				retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+					workflowFunc: workflowFunc,
+					options:      options,
+					workflowID:   workflowID,
+					args:         args,
+					future:       future,
+					queueName:    queueName,
+					continued:    true,
+				})); err != nil {
+				future.setError(err)
+			}
 		} else if queue.Name == "second" {
-			future, _, err = secondQ.Submit(workflowFunc, options, args...)
+			if err := secondQ.orchestrators.Submit(
+				retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+					workflowFunc: workflowFunc,
+					options:      options,
+					workflowID:   workflowID,
+					args:         args,
+					future:       future,
+					queueName:    queueName,
+					continued:    true,
+				})); err != nil {
+				future.setError(err)
+			}
 		} else {
-			future := NewDatabaseFuture(ctx, db, registry)
+			future := NewRuntimeFuture()
 			future.setError(fmt.Errorf("queue %s does not exist", queueName))
 		}
 		if err != nil {
@@ -72,7 +97,7 @@ func TestQueueCrossBasic(t *testing.T) {
 		return nil
 	}
 
-	future, _, err := defaultQ.Submit(wrkfl, nil)
+	future, _, err := defaultQ.Submit(wrkfl, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +112,8 @@ func TestTempoliteBasicCross(t *testing.T) {
 	ctx := context.Background()
 	db := NewMemoryDatabase()
 
+	defer db.SaveAsJSON("./json/tempolite_cross_continueasnew.json")
+
 	tp, err := New(
 		ctx,
 		db,
@@ -99,19 +126,20 @@ func TestTempoliteBasicCross(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	counter := atomic.Int32{}
+	once := atomic.Bool{}
+	once.Store(false)
 
 	var subWork func(ctx WorkflowContext) error
 
 	subWork = func(ctx WorkflowContext) error {
-		fmt.Println("Hello, second world!")
+		fmt.Println("Hello, second world!", once.Load())
 		<-time.After(1 * time.Second)
-		if counter.Load() < 5 {
-			counter.Store(counter.Load() + 1)
-			fmt.Println("second ", counter.Load())
+		if !once.Load() {
+			once.Store(true)
+			fmt.Println("continue second world")
 			return ctx.ContinueAsNew(&WorkflowOptions{})
 		}
-		fmt.Println("second done!")
+		fmt.Println("second done!", once.Load())
 		return nil
 	}
 
@@ -256,6 +284,73 @@ func TestTempoliteBasicSecondQueueSubWorkflow(t *testing.T) {
 	}
 
 	future, err := tp.ExecuteDefault(wrkfl, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFreeFlow(t *testing.T) {
+
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	// defer db.SaveAsJSON("./json/tempolite_freeflow.json")
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10),
+		WithQueue(QueueConfig{
+			Name:        "second",
+			WorkerCount: 10,
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counter := atomic.Int32{}
+
+	subWorkflowFunc := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, second world!")
+		if counter.Load() < 5 {
+			counter.Store(counter.Load() + 1)
+			fmt.Println("second ", counter.Load())
+			return ctx.ContinueAsNew(nil)
+		}
+		fmt.Println("second done!")
+		return nil
+	}
+
+	workflowFunc := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+
+		if err := ctx.Workflow(
+			"next",
+			subWorkflowFunc,
+			&WorkflowOptions{
+				Queue: "second",
+			}).Get(); err != nil {
+			return err
+		}
+
+		fmt.Println("finished!!")
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

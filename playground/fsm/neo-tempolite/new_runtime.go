@@ -66,7 +66,7 @@ type Future interface {
 	IsPaused() bool
 }
 
-type crossWorkflow func(queueName string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossWorkflow func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
 type continueAsNew func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
@@ -368,7 +368,7 @@ func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...inter
 		options.RetryPolicy = DefaultRetryPolicy()
 	}
 
-	// fmt.Println("ContinueAsNew called with options", options.Queue)
+	fmt.Println("ContinueAsNew called with options", options.Queue)
 
 	return &ContinueAsNewError{
 		Options: options,
@@ -852,25 +852,44 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		return nil, fmt.Errorf("failed to register workflow: %w", err)
 	}
 
+	isRoot := true
+
 	// Convert inputs for storage
 	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize inputs: %w", err)
 	}
 
-	var continuedID int
-	var continuedExecutionID int
+	opttionsPreparation := &preparationOptions{}
 	if opts != nil {
-		if opts.parentWorkflowExecutionID != 0 {
-			continuedID = opts.parentWorkflowID
+		if opts.parentRunID != 0 {
+			opttionsPreparation.parentRunID = opts.parentRunID
+			isRoot = false
 		}
 		if opts.parentWorkflowID != 0 {
-			continuedExecutionID = opts.parentWorkflowExecutionID
+			opttionsPreparation.parentWorkflowID = opts.parentWorkflowID
+			isRoot = false
+		}
+		if opts.parentWorkflowExecutionID != 0 {
+			opttionsPreparation.parentWorkflowExecutionID = opts.parentWorkflowExecutionID
+			isRoot = false
 		}
 	}
 
+	var continuedID int
+	var continuedExecutionID int
+
+	if opttionsPreparation.parentWorkflowExecutionID != 0 {
+		fmt.Println("continue as new parentRunID", opttionsPreparation.parentWorkflowID)
+		continuedID = opttionsPreparation.parentWorkflowID
+	}
+	if opttionsPreparation.parentWorkflowID != 0 {
+		fmt.Println("continue as new parentWorkflowExecutionID", opttionsPreparation.parentWorkflowExecutionID)
+		continuedExecutionID = opttionsPreparation.parentWorkflowExecutionID
+	}
+
 	var runID int
-	if opts == nil {
+	if opttionsPreparation.parentRunID == 0 {
 		// Create or get Run
 		if runID, err = db.AddRun(&Run{
 			Status: RunStatusPending,
@@ -878,7 +897,7 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 			return nil, fmt.Errorf("failed to create run: %w", err)
 		}
 	} else {
-		runID = opts.parentRunID
+		runID = opttionsPreparation.parentRunID
 	}
 
 	// Convert retry policy if provided
@@ -908,7 +927,7 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		Inputs:    inputBytes,
 		Paused:    false,
 		Resumable: false,
-		IsRoot:    true,
+		IsRoot:    isRoot,
 	}
 
 	if continuedID != 0 {
@@ -1245,6 +1264,7 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 	if err := fsm.Fire(TriggerStart, inputs); err != nil {
 		if !errors.Is(err, ErrPaused) {
 			log.Printf("Error starting workflow: %v", err)
+			wi.future.setError(err)
 		}
 	}
 
@@ -1293,6 +1313,8 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 		return fmt.Errorf("failed to get workflow data properties: %w", err)
 	}
 
+	fmt.Println("maxAttempts", maxAttempts, "maxInterval", maxInterval, wi.ctx.Err())
+
 	if err := retry.Do(
 		wi.ctx,
 		retry.
@@ -1302,6 +1324,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 		// only the execution might change
 		func(ctx context.Context) error {
 
+			fmt.Println("retry.Do called")
 			// now we can create and set the execution id
 			if wi.executionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
 				BaseExecution: BaseExecution{
@@ -1313,6 +1336,8 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				log.Printf("WorkflowInstance error adding execution: %v", err)
 				return err
 			}
+
+			fmt.Println("workflow execution id", wi.executionID)
 
 			if !isRoot {
 				// Check if hierarchy already exists for this execution
@@ -1356,7 +1381,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				if workflowOutput.Paused {
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusPaused)); err != nil {
 						wi.mu.Unlock()
-						return fmt.Errorf("failed to set workflow execution status: %w", err)
+						return fmt.Errorf("failed to set workflow execution status paused: %w", err)
 					}
 					wi.fsm.Fire(TriggerPause)
 					log.Printf("Workflow %s (Entity ID: %d, Execution ID: %d) paused", wi.stepID, wi.workflowID, wi.executionID)
@@ -1364,7 +1389,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 					// normal case
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusCompleted)); err != nil {
 						wi.mu.Unlock()
-						return fmt.Errorf("failed to set workflow execution status: %w", err)
+						return fmt.Errorf("failed to set workflow execution status to completed: %w", err)
 					}
 
 					wi.fsm.Fire(TriggerComplete, workflowOutput)
@@ -1394,7 +1419,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 					setters...,
 				); err != nil {
 					wi.mu.Unlock()
-					return fmt.Errorf("failed to set workflow execution status: %w", err)
+					return fmt.Errorf("failed to set workflow execution status real failure error: %w", err)
 				}
 
 				wi.mu.Unlock()
@@ -1529,7 +1554,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	var continueAsNewErr *ContinueAsNewError
 	var ok bool
 	if continueAsNewErr, ok = errInterface.(*ContinueAsNewError); ok {
-		log.Printf("Workflow requested ContinueAsNew")
+		log.Println("Workflow requested ContinueAsNew")
 		// We treat it as normal completion, return nil to proceed
 		errInterface = nil
 	}
@@ -1552,7 +1577,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		// Update execution error
 		if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionError(realError.Error())); err != nil {
 			// wi.mu.Unlock()
-			return nil, fmt.Errorf("failed to set workflow execution status: %w", err)
+			return nil, fmt.Errorf("failed to set workflow execution status error: %w", err)
 		}
 
 		// Emptied the output data
@@ -1629,51 +1654,23 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 		wi.mu.Lock()
 		handler := wi.handler
+		copyID := wi.workflowID
 		wi.mu.Unlock()
 
-		// Convert inputs to [][]byte
-		inputBytes, err := convertInputsForSerialization(workflowOutput.ContinueAsNewArgs)
-		if err != nil {
-			log.Printf("Error converting inputs in ContinueAsNew: %v", err)
-			if wi.future != nil {
-				wi.future.setError(err)
-			}
-			return err
-		}
+		var workflowEntity *WorkflowEntity
 
-		// Convert API RetryPolicy to internal retry policy
-		internalRetryPolicy := ToInternalRetryPolicy(workflowOutput.ContinueAsNewOptions.RetryPolicy)
-
-		copyID := wi.workflowID
-
-		var workflowID int
-		if workflowID, err = wi.db.AddWorkflowEntity(&WorkflowEntity{
-			BaseEntity: BaseEntity{
-				// we still depends on the run
-				RunID: wi.runID,
-				// continue as new mean on the same queue
-				// you have to make another sub-workflow on a different queue
-				QueueID:     wi.queueID,
-				Type:        EntityWorkflow,
-				HandlerName: handler.HandlerName,
-				Status:      StatusPending,
-				RetryPolicy: *internalRetryPolicy,
-				RetryState:  RetryState{Attempts: 0},
-				// We have to use the same stepID
-				// - if we are root, there is no problem, it's normal to have root
-				// - if we are not root, that mean we are a child, so we have to use the same stepID
-				// I need to make a diagram for that... it's badly explained
-				StepID: wi.stepID,
+		if workflowEntity, err = prepareWorkflow(
+			wi.registry,
+			wi.db,
+			handler.Handler,
+			workflowOutput.ContinueAsNewOptions,
+			&preparationOptions{
+				parentWorkflowID:          copyID,
+				parentWorkflowExecutionID: wi.executionID,
+				parentRunID:               wi.runID,
 			},
-			WorkflowData: &WorkflowData{
-				Duration:      "",
-				Paused:        false,
-				Resumable:     false,
-				Inputs:        inputBytes,
-				ContinuedFrom: &copyID, // parent workflow
-			},
-		}); err != nil {
-			log.Printf("Error adding workflow entity: %v", err)
+			workflowOutput.ContinueAsNewArgs...); err != nil {
+			log.Printf("Error preparing workflow: %v", err)
 			return err
 		}
 
@@ -1686,28 +1683,12 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 			}
 
 			// Get the handler info to get the original workflow func
-			wi.mu.Lock()
-			handler := wi.handler
-			wi.mu.Unlock()
 
-			// Prepare the workflow
-			we, err := prepareWorkflow(
-				wi.registry,
-				wi.db,
-				handler.Handler,
-				&wi.options,
-				&preparationOptions{
-					parentWorkflowID:          copyID,
-					parentWorkflowExecutionID: wi.executionID,
-					parentRunID:               wi.runID,
-				}, workflowOutput.ContinueAsNewArgs...)
-			if err != nil {
-				return err
-			}
+			fmt.Println("Continuing as new workflow", workflowEntity.ID)
 
 			_ = wi.onContinueAsNew( // Just start it running
 				queue,
-				we.ID,
+				workflowEntity.ID,
 				handler.Handler,
 				workflowOutput.ContinueAsNewOptions,
 				workflowOutput.ContinueAsNewArgs...,
@@ -1765,7 +1746,7 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 	if wi.ctx.Err() != nil {
 		if errors.Is(wi.ctx.Err(), context.Canceled) {
 			if err := wi.db.SetWorkflowExecutionProperties(wi.workflowID, SetWorkflowExecutionStatus(ExecutionStatusCancelled)); err != nil {
-				return fmt.Errorf("failed to set Workflow execution status: %w", err)
+				return fmt.Errorf("failed to set Workflow execution status cancelled: %w", err)
 			}
 			if err := wi.db.SetWorkflowEntityProperties(wi.workflowID, SetWorkflowEntityStatus(StatusCancelled)); err != nil {
 				return fmt.Errorf("failed to set Workflow entity status: %w", err)
@@ -2608,6 +2589,7 @@ func (si *SideEffectInstance) Start() {
 	if err := fsm.Fire(TriggerStart); err != nil {
 		if !errors.Is(err, ErrPaused) {
 			log.Printf("Error starting side effect: %v", err)
+			si.future.setError(err)
 		}
 	}
 }
@@ -3010,6 +2992,7 @@ func (si *SagaInstance) Start() {
 
 	if err := fsm.Fire(TriggerStart); err != nil {
 		log.Printf("Error starting saga: %v", err)
+		si.future.setError(err)
 	}
 }
 
@@ -3327,16 +3310,47 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		options.Queue = ctx.options.Queue
 	}
 
-	// fmt.Println("Queue workflow", "queue", options.Queue, "ctx queue", ctx.options.Queue, options.Queue != ctx.options.Queue)
+	fmt.Println("Queue workflow", "queue", options.Queue, "ctx queue", ctx.options.Queue, options.Queue != ctx.options.Queue)
 	// Check if this is a cross-queue workflow
 	if options != nil && options.Queue != ctx.options.Queue {
+
+		// TODO: check if already exists and return the data, probably just move it below
+
 		// If we have a cross-queue handler, use it
 		if ctx.onCrossQueueWorkflow != nil {
 			fmt.Println("Executing cross-queue workflow",
 				"parentQueue", ctx.options.Queue,
 				"targetQueue", options.Queue,
 				"stepID", stepID)
-			return ctx.onCrossQueueWorkflow(options.Queue, workflowFunc, options, args...)
+
+			var workflowEntity *WorkflowEntity
+
+			handler, err := ctx.registry.RegisterWorkflow(workflowFunc)
+			if err != nil {
+				log.Printf("Error registering workflow: %v", err)
+				future := NewRuntimeFuture()
+				future.setError(err)
+				return future
+			}
+
+			if workflowEntity, err = prepareWorkflow(
+				ctx.registry,
+				ctx.db,
+				handler.Handler,
+				options,
+				&preparationOptions{
+					parentWorkflowID:          ctx.workflowID,
+					parentWorkflowExecutionID: ctx.workflowExecutionID,
+					parentRunID:               ctx.runID,
+				},
+				args...); err != nil {
+				log.Printf("Error preparing workflow: %v", err)
+				future := NewRuntimeFuture()
+				future.setError(err)
+				return future
+			}
+
+			return ctx.onCrossQueueWorkflow(options.Queue, workflowEntity.ID, workflowFunc, options, args...)
 		}
 		// If no handler is set, return an error
 		future := NewRuntimeFuture()
