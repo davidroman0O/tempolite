@@ -214,7 +214,7 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 }
 
 func (w *QueueWorker) OnStart(ctx context.Context) {
-	log.Printf("Queue worker started for queue %s", w.queueInstance.name)
+	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
 }
 
 func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]) error {
@@ -301,8 +301,6 @@ func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
 			return futureErr
 		}
 
-		fmt.Println("cross workflow handler", queueName, workflowID, workflowFunc, options, args)
-
 		future := NewRuntimeFuture()
 
 		if err := queue.orchestrators.Submit(
@@ -337,8 +335,6 @@ func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 		}
 
 		future := NewRuntimeFuture()
-
-		fmt.Println("continue as new handler", queueName, workflowID, workflowFunc, options, args)
 
 		if err := queue.orchestrators.Submit(
 			retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{

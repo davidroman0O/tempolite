@@ -3,7 +3,6 @@ package tempolite
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -536,14 +535,6 @@ func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
 
 	db.hierarchyCounter++
 	hierarchy.ID = db.hierarchyCounter
-
-	log.Printf("Adding hierarchy - ID: %d, Parent: %d, Child: %d, ParentType: %s, ChildType: %s, StepID: %s",
-		hierarchy.ID,
-		hierarchy.ParentEntityID,
-		hierarchy.ChildEntityID,
-		hierarchy.ParentType,
-		hierarchy.ChildType,
-		hierarchy.ChildStepID)
 
 	db.hierarchies[hierarchy.ID] = copyHierarchy(hierarchy)
 	return hierarchy.ID, nil
