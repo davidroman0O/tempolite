@@ -3399,3 +3399,40 @@ func SignalExecutionWithData() SignalExecutionGetOption {
 		return nil
 	}
 }
+
+func GetWorkflowVersions(versions *[]*Version) WorkflowEntityPropertyGetter {
+	return func(e *WorkflowEntity) (WorkflowEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("workflow entity is nil")
+		}
+		if e.Edges == nil || e.Edges.Versions == nil {
+			*versions = make([]*Version, 0)
+		} else {
+			*versions = make([]*Version, len(e.Edges.Versions))
+			copy(*versions, e.Edges.Versions)
+		}
+		return func(opts *WorkflowEntityGetterOptions) error {
+			opts.IncludeVersion = true
+			return nil
+		}, nil
+	}
+}
+
+func SetWorkflowVersion(version *Version) WorkflowEntityPropertySetter {
+	return func(e *WorkflowEntity) (WorkflowEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("workflow entity is nil")
+		}
+		if e.Edges == nil {
+			e.Edges = &WorkflowEntityEdges{}
+		}
+		if e.Edges.Versions == nil {
+			e.Edges.Versions = make([]*Version, 0)
+		}
+		e.Edges.Versions = append(e.Edges.Versions, version)
+		return func(opts *WorkflowEntitySetterOptions) error {
+			opts.Version = version
+			return nil
+		}, nil
+	}
+}

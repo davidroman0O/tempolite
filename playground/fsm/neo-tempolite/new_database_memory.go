@@ -54,7 +54,7 @@ type MemoryDatabase struct {
 
 	// Core maps
 	runs        map[int]*Run
-	versions    map[int]*Version
+	versions    map[int]*Version // ID -> Version
 	hierarchies map[int]*Hierarchy
 	queues      map[int]*Queue
 	queueNames  map[string]int
@@ -96,6 +96,7 @@ type MemoryDatabase struct {
 	workflowToQueue    map[int]int                  // workflow ID -> queue ID
 	queueToWorkflows   map[int][]int                // queue ID -> workflow IDs
 	runToWorkflows     map[int][]int                // run ID -> workflow IDs
+	workflowVersions   map[int][]int                // WorkflowID -> []VersionID
 }
 
 func NewMemoryDatabase() *MemoryDatabase {
@@ -147,6 +148,7 @@ func NewMemoryDatabase() *MemoryDatabase {
 		workflowToQueue:    make(map[int]int),
 		queueToWorkflows:   make(map[int][]int),
 		runToWorkflows:     make(map[int][]int),
+		workflowVersions:   make(map[int][]int),
 
 		queueCounter: 1, // Starting from 1 for the default queue
 	}
@@ -2511,6 +2513,101 @@ func (db *MemoryDatabase) UpdateQueue(queue *Queue) error {
 
 	queue.UpdatedAt = time.Now()
 	db.queues[queue.ID] = copyQueue(queue)
+	return nil
+}
+
+// GetVersionByWorkflowAndChangeID returns a version by workflow ID and change ID. Will return
+// ErrVersionNotFound if no version exists for this combination.
+func (db *MemoryDatabase) GetVersionByWorkflowAndChangeID(workflowID int, changeID string) (*Version, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	// Get all version IDs for this workflow
+	versionIDs, ok := db.workflowVersions[workflowID]
+	if !ok {
+		return nil, ErrVersionNotFound
+	}
+
+	// Find the version with matching changeID
+	for _, vID := range versionIDs {
+		version := db.versions[vID]
+		if version.ChangeID == changeID {
+			return copyVersion(version), nil
+		}
+	}
+
+	return nil, ErrVersionNotFound
+}
+
+func (db *MemoryDatabase) GetVersionsByWorkflowID(workflowID int) ([]*Version, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	versionIDs, ok := db.workflowVersions[workflowID]
+	if !ok {
+		return []*Version{}, nil
+	}
+
+	versions := make([]*Version, 0, len(versionIDs))
+	for _, vID := range versionIDs {
+		if version, exists := db.versions[vID]; exists {
+			versions = append(versions, copyVersion(version))
+		}
+	}
+
+	return versions, nil
+}
+
+// SetVersion creates or updates a version.
+func (db *MemoryDatabase) SetVersion(version *Version) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if version.ID == 0 {
+		db.versionCounter++
+		version.ID = db.versionCounter
+		version.CreatedAt = time.Now()
+	}
+	version.UpdatedAt = time.Now()
+
+	db.versions[version.ID] = copyVersion(version)
+
+	// Update workflowVersions map
+	found := false
+	for _, vID := range db.workflowVersions[version.EntityID] {
+		if v := db.versions[vID]; v.ChangeID == version.ChangeID {
+			// Update existing version
+			db.versions[vID] = copyVersion(version)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// Add new version ID to workflow's version list
+		db.workflowVersions[version.EntityID] = append(
+			db.workflowVersions[version.EntityID],
+			version.ID,
+		)
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) DeleteVersionsForWorkflow(workflowID int) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	versionIDs, ok := db.workflowVersions[workflowID]
+	if !ok {
+		return nil
+	}
+
+	for _, vID := range versionIDs {
+		delete(db.versions, vID)
+	}
+	delete(db.workflowVersions, workflowID)
+
 	return nil
 }
 

@@ -585,6 +585,8 @@ type WorkflowOptions struct {
 type ContinueAsNewError struct {
 	Options *WorkflowOptions
 	Args    []interface{}
+	// Internal tracking of parent workflow for version inheritance
+	parentWorkflowID int
 }
 
 func (e ContinueAsNewError) Error() string {
@@ -631,10 +633,10 @@ type HandlerInfo struct {
 // Core entity structures
 type Version struct {
 	ID        int
-	EntityID  int
-	ChangeID  string
-	Version   int
-	Data      map[string]interface{}
+	EntityID  int                    // Workflow ID this version belongs to
+	ChangeID  string                 // Identifier for the change (e.g., "format-change")
+	Version   int                    // The actual version number
+	Data      map[string]interface{} // Additional version metadata if needed
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -686,15 +688,16 @@ type BaseEntity struct {
 
 // Entity Data structures
 type WorkflowData struct {
-	ID                     int      `json:"id,omitempty"`
-	EntityID               int      `json:"entity_id,omitempty"`
-	Duration               string   `json:"duration,omitempty"`
-	Paused                 bool     `json:"paused"`
-	Resumable              bool     `json:"resumable"`
-	Inputs                 [][]byte `json:"inputs,omitempty"`
-	IsRoot                 bool     `json:"is_root"`
-	ContinuedFrom          *int     `json:"continued_from,omitempty"`
-	ContinuedExecutionFrom *int     `json:"continued_execution_from,omitempty"`
+	ID                     int            `json:"id,omitempty"`
+	EntityID               int            `json:"entity_id,omitempty"`
+	Duration               string         `json:"duration,omitempty"`
+	Paused                 bool           `json:"paused"`
+	Resumable              bool           `json:"resumable"`
+	Inputs                 [][]byte       `json:"inputs,omitempty"`
+	IsRoot                 bool           `json:"is_root"`
+	ContinuedFrom          *int           `json:"continued_from,omitempty"`
+	ContinuedExecutionFrom *int           `json:"continued_execution_from,omitempty"`
+	Versions               map[string]int // Tracks versions used in this workflow
 }
 
 type ActivityData struct {
@@ -1005,6 +1008,9 @@ type Database interface {
 	GetVersion(id int, opts ...VersionGetOption) (*Version, error)
 	HasVersion(id int) (bool, error)
 	UpdateVersion(version *Version) error
+	GetVersionByWorkflowAndChangeID(workflowID int, changeID string) (*Version, error)
+	GetVersionsByWorkflowID(workflowID int) ([]*Version, error)
+	SetVersion(version *Version) error
 	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
 	SetVersionProperties(id int, setters ...VersionPropertySetter) error
 
@@ -1252,26 +1258,39 @@ func copyRun(run *Run) *Run {
 	return copy
 }
 
-func copyVersion(version *Version) *Version {
-	if version == nil {
+// func copyVersion(version *Version) *Version {
+// 	if version == nil {
+// 		return nil
+// 	}
+
+// 	copy := &Version{
+// 		ID:       version.ID,
+// 		EntityID: version.EntityID,
+// 		ChangeID: version.ChangeID,
+// 		Version:  version.Version,
+// 	}
+
+// 	if version.Data != nil {
+// 		copy.Data = make(map[string]interface{}, len(version.Data))
+// 		for k, v := range version.Data {
+// 			copy.Data[k] = v
+// 		}
+// 	}
+
+//		return copy
+//	}
+func copyVersion(v *Version) *Version {
+	if v == nil {
 		return nil
 	}
-
-	copy := &Version{
-		ID:       version.ID,
-		EntityID: version.EntityID,
-		ChangeID: version.ChangeID,
-		Version:  version.Version,
-	}
-
-	if version.Data != nil {
-		copy.Data = make(map[string]interface{}, len(version.Data))
-		for k, v := range version.Data {
-			copy.Data[k] = v
+	copied := *v
+	if v.Data != nil {
+		copied.Data = make(map[string]interface{})
+		for k, v := range v.Data {
+			copied.Data[k] = v
 		}
 	}
-
-	return copy
+	return &copied
 }
 
 func copyHierarchy(hierarchy *Hierarchy) *Hierarchy {
@@ -1357,6 +1376,14 @@ func copyWorkflowData(data *WorkflowData) *WorkflowData {
 	}
 
 	c := *data
+
+	// Deep copy versions map
+	if data.Versions != nil {
+		c.Versions = make(map[string]int)
+		for k, v := range data.Versions {
+			c.Versions[k] = v
+		}
+	}
 
 	if data.Inputs != nil {
 		c.Inputs = make([][]byte, len(data.Inputs))

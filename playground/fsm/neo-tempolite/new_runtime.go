@@ -378,6 +378,48 @@ type WorkflowContext struct {
 	onSignalNew          signalNew
 }
 
+// GetVersion retrieves or sets a version for a changeID.
+func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) (int, error) {
+	// First check version overrides
+	if ctx.options.VersionOverrides != nil {
+		if forcedVersion, ok := ctx.options.VersionOverrides[changeID]; ok {
+			if forcedVersion < minSupported || forcedVersion > maxSupported {
+				return 0, fmt.Errorf("version override %d for change %s is outside supported range [%d,%d]",
+					forcedVersion, changeID, minSupported, maxSupported)
+			}
+			return forcedVersion, nil
+		}
+	}
+
+	// Look up version for this workflow
+	version, err := ctx.db.GetVersionByWorkflowAndChangeID(ctx.workflowID, changeID)
+	if err != nil {
+		if !errors.Is(err, ErrVersionNotFound) {
+			return 0, err
+		}
+		// First time seeing this change, use maxSupported
+		newVersion := &Version{
+			EntityID: ctx.workflowID,
+			ChangeID: changeID,
+			Version:  maxSupported,
+		}
+
+		if err := ctx.db.SetVersion(newVersion); err != nil {
+			return 0, err
+		}
+
+		return maxSupported, nil
+	}
+
+	// Verify version is in supported range
+	if version.Version < minSupported || version.Version > maxSupported {
+		return 0, fmt.Errorf("version %d for change %s is outside supported range [%d,%d]",
+			version.Version, changeID, minSupported, maxSupported)
+	}
+
+	return version.Version, nil
+}
+
 func (ctx WorkflowContext) checkPause() error {
 	if ctx.state.isPaused() {
 		logger.Debug(ctx.ctx, "workflow is paused", "workflow_context.workflow_id", ctx.workflowID, "workflow_context.execution_id", ctx.workflowExecutionID, "workflow_context.step_id", ctx.stepID, "workflow_context.queue_id", ctx.queueID, "workflow_context.run_id", ctx.runID)
@@ -398,7 +440,6 @@ func (ctx WorkflowContext) GetRetryCount() (uint64, error) {
 // ContinueAsNew allows a workflow to continue as new with the given function and arguments.
 // It also mean the workflow is successful and will be marked as completed.
 func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...interface{}) error {
-
 	if options == nil {
 		options = &WorkflowOptions{}
 	}
@@ -411,7 +452,23 @@ func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...inter
 		options.RetryPolicy = DefaultRetryPolicy()
 	}
 
-	logger.Debug(ctx.ctx, "workflow continuing as new", "workflow_context.workflow_id", ctx.workflowID, "workflow_context.execution_id", ctx.workflowExecutionID, "workflow_context.step_id", ctx.stepID, "workflow_context.queue_id", ctx.queueID, "workflow_context.run_id", ctx.runID)
+	// If no version overrides specified, inherit current versions
+	if options.VersionOverrides == nil {
+		versions, err := ctx.db.GetVersionsByWorkflowID(ctx.workflowID)
+		if err == nil && len(versions) > 0 {
+			options.VersionOverrides = make(map[string]int)
+			for _, v := range versions {
+				options.VersionOverrides[v.ChangeID] = v.Version
+			}
+		}
+	}
+
+	logger.Debug(ctx.ctx, "workflow continuing as new",
+		"workflow_id", ctx.workflowID,
+		"execution_id", ctx.workflowExecutionID,
+		"step_id", ctx.stepID,
+		"queue_id", ctx.queueID,
+		"run_id", ctx.runID)
 
 	return &ContinueAsNewError{
 		Options: options,
@@ -1090,6 +1147,33 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 
 	if continuedID != 0 {
 		data.ContinuedFrom = &continuedID
+		// If this is a continued workflow, we should inherit versions from the parent
+		parentVersions, err := db.GetVersionsByWorkflowID(continuedID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get parent versions: %w", err)
+		}
+		// Store inherited versions
+		for _, v := range parentVersions {
+			newVersion := &Version{
+				ChangeID:  v.ChangeID,
+				Version:   v.Version,
+				Data:      v.Data,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if workflowOptions != nil && workflowOptions.VersionOverrides != nil {
+				// Allow version override on continued workflows
+				if override, exists := workflowOptions.VersionOverrides[v.ChangeID]; exists {
+					newVersion.Version = override
+				}
+			}
+			if err := db.SetVersion(newVersion); err != nil {
+				return nil, fmt.Errorf("failed to set inherited version: %w", err)
+			}
+		}
+	}
+	if continuedID != 0 {
+		data.ContinuedFrom = &continuedID
 	}
 	if continuedExecutionID != 0 {
 		data.ContinuedExecutionFrom = &continuedExecutionID
@@ -1115,6 +1199,21 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		err := errors.Join(ErrPreparation, fmt.Errorf("failed to add workflow entity: %w", err))
 		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
 		return nil, err
+	}
+
+	// Handle new version overrides only for new workflows
+	if workflowOptions != nil && workflowOptions.VersionOverrides != nil && continuedID == 0 {
+		for changeID, version := range workflowOptions.VersionOverrides {
+			if err := db.SetVersion(&Version{
+				EntityID:  workflowID,
+				ChangeID:  changeID,
+				Version:   version,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}); err != nil {
+				return nil, fmt.Errorf("failed to set version override: %w", err)
+			}
+		}
 	}
 
 	var entity *WorkflowEntity
@@ -4492,4 +4591,35 @@ func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
 		return err
 	}
 	return nil
+}
+
+/////////
+
+func (o *Orchestrator) handleContinueAsNew(parentWorkflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	if options == nil {
+		options = &WorkflowOptions{}
+	}
+
+	// Get parent versions
+	versions, err := o.db.GetVersionsByWorkflowID(parentWorkflowID)
+	if err != nil {
+		future := NewRuntimeFuture()
+		future.setError(fmt.Errorf("failed to get parent versions: %w", err))
+		return future
+	}
+
+	// Initialize version overrides if needed
+	if options.VersionOverrides == nil {
+		options.VersionOverrides = make(map[string]int)
+	}
+
+	// Inherit versions from parent unless explicitly overridden
+	for _, v := range versions {
+		if _, hasOverride := options.VersionOverrides[v.ChangeID]; !hasOverride {
+			options.VersionOverrides[v.ChangeID] = v.Version
+		}
+	}
+
+	// Create new workflow with inherited versions
+	return o.Execute(workflowFunc, options, args...)
 }

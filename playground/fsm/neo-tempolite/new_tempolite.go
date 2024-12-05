@@ -324,7 +324,6 @@ func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
 
 func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 	return func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
-
 		t.mu.Lock()
 		queue, ok := t.queueInstances[queueName]
 		t.mu.Unlock()
@@ -336,15 +335,16 @@ func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 
 		future := NewRuntimeFuture()
 
+		// Handle version inheritance through ContinueAsNew
 		if err := queue.orchestrators.Submit(
 			retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+				workflowID:   workflowID,
 				workflowFunc: workflowFunc,
 				options:      options,
-				workflowID:   workflowID,
 				args:         args,
 				future:       future,
 				queueName:    queueName,
-				continued:    true,
+				continued:    true, // Mark this as a continuation
 			})); err != nil {
 			futureErr := NewRuntimeFuture()
 			futureErr.setError(err)

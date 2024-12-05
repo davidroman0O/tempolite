@@ -3002,3 +3002,180 @@ func TestWorkflowSignalPanic(t *testing.T) {
 	}
 
 }
+
+func TestVersion(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_version.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	versioningA := atomic.Int32{}
+	versioningB := atomic.Int32{}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		featureAVersion, err := ctx.GetVersion("featureA", DefaultVersion, int(versioningA.Load()))
+		if err != nil {
+			return err
+		}
+		fmt.Println("Feature A version:", featureAVersion)
+		switch versioningB.Load() {
+		case 0:
+			fmt.Println("Default real version")
+		default:
+			version, err := ctx.GetVersion("test", DefaultVersion, int(versioningB.Load()))
+			if err != nil {
+				return err
+			}
+			fmt.Println("Version:", version)
+			switch version {
+			case DefaultVersion:
+				fmt.Println("Default version")
+			case 1:
+				fmt.Println("Version 1")
+			case 2:
+				fmt.Println("Version 2")
+			default:
+				return fmt.Errorf("unexpected version: %d", version)
+			}
+		}
+		return nil
+	}
+
+	for i := 0; i < 3; i++ {
+		future := o.Execute(wrfl, &WorkflowOptions{})
+		if future == nil {
+			t.Fatal("future is nil")
+		}
+		if err := future.Get(); err != nil {
+			t.Fatal(err)
+		}
+		versioningB.Add(1)
+		if i == 1 {
+			versioningA.Add(1)
+		}
+	}
+
+}
+
+// Test the capabilities of the versioning system using the pause and resume feature
+func TestVersionPauseResume(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_version_pause_resume.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	versioningA := atomic.Int32{}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		featureAVersion, err := ctx.GetVersion("featureA", DefaultVersion, int(versioningA.Load()))
+		if err != nil {
+			return err
+		}
+		<-time.After(1 * time.Second) // In theory, we should have the version 0
+		if err := ctx.SideEffect("test", func() int {
+			return 1
+		}).Get(); err != nil {
+			return err
+		}
+		fmt.Println("Feature A version:", featureAVersion)
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{})
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	o.Pause()
+
+	<-time.After(2 * time.Second)
+	versioningA.Add(1)
+	fmt.Println("Resuming")
+
+	future = o.Resume(future.WorkflowID())
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	version, err := db.GetVersionsByWorkflowID(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(version) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(version))
+	}
+
+	if version[0].Version != 0 {
+		t.Fatalf("expected version 0, got %d", version[0].Version)
+	}
+}
+
+func TestVersionPauseResumeOverride(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_version_pause_resume.json")
+
+	o := NewOrchestrator(ctx, db, registry)
+
+	versioningA := atomic.Int32{}
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		featureAVersion, err := ctx.GetVersion("featureA", DefaultVersion, 2)
+		if err != nil {
+			return err
+		}
+		<-time.After(1 * time.Second) // In theory, we should have the version 0
+		if err := ctx.SideEffect("test", func() int {
+			return 1
+		}).Get(); err != nil {
+			return err
+		}
+		fmt.Println("Feature A version:", featureAVersion)
+		return nil
+	}
+
+	future := o.Execute(wrfl, &WorkflowOptions{
+		VersionOverrides: map[string]int{
+			"featureA": 1,
+		},
+	})
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	o.Pause()
+
+	<-time.After(2 * time.Second)
+	versioningA.Add(1)
+	fmt.Println("Resuming")
+
+	future = o.Resume(future.WorkflowID())
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	version, err := db.GetVersionsByWorkflowID(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(version) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(version))
+	}
+
+	if version[0].Version != 1 {
+		t.Fatalf("expected version 1, got %d", version[0].Version)
+	}
+}
