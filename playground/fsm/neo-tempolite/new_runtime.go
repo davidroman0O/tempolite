@@ -359,7 +359,6 @@ func (ac ActivityContext) Err() error {
 }
 
 // WorkflowContext provides context for workflow execution.
-// TODO: add a function to know how much was i retried!
 type WorkflowContext struct {
 	db                  Database
 	registry            *Registry
@@ -385,6 +384,15 @@ func (ctx WorkflowContext) checkPause() error {
 		return ErrPaused
 	}
 	return nil
+}
+
+// GetRetryCount returns the number of times this workflow has been retried
+func (ctx WorkflowContext) GetRetryCount() (uint64, error) {
+	var retryState RetryState
+	if err := ctx.db.GetWorkflowEntityProperties(ctx.workflowID, GetWorkflowEntityRetryState(&retryState)); err != nil {
+		return 0, fmt.Errorf("failed to get workflow retry state: %w", err)
+	}
+	return retryState.Attempts, nil
 }
 
 // ContinueAsNew allows a workflow to continue as new with the given function and arguments.
