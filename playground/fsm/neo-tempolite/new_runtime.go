@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"sort"
@@ -32,14 +32,15 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
+var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
+
 func init() {
 	maxprocs.Set()
 	deadlock.Opts.DeadlockTimeout = time.Second * 2
 	deadlock.Opts.OnPotentialDeadlock = func() {
-		log.Println("POTENTIAL DEADLOCK DETECTED!")
+		logger.Error(context.Background(), "POTENTIAL DEADLOCK DETECTED!")
 		buf := make([]byte, 1<<16)
 		runtime.Stack(buf, true)
-
 	}
 }
 
@@ -84,31 +85,64 @@ var ErrMustPointer = errors.New("value must be a pointer")
 var ErrEncoding = errors.New("failed to encode value")
 var ErrSagaGetValue = errors.New("failed to get saga value")
 
+var ErrTransactionContext = errors.New("failed transaction context")
+
 func (tc *TransactionContext) Store(key string, value interface{}) error {
+	var err error
+
+	logger.Debug(tc.ctx, "transaction storing value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
-		return ErrMustPointer
+		err := errors.Join(ErrTransactionContext, ErrMustPointer)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key)
+		return err
 	}
 
 	buf := new(bytes.Buffer)
-	if err := rtl.Encode(reflect.ValueOf(value).Elem().Interface(), buf); err != nil {
-		return errors.Join(ErrEncoding, err)
+	if err = rtl.Encode(reflect.ValueOf(value).Elem().Interface(), buf); err != nil {
+		err := errors.Join(ErrTransactionContext, ErrEncoding, err)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
+		return err
 	}
 
-	_, err := tc.db.SetSagaValue(tc.executionID, key, buf.Bytes())
-	return err
+	if _, err = tc.db.SetSagaValue(tc.executionID, key, buf.Bytes()); err != nil {
+		err := errors.Join(ErrTransactionContext, err)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
+		return err
+	}
+
+	logger.Debug(tc.ctx, "transaction stored value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+
+	return nil
 }
 
 func (tc *TransactionContext) Load(key string, value interface{}) error {
+	var data []byte
+	var err error
+
+	logger.Debug(tc.ctx, "transaction loading value", "transaction_context.key", key, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
-		return ErrMustPointer
+		err := errors.Join(ErrTransactionContext, ErrMustPointer)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key)
+		return err
 	}
 
-	data, err := tc.db.GetSagaValueByExecutionID(tc.executionID, key)
-	if err != nil {
-		return errors.Join(ErrSagaGetValue, err)
+	if data, err = tc.db.GetSagaValueByExecutionID(tc.executionID, key); err != nil {
+		err := errors.Join(ErrSagaGetValue, err)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
+		return err
 	}
 
-	return rtl.Decode(bytes.NewBuffer(data), value)
+	if err := rtl.Decode(bytes.NewBuffer(data), value); err != nil {
+		err := errors.Join(ErrTransactionContext, ErrEncoding, err)
+		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
+		return err
+	}
+
+	logger.Debug(tc.ctx, "transaction loaded value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+
+	return nil
 }
 
 type CompensationContext struct {
@@ -119,17 +153,35 @@ type CompensationContext struct {
 	stepIndex   int
 }
 
+var ErrCompensationContext = errors.New("failed compensation context")
+
 func (cc *CompensationContext) Load(key string, value interface{}) error {
+	var data []byte
+	var err error
+
+	logger.Debug(cc.ctx, "compensation loading value", "compensation_context.key", key, "compensation_context.execution_id", cc.executionID, "compensation_context.step_index", cc.stepIndex, "compensation_context.context_id", cc.contextID)
+
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
-		return ErrMustPointer
+		err := errors.Join(ErrCompensationContext, ErrMustPointer)
+		logger.Error(cc.ctx, err.Error(), "compensation_context.key", key)
+		return err
 	}
 
-	data, err := cc.db.GetSagaValueByExecutionID(cc.executionID, key)
-	if err != nil {
-		return errors.Join(ErrSagaGetValue, err)
+	if data, err = cc.db.GetSagaValueByExecutionID(cc.executionID, key); err != nil {
+		err := errors.Join(ErrSagaGetValue, err)
+		logger.Error(cc.ctx, err.Error(), "compensation_context.key", key, "error", err)
+		return err
 	}
 
-	return rtl.Decode(bytes.NewBuffer(data), value)
+	if err := rtl.Decode(bytes.NewBuffer(data), value); err != nil {
+		err := errors.Join(ErrCompensationContext, ErrEncoding, err)
+		logger.Error(cc.ctx, err.Error(), "compensation_context.key", key, "error", err)
+		return err
+	}
+
+	logger.Debug(cc.ctx, "compensation loaded value", "compensation_context.key", key, "compensation_context.value", value, "compensation_context.execution_id", cc.executionID, "compensation_context.step_index", cc.stepIndex, "compensation_context.context_id", cc.contextID)
+
+	return nil
 }
 
 // GetStepIndex returns the current step index
@@ -200,6 +252,9 @@ var ErrCompensationMethodNotFound = errors.New("compensation method not found")
 
 // Build creates a SagaDefinition with the HandlerInfo included.
 func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
+
+	logger.Debug(context.Background(), "building saga definition", "saga_builder.steps", len(b.steps))
+
 	sagaInfo := &SagaHandlerInfo{
 		TransactionInfo:  make([]HandlerInfo, len(b.steps)),
 		CompensationInfo: make([]HandlerInfo, len(b.steps)),
@@ -241,10 +296,14 @@ func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 		}
 
 		if !transactionOk {
-			return nil, errors.Join(ErrTransactionMethodNotFound, fmt.Errorf("not found for step %d", i))
+			err := errors.Join(ErrTransactionMethodNotFound, fmt.Errorf("not found for step %d", i))
+			logger.Error(context.Background(), err.Error(), "saga_builder.step", i)
+			return nil, err
 		}
 		if !compensationOk {
-			return nil, errors.Join(ErrCompensationMethodNotFound, fmt.Errorf("not found for step %d", i))
+			err := errors.Join(ErrCompensationMethodNotFound, fmt.Errorf("not found for step %d", i))
+			logger.Error(context.Background(), err.Error(), "saga_builder.step", i)
+			return nil, err
 		}
 
 		// Use the actual type name for the handler
@@ -277,6 +336,8 @@ func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
 		sagaInfo.TransactionInfo[i] = transactionInfo
 		sagaInfo.CompensationInfo[i] = compensationInfo
 	}
+
+	logger.Debug(context.Background(), "built saga definition", "saga_builder.steps", len(b.steps), "saga_builder.transaction_info", len(sagaInfo.TransactionInfo), "saga_builder.compensation_info", len(sagaInfo.CompensationInfo))
 
 	return &SagaDefinition{
 		Steps:       b.steps,
@@ -320,7 +381,7 @@ type WorkflowContext struct {
 
 func (ctx WorkflowContext) checkPause() error {
 	if ctx.state.isPaused() {
-
+		logger.Debug(ctx.ctx, "workflow is paused", "workflow_context.workflow_id", ctx.workflowID, "workflow_context.execution_id", ctx.workflowExecutionID, "workflow_context.step_id", ctx.stepID, "workflow_context.queue_id", ctx.queueID, "workflow_context.run_id", ctx.runID)
 		return ErrPaused
 	}
 	return nil
@@ -341,6 +402,8 @@ func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...inter
 	if options.RetryPolicy == nil {
 		options.RetryPolicy = DefaultRetryPolicy()
 	}
+
+	logger.Debug(ctx.ctx, "workflow continuing as new", "workflow_context.workflow_id", ctx.workflowID, "workflow_context.execution_id", ctx.workflowExecutionID, "workflow_context.step_id", ctx.stepID, "workflow_context.queue_id", ctx.queueID, "workflow_context.run_id", ctx.runID)
 
 	return &ContinueAsNewError{
 		Options: options,
@@ -414,13 +477,14 @@ func (f *RuntimeFuture) IsPaused() bool {
 func (f *RuntimeFuture) setEntityID(entityID int) {
 	f.mu.Lock()
 	f.workflowID = entityID
+	logger.Debug(context.Background(), "future set entity id", "future.entity_id", entityID, "future.workflow_id", f.workflowID)
 	f.mu.Unlock()
 }
 
 func (f *RuntimeFuture) setResult(results []interface{}) {
-
 	f.mu.Lock()
 	f.results = results
+	logger.Debug(context.Background(), "future set results", "future.results", len(results), "future.workflow_id", f.workflowID)
 	f.mu.Unlock()
 	f.once.Do(func() {
 		close(f.done)
@@ -428,9 +492,9 @@ func (f *RuntimeFuture) setResult(results []interface{}) {
 }
 
 func (f *RuntimeFuture) setError(err error) {
-
 	f.mu.Lock()
 	f.err = err
+	logger.Debug(context.Background(), "future set error", "future.error", err, "future.workflow_id", f.workflowID)
 	f.mu.Unlock()
 	f.once.Do(func() {
 		close(f.done)
@@ -438,48 +502,65 @@ func (f *RuntimeFuture) setError(err error) {
 }
 
 func (f *RuntimeFuture) GetResults() ([]interface{}, error) {
+	logger.Debug(context.Background(), "future wait results", "future.workflow_id", f.workflowID)
+
 	<-f.done
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	logger.Debug(context.Background(), "future get results", "future.results", len(f.results), "future.workflow_id", f.workflowID)
+
 	if f.err != nil {
+		logger.Debug(context.Background(), "future get results error", "future.error", f.err, "future.workflow_id", f.workflowID)
 		return nil, f.err
 	}
 
 	// Return a copy of results to prevent modification
 	results := make([]interface{}, len(f.results))
 	copy(results, f.results)
+
 	return results, nil
 }
 
 var ErrGetResults = errors.New("cannot get results")
 
 func (f *RuntimeFuture) Get(out ...interface{}) error {
+
+	logger.Debug(context.Background(), "future wait get", "future.workflow_id", f.workflowID)
+
 	<-f.done
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
+		logger.Debug(context.Background(), "future get error", "future.error", f.err, "future.workflow_id", f.workflowID)
 		return f.err
 	}
 
 	if len(out) == 0 {
+		logger.Debug(context.Background(), "future get no output", "future.workflow_id", f.workflowID)
 		return nil
 	}
 
 	if len(out) > len(f.results) {
-		return errors.Join(ErrGetResults, fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results)))
+		err := errors.Join(ErrGetResults, fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results)))
+		logger.Error(context.Background(), err.Error(), "future.workflow_id", f.workflowID)
+		return err
 	}
 
 	for i := 0; i < len(out); i++ {
 		val := reflect.ValueOf(out[i])
 		if val.Kind() != reflect.Ptr {
-			return errors.Join(ErrGetResults, fmt.Errorf("output parameter %d must be a pointer", i))
+			err := errors.Join(ErrGetResults, ErrMustPointer)
+			logger.Error(context.Background(), err.Error(), "future.workflow_id", f.workflowID)
+			return err
 		}
 		val = val.Elem()
 
 		result := reflect.ValueOf(f.results[i])
 		if !result.Type().AssignableTo(val.Type()) {
-			return errors.Join(ErrGetResults, fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i))
+			err := errors.Join(ErrGetResults, fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i))
+			logger.Error(context.Background(), err.Error(), "future.workflow_id", f.workflowID)
+			return err
 		}
 
 		val.Set(result)
@@ -612,15 +693,16 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 // 	o.active.Store(false)
 // }
 
-var ErrOrchestratorSagaInstanceNotFound = errors.New("saga instance not found")
-
 func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
+	logger.Debug(o.ctx, "orchestrator find saga instance", "orchestrator.find_saga_instance.step_id", stepID)
 	for _, saga := range o.sagas {
 		if saga.stepID == stepID {
 			return saga, nil
 		}
 	}
-	return nil, errors.Join(ErrOrchestratorSagaInstanceNotFound, fmt.Errorf("not found step %s", stepID))
+	err := errors.Join(ErrOrchestrator, fmt.Errorf("not found step %s", stepID))
+	logger.Error(o.ctx, err.Error(), "orchestrator.find_saga_instance.step_id", stepID)
+	return nil, err
 }
 
 func (o *Orchestrator) reset() {
@@ -647,11 +729,17 @@ func (o *Orchestrator) Cancel() {
 	o.cancel()
 }
 
+var ErrOrchestrator = errors.New("failed orchestrator")
+
 func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
+
+	logger.Debug(o.ctx, "orchestrator get status", "orchestrator.get_status.workflow_id", id)
+
 	o.mu.Lock()
 	var status EntityStatus
 	if err := o.db.GetWorkflowEntityProperties(id, GetWorkflowEntityStatus(&status)); err != nil {
-
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity properties: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.get_status.workflow_id", id)
 		return "", err
 	}
 	o.mu.Unlock()
@@ -659,15 +747,20 @@ func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
 }
 
 func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
+
+	logger.Debug(o.ctx, "orchestrator wait for", "orchestrator.wait_for.workflow_id", id, "orchestrator.wait_for.status", status)
+
 	for {
 		s, err := o.GetStatus(id)
 		if err != nil {
+			err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get status: %w", err))
+			logger.Error(o.ctx, err.Error(), "orchestrator.wait_for.workflow_id", id)
 			return err
 		}
 		if s == status {
 			return nil
 		}
-		<-time.After(100 * time.Millisecond)
+		<-time.After(100 * time.Millisecond) // TODO: should be configurable
 	}
 }
 
@@ -678,12 +771,14 @@ func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
 // }
 
 func (o *Orchestrator) isPaused() bool {
+	logger.Debug(o.ctx, "orchestrator is paused", "orchestrator.is_paused", o.paused)
 	o.pausedMu.Lock()
 	defer o.pausedMu.Unlock()
 	return o.paused
 }
 
 func (o *Orchestrator) setUnpause() {
+	logger.Debug(o.ctx, "orchestrator set unpause")
 	o.pausedMu.Lock()
 	defer o.pausedMu.Unlock()
 	o.paused = false
@@ -694,6 +789,7 @@ func (o *Orchestrator) setUnpause() {
 // }
 
 func (o *Orchestrator) canStackTrace() bool {
+	logger.Debug(o.ctx, "orchestrator can stack trace", "orchestrator.can_stack_trace", o.displayStackTrace)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.displayStackTrace
@@ -709,19 +805,25 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	// 	<-time.After(100 * time.Millisecond)
 	// }
 
+	logger.Debug(o.ctx, "orchestrator resume", "orchestrator.resume.workflow_id", entityID)
+
 	var err error
 
 	// resume, heh? was it paused?
 	var status EntityStatus
 	if err := o.db.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
 		future := NewRuntimeFuture()
-		future.setError(fmt.Errorf("failed to get workflow entity: %w", err))
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity properties: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
 	if status != StatusPaused {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrPaused, ErrWorkflowPaused))
+		err := errors.Join(ErrOrchestrator, ErrPaused, ErrWorkflowPaused, fmt.Errorf("workflow is not paused: %s", status))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
@@ -733,7 +835,9 @@ func (o *Orchestrator) Resume(entityID int) Future {
 			WorkflowEntityWithQueue(),
 		); err != nil {
 		future := NewRuntimeFuture()
-		future.setError(fmt.Errorf("failed to get workflow entity: %w", err))
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
@@ -749,8 +853,9 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	var parentStepID string
 	var hierarchies []*Hierarchy
 	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
-
 		future := NewRuntimeFuture()
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get hierarchies: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.setError(err)
 		return future
 	}
@@ -764,14 +869,18 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	handler, ok := o.registry.GetWorkflow(workflowEntity.HandlerName)
 	if !ok {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrRegistryHandlerNotFound, fmt.Errorf("handler %s not found", workflowEntity.HandlerName)))
+		err := errors.Join(ErrOrchestrator, ErrRegistryHandlerNotFound, fmt.Errorf("handler %s not found", workflowEntity.HandlerName))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
 	inputs, err := convertInputsFromSerialization(handler, workflowEntity.WorkflowData.Inputs)
 	if err != nil {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrSerialization, fmt.Errorf("failed to convert inputs: %w", err)))
+		err := errors.Join(ErrOrchestrator, ErrSerialization, fmt.Errorf("failed to convert inputs: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
@@ -834,7 +943,9 @@ func (o *Orchestrator) Resume(entityID int) Future {
 		SetWorkflowDataPaused(false),
 		SetWorkflowDataResumable(false),
 	); err != nil {
-		future.setError(fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to set workflow data properties: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
 
@@ -843,9 +954,13 @@ func (o *Orchestrator) Resume(entityID int) Future {
 		entityID,
 		SetWorkflowEntityStatus(StatusRunning),
 	); err != nil {
-		future.setError(fmt.Errorf("failed to set workflow entity status: %w", err))
+		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to set workflow entity status: %w", err))
+		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
+		future.setError(err)
 		return future
 	}
+
+	logger.Debug(o.ctx, "orchestrator resumed", "orchestrator.resumed.workflow_id", entityID)
 
 	go instance.Start(inputs)
 
@@ -866,10 +981,14 @@ var ErrPreparation = errors.New("failed to prepare workflow")
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
 func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
 
+	logger.Debug(context.Background(), "preparing workflow", "workflow_func", getFunctionName(workflowFunc))
+
 	// Register workflow if needed
 	handler, err := registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
-		return nil, errors.Join(ErrPreparation, ErrRegistryRegisteration, fmt.Errorf("failed to register workflow: %w", err))
+		err := errors.Join(ErrPreparation, ErrRegistryRegisteration, fmt.Errorf("failed to register workflow: %w", err))
+		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc))
+		return nil, err
 	}
 
 	isRoot := true
@@ -877,7 +996,9 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	// Convert inputs for storage
 	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
-		return nil, errors.Join(ErrPreparation, ErrSerialization, fmt.Errorf("failed to serialize inputs: %w", err))
+		err := errors.Join(ErrPreparation, ErrSerialization, fmt.Errorf("failed to serialize inputs: %w", err))
+		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc))
+		return nil, err
 	}
 
 	opttionsPreparation := &preparationOptions{}
@@ -910,37 +1031,46 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 
 	var runID int
 	if opttionsPreparation.parentRunID == 0 {
+		logger.Debug(context.Background(), "preparing workflow got no parentRunID", "workflow_func", getFunctionName(workflowFunc))
 		// Create or get Run
 		if runID, err = db.AddRun(&Run{
 			Status: RunStatusPending,
 		}); err != nil {
-			return nil, errors.Join(ErrPreparation, fmt.Errorf("failed to create run: %w", err))
+			err := errors.Join(ErrPreparation, fmt.Errorf("failed to create run: %w", err))
+			logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc))
+			return nil, err
 		}
 	} else {
+		logger.Debug(context.Background(), "preparing workflow got parentRunID", "workflow_func", getFunctionName(workflowFunc), "parentRunID", opttionsPreparation.parentRunID)
 		runID = opttionsPreparation.parentRunID
 	}
 
 	// Convert retry policy if provided
 	var retryPolicy *retryPolicyInternal
 	if workflowOptions != nil && workflowOptions.RetryPolicy != nil {
+		logger.Debug(context.Background(), "preparing workflow got retry policy", "workflow_func", getFunctionName(workflowFunc), "retry_policy.max_attempts", workflowOptions.RetryPolicy.MaxAttempts, "retry_policy.max_interval", workflowOptions.RetryPolicy.MaxInterval)
 		rp := workflowOptions.RetryPolicy
 		retryPolicy = &retryPolicyInternal{
 			MaxAttempts: rp.MaxAttempts,
 			MaxInterval: rp.MaxInterval.Nanoseconds(),
 		}
 	} else {
+		logger.Debug(context.Background(), "preparing workflow got no retry policy (default)", "workflow_func", getFunctionName(workflowFunc))
 		// Default retry policy
 		retryPolicy = DefaultRetryPolicyInternal()
 	}
 
 	var queueName string = DefaultQueue
 	if workflowOptions != nil && workflowOptions.Queue != "" {
+		logger.Debug(context.Background(), "preparing workflow got queue name", "workflow_func", getFunctionName(workflowFunc), "queue_name", workflowOptions.Queue)
 		queueName = workflowOptions.Queue
 	}
 
 	var queue *Queue
 	if queue, err = db.GetQueueByName(queueName); err != nil {
-		return nil, errors.Join(ErrPreparation, fmt.Errorf("failed to get queue %s: %w", queueName, err))
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get queue %s: %w", queueName, err))
+		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
+		return nil, err
 	}
 
 	data := &WorkflowData{
@@ -974,21 +1104,35 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 				},
 				WorkflowData: data,
 			}); err != nil {
-		return nil, errors.Join(ErrPreparation, fmt.Errorf("failed to add workflow entity: %w", err))
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to add workflow entity: %w", err))
+		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
+		return nil, err
 	}
 
-	return db.GetWorkflowEntity(workflowID)
+	var entity *WorkflowEntity
+	if entity, err = db.GetWorkflowEntity(workflowID); err != nil {
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get workflow entity: %w", err))
+		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
+		return nil, err
+	}
+
+	return entity, nil
 }
 
 var ErrOrchestratorExecution = errors.New("failed to execute workflow")
 
 // Execute starts the execution of a workflow directly.
 func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var entity *WorkflowEntity
+	var err error
+	logger.Debug(o.ctx, "orchestrator execute", "workflow_func", getFunctionName(workflowFunc))
+
 	// Create entity and related records
-	entity, err := prepareWorkflow(o.registry, o.db, workflowFunc, options, nil, args...)
-	if err != nil {
+	if entity, err = prepareWorkflow(o.registry, o.db, workflowFunc, options, nil, args...); err != nil {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrOrchestratorExecution, err))
+		err := errors.Join(ErrOrchestratorExecution, err)
+		logger.Error(o.ctx, err.Error(), "workflow_func", getFunctionName(workflowFunc))
+		future.setError(err)
 		return future
 	}
 
@@ -997,9 +1141,13 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 	if err != nil {
 		f := NewRuntimeFuture()
 		f.setEntityID(entity.ID)
-		f.setError(errors.Join(ErrOrchestratorExecution, err))
+		err := errors.Join(ErrOrchestratorExecution, err, fmt.Errorf("failed to execute workflow with entity %d", entity.ID))
+		logger.Error(o.ctx, err.Error(), "workflow_func", getFunctionName(workflowFunc), "entity_id", entity.ID)
+		f.setError(err)
 		return f
 	}
+
+	logger.Debug(o.ctx, "orchestrator executed", "workflow_func", getFunctionName(workflowFunc), "entity_id", entity.ID)
 
 	return future
 }
@@ -1008,21 +1156,27 @@ var ErrOrchestratorExecuteEntity = errors.New("failed to execute workflow with e
 
 // ExecuteWithEntity starts a workflow using an existing entity ID
 func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
-	// Get the entity and verify it exists
 	var err error
 
+	logger.Debug(o.ctx, "orchestrator execute with entity", "entity_id", entityID)
+
+	// Get the entity and verify it exists
 	var entity *WorkflowEntity
 	if entity, err = o.db.GetWorkflowEntity(
 		entityID,
 		WorkflowEntityWithQueue(), // we need the edge to the queue
 		WorkflowEntityWithData(),
 	); err != nil {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get workflow entity: %w", err))
+		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get workflow entity: %w", err))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	var isRoot bool
 	if err = o.db.GetWorkflowDataProperties(entityID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get workflow data properties: %w", err))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	// Set orchestrator's runID from entity
@@ -1030,19 +1184,25 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 
 	// Verify it's a workflow
 	if entity.Type != EntityWorkflow {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("entity %d is not a workflow", entityID))
+		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("entity %d is not a workflow", entityID))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	var ok bool
 	var handlerInfo HandlerInfo
 	if handlerInfo, ok = o.registry.GetWorkflow(entity.HandlerName); !ok {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get handler info"))
+		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get handler info"))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	// Convert inputs
 	inputs, err := convertInputsFromSerialization(handlerInfo, entity.WorkflowData.Inputs)
 	if err != nil {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, ErrSerialization, fmt.Errorf("failed to convert inputs: %w", err))
+		err := errors.Join(ErrOrchestratorExecuteEntity, ErrSerialization, fmt.Errorf("failed to convert inputs: %w", err))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	// Create workflow instance
@@ -1083,7 +1243,9 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	// If this is a sub-workflow, set parent info from hierarchies
 	var hierarchies []*Hierarchy
 	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
-		return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get hierarchies: %w", err))
+		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get hierarchies: %w", err))
+		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
+		return nil, err
 	}
 
 	// If we have parents only
@@ -1111,6 +1273,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 
 	o.addWorkflowInstance(instance)
 
+	logger.Debug(o.ctx, "orchestrator execute with entity", "entity_id", entityID)
 	// We don't start the FSM within the same goroutine as the caller
 	go instance.Start(inputs) // root workflow OR ContinueAsNew starts in a goroutine
 
@@ -1144,6 +1307,7 @@ func (o *Orchestrator) addSagaInstance(wi *SagaInstance) {
 // onPause will check all the instances and pause them
 func (o *Orchestrator) onPause() error {
 
+	logger.Debug(o.ctx, "orchestrator on pause")
 	var err error
 
 	for _, workflow := range o.instances {
@@ -1152,7 +1316,9 @@ func (o *Orchestrator) onPause() error {
 
 		var status EntityStatus
 		if err = o.db.GetWorkflowEntityProperties(workflow.workflowID, GetWorkflowEntityStatus(&status)); err != nil {
-			return fmt.Errorf("failed to get workflow entity status: %w", err)
+			err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity status: %w", err))
+			logger.Error(o.ctx, err.Error(), "workflow_id", workflow.workflowID)
+			return err
 		}
 
 		switch status {
@@ -1162,7 +1328,9 @@ func (o *Orchestrator) onPause() error {
 					workflow.workflowID,
 					SetWorkflowEntityStatus(StatusPaused),
 				); err != nil {
-				return fmt.Errorf("failed to set workflow entity status: %w", err)
+				err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to set workflow entity status: %w", err))
+				logger.Error(o.ctx, err.Error(), "workflow_id", workflow.workflowID)
+				return err
 			}
 
 			if err = o.db.
@@ -1171,7 +1339,9 @@ func (o *Orchestrator) onPause() error {
 					SetWorkflowDataPaused(true),
 					SetWorkflowDataResumable(false),
 				); err != nil {
-				return fmt.Errorf("failed to set workflow data paused: %w", err)
+				err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to set workflow data paused: %w", err))
+				logger.Error(o.ctx, err.Error(), "workflow_id", workflow.workflowID)
+				return err
 			}
 		}
 	}
@@ -1260,6 +1430,8 @@ var ErrWorkflowInstance = errors.New("failed workflow instance")
 // Ideally we're already within a goroutine
 func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
+	logger.Debug(wi.ctx, "workflow instance start", "workflow_id", wi.workflowID)
+
 	wi.mu.Lock()
 	wi.fsm = stateless.NewStateMachine(StateIdle)
 	fsm := wi.fsm
@@ -1285,20 +1457,26 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 		OnEntry(wi.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
+	logger.Debug(wi.ctx, "workflow instance fsm configured", "workflow_id", wi.workflowID)
 	// Start the FSM without holding wi.mu
 	if err := fsm.Fire(TriggerStart, inputs); err != nil {
+		err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to start FSM: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 		if !errors.Is(err, ErrPaused) {
-			wi.future.setError(errors.Join(ErrWorkflowInstance, err))
+			wi.future.setError(err)
 		}
 	}
 
 	var isRoot bool
 	if err := wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
-		return errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to get workflow data properties: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	// free up the orchestrator
 	if isRoot {
+		logger.Debug(wi.ctx, "workflow instance is root", "workflow_id", wi.workflowID)
 		// // set to inactive
 		// if wi.state.isActive() {
 		// 	wi.state.setInactive()
@@ -1317,8 +1495,12 @@ var ErrWorkflowInstanceExecution = errors.New("failed to execute workflow instan
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(wi.ctx, "workflow instance execute workflow", "workflow_id", wi.workflowID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeActivity expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeWorkflow expected 1 argument, got %d", len(args)))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	var err error
@@ -1332,14 +1514,19 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 	maxAttempts, maxInterval = getRetryPolicyOrDefault(wi.options.RetryPolicy)
 
 	if inputs, ok = args[0].([]interface{}); !ok {
-		return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeActivity expected argument to be []interface{}, got %T", args[0]))
+		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeActivity expected argument to be []interface{}, got %T", args[0]))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	var isRoot bool
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
-		return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to get workflow data properties: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
+	logger.Debug(wi.ctx, "workflow instance execute workflow retries", "workflow_id", wi.workflowID)
 	if err := retry.Do(
 		wi.ctx,
 		retry.
@@ -1348,6 +1535,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				retry.NewConstant(maxInterval)),
 		// only the execution might change
 		func(ctx context.Context) error {
+			logger.Debug(wi.ctx, "attempt execute workflow", "workflow_id", wi.workflowID)
 
 			// now we can create and set the execution id
 			if wi.executionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
@@ -1357,13 +1545,17 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				},
 				WorkflowExecutionData: &WorkflowExecutionData{},
 			}); err != nil {
+				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add workflow execution: %w", err))
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 				return err
 			}
 
 			if !isRoot {
+				logger.Debug(wi.ctx, "workflow instance is not root", "workflow_id", wi.workflowID)
 				// Check if hierarchy already exists for this execution
 				hierarchies, err := wi.db.GetHierarchiesByChildEntity(wi.workflowID)
 				if err != nil || len(hierarchies) == 0 {
+					logger.Debug(wi.ctx, "workflow instance hierarchy does not exist", "workflow_id", wi.workflowID)
 					// Only create hierarchy if none exists
 					if _, err = wi.db.AddHierarchy(&Hierarchy{
 						RunID:             wi.runID,
@@ -1376,49 +1568,64 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 						ParentType:        EntityWorkflow,
 						ChildType:         EntityWorkflow,
 					}); err != nil {
-						return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add hierarchy: %w", err))
+						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add hierarchy: %w", err))
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						return err
 					}
 				} else {
+					logger.Debug(wi.ctx, "workflow instance hierarchy exists", "workflow_id", wi.workflowID)
+					// TODO: hum that's a bug no? we append all the time, we shouldn't update the hierarchy
 					// Update existing hierarchy with new execution ID
 					hierarchy := hierarchies[0]
 					hierarchy.ChildExecutionID = wi.executionID
 					if err = wi.db.UpdateHierarchy(hierarchy); err != nil {
-						return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to update hierarchy: %w", err))
+						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to update hierarchy: %w", err))
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						return err
 					}
 				}
 			}
+
+			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID)
 
 			// Run the real workflow
 			workflowOutput, workflowErr := wi.runWorkflow(inputs)
 
 			// success case
 			if workflowErr == nil {
+				logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID)
 				// Success
 				wi.mu.Lock()
 
 				// if we detected a pause
 				if workflowOutput.Paused {
+					logger.Debug(wi.ctx, "workflow instance detected pause", "workflow_id", wi.workflowID)
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusPaused)); err != nil {
 						wi.mu.Unlock()
-						return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status paused: %w", err))
+						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status paused: %w", err))
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						return err
 					}
-					wi.fsm.Fire(TriggerPause)
 
+					wi.fsm.Fire(TriggerPause)
 				} else {
+					logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID)
 					// normal case
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusCompleted)); err != nil {
 						wi.mu.Unlock()
-						return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status to completed: %w", err))
+						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status completed: %w", err))
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						return err
 					}
 
 					wi.fsm.Fire(TriggerComplete, workflowOutput)
-
 				}
 
 				wi.mu.Unlock()
 
 				return nil
 			} else {
+				logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID)
 				// real failure
 				wi.mu.Lock()
 
@@ -1438,7 +1645,9 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 					setters...,
 				); err != nil {
 					wi.mu.Unlock()
-					return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status real failure error: %w", err))
+					err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status failed: %w", err))
+					logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+					return err
 				}
 
 				wi.mu.Unlock()
@@ -1449,14 +1658,21 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 			if err = wi.db.
 				SetWorkflowEntityProperties(wi.workflowID,
 					SetWorkflowEntityRetryState(retryState)); err != nil {
-				return errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow entity retry state: %w", err))
+				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow entity retry state: %w", err))
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+				return err
 			}
 
+			logger.Debug(wi.ctx, "workflow instance failed (might be retried)", "workflow_id", wi.workflowID, "retry_attempts", retryState.Attempts)
+
+			logger.Error(wi.ctx, workflowErr.Error(), "workflow_id", wi.workflowID)
 			return retry.RetryableError(workflowErr) // directly return the workflow error, if the execution failed we will retry eventually
 		}); err != nil {
 		// Max attempts reached and not resumable
 		wi.mu.Lock()
 		// the whole workflow entity failed
+		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to execute workflow instance: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 		wi.fsm.Fire(TriggerFail, err)
 
 		wi.mu.Unlock()
@@ -1470,20 +1686,27 @@ var ErrWorkflowInstanceRun = errors.New("failed to run workflow instance")
 // Whatever happen in the runWorkflow is interpreted for form the WorkflowOutput or an error
 func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *WorkflowOutput, err error) {
 
+	logger.Debug(wi.ctx, "workflow instance run workflow", "workflow_id", wi.workflowID)
+
 	// Get the latest execution, which may be nil if none exist
 	latestExecution, err := wi.db.GetWorkflowExecutionLatestByEntityID(wi.workflowID)
 	if err != nil {
 		// Only return if there's an actual error)
-		return nil, errors.Join(ErrWorkflowInstanceRun, err)
+		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to get latest workflow execution: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return nil, err
 	}
 
 	// No need to run it
+	// Technically, that's handled at the contest level
+	// TODO: is that really necessary?!?!
 	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
-
+		logger.Debug(wi.ctx, "workflow instance run workflow already completed", "workflow_id", wi.workflowID)
 		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Outputs)
 		if err != nil {
-
-			return nil, errors.Join(ErrWorkflowInstanceRun, err)
+			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to convert outputs from serialization: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return nil, err
 		}
 		return &WorkflowOutput{
 			Outputs: outputs,
@@ -1517,8 +1740,9 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 
 	var workflowInputs [][]byte
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataInputs(&workflowInputs)); err != nil {
-
-		return nil, errors.Join(ErrWorkflowInstanceRun, err)
+		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to get workflow data inputs: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return nil, err
 	}
 
 	argsValues := []reflect.Value{reflect.ValueOf(ctxWorkflow)}
@@ -1534,13 +1758,14 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 			stackTrace := string(buf[:n])
 
 			if wi.debug.canStackTrace() {
-
+				fmt.Println(stackTrace)
 			}
 
 			wi.mu.Lock()
 
 			// allow the caller to know about the panic
-			err = ErrWorkflowPanicked
+			err = errors.Join(ErrWorkflowInstanceRun, ErrWorkflowPanicked)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 			// due to the `err` it will trigger the fail state
 			outputs = &WorkflowOutput{
 				StrackTrace: &stackTrace,
@@ -1552,8 +1777,9 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 
 	select {
 	case <-wi.ctx.Done():
-
-		return nil, wi.ctx.Err()
+		err := errors.Join(ErrWorkflowInstanceRun, wi.ctx.Err(), fmt.Errorf("workflow instance context done: %w", wi.ctx.Err()))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return nil, err
 	default:
 	}
 
@@ -1561,9 +1787,9 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 
 	numOut := len(results)
 	if numOut == 0 {
-		err := fmt.Errorf("function %s should return at least an error", handler.HandlerName)
-
-		return nil, errors.Join(ErrWorkflowInstanceRun, err)
+		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("function %s should return at least an error", handler.HandlerName))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return nil, err
 	}
 
 	errInterface := results[numOut-1].Interface()
@@ -1582,33 +1808,38 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	if realError, ok = errInterface.(error); ok {
 		// could be a fake error to trigger a pause
 		if errors.Is(realError, ErrPaused) {
-
 			realError = nil // mute the error
 			pausedDetected = true
 		}
 	}
 
 	if realError != nil {
+		logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID)
 
 		// Update execution error
 		if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionError(realError.Error())); err != nil {
 			// wi.mu.Unlock()
-			return nil, errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution status error: %w", err))
+			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution error: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return nil, err
 		}
 
 		// Emptied the output data
 		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
 			// wi.mu.Unlock()
-			return nil, errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
+			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return nil, err
 		}
 
 		return nil, realError
 	} else {
+		logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID)
+
 		outputs := []interface{}{}
 		if numOut > 1 {
 			for i := 0; i < numOut-1; i++ {
 				result := results[i].Interface()
-
 				outputs = append(outputs, result)
 			}
 		}
@@ -1616,14 +1847,17 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		// Serialize output
 		outputBytes, err := convertOutputsForSerialization(outputs)
 		if err != nil {
-
-			return nil, errors.Join(ErrWorkflowInstanceRun, err)
+			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to convert outputs for serialization: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return nil, err
 		}
 
 		// save result
 		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
 			// wi.mu.Unlock()
-			return nil, errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
+			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return nil, err
 		}
 
 		// We do not take risk to sent back an instruction
@@ -1647,27 +1881,37 @@ var ErrWorkflowInstanceCompleted = errors.New("failed to complete workflow insta
 
 func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(wi.ctx, "workflow instance on completed", "workflow_id", wi.workflowID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("WorkflowInstance onCompleted expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("WorkflowInstance onCompleted expected 1 argument, got %d", len(args)))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	var ok bool
 	var workflowOutput *WorkflowOutput
 	if workflowOutput, ok = args[0].(*WorkflowOutput); !ok {
-		return errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("WorkflowInstance onCompleted expected argument to be *WorkflowOutput, got %T", args[0]))
+		err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("WorkflowInstance onCompleted expected argument to be *WorkflowOutput, got %T", args[0]))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	var err error
 
 	var isRoot bool
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
-		return errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to get workflow data properties: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	// Handle ContinueAsNew
 	// We re-create a new workflow entity to that related to that workflow
 	// It will run on another worker on it's own, we are use preparing it
 	if workflowOutput.ContinueAsNewOptions != nil {
+
+		logger.Debug(wi.ctx, "workflow instance continue as new", "workflow_id", wi.workflowID)
 
 		wi.mu.Lock()
 		handler := wi.handler
@@ -1687,13 +1931,15 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 				parentRunID:               wi.runID,
 			},
 			workflowOutput.ContinueAsNewArgs...); err != nil {
-
+			err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to prepare workflow: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 			return err
 		}
 
 		// Use the callback if available
 		// Otherwise, you will have to use ExecuteWithEntity to manually trigger the workflow
 		if wi.onContinueAsNew != nil {
+			logger.Debug(wi.ctx, "workflow instance created continue as new", "workflow_id", wi.workflowID)
 			queue := wi.options.Queue
 			if workflowOutput.ContinueAsNewOptions.Queue != "" {
 				queue = workflowOutput.ContinueAsNewOptions.Queue
@@ -1708,31 +1954,37 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 				workflowOutput.ContinueAsNewOptions,
 				workflowOutput.ContinueAsNewArgs...,
 			)
+		} else {
+			logger.Debug(wi.ctx, "workflow instance continue as new require manual execution", "workflow_id", wi.workflowID)
 		}
 		// end continue as new
 	}
 
 	if isRoot {
-
+		logger.Debug(wi.ctx, "workflow instance is root for completion", "workflow_id", wi.workflowID)
 		if err = wi.db.SetRunProperties(wi.runID, SetRunStatus(RunStatusCompleted)); err != nil {
-
+			err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to set run status completed: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 			return err
 		}
 
 		if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusCompleted)); err != nil {
-
+			err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to set workflow execution status completed: %w", err))
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 			return err
 		}
-
 	}
 
 	if err = wi.db.SetWorkflowEntityProperties(wi.workflowID, SetWorkflowEntityStatus(StatusCompleted)); err != nil {
 		// wi.mu.Unlock()
-		return errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to set workflow entity status: %w", err))
+		err := errors.Join(ErrWorkflowInstanceCompleted, fmt.Errorf("failed to set workflow entity status: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	// Normal completion
 	if wi.future != nil {
+		logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID)
 		wi.future.setResult(workflowOutput.Outputs)
 	}
 
@@ -1743,10 +1995,14 @@ var ErrWorkflowInstanceFailed = errors.New("failed to fail workflow instance")
 
 func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(wi.ctx, "workflow instance on failed", "workflow_id", wi.workflowID)
+
 	var err error
 
 	if len(args) != 1 {
-		return errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("WorkfloInstance onFailed expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("WorkfloInstance onFailed expected 1 argument, got %d", len(args)))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	err = args[0].(error)
@@ -1755,27 +2011,36 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 
 	var isRoot bool
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
-		return errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to get workflow data properties: %w", err))
+		err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to get workflow data properties: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	if wi.ctx.Err() != nil {
 		if errors.Is(wi.ctx.Err(), context.Canceled) {
 			if err := wi.db.SetWorkflowExecutionProperties(wi.workflowID, SetWorkflowExecutionStatus(ExecutionStatusCancelled)); err != nil {
-				return errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set Workflow execution status cancelled: %w", err))
+				err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set Workflow execution status cancelled: %w", err))
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+				return err
 			}
 			if err := wi.db.SetWorkflowEntityProperties(wi.workflowID, SetWorkflowEntityStatus(StatusCancelled)); err != nil {
-				return errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set Workflow entity status: %w", err))
+				err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set Workflow entity status cancelled: %w", err))
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+				return err
 			}
 
 			// If this is the root workflow, update the Run status to Failed
 			if isRoot {
 				// Entity is now a failure
 				if err = wi.db.SetRunProperties(wi.runID, SetRunStatus(RunStatusCancelled)); err != nil {
-					return errors.Join(ErrWorkflowInstanceFailed, err)
+					err := errors.Join(ErrWorkflowInstanceFailed, err)
+					logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+					return err
 				}
 			}
 
 			if wi.future != nil {
+				logger.Debug(wi.ctx, "workflow instance cancelled", "workflow_id", wi.workflowID, "error", wi.ctx.Err())
 				wi.future.setError(wi.ctx.Err())
 			}
 
@@ -1789,20 +2054,28 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 			wi.workflowID,
 			SetWorkflowEntityStatus(StatusFailed),
 		); err != nil {
-		return errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set workflow entity status: %w", err))
+		err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set workflow entity status: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
 	}
 
 	// If this is the root workflow, update the Run status to Failed
 	if isRoot {
 		// Entity is now a failure
 		if err = wi.db.SetRunProperties(wi.runID, SetRunStatus(RunStatusFailed)); err != nil {
-			return errors.Join(ErrWorkflowInstanceFailed, err)
+			err := errors.Join(ErrWorkflowInstanceFailed, err)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			return err
 		}
 	}
 
 	if wi.future != nil {
-		wi.future.setError(errors.Join(ErrWorkflowInstanceFailed, joinedErr))
+		err := errors.Join(ErrWorkflowInstanceFailed, joinedErr)
+		logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
+		wi.future.setError(err)
 	}
+
+	logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
 
 	return nil
 }
@@ -1811,18 +2084,27 @@ var ErrWorkflowInstancePaused = errors.New("failed to pause workflow instance")
 
 func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
+	logger.Debug(wi.ctx, "workflow instance on paused", "workflow_id", wi.workflowID)
+
 	if wi.future != nil {
-		wi.future.setError(ErrPaused)
+		err := errors.Join(ErrWorkflowInstancePaused, ErrPaused)
+		logger.Debug(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		wi.future.setError(err)
 	}
+
 	var err error
 
 	// Tell the orchestrator to manage the case
 	if err = wi.tracker.onPause(); err != nil {
+		err := errors.Join(ErrWorkflowInstancePaused, fmt.Errorf("failed to pause orchestrator: %w", err))
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 		if wi.future != nil {
 			wi.future.setError(err)
 		}
-		return errors.Join(ErrWorkflowInstancePaused, fmt.Errorf("failed to pause orchestrator: %w", err))
+		return err
 	}
+
+	logger.Debug(wi.ctx, "workflow instance paused", "workflow_id", wi.workflowID)
 
 	return nil
 }
@@ -1834,10 +2116,15 @@ var ErrActivityContext = errors.New("failed activity context")
 func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) Future {
 	var err error
 
-	if err = ctx.checkPause(); err != nil {
+	logger.Debug(ctx.ctx, "activity context", "workflow_id", ctx.workflowID, "step_id", stepID)
 
+	if err = ctx.checkPause(); err != nil {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrActivityContext, err))
+		err := errors.Join(ErrActivityContext, err)
+		if !errors.Is(err, ErrPaused) {
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		}
+		future.setError(err)
 		return future
 	}
 
@@ -1846,8 +2133,9 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	// Register activity on-the-fly
 	handler, err := ctx.registry.RegisterActivity(activityFunc)
 	if err != nil {
-
-		future.setError(errors.Join(ErrActivityContext, err))
+		err := errors.Join(ErrActivityContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -1857,7 +2145,9 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	var hierarchies []*Hierarchy
 	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntityActivity); err != nil {
 		if !errors.Is(err, ErrHierarchyNotFound) {
-			future.setError(errors.Join(ErrActivityContext, err))
+			err := errors.Join(ErrActivityContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 	}
@@ -1865,26 +2155,32 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	// Convert inputs to [][]byte
 	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
-
-		future.setError(errors.Join(ErrActivityContext, err))
+		err := errors.Join(ErrActivityContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
 	// If we have existing hierarchies
 	if len(hierarchies) > 0 {
+		logger.Debug(ctx.ctx, "activity context existing", "workflow_id", ctx.workflowID, "step_id", stepID)
 		// Check if we have multiple different entity IDs (shouldn't happen)
 		activityEntityID = hierarchies[0].ChildEntityID
 		for _, h := range hierarchies[1:] {
 			if h.ChildEntityID != activityEntityID {
-
+				// TODO: wat?!
 			}
 		}
+
+		// If not completed, reuse the existing activity entity for retry
+		future.setEntityID(activityEntityID)
 
 		// Check the latest execution for completion
 		var activityExecution *ActivityExecution
 		if activityExecution, err = ctx.db.GetActivityExecution(hierarchies[0].ChildExecutionID); err != nil {
-
-			future.setError(errors.Join(ErrActivityContext, err))
+			err := errors.Join(ErrActivityContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 
@@ -1893,27 +2189,27 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 
 			var activityExecutionData *ActivityExecutionData
 			if activityExecutionData, err = ctx.db.GetActivityExecutionData(activityExecution.ID); err != nil {
-
-				future.setError(errors.Join(ErrActivityContext, err))
+				err := errors.Join(ErrActivityContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
 
 			outputs, err := convertOutputsFromSerialization(handler, activityExecutionData.Outputs)
 			if err != nil {
-
-				future.setError(errors.Join(ErrActivityContext, err))
+				err := errors.Join(ErrActivityContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
 
+			logger.Debug(ctx.ctx, "activity context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 			future.setResult(outputs)
 			return future
 		}
-
-		// If not completed, reuse the existing activity entity for retry
-		future.setEntityID(activityEntityID)
 	} else {
 		// No existing activity entity found, create a new one
-
+		logger.Debug(ctx.ctx, "activity context create new", "workflow_id", ctx.workflowID, "step_id", stepID)
 		// Convert API RetryPolicy to internal retry policy
 		var internalRetryPolicy *retryPolicyInternal = &retryPolicyInternal{}
 
@@ -1947,18 +2243,22 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 				Inputs: inputBytes,
 			},
 		}, ctx.workflowID); err != nil {
-
-			future.setError(errors.Join(ErrActivityContext, err))
+			err := errors.Join(ErrActivityContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 
 		future.setEntityID(activityEntityID)
 	}
 
+	logger.Debug(ctx.ctx, "activity context start", "workflow_id", ctx.workflowID, "step_id", stepID)
+
 	var data *ActivityData
 	if data, err = ctx.db.GetActivityDataByEntityID(activityEntityID); err != nil {
-
-		future.setError(errors.Join(ErrActivityContext, err))
+		err := errors.Join(ErrActivityContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 	}
 
 	var cancel context.CancelFunc
@@ -1995,10 +2295,14 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 
 	inputs, err := convertInputsFromSerialization(handler, inputBytes)
 	if err != nil {
-
+		err := errors.Join(ErrActivityContext, ErrSerialization, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
+		return future
 	}
 
 	ctx.tracker.addActivityInstance(activityInstance)
+	logger.Debug(ctx.ctx, "activity context start activity", "workflow_id", ctx.workflowID, "step_id", stepID)
 	activityInstance.Start(inputs) // synchronous because we want to know when it's done for real, the future will sent back the data anyway
 
 	return future
@@ -2041,6 +2345,7 @@ type ActivityInstance struct {
 var ErrActivityInstance = errors.New("failed activity instance")
 
 func (ai *ActivityInstance) Start(inputs []interface{}) {
+	logger.Debug(ai.ctx, "activity instance start", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 	// ai.mu.Lock()
 	// Initialize the FSM
 	ai.fsm = stateless.NewStateMachine(StateIdle)
@@ -2065,17 +2370,25 @@ func (ai *ActivityInstance) Start(inputs []interface{}) {
 		Permit(TriggerResume, StateExecuting)
 	// ai.mu.Unlock()
 
+	logger.Debug(ai.ctx, "activity instance fsm configured", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 	// Start the FSM
 	if err := ai.fsm.Fire(TriggerStart, inputs); err != nil {
-		ai.future.setError(errors.Join(ErrActivityInstance, err))
+		err := errors.Join(ErrActivityInstance, err)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		ai.future.setError(err)
 	}
 }
 
 var ErrActivityInstanceExecute = errors.New("failed to execute activity instance")
 
 func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface{}) error {
+
+	logger.Debug(ai.ctx, "activity instance execute", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("ActivityInstance executeActivity expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("ActivityInstance executeActivity expected 1 argument, got %d", len(args)))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 
 	var err error
@@ -2089,7 +2402,9 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 	maxAttempts, maxInterval = getRetryPolicyOrDefault(ai.options.RetryPolicy)
 
 	if inputs, ok = args[0].([]interface{}); !ok {
-		return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("ActivityInstance executeActivity expected argument to be []interface{}, got %T", args[0]))
+		err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("ActivityInstance executeActivity expected argument to be []interface{}, got %T", args[0]))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 
 	if err := retry.Do(
@@ -2101,6 +2416,8 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 		// only the execution might change
 		func(ctx context.Context) error {
 
+			logger.Debug(ai.ctx, "activity instance execute retry", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 			// now we can create and set the execution id
 			if ai.executionID, err = ai.db.AddActivityExecution(&ActivityExecution{
 				BaseExecution: BaseExecution{
@@ -2110,7 +2427,8 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 				ActivityExecutionData: &ActivityExecutionData{},
 			}); err != nil {
 				ai.mu.Lock()
-
+				err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to add activity execution: %w", err))
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 				ai.fsm.Fire(TriggerFail, err)
 				ai.mu.Unlock()
 				return err
@@ -2129,35 +2447,44 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 				ChildType:         EntityActivity,
 			}); err != nil {
 				// ai.mu.Unlock()
-				return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to add hierarchy: %w", err))
+				err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to add hierarchy: %w", err))
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				return err
 			}
 
 			// run the real activity
 			activityOutput, activityErr := ai.runActivity(inputs)
 
 			if activityErr == nil {
+				logger.Debug(ai.ctx, "activity instance execute completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 
 				ai.mu.Lock()
 
 				if activityOutput.Paused {
+					logger.Debug(ai.ctx, "activity instance execute paused", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 
 					if err = ai.db.SetActivityExecutionProperties(
 						ai.executionID,
 						SetActivityExecutionStatus(ExecutionStatusPaused),
 					); err != nil {
 						ai.mu.Unlock()
-						return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution status: %w", err))
+						err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution status: %w", err))
+						logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+						return err
 					}
 					ai.fsm.Fire(TriggerPause)
 
 				} else {
+					logger.Debug(ai.ctx, "activity instance execute completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 
 					if err = ai.db.SetActivityExecutionProperties(
 						ai.executionID,
 						SetActivityExecutionStatus(ExecutionStatusCompleted),
 					); err != nil {
 						ai.mu.Unlock()
-						return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution status: %w", err))
+						err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution status: %w", err))
+						logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+						return err
 					}
 
 					ai.fsm.Fire(TriggerComplete, activityOutput)
@@ -2167,11 +2494,13 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 
 				return nil
 			} else {
+				logger.Debug(ai.ctx, "activity instance execute failed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 
 				if errors.Is(activityErr, context.Canceled) {
 					// Context cancelled
 					ai.mu.Lock()
-					ai.fsm.Fire(TriggerFail, activityErr)
+					err := errors.Join(ErrActivityInstanceExecute, activityErr)
+					ai.fsm.Fire(TriggerFail, err)
 					ai.mu.Unlock()
 					return activityErr
 				}
@@ -2195,7 +2524,9 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 					setters...,
 				); err != nil {
 					ai.mu.Unlock()
-					return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution status: %w", err))
+					err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activity execution properties: %w", err))
+					logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+					return err
 				}
 
 				ai.mu.Unlock()
@@ -2207,13 +2538,17 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 			if err = ai.db.
 				SetActivityEntityProperties(ai.entityID,
 					SetActivityEntityRetryState(retryState)); err != nil {
-				return errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activty entity retry state: %w", err))
+				err := errors.Join(ErrActivityInstanceExecute, fmt.Errorf("failed to set activty entity retry state: %w", err))
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				return err
 			}
 
 			return retry.RetryableError(activityErr) // directly return the activty error, if the execution failed we will retry eventually
 		}); err != nil {
 		// Max attempts reached and not resumable
 		ai.mu.Lock()
+		err := errors.Join(ErrActivityInstanceExecute, err)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 		// the whole activty entity failed
 		ai.fsm.Fire(TriggerFail, err)
 
@@ -2227,10 +2562,13 @@ var ErrActivityInstanceRun = errors.New("failed to run activity instance")
 // Sub-function within executeWithRetry
 func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *ActivityOutput, err error) {
 
+	logger.Debug(ai.ctx, "activity instance run", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 	activityExecution, err := ai.db.GetActivityExecutionLatestByEntityID(ai.entityID)
 	if err != nil {
-
-		return nil, errors.Join(ErrActivityInstanceRun, err)
+		err := errors.Join(ErrActivityInstanceRun, err)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return nil, err
 	}
 
 	if activityExecution != nil && activityExecution.Status == ExecutionStatusCompleted &&
@@ -2239,8 +2577,9 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 		outputsData, err := convertOutputsFromSerialization(ai.handler, activityExecution.ActivityExecutionData.Outputs)
 		if err != nil {
-
-			return nil, errors.Join(ErrActivityInstanceRun, err)
+			err := errors.Join(ErrActivityInstanceRun, err)
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			return nil, err
 		}
 		return &ActivityOutput{
 			Outputs: outputsData,
@@ -2258,12 +2597,13 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 			stackTrace := string(buf[:n])
 
 			if ai.debug.canStackTrace() {
-
+				fmt.Println(stackTrace)
 			}
 
 			ai.mu.Lock()
 			// allow the caller to know about the panic
-			err = ErrActivityPanicked
+			err = errors.Join(ErrActivityInstanceRun, ErrActivityPanicked)
+			logger.Error(ai.ctx, fmt.Sprintf("activity panicked: %v", r), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 			outputs = &ActivityOutput{
 				StrackTrace: &stackTrace,
 			}
@@ -2274,8 +2614,9 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 	var activityInputs [][]byte
 	if err = ai.db.GetActivityDataProperties(ai.entityID, GetActivityDataInputs(&activityInputs)); err != nil {
-
-		return nil, errors.Join(ErrActivityInstanceRun, err)
+		err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to get activity data inputs: %w", err))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return nil, err
 	}
 
 	argsValues := []reflect.Value{reflect.ValueOf(ActivityContext{ai.ctx})}
@@ -2285,21 +2626,24 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 	select {
 	case <-ai.ctx.Done():
-
-		return nil, errors.Join(ErrActivityInstanceRun, ai.ctx.Err())
+		err := errors.Join(ErrActivityInstanceRun, ai.ctx.Err())
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return nil, err
 	default:
 	}
 
 	results := reflect.ValueOf(activityFunc).Call(argsValues)
 	numOut := len(results)
 	if numOut == 0 {
-		err := fmt.Errorf("activity %s should return at least an error", handler.HandlerName)
-
-		return nil, errors.Join(ErrActivityInstanceRun, err)
+		err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("activity %s should return at least an error", handler.HandlerName))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return nil, err
 	}
 
 	errInterface := results[numOut-1].Interface()
 	if errInterface != nil {
+
+		logger.Debug(ai.ctx, "activity instance run failed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 
 		errActivity := errInterface.(error)
 
@@ -2310,23 +2654,29 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 		if err = ai.db.SetActivityExecutionProperties(
 			ai.entityID,
 			SetActivityExecutionError(errorMessage)); err != nil {
-			return nil, errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution error: %w", err))
+			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution error: %w", err))
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			return nil, err
 		}
 
 		// Update the execution with the execution data
 		if err = ai.db.SetActivityExecutionDataProperties(
 			ai.entityID,
 			SetActivityExecutionDataOutputs(nil)); err != nil {
-			return nil, errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
+			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			return nil, err
 		}
 
 		return nil, errors.Join(ErrActivityInstanceRun, errActivity)
 	} else {
+
+		logger.Debug(ai.ctx, "activity instance run completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 		outputs := []interface{}{}
 		if numOut > 1 {
 			for i := 0; i < numOut-1; i++ {
 				result := results[i].Interface()
-
 				outputs = append(outputs, result)
 			}
 		}
@@ -2334,15 +2684,18 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 		// Serialize output
 		outputBytes, err := convertOutputsForSerialization(outputs)
 		if err != nil {
-
-			return nil, errors.Join(ErrActivityInstanceRun, err)
+			err := errors.Join(ErrActivityInstanceRun, err)
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			return nil, err
 		}
 
 		// Update the execution with the execution data
 		if err = ai.db.SetActivityExecutionDataProperties(
 			ai.entityID,
 			SetActivityExecutionDataOutputs(outputBytes)); err != nil {
-			return nil, errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
+			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			return nil, err
 		}
 
 		return &ActivityOutput{
@@ -2355,17 +2708,24 @@ var ErrActivityInstanceCompleted = errors.New("failed to complete activity insta
 
 func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("activity instance onCompleted expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("activity instance onCompleted expected 1 argument, got %d", len(args)))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 
 	if ai.future != nil {
 		activtyOutput := args[0].(*ActivityOutput)
+		logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 		ai.future.setResult(activtyOutput.Outputs)
 	}
 
 	if err := ai.db.SetActivityEntityProperties(ai.entityID, SetActivityEntityStatus(StatusCompleted)); err != nil {
-		return errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("failed to set activity entity status: %w", err))
+		err := errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("failed to set activity entity status: %w", err))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 
 	return nil
@@ -2375,21 +2735,32 @@ var ErrActivityInstanceFailed = errors.New("failed to fail activity instance")
 
 func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(ai.ctx, "activity instance failed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrActivityInstanceFailed, fmt.Errorf("activity instance onFailed expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("activity instance onFailed expected 1 argument, got %d", len(args)))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 	if ai.future != nil {
 		err := args[0].(error)
-		ai.future.setError(errors.Join(ErrActivityInstanceFailed, err))
+		err = errors.Join(ErrActivityInstanceFailed, err)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		ai.future.setError(err)
 	}
 
 	if ai.ctx.Err() != nil {
 		if errors.Is(ai.ctx.Err(), context.Canceled) {
+			logger.Debug(ai.ctx, "activity instance cancelled", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 			if err := ai.db.SetActivityExecutionProperties(ai.entityID, SetActivityExecutionStatus(ExecutionStatusCancelled)); err != nil {
-				return errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity execution status: %w", err))
+				err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity execution status: %w", err))
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				return err
 			}
 			if err := ai.db.SetActivityEntityProperties(ai.entityID, SetActivityEntityStatus(StatusCancelled)); err != nil {
-				return errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
+				err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				return err
 			}
 			return nil
 		}
@@ -2399,7 +2770,9 @@ func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) err
 		ai.entityID,
 		SetActivityEntityStatus(StatusFailed),
 	); err != nil {
-		return errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
+		err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		return err
 	}
 
 	return nil
@@ -2410,9 +2783,11 @@ var ErrActivityInstancePaused = errors.New("failed to pause activity instance")
 // In theory, the behavior of the pause doesn't exists
 // The Activity is supposed to finish what it was doing, the developer own the responsibility to detect the cancellation of it's own context.
 func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error {
-
+	logger.Debug(ai.ctx, "activity instance paused", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 	if ai.future != nil {
-		ai.future.setError(errors.Join(ErrActivityInstancePaused, ErrPaused))
+		err := errors.Join(ErrActivityInstancePaused, ErrPaused)
+		logger.Debug(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		ai.future.setError(err)
 	}
 	return nil
 }
@@ -2429,11 +2804,15 @@ var ErrSideEffectContext = errors.New("failed side effect context")
 
 func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) Future {
 	var err error
+	logger.Debug(ctx.ctx, "side effect context", "workflow_id", ctx.workflowID, "step_id", stepID)
 
 	if err = ctx.checkPause(); err != nil {
-
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrActivityInstancePaused, err))
+		err := errors.Join(ErrSideEffectContext, err)
+		if !errors.Is(err, ErrPaused) {
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		}
+		future.setError(err)
 		return future
 	}
 
@@ -2442,8 +2821,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	// Register side effect on-the-fly
 	handler, err := ctx.registry.RegisterSideEffect(sideEffectFunc)
 	if err != nil {
-
-		future.setError(errors.Join(ErrActivityInstancePaused, err))
+		err := errors.Join(ErrSideEffectContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -2452,8 +2832,10 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	// First check if there's an existing side effect entity for this workflow and step
 	var sideEffectEntities []*SideEffectEntity
 	if sideEffectEntities, err = ctx.db.GetSideEffectEntities(ctx.workflowID, SideEffectEntityWithData()); err != nil {
+		err := errors.Join(ErrSideEffectContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
 		if !errors.Is(err, ErrSideEffectEntityNotFound) {
-			future.setError(errors.Join(ErrActivityInstancePaused, err))
+			future.setError(err)
 			return future
 		}
 	}
@@ -2472,7 +2854,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	if entity != nil {
 		execs, err := ctx.db.GetSideEffectExecutions(entity.ID)
 		if err != nil {
-			future.setError(errors.Join(ErrActivityInstancePaused, err))
+			err := errors.Join(ErrSideEffectContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 
@@ -2482,16 +2866,21 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 				// Get the execution data
 				execData, err := ctx.db.GetSideEffectExecutionDataByExecutionID(exec.ID)
 				if err != nil {
-					future.setError(errors.Join(ErrActivityInstancePaused, err))
+					err := errors.Join(ErrSideEffectContext, err)
+					logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+					future.setError(err)
 					return future
 				}
 				if execData != nil && len(execData.Outputs) > 0 {
 					// Reuse the existing result
 					outputs, err := convertOutputsFromSerialization(handler, execData.Outputs)
 					if err != nil {
-						future.setError(errors.Join(ErrActivityInstancePaused, err))
+						err := errors.Join(ErrSideEffectContext, err)
+						logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+						future.setError(err)
 						return future
 					}
+					logger.Debug(ctx.ctx, "side effect context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 					future.setEntityID(sideEffectEntityID)
 					future.setResult(outputs)
 					return future
@@ -2502,6 +2891,7 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 
 	// No existing completed execution found, proceed with creating new entity/execution
 	if entity == nil {
+		logger.Debug(ctx.ctx, "side effect context create new", "workflow_id", ctx.workflowID, "step_id", stepID)
 		if sideEffectEntityID, err = ctx.db.AddSideEffectEntity(&SideEffectEntity{
 			BaseEntity: BaseEntity{
 				RunID:       ctx.runID,
@@ -2518,8 +2908,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 			},
 			SideEffectData: &SideEffectData{},
 		}, ctx.workflowID); err != nil {
-
-			future.setError(errors.Join(ErrActivityInstancePaused, err))
+			err := errors.Join(ErrSideEffectContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 	}
@@ -2528,8 +2919,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 
 	var data *SideEffectData
 	if data, err = ctx.db.GetSideEffectDataByEntityID(sideEffectEntityID); err != nil {
-
-		future.setError(errors.Join(ErrActivityInstancePaused, err))
+		err := errors.Join(ErrSideEffectContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID, "entity_id", sideEffectEntityID)
+		future.setError(err)
 		return future
 	}
 
@@ -2556,6 +2948,8 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	}
 
 	ctx.tracker.addSideEffectInstance(instance)
+
+	logger.Debug(ctx.ctx, "side effect context start", "workflow_id", ctx.workflowID, "step_id", stepID)
 	instance.Start()
 
 	return future
@@ -2624,6 +3018,8 @@ var ErrSideEffectInstanceExecute = errors.New("failed to execute side effect ins
 func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...interface{}) error {
 	var err error
 
+	logger.Debug(si.ctx, "side effect instance execute", "workflow_id", si.workflowID, "step_id", si.stepID)
+
 	// Create execution before trying side effect
 	if si.executionID, err = si.db.AddSideEffectExecution(&SideEffectExecution{
 		BaseExecution: BaseExecution{
@@ -2632,10 +3028,12 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		},
 		SideEffectExecutionData: &SideEffectExecutionData{},
 	}); err != nil {
+		err := errors.Join(ErrSideEffectInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setError(errors.Join(ErrSideEffectInstanceExecute, err))
+			si.future.setError(err)
 		}
-		return errors.Join(ErrSideEffectInstanceExecute, err)
+		return err
 	}
 
 	// Add hierarchy
@@ -2650,10 +3048,12 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		ParentType:        EntityWorkflow,
 		ChildType:         EntitySideEffect,
 	}); err != nil {
+		err := errors.Join(ErrSideEffectInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setError(fmt.Errorf("failed to add hierarchy: %w", err))
+			si.future.setError(err)
 		}
-		return fmt.Errorf("failed to add hierarchy: %w", err)
+		return err
 	}
 
 	// Run side effect just once
@@ -2666,12 +3066,15 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		if err = si.db.SetSideEffectExecutionProperties(
 			si.executionID,
 			SetSideEffectExecutionStatus(ExecutionStatusCompleted)); err != nil {
+			err := errors.Join(ErrSideEffectInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			if si.future != nil {
-				si.future.setError(errors.Join(ErrSideEffectInstanceExecute, err))
+				si.future.setError(err)
 			}
-			return errors.Join(ErrSideEffectInstanceExecute, err)
+			return err
 		}
 
+		logger.Debug(si.ctx, "side effect instance execute completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setResult(output.Outputs)
 		}
@@ -2690,21 +3093,26 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 	}
 
 	if err = si.db.SetSideEffectExecutionProperties(si.executionID, setters...); err != nil {
+		err := errors.Join(ErrSideEffectInstanceExecute, execErr, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setError(execErr)
+			si.future.setError(err)
 		}
-		return errors.Join(ErrSideEffectInstanceExecute, execErr)
+		return err
 	}
 
 	if err = si.db.SetSideEffectEntityProperties(
 		si.entityID,
 		SetSideEffectEntityStatus(StatusFailed)); err != nil {
+		err := errors.Join(ErrSideEffectInstanceExecute, execErr, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setError(execErr)
+			si.future.setError(err)
 		}
-		return errors.Join(ErrSideEffectInstanceExecute, execErr)
+		return err
 	}
 
+	logger.Error(si.ctx, "side effect instance execute failed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setError(execErr)
 	}
@@ -2715,6 +3123,8 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 var ErrSideEffectRun = errors.New("failed to run side effect")
 
 func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err error) {
+	logger.Debug(si.ctx, "side effect instance run", "workflow_id", si.workflowID, "step_id", si.stepID)
+
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 4096)
@@ -2726,12 +3136,15 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 			}
 
 			err = errors.Join(ErrSideEffectRun, ErrSideEffectPanicked)
+			logger.Error(si.ctx, fmt.Sprintf("side effect panicked: %v", r), "workflow_id", si.workflowID, "step_id", si.stepID)
 		}
 	}()
 
 	select {
 	case <-si.ctx.Done():
-		return nil, errors.Join(ErrSideEffectRun, si.ctx.Err())
+		err := errors.Join(ErrSideEffectRun, si.ctx.Err())
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return nil, err
 	default:
 	}
 
@@ -2743,13 +3156,17 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 
 	outputBytes, err := convertOutputsForSerialization(outputs)
 	if err != nil {
-		return nil, errors.Join(ErrSideEffectRun, err)
+		err := errors.Join(ErrSideEffectRun, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return nil, err
 	}
 
 	if err = si.db.SetSideEffectExecutionDataProperties(
 		si.entityID,
 		SetSideEffectExecutionDataOutputs(outputBytes)); err != nil {
-		return nil, errors.Join(ErrSideEffectRun, err)
+		err := errors.Join(ErrSideEffectRun, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return nil, err
 	}
 
 	return &SideEffectOutput{
@@ -2761,22 +3178,31 @@ var ErrSideEffectInstanceCompleted = errors.New("failed to complete side effect 
 
 func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected 1 argument"))
+		err := errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected 1 argument, got %d", len(args)))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
 	var ok bool
 	var sideEffectOutput *SideEffectOutput
 	if sideEffectOutput, ok = args[0].(*SideEffectOutput); !ok {
-		return errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected *SideEffectOutput"))
+		err := errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected *SideEffectOutput"))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
 	if err := si.db.SetSideEffectEntityProperties(
 		si.entityID,
 		SetSideEffectEntityStatus(StatusCompleted)); err != nil {
-		return errors.Join(ErrSideEffectInstanceCompleted, err)
+		err := errors.Join(ErrSideEffectInstanceCompleted, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
+	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setResult(sideEffectOutput.Outputs)
 	}
@@ -2788,12 +3214,17 @@ var ErrSideEffectInstanceFailed = errors.New("failed to fail side effect instanc
 
 func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) error {
 
+	logger.Debug(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
+
 	if len(args) != 1 {
-		return errors.Join(ErrSideEffectInstanceFailed, fmt.Errorf("activity instance onFailed expected 1 argument, got %d", len(args)))
+		err := errors.Join(ErrSideEffectInstanceFailed, fmt.Errorf("SideEffectInstance onFailed expected 1 argument, got %d", len(args)))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
 	err := args[0].(error)
 
+	logger.Error(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setError(errors.Join(ErrSideEffectFailed, err))
 	}
@@ -2803,12 +3234,16 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 			if err := si.db.SetSideEffectExecutionProperties(
 				si.executionID,
 				SetSideEffectExecutionStatus(ExecutionStatusCancelled)); err != nil {
-				return errors.Join(ErrSideEffectInstanceFailed, err)
+				err := errors.Join(ErrSideEffectInstanceFailed, err)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+				return err
 			}
 			if err := si.db.SetSideEffectEntityProperties(
 				si.entityID,
 				SetSideEffectEntityStatus(StatusCancelled)); err != nil {
-				return errors.Join(ErrSideEffectInstanceFailed, err)
+				err := errors.Join(ErrSideEffectInstanceFailed, err)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+				return err
 			}
 			return nil
 		}
@@ -2817,7 +3252,9 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 	if err := si.db.SetSideEffectEntityProperties(
 		si.entityID,
 		SetSideEffectEntityStatus(StatusFailed)); err != nil {
-		return errors.Join(ErrSideEffectInstanceFailed, err)
+		err := errors.Join(ErrSideEffectInstanceFailed, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
 	return nil
@@ -2827,6 +3264,8 @@ var ErrSideEffectInstancePaused = errors.New("failed to pause side effect instan
 
 func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
+	logger.Debug(si.ctx, "side effect instance paused", "workflow_id", si.workflowID, "step_id", si.stepID)
+
 	if si.future != nil {
 		si.future.setError(errors.Join(ErrSideEffectInstancePaused, ErrPaused))
 	}
@@ -2834,10 +3273,12 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 	var err error
 	// Tell the orchestrator to manage the case
 	if err = si.tracker.onPause(); err != nil {
+		err := errors.Join(ErrSideEffectInstancePaused, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setError(errors.Join(ErrSideEffectInstancePaused, err))
+			si.future.setError(err)
 		}
-		return errors.Join(ErrSideEffectInstancePaused, fmt.Errorf("failed to pause orchestrator: %w", err))
+		return err
 	}
 
 	return nil
@@ -2850,15 +3291,21 @@ var ErrSagaContext = errors.New("failed saga context")
 func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	var err error
 
-	if err = ctx.checkPause(); err != nil {
+	logger.Debug(ctx.ctx, "saga context", "workflow_id", ctx.workflowID, "step_id", stepID)
 
+	if err = ctx.checkPause(); err != nil {
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrSagaContext, err))
+		err := errors.Join(ErrSagaContext, err)
+		if !errors.Is(err, ErrPaused) {
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		}
+		future.setError(err)
 		return future
 	}
 
+	var existingSaga *SagaInstance
 	// First check if we already have a saga instance for this stepID
-	if existingSaga, err := ctx.tracker.findSagaInstance(stepID); err == nil {
+	if existingSaga, err = ctx.tracker.findSagaInstance(stepID); err == nil {
 		return existingSaga.future
 	}
 
@@ -2889,16 +3336,18 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 		}
 
 		if entityID, err = ctx.db.AddSagaEntity(entity, ctx.workflowID); err != nil {
-
-			future.setError(errors.Join(ErrSagaContext, err))
+			err := errors.Join(ErrSagaContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 	}
 
 	var data *SagaData
 	if data, err = ctx.db.GetSagaDataByEntityID(entityID); err != nil {
-
-		future.setError(errors.Join(ErrSagaContext, err))
+		err := errors.Join(ErrSagaContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID, "entity_id", entityID)
+		future.setError(err)
 		return future
 	}
 
@@ -2930,11 +3379,14 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	// Only start if not already started/completed
 	var status EntityStatus
 	if err := ctx.db.GetSagaEntityProperties(entityID, GetSagaEntityStatus(&status)); err != nil {
-		future.setError(errors.Join(ErrSagaContext, err))
+		err := errors.Join(ErrSagaContext, fmt.Errorf("failed to get saga status: %w", err))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
 	if status == StatusPending {
+		logger.Debug(ctx.ctx, "saga context start", "workflow_id", ctx.workflowID, "step_id", stepID)
 		sagaInstance.Start()
 	}
 
@@ -2944,24 +3396,35 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 var ErrSagaContextCompensate = errors.New("failed to compensate saga context")
 
 func (ctx WorkflowContext) CompensateSaga(stepID string) error {
+
+	logger.Debug(ctx.ctx, "compensate saga context", "workflow_id", ctx.workflowID, "step_id", stepID)
+
 	// Find the saga instance through the tracker
 	sagaInst, err := ctx.tracker.findSagaInstance(stepID)
 	if err != nil {
-		return errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to find saga for step %s: %w", stepID, err))
+		err := errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to find saga for step %s: %w", stepID, err))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		return err
 	}
 
 	// Verify saga is in completed state
 	var status EntityStatus
 	if err := ctx.db.GetSagaEntityProperties(sagaInst.entityID, GetSagaEntityStatus(&status)); err != nil {
-		return errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to get saga status: %w", err))
+		err := errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to get saga status: %w", err))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		return err
 	}
 	if status != StatusCompleted {
-		return errors.Join(ErrSagaContextCompensate, fmt.Errorf("cannot compensate saga in %s state", status))
+		err := errors.Join(ErrSagaContextCompensate, fmt.Errorf("cannot compensate saga in %s state", status))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		return err
 	}
 
 	// Trigger the FSM compensation
 	if err := sagaInst.fsm.Fire(TriggerCompensate, nil); err != nil {
-		return errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to trigger compensation: %w", err))
+		err := errors.Join(ErrSagaContextCompensate, fmt.Errorf("failed to trigger compensation: %w", err))
+		logger.Debug(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		return err
 	}
 
 	return nil
@@ -3001,6 +3464,7 @@ type SagaInstance struct {
 var ErrSagaInstance = errors.New("failed saga instance")
 
 func (si *SagaInstance) Start() {
+	logger.Debug(si.ctx, "saga instance start", "workflow_id", si.workflowID, "step_id", si.stepID)
 	si.mu.Lock()
 	si.fsm = stateless.NewStateMachine(StateIdle)
 	fsm := si.fsm
@@ -3027,8 +3491,11 @@ func (si *SagaInstance) Start() {
 	fsm.Configure(StateFailed).
 		OnEntry(si.onFailed)
 
+	logger.Debug(si.ctx, "saga instance start", "workflow_id", si.workflowID, "step_id", si.stepID)
 	if err := fsm.Fire(TriggerStart); err != nil {
-		si.future.setError(errors.Join(ErrSagaInstance, err))
+		err := errors.Join(ErrSagaInstance, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		si.future.setError(err)
 	}
 }
 
@@ -3044,7 +3511,7 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 			stackTrace := string(buf[:n])
 
 			if si.debug.canStackTrace() {
-
+				fmt.Println(stackTrace)
 			}
 
 			// Update last execution status to failed
@@ -3056,19 +3523,24 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 					SetSagaExecutionStatus(ExecutionStatusFailed),
 					SetSagaExecutionError(fmt.Sprintf("panic: %v", r)),
 					SetSagaExecutionStackTrace(stackTrace)); updateErr != nil {
-
+					err := errors.Join(ErrSagaInstanceExecute, updateErr)
+					logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 				}
 			}
 
 			// Trigger compensation with the panic error
 			panicErr := fmt.Errorf("step panicked: %v", r)
-			si.fsm.Fire(TriggerCompensate, errors.Join(ErrSagaInstanceExecute, ErrSagaPanicked, panicErr))
+			err := errors.Join(ErrSagaInstanceExecute, ErrSagaPanicked, panicErr)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+			si.fsm.Fire(TriggerCompensate, err)
 		}
 	}()
 
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusRunning)); err != nil {
+		err := errors.Join(ErrSagaInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
@@ -3089,6 +3561,8 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 		var stepExecID int
 		var err error
 		if stepExecID, err = si.db.AddSagaExecution(stepExec); err != nil {
+			err := errors.Join(ErrSagaInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			si.fsm.Fire(TriggerFail, err)
 			return nil
 		}
@@ -3107,9 +3581,12 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 				stepExecID,
 				SetSagaExecutionStatus(ExecutionStatusFailed),
 				SetSagaExecutionError(err.Error())); updateErr != nil {
-
+				err := errors.Join(ErrSagaInstanceExecute, updateErr)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			}
 
+			err := errors.Join(ErrSagaInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			// Pass the error to the compensation state
 			si.fsm.Fire(TriggerCompensate, err)
 			return nil
@@ -3118,6 +3595,8 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 		if err := si.db.SetSagaExecutionProperties(
 			stepExecID,
 			SetSagaExecutionStatus(ExecutionStatusCompleted)); err != nil {
+			err := errors.Join(ErrSagaInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			si.fsm.Fire(TriggerFail, err)
 			return nil
 		}
@@ -3127,6 +3606,8 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusCompleted)); err != nil {
+		err := errors.Join(ErrSagaInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
@@ -3138,6 +3619,7 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 var ErrSagaInstanceCompensate = errors.New("failed to compensate saga instance")
 
 func (si *SagaInstance) executeCompensations(_ context.Context, args ...interface{}) (err error) {
+	logger.Debug(si.ctx, "saga instance compensate", "workflow_id", si.workflowID, "step_id", si.stepID)
 	// Recover from panics in the compensation phase
 	defer func() {
 		if r := recover(); r != nil {
@@ -3147,7 +3629,7 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 			stackTrace := string(buf[:n])
 
 			if si.debug.canStackTrace() {
-
+				fmt.Println(stackTrace)
 			}
 
 			// Update last execution status to failed
@@ -3159,6 +3641,8 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 					SetSagaExecutionStatus(ExecutionStatusFailed),
 					SetSagaExecutionError(fmt.Sprintf("panic: %v", r)),
 					SetSagaExecutionStackTrace(stackTrace)); updateErr != nil {
+					err := errors.Join(ErrSagaInstanceCompensate, updateErr)
+					logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 
 				}
 			}
@@ -3167,11 +3651,14 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 			if err := si.db.SetSagaEntityProperties(
 				si.entityID,
 				SetSagaEntityStatus(StatusFailed)); err != nil {
-
+				err := errors.Join(ErrSagaInstanceCompensate, fmt.Errorf("compensation panicked: %v", r))
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			}
 
+			err := errors.Join(ErrSagaInstanceCompensate, ErrSagaPanicked, fmt.Errorf("compensation panicked: %v", r))
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			// Critical failure - compensation panicked
-			si.fsm.Fire(TriggerFail, errors.Join(ErrSagaInstanceCompensate, ErrSagaPanicked, fmt.Errorf("compensation panicked: %v", r)))
+			si.fsm.Fire(TriggerFail, err)
 		}
 	}()
 
@@ -3185,7 +3672,9 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 
 	executions, err := si.db.GetSagaExecutions(si.entityID)
 	if err != nil {
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSagaInstanceCompensate, transactionErr, err))
+		err := errors.Join(ErrSagaInstanceCompensate, transactionErr, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 
@@ -3262,10 +3751,15 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 		if err := si.db.SetSagaEntityProperties(
 			si.entityID,
 			SetSagaEntityStatus(StatusFailed)); err != nil {
-
+			err := errors.Join(ErrSagaInstanceCompensate, transactionErr, compensationErr, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+			si.fsm.Fire(TriggerFail, err)
+			return nil
 		}
 
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSagaInstanceCompensate, transactionErr, compensationErr))
+		err := errors.Join(ErrSagaInstanceCompensate, transactionErr, compensationErr)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 
@@ -3273,19 +3767,28 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 	if err := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusCompensated)); err != nil {
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSagaInstanceCompensate, transactionErr, compensationErr, err))
+		err := errors.Join(ErrSagaInstanceCompensate, transactionErr, compensationErr, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
+
+	logger.Error(si.ctx, "saga instance compensate completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 
 	si.fsm.Fire(TriggerComplete, transactionErr)
 	return nil
 }
 
+var ErrSagaInstanceCompleted = errors.New("failed to complete saga instance")
+
 func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) error {
+	logger.Debug(si.ctx, "saga instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	var status EntityStatus
 	if err := si.db.GetSagaEntityProperties(
 		si.entityID,
 		GetSagaEntityStatus(&status)); err != nil {
+		err := errors.Join(ErrSagaInstanceCompleted, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
@@ -3299,17 +3802,21 @@ func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) erro
 					transactionErr = err
 				}
 			}
-			si.future.setError(errors.Join(ErrSagaCompensated, transactionErr))
+			err := errors.Join(ErrSagaInstanceCompleted, ErrSagaCompensated, transactionErr)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+			si.future.setError(err)
 		} else {
 			si.future.setResult(nil)
 		}
 	}
+	logger.Debug(si.ctx, "saga instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	return nil
 }
 
 var ErrSagaInstanceFailed = errors.New("failed to fail saga instance")
 
 func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
+	logger.Debug(si.ctx, "saga instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	var err error
 	if len(args) > 0 {
 		if e, ok := args[0].(error); ok {
@@ -3321,9 +3828,12 @@ func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 	if updateErr := si.db.SetSagaEntityProperties(
 		si.entityID,
 		SetSagaEntityStatus(StatusFailed)); updateErr != nil {
-		return errors.Join(ErrSagaInstanceFailed, fmt.Errorf("failed to update saga status: %w", updateErr))
+		err := errors.Join(ErrSagaInstanceFailed, fmt.Errorf("failed to update saga status: %w", updateErr))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		return err
 	}
 
+	logger.Error(si.ctx, "saga instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setError(errors.Join(ErrSagaFailed, err))
 	}
@@ -3340,9 +3850,12 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	// Check for pause first, consistent with other context methods
 	if err = ctx.checkPause(); err != nil {
-
 		future := NewRuntimeFuture()
-		future.setError(errors.Join(ErrWorkflowContext, err))
+		err := errors.Join(ErrWorkflowContext, err)
+		if !errors.Is(err, ErrPaused) {
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		}
+		future.setError(err)
 		return future
 	}
 
@@ -3365,9 +3878,10 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 			handler, err := ctx.registry.RegisterWorkflow(workflowFunc)
 			if err != nil {
-
 				future := NewRuntimeFuture()
-				future.setError(errors.Join(ErrWorkflowContext, err))
+				err := errors.Join(ErrWorkflowContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
 
@@ -3384,7 +3898,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 				args...); err != nil {
 
 				future := NewRuntimeFuture()
-				future.setError(errors.Join(ErrWorkflowContext, err))
+				err := errors.Join(ErrWorkflowContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
 
@@ -3392,11 +3908,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		}
 		// If no handler is set, return an error
 		future := NewRuntimeFuture()
-		future.setError(
-			errors.Join(
-				ErrWorkflowContext,
-				fmt.Errorf("cross-queue workflow execution not supported: from %s to %s",
-					ctx.options.Queue, options.Queue)))
+		err := errors.Join(ErrWorkflowContext, fmt.Errorf("cross-queue workflow execution not supported: from %s to %s", ctx.options.Queue, options.Queue))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -3405,7 +3919,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	// Register workflow on-the-fly (like other components)
 	handler, err := ctx.registry.RegisterWorkflow(workflowFunc)
 	if err != nil {
-		future.setError(errors.Join(ErrWorkflowContext, err))
+		err := errors.Join(ErrWorkflowContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -3414,8 +3930,10 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	// Check for existing hierarchies like we do for activities/sagas
 	var hierarchies []*Hierarchy
 	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntityWorkflow); err != nil {
+		err := errors.Join(ErrWorkflowContext, err)
 		if !errors.Is(err, ErrHierarchyNotFound) {
-			future.setError(errors.Join(ErrWorkflowContext, err))
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 	}
@@ -3423,7 +3941,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	// Convert inputs for storage
 	inputBytes, err := convertInputsForSerialization(args)
 	if err != nil {
-		future.setError(errors.Join(ErrWorkflowContext, err))
+		err := errors.Join(ErrWorkflowContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -3431,36 +3951,47 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 	if len(hierarchies) > 0 {
 		workflowEntityID = hierarchies[0].ChildEntityID
 
+		logger.Debug(ctx.ctx, "workflow context existing", "workflow_id", ctx.workflowID, "step_id", stepID)
+
 		// Check the latest execution for completion
 		var workflowExecution *WorkflowExecution
 		if workflowExecution, err = ctx.db.GetWorkflowExecutionLatestByEntityID(workflowEntityID); err != nil {
-			future.setError(errors.Join(ErrWorkflowContext, err))
+			err := errors.Join(ErrWorkflowContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
+
+		future.setEntityID(workflowEntityID)
 
 		// If we have a completed execution, return its result
 		if workflowExecution.Status == ExecutionStatusCompleted {
 
 			var workflowExecutionData *WorkflowExecutionData
 			if workflowExecutionData, err = ctx.db.GetWorkflowExecutionDataByExecutionID(workflowExecution.ID); err != nil {
-				future.setError(errors.Join(ErrWorkflowContext, err))
+				err := errors.Join(ErrWorkflowContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
 
 			outputs, err := convertOutputsFromSerialization(handler, workflowExecutionData.Outputs)
 			if err != nil {
-				future.setError(errors.Join(ErrWorkflowContext, err))
+				err := errors.Join(ErrWorkflowContext, err)
+				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+				future.setError(err)
 				return future
 			}
+
+			logger.Debug(ctx.ctx, "workflow context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 
 			future.setEntityID(workflowEntityID)
 			future.setResult(outputs)
 			return future
 		}
-
-		future.setEntityID(workflowEntityID)
 	} else {
 		// Create new workflow entity as child
+		logger.Debug(ctx.ctx, "workflow context new", "workflow_id", ctx.workflowID, "step_id", stepID)
 
 		// Convert retry policy if provided
 		var internalRetryPolicy *retryPolicyInternal
@@ -3478,7 +4009,9 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 		var queue *Queue
 		if queue, err = ctx.db.GetQueueByName(queueName); err != nil {
-			future.setError(fmt.Errorf("failed to get queue %s: %w", queueName, err))
+			err := errors.Join(ErrWorkflowContext, fmt.Errorf("failed to get queue %s: %w", queueName, err))
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
 
@@ -3501,9 +4034,13 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 				IsRoot:    false, // This is a child workflow
 			},
 		}); err != nil {
-			future.setError(errors.Join(ErrWorkflowContext, err))
+			err := errors.Join(ErrWorkflowContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
+
+		future.setEntityID(workflowEntityID)
 
 		// Add hierarchy relationship
 		if _, err = ctx.db.AddHierarchy(&Hierarchy{
@@ -3516,15 +4053,18 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			ParentType:        EntityWorkflow,
 			ChildType:         EntityWorkflow,
 		}); err != nil {
-			future.setError(fmt.Errorf("failed to add hierarchy: %w", err))
+			err := errors.Join(ErrWorkflowContext, err)
+			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+			future.setError(err)
 			return future
 		}
-		future.setEntityID(workflowEntityID)
 	}
 
 	var data *WorkflowData
 	if data, err = ctx.db.GetWorkflowDataByEntityID(workflowEntityID); err != nil {
-		future.setError(errors.Join(ErrWorkflowContext, err))
+		err := errors.Join(ErrWorkflowContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
@@ -3563,11 +4103,13 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	inputs, err := convertInputsFromSerialization(handler, inputBytes)
 	if err != nil {
-
-		future.setError(errors.Join(ErrWorkflowContext, err))
+		err := errors.Join(ErrWorkflowContext, err)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+		future.setError(err)
 		return future
 	}
 
+	logger.Debug(ctx.ctx, "workflow instance start", "workflow_id", ctx.workflowID, "step_id", stepID)
 	ctx.tracker.addWorkflowInstance(workflowInstance)
 	workflowInstance.Start(inputs)
 
@@ -3580,10 +4122,15 @@ var ErrSignalContext = errors.New("failed signal context")
 
 // Signal allows workflow to receive named signals with type-safe output
 func (ctx WorkflowContext) Signal(name string, output interface{}) error {
+	logger.Debug(ctx.ctx, "signal context", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+
 	// Validate output is a pointer
 	if reflect.TypeOf(output).Kind() != reflect.Ptr {
-		return errors.Join(ErrSignalContext, fmt.Errorf("output must be a pointer"))
+		err := errors.Join(ErrSignalContext, ErrMustPointer, fmt.Errorf("output must be a pointer"))
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+		return err
 	}
+
 	outputType := reflect.TypeOf(output).Elem()
 
 	// First check existing hierarchies for completed signals
@@ -3601,8 +4148,12 @@ func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 						// Convert stored value to requested type
 						result, err := convertSingleOutputFromSerialization(outputType, data.Value)
 						if err != nil {
-							return errors.Join(ErrSignalContext, fmt.Errorf("failed to decode signal value: %w", err))
+							err := errors.Join(ErrSignalContext, fmt.Errorf("failed to decode signal value: %w", err))
+							logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+							return err
 						}
+
+						logger.Debug(ctx.ctx, "signal context already completed", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
 
 						// Set output value
 						reflect.ValueOf(output).Elem().Set(reflect.ValueOf(result))
@@ -3633,6 +4184,8 @@ func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 		onSignal:   ctx.onSignalNew,
 		done:       make(chan error, 1),
 	}
+
+	logger.Debug(ctx.ctx, "signal instance start", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
 
 	return instance.Start()
 }
@@ -3665,6 +4218,9 @@ type SignalInstance struct {
 }
 
 func (si *SignalInstance) Start() error {
+
+	logger.Debug(si.ctx, "signal instance start", "workflow_id", si.runID, "step_id", si.parentStepID, "signal_name", si.name)
+
 	si.mu.Lock()
 	si.fsm = stateless.NewStateMachine(StateIdle)
 	fsm := si.fsm
@@ -3690,8 +4246,11 @@ func (si *SignalInstance) Start() error {
 		OnEntry(si.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
+	logger.Debug(si.ctx, "signal instance start fsm configured", "workflow_id", si.runID, "step_id", si.parentStepID, "signal_name", si.name)
 	if err := fsm.Fire(TriggerStart); err != nil {
-		return errors.Join(ErrSignalInstance, fmt.Errorf("failed to start signal: %w", err))
+		err := errors.Join(ErrSignalInstance, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID, "signal_name", si.name)
+		return err
 	}
 
 	return <-si.done
@@ -3700,6 +4259,9 @@ func (si *SignalInstance) Start() error {
 var ErrSignalInstanceExecute = errors.New("failed to execute signal instance")
 
 func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) error {
+
+	logger.Debug(si.ctx, "signal instance execute", "workflow_id", si.runID, "step_id", si.parentStepID, "signal_name", si.name)
+
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 4096)
@@ -3711,9 +4273,10 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 			}
 
 			si.mu.Lock()
-			err := fmt.Errorf("signal panicked: %v", r)
+			err := errors.Join(ErrSignalInstanceExecute, fmt.Errorf("signal panicked: %v", r))
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID, "signal_name", si.name)
 			si.done <- err
-			si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+			si.fsm.Fire(TriggerFail, err)
 			si.mu.Unlock()
 		}
 	}()
@@ -3736,9 +4299,10 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	}, si.parentEntityID)
 
 	if err != nil {
-		err = fmt.Errorf("failed to create signal entity: %w", err)
+		err := errors.Join(ErrSignalInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- err
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 	si.entityID = entityID
@@ -3753,9 +4317,10 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	}
 
 	if si.executionID, err = si.db.AddSignalExecution(exec); err != nil {
-		err = fmt.Errorf("failed to add signal execution: %w", err)
+		err := errors.Join(ErrSignalInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- err
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 
@@ -3771,34 +4336,38 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		ParentType:        EntityWorkflow,
 		ChildType:         EntitySignal,
 	}); err != nil {
-		err = fmt.Errorf("failed to add hierarchy: %w", err)
+		err := errors.Join(ErrSignalInstanceExecute, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- err
 		si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
 		return nil
 	}
 
 	if si.onSignal == nil {
-		err = fmt.Errorf("signal handler not implemented")
+		err := fmt.Errorf("signal handler not implemented")
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- err
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 
 	future := si.onSignal(si.parentEntityID, si.name)
 	res, err := future.GetResults()
 	if err != nil {
-		err = fmt.Errorf("unable to process signal: %w", err)
+		err := fmt.Errorf("unable to process signal: %w", err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- err
-		si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
 
 	if len(res) > 0 {
 		valueBytes, err := convertOutputsForSerialization(res)
 		if err != nil {
-			err = fmt.Errorf("failed to serialize signal value: %w", err)
+			err := fmt.Errorf("failed to serialize signal value: %w", err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 			si.done <- err
-			si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+			si.fsm.Fire(TriggerFail, err)
 			return nil
 		}
 
@@ -3806,24 +4375,27 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		if err := si.db.SetSignalExecutionDataProperties(
 			si.executionID,
 			SetSignalExecutionDataValue(valueBytes[0])); err != nil {
-			err = fmt.Errorf("failed to store signal value: %w", err)
+			err := fmt.Errorf("failed to store signal value: %w", err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 			si.done <- err
-			si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+			si.fsm.Fire(TriggerFail, err)
 			return nil
 		}
 
 		// Convert and set output
 		result, err := convertSingleOutputFromSerialization(si.outputType, valueBytes[0])
 		if err != nil {
-			err = fmt.Errorf("failed to convert signal value: %w", err)
+			err := errors.Join(ErrSignalInstanceExecute, ErrSerialization, fmt.Errorf("failed to convert signal value: %w", err))
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 			si.done <- err
-			si.fsm.Fire(TriggerFail, errors.Join(ErrSignalInstanceExecute, err))
+			si.fsm.Fire(TriggerFail, err)
 			return nil
 		}
 
 		reflect.ValueOf(si.output).Elem().Set(reflect.ValueOf(result))
 	}
 
+	logger.Debug(si.ctx, "signal instance completed", "workflow_id", si.runID, "step_id", si.parentStepID)
 	si.done <- nil
 	si.fsm.Fire(TriggerComplete)
 	return nil
@@ -3832,16 +4404,21 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 var ErrSignalInstanceCompleted = errors.New("failed to complete signal instance")
 
 func (si *SignalInstance) onCompleted(_ context.Context, args ...interface{}) error {
+	logger.Debug(si.ctx, "signal instance completed", "workflow_id", si.runID, "step_id", si.parentStepID)
 	if err := si.db.SetSignalEntityProperties(
 		si.entityID,
 		SetSignalEntityStatus(StatusCompleted)); err != nil {
-		return errors.Join(ErrSignalInstanceCompleted, fmt.Errorf("failed to set signal entity status: %w", err))
+		err := errors.Join(ErrSignalInstanceCompleted, fmt.Errorf("failed to set signal entity status: %w", err))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
 	}
 
 	if err := si.db.SetSignalExecutionProperties(
 		si.executionID,
 		SetSignalExecutionStatus(ExecutionStatusCompleted)); err != nil {
-		return errors.Join(ErrSignalInstanceCompleted, fmt.Errorf("failed to set signal execution status: %w", err))
+		err := errors.Join(ErrSignalInstanceCompleted, fmt.Errorf("failed to set signal execution status: %w", err))
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
 	}
 
 	return nil
@@ -3850,6 +4427,7 @@ func (si *SignalInstance) onCompleted(_ context.Context, args ...interface{}) er
 var ErrSignalInstanceFailed = errors.New("failed to fail signal instance")
 
 func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error {
+	logger.Debug(si.ctx, "signal instance failed", "workflow_id", si.runID, "step_id", si.parentStepID)
 	var err error
 	if len(args) > 0 {
 		err = args[0].(error)
@@ -3860,12 +4438,16 @@ func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error
 			if err := si.db.SetSignalExecutionProperties(
 				si.executionID,
 				SetSignalExecutionStatus(ExecutionStatusCancelled)); err != nil {
-				return errors.Join(ErrSignalInstanceFailed, err)
+				err := errors.Join(ErrSignalInstanceFailed, err)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+				return err
 			}
 			if err := si.db.SetSignalEntityProperties(
 				si.entityID,
 				SetSignalEntityStatus(StatusCancelled)); err != nil {
-				return errors.Join(ErrSignalInstanceFailed, err)
+				err := errors.Join(ErrSignalInstanceFailed, err)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+				return err
 			}
 			return nil
 		}
@@ -3874,14 +4456,18 @@ func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error
 	if err := si.db.SetSignalEntityProperties(
 		si.entityID,
 		SetSignalEntityStatus(StatusFailed)); err != nil {
-		return errors.Join(ErrSignalInstanceFailed, err)
+		err := errors.Join(ErrSignalInstanceFailed, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
 	}
 
 	if err := si.db.SetSignalExecutionProperties(
 		si.executionID,
 		SetSignalExecutionStatus(ExecutionStatusFailed),
 		SetSignalExecutionError(err.Error())); err != nil {
-		return errors.Join(ErrSignalInstanceFailed, err)
+		err := errors.Join(ErrSignalInstanceFailed, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
 	}
 
 	return nil
@@ -3890,9 +4476,12 @@ func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error
 var ErrSignalInstancePaused = errors.New("failed to pause signal instance")
 
 func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
+	logger.Debug(si.ctx, "signal instance paused", "workflow_id", si.runID, "step_id", si.parentStepID)
 	var err error
 	if err = si.tracker.onPause(); err != nil {
-		return errors.Join(ErrSignalInstancePaused, fmt.Errorf("failed to pause orchestrator: %w", err))
+		err := errors.Join(ErrSignalInstancePaused, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
 	}
 	return nil
 }

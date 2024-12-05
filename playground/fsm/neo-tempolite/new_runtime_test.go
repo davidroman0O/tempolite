@@ -1435,7 +1435,9 @@ func TestUnitPrepareRootWorkflowPanicWithRetry(t *testing.T) {
 	if execs[0].Status != ExecutionStatusFailed {
 		t.Fatalf("expected first execution %s, got %s", ExecutionStatusFailed, execs[0].Status)
 	}
-	if execs[0].Error != "workflow panicked" {
+
+	if strings.Contains(execs[0].Error, `failed to run workflow instance
+        workflow panicked`) {
 		t.Fatalf("expected error 'workflow panicked', got '%s'", execs[0].Error)
 	}
 
