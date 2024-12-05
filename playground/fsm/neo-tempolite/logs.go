@@ -41,6 +41,12 @@ const (
 func NewDefaultLogger(level slog.Leveler, format LogFormat) Logger {
 	var handler slog.Handler
 
+	// jsonFile, err := os.Create("logs.json")
+	// if err != nil {
+	// 	log.Fatalf("failed to create log file: %v", err)
+	// }
+	// defer jsonFile.Close()
+
 	opts := &slog.HandlerOptions{Level: level}
 
 	switch format {
@@ -49,6 +55,9 @@ func NewDefaultLogger(level slog.Leveler, format LogFormat) Logger {
 	default:
 		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
+
+	// // MultiHandler to handle both text and JSON
+	// multiHandler := slog.NewMultiHandler(textHandler, jsonHandler)
 
 	return &defaultLogger{
 		logger: slog.New(handler),

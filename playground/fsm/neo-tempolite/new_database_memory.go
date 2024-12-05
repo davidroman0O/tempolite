@@ -519,16 +519,16 @@ func (db *MemoryDatabase) GetVersion(id int, opts ...VersionGetOption) (*Version
 		}
 	}
 
-	if cfg.IncludeData {
-		// Data is already included in the version structure
-		// Just ensure we return a copy
-		return copyVersion(version), nil
-	}
+	// if cfg.IncludeData {
+	// Data is already included in the version structure
+	// Just ensure we return a copy
+	return copyVersion(version), nil
+	// }
 
 	// If we don't need data, return version without data
-	versionCopy := *version
-	versionCopy.Data = nil
-	return &versionCopy, nil
+	// versionCopy := *version
+	// versionCopy.Data = nil
+	// return &versionCopy, nil
 }
 
 func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {

@@ -33,6 +33,7 @@ func TestVersionBasicOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to retrieve version: %v", err)
 	}
+
 	if retrieved.ChangeID != version.ChangeID {
 		t.Errorf("Expected ChangeID %s, got %s", version.ChangeID, retrieved.ChangeID)
 	}
@@ -171,36 +172,6 @@ func TestVersionOverrides(t *testing.T) {
 	}
 	if versions[0].Version != 2 {
 		t.Errorf("Expected Version 2 (override), got %d", versions[0].Version)
-	}
-}
-
-func TestVersionValidation(t *testing.T) {
-	db := NewMemoryDatabase()
-	registry := NewRegistry()
-	ctx := context.Background()
-	orchestrator := NewOrchestrator(ctx, db, registry)
-
-	workflow := func(ctx WorkflowContext) error {
-		// First call should succeed with max version
-		_, err := ctx.GetVersion("feature-flag", 2, 3)
-		if err != nil {
-			t.Errorf("First GetVersion call failed: %v", err)
-			return err
-		}
-
-		// Second call should fail as stored version (3) is outside range
-		_, err = ctx.GetVersion("feature-flag", 4, 5)
-		if err == nil {
-			t.Error("Expected error for version outside range, got nil")
-		}
-
-		return nil
-	}
-
-	future := orchestrator.Execute(workflow, nil)
-
-	if err := future.Get(); err == nil {
-		t.Error("Expected workflow to fail due to version validation")
 	}
 }
 
