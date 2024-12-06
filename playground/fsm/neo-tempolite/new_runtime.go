@@ -32,7 +32,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -1966,7 +1966,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		}
 
 		// save result
-		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
+		if err = wi.db.SetWorkflowExecutionDataProperties(wi.executionID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
 			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID, "data_id", wi.dataID)
