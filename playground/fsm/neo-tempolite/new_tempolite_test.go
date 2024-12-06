@@ -3,6 +3,7 @@ package tempolite
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -405,6 +406,205 @@ func TestTempoliteSignal(t *testing.T) {
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteWorkflows(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tp.Close()
+
+	workflowFunc := func(ctx WorkflowContext) (int, error) {
+		return 1, nil // Return a value instead of -1 to make success/failure clearer
+	}
+
+	// Run workflows one at a time first to verify basic functionality
+	for i := 0; i < 10; i++ {
+		future, err := tp.ExecuteDefault(workflowFunc, nil)
+		if err != nil {
+			t.Fatalf("Failed to execute workflow %d: %v", i, err)
+		}
+
+		// Wait for each workflow to complete before starting the next
+		if err := future.Get(); err != nil {
+			t.Fatalf("Workflow %d failed: %v", i, err)
+		}
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteWorkflowsConcurrent(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tp.Close()
+
+	workflowFunc := func(ctx WorkflowContext) (int, error) {
+		return 1, nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 10)
+
+	// Launch workflows concurrently
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			future, err := tp.ExecuteDefault(workflowFunc, nil)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to execute workflow %d: %v", index, err)
+				return
+			}
+
+			if err := future.Get(); err != nil {
+				errChan <- fmt.Errorf("workflow %d failed: %v", index, err)
+				return
+			}
+		}(i)
+	}
+
+	// Wait for all workflows to complete
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors
+	for err := range errChan {
+		t.Error(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteRunDelete(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(10),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activityFunc := func(ctx ActivityContext) error {
+		return nil
+	}
+
+	workflowFunc := func(ctx WorkflowContext) (int, error) {
+		var life int
+
+		if err := ctx.SideEffect("life", func() int {
+			return 42
+		}).Get(&life); err != nil {
+			return -1, err
+		}
+
+		if err := ctx.Activity("activity", activityFunc, nil).Get(); err != nil {
+			return -1, err
+		}
+
+		sagaDef, err := NewSaga().
+			Add(
+				func(tc TransactionContext) error {
+					tc.Store("life", &life)
+					return nil
+				},
+				func(tc CompensationContext) error {
+					return nil
+				},
+			).
+			Add(
+				func(tc TransactionContext) error {
+					return nil
+				},
+				func(tc CompensationContext) error {
+					return nil
+				},
+			).
+			Add(
+				func(tc TransactionContext) error {
+					tc.Load("life", &life)
+					return nil
+				},
+				func(tc CompensationContext) error {
+					return nil
+				},
+			).
+			Build()
+		if err != nil {
+			return -1, err
+		}
+
+		if err := ctx.Saga("saga", sagaDef).Get(); err != nil {
+			return -1, err
+		}
+
+		return life, nil
+	}
+
+	all := []Future{}
+
+	for range 100 {
+		future, err := tp.ExecuteDefault(workflowFunc, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, future)
+	}
+
+	db.SaveAsJSON("./json/tempolite_run_delete.json")
+
+	for _, v := range all {
+		if err := v.Get(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	defer db.SaveAsJSON("./json/tempolite_run_delete.json")
+
+	runs, err := db.GetRunsPaginated(1, 50, &RunFilter{
+		Status: RunStatusCompleted,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(runs.Runs) != 50 {
+		t.Fatalf("expected 50 runs, got %d", len(runs.Runs))
 	}
 
 	if err := tp.Wait(); err != nil {

@@ -1,13 +1,18 @@
 package tempolite
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 type MemoryDatabase struct {
@@ -97,6 +102,31 @@ type MemoryDatabase struct {
 	queueToWorkflows   map[int][]int                // queue ID -> workflow IDs
 	runToWorkflows     map[int][]int                // run ID -> workflow IDs
 	workflowVersions   map[int][]int                // WorkflowID -> []VersionID
+
+	// Lock types for different entity categories
+	runLock        deadlock.RWMutex
+	workflowLock   deadlock.RWMutex
+	activityLock   deadlock.RWMutex
+	sagaLock       deadlock.RWMutex
+	sideEffectLock deadlock.RWMutex
+	signalLock     deadlock.RWMutex
+	hierarchyLock  deadlock.RWMutex
+	versionLock    deadlock.RWMutex
+	queueLock      deadlock.RWMutex
+
+	// Individual data locks
+	workflowDataLock   deadlock.RWMutex
+	activityDataLock   deadlock.RWMutex
+	sagaDataLock       deadlock.RWMutex
+	sideEffectDataLock deadlock.RWMutex
+	signalDataLock     deadlock.RWMutex
+
+	// Execution locks
+	workflowExecLock   deadlock.RWMutex
+	activityExecLock   deadlock.RWMutex
+	sagaExecLock       deadlock.RWMutex
+	sideEffectExecLock deadlock.RWMutex
+	signalExecLock     deadlock.RWMutex
 }
 
 func NewMemoryDatabase() *MemoryDatabase {
@@ -3886,4 +3916,364 @@ func (db *MemoryDatabase) UpdateSignalEntity(entity *SignalEntity) error {
 	entity.UpdatedAt = time.Now()
 	db.signalEntities[entity.ID] = copySignalEntity(entity)
 	return nil
+}
+
+// Fine-grained locking version of DeleteRunsByStatus
+func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
+	// First, identify runs to delete under read lock
+	db.runLock.RLock()
+	runsToDelete := make([]*Run, 0)
+	runIDs := make([]int, 0)
+	for _, run := range db.runs {
+		if run.Status == status {
+			runsToDelete = append(runsToDelete, copyRun(run))
+			runIDs = append(runIDs, run.ID)
+		}
+	}
+	db.runLock.RUnlock()
+
+	if len(runsToDelete) == 0 {
+		return nil
+	}
+
+	// For each run, process its workflows and children
+	for _, runID := range runIDs {
+		// Get workflow IDs under read lock
+		db.runLock.RLock()
+		workflowIDs := make([]int, len(db.runToWorkflows[runID]))
+		copy(workflowIDs, db.runToWorkflows[runID])
+		db.runLock.RUnlock()
+
+		// Process each workflow
+		for _, workflowID := range workflowIDs {
+			if err := db.deleteWorkflowAndChildren(workflowID); err != nil {
+				return fmt.Errorf("failed to delete workflow %d: %w", workflowID, err)
+			}
+		}
+
+		// Finally delete the run itself
+		db.runLock.Lock()
+		delete(db.runs, runID)
+		delete(db.runToWorkflows, runID)
+		db.runLock.Unlock()
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID int) error {
+	// Get hierarchies under read lock
+	db.hierarchyLock.RLock()
+	var hierarchies []*Hierarchy
+	for _, h := range db.hierarchies {
+		if h.ParentEntityID == workflowID {
+			hierarchies = append(hierarchies, copyHierarchy(h))
+		}
+	}
+	db.hierarchyLock.RUnlock()
+
+	// Process children first - always process in this order to prevent deadlocks
+	for _, hierarchy := range hierarchies {
+		switch hierarchy.ChildType {
+		case EntityActivity:
+			if err := db.deleteActivityEntity(hierarchy.ChildEntityID); err != nil {
+				return err
+			}
+		case EntitySaga:
+			if err := db.deleteSagaEntity(hierarchy.ChildEntityID); err != nil {
+				return err
+			}
+		case EntitySideEffect:
+			if err := db.deleteSideEffectEntity(hierarchy.ChildEntityID); err != nil {
+				return err
+			}
+		case EntitySignal:
+			if err := db.deleteSignalEntity(hierarchy.ChildEntityID); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Delete workflow's own data
+	if err := db.deleteWorkflowEntity(workflowID); err != nil {
+		return err
+	}
+
+	// Clean up hierarchies
+	db.hierarchyLock.Lock()
+	for id, h := range db.hierarchies {
+		if h.ParentEntityID == workflowID || h.ChildEntityID == workflowID {
+			delete(db.hierarchies, id)
+		}
+	}
+	db.hierarchyLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteWorkflowEntity(workflowID int) error {
+	// Delete workflow execution data
+	db.workflowExecLock.Lock()
+	for _, exec := range db.workflowExecutions {
+		if exec.EntityID == workflowID {
+			delete(db.workflowExecutionData, exec.ID)
+			delete(db.workflowExecutions, exec.ID)
+		}
+	}
+	db.workflowExecLock.Unlock()
+
+	// Delete workflow data
+	db.workflowDataLock.Lock()
+	for id, data := range db.workflowData {
+		if data.EntityID == workflowID {
+			delete(db.workflowData, id)
+		}
+	}
+	db.workflowDataLock.Unlock()
+
+	// Delete versions
+	db.versionLock.Lock()
+	if versionIDs, ok := db.workflowToVersion[workflowID]; ok {
+		for _, vID := range versionIDs {
+			delete(db.versions, vID)
+		}
+		delete(db.workflowToVersion, workflowID)
+	}
+	delete(db.workflowVersions, workflowID)
+	db.versionLock.Unlock()
+
+	// Clean up queue mappings
+	db.queueLock.Lock()
+	if queueID, ok := db.workflowToQueue[workflowID]; ok {
+		if workflows, exists := db.queueToWorkflows[queueID]; exists {
+			newWorkflows := make([]int, 0, len(workflows)-1)
+			for _, wID := range workflows {
+				if wID != workflowID {
+					newWorkflows = append(newWorkflows, wID)
+				}
+			}
+			db.queueToWorkflows[queueID] = newWorkflows
+		}
+		delete(db.workflowToQueue, workflowID)
+	}
+	db.queueLock.Unlock()
+
+	// Finally delete the workflow entity itself
+	db.workflowLock.Lock()
+	delete(db.workflowEntities, workflowID)
+	db.workflowLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteActivityEntity(entityID int) error {
+	// Delete executions and their data
+	db.activityExecLock.Lock()
+	for id, exec := range db.activityExecutions {
+		if exec.EntityID == entityID {
+			delete(db.activityExecutionData, exec.ID)
+			delete(db.activityExecutions, id)
+		}
+	}
+	db.activityExecLock.Unlock()
+
+	// Delete activity data
+	db.activityDataLock.Lock()
+	for id, data := range db.activityData {
+		if data.EntityID == entityID {
+			delete(db.activityData, id)
+		}
+	}
+	db.activityDataLock.Unlock()
+
+	// Delete activity entity
+	db.activityLock.Lock()
+	delete(db.activityEntities, entityID)
+	db.activityLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteSagaEntity(entityID int) error {
+	// Delete executions and their data
+	db.sagaExecLock.Lock()
+	for id, exec := range db.sagaExecutions {
+		if exec.EntityID == entityID {
+			delete(db.sagaExecutionData, exec.ID)
+			delete(db.sagaValues, exec.ID) // Clean up saga values
+			delete(db.sagaExecutions, id)
+		}
+	}
+	db.sagaExecLock.Unlock()
+
+	// Delete saga data
+	db.sagaDataLock.Lock()
+	for id, data := range db.sagaData {
+		if data.EntityID == entityID {
+			delete(db.sagaData, id)
+		}
+	}
+	db.sagaDataLock.Unlock()
+
+	// Delete saga entity
+	db.sagaLock.Lock()
+	delete(db.sagaEntities, entityID)
+	db.sagaLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteSideEffectEntity(entityID int) error {
+	// Delete executions and their data
+	db.sideEffectExecLock.Lock()
+	for id, exec := range db.sideEffectExecutions {
+		if exec.EntityID == entityID {
+			delete(db.sideEffectExecutionData, exec.ID)
+			delete(db.sideEffectExecutions, id)
+		}
+	}
+	db.sideEffectExecLock.Unlock()
+
+	// Delete side effect data
+	db.sideEffectDataLock.Lock()
+	for id, data := range db.sideEffectData {
+		if data.EntityID == entityID {
+			delete(db.sideEffectData, id)
+		}
+	}
+	db.sideEffectDataLock.Unlock()
+
+	// Delete side effect entity
+	db.sideEffectLock.Lock()
+	delete(db.sideEffectEntities, entityID)
+	db.sideEffectLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) deleteSignalEntity(entityID int) error {
+	// Delete executions and their data
+	db.signalExecLock.Lock()
+	for id, exec := range db.signalExecutions {
+		if exec.EntityID == entityID {
+			delete(db.signalExecutionData, exec.ID)
+			delete(db.signalExecutions, id)
+		}
+	}
+	db.signalExecLock.Unlock()
+
+	// Delete signal data
+	db.signalDataLock.Lock()
+	for id, data := range db.signalData {
+		if data.EntityID == entityID {
+			delete(db.signalData, id)
+		}
+	}
+	db.signalDataLock.Unlock()
+
+	// Delete signal entity
+	db.signalLock.Lock()
+	delete(db.signalEntities, entityID)
+	db.signalLock.Unlock()
+
+	return nil
+}
+
+func (db *MemoryDatabase) GetRunsPaginated(page, pageSize int, filter *RunFilter, sort *RunSort) (*PaginatedRuns, error) {
+	db.runLock.RLock()
+	defer db.runLock.RUnlock()
+
+	// Validate pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10 // Default page size
+	}
+
+	// Collect all matching runs
+	matchingRuns := make([]*Run, 0)
+	for _, run := range db.runs {
+		// Apply filter if provided
+		if filter != nil {
+			if run.Status != filter.Status {
+				continue
+			}
+		}
+		// Deep copy the run to avoid data races
+		matchingRuns = append(matchingRuns, copyRun(run))
+	}
+
+	// Sort runs if sorting is specified
+	if sort != nil {
+		sortRuns(matchingRuns, sort)
+	}
+
+	// Calculate pagination values
+	totalRuns := len(matchingRuns)
+	totalPages := (totalRuns + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	// Adjust page number if it exceeds total pages
+	if page > totalPages {
+		page = totalPages
+	}
+
+	// Calculate start and end indices for the current page
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if end > totalRuns {
+		end = totalRuns
+	}
+
+	// Get runs for current page
+	var pageRuns []*Run
+	if start < totalRuns {
+		pageRuns = matchingRuns[start:end]
+	} else {
+		pageRuns = []*Run{}
+	}
+
+	return &PaginatedRuns{
+		Runs:       pageRuns,
+		TotalRuns:  totalRuns,
+		TotalPages: totalPages,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
+}
+
+func sortRuns(runs []*Run, sort *RunSort) {
+	if sort == nil {
+		return
+	}
+
+	sort.Field = strings.ToLower(sort.Field)
+
+	sortFn := func(i, j *Run) int {
+		var comparison int
+
+		switch sort.Field {
+		case "id":
+			comparison = cmp.Compare(i.ID, j.ID)
+		case "created_at":
+			comparison = i.CreatedAt.Compare(j.CreatedAt)
+		case "updated_at":
+			comparison = i.UpdatedAt.Compare(j.UpdatedAt)
+		case "status":
+			comparison = strings.Compare(string(i.Status), string(j.Status))
+		default:
+			// Default sort by ID
+			comparison = cmp.Compare(i.ID, j.ID)
+		}
+
+		if sort.Desc {
+			return -comparison
+		}
+		return comparison
+	}
+
+	slices.SortFunc(runs, sortFn)
 }

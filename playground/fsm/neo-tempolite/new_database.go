@@ -842,6 +842,23 @@ type SideEffectExecution struct {
 	SideEffectExecutionData *SideEffectExecutionData
 }
 
+type RunFilter struct {
+	Status RunStatus // Optional filter by status
+}
+
+type RunSort struct {
+	Field string // Field to sort by (e.g., "id", "created_at", "status")
+	Desc  bool   // Sort in descending order if true
+}
+
+type PaginatedRuns struct {
+	Runs       []*Run // List of runs for current page
+	TotalRuns  int    // Total number of runs matching filter
+	TotalPages int    // Total number of pages
+	Page       int    // Current page number
+	PageSize   int    // Number of items per page
+}
+
 // Database interface
 type Database interface {
 
@@ -1002,6 +1019,8 @@ type Database interface {
 	UpdateRun(run *Run) error
 	GetRunProperties(id int, getters ...RunPropertyGetter) error
 	SetRunProperties(id int, setters ...RunPropertySetter) error
+	DeleteRunsByStatus(status RunStatus) error
+	GetRunsPaginated(page, pageSize int, filter *RunFilter, sort *RunSort) (*PaginatedRuns, error)
 
 	// VERSION-RELATED OPERATIONS
 	AddVersion(version *Version) (int, error)

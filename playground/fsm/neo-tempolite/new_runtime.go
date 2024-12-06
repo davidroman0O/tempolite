@@ -32,7 +32,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -1547,7 +1547,7 @@ func (o *Orchestrator) newRoot(root *WorkflowInstance) {
 // Ideally we're already within a goroutine
 func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
-	logger.Debug(wi.ctx, "workflow instance start", "workflow_id", wi.workflowID)
+	logger.Debug(wi.ctx, "workflow instance start", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 	wi.mu.Lock()
 	wi.fsm = stateless.NewStateMachine(StateIdle)
@@ -1574,11 +1574,11 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 		OnEntry(wi.onPaused).
 		Permit(TriggerResume, StateExecuting)
 
-	logger.Debug(wi.ctx, "workflow instance fsm configured", "workflow_id", wi.workflowID)
+	logger.Debug(wi.ctx, "workflow instance fsm configured", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 	// Start the FSM without holding wi.mu
 	if err := fsm.Fire(TriggerStart, inputs); err != nil {
 		err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to start FSM: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		if !errors.Is(err, ErrPaused) {
 			wi.future.setError(err)
 		}
@@ -1587,13 +1587,13 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 	var isRoot bool
 	if err := wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
 		err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to get workflow data properties: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return err
 	}
 
 	// free up the orchestrator
 	if isRoot {
-		logger.Debug(wi.ctx, "workflow instance is root", "workflow_id", wi.workflowID)
+		logger.Debug(wi.ctx, "workflow instance is root", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		// // set to inactive
 		// if wi.state.isActive() {
 		// 	wi.state.setInactive()
@@ -1610,11 +1610,11 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface{}) error {
 
-	logger.Debug(wi.ctx, "workflow instance execute workflow", "workflow_id", wi.workflowID)
+	logger.Debug(wi.ctx, "workflow instance execute workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 	if len(args) != 1 {
 		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeWorkflow expected 1 argument, got %d", len(args)))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return err
 	}
 
@@ -1630,18 +1630,18 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 
 	if inputs, ok = args[0].([]interface{}); !ok {
 		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("WorkflowInstance executeActivity expected argument to be []interface{}, got %T", args[0]))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return err
 	}
 
 	var isRoot bool
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
 		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to get workflow data properties: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return err
 	}
 
-	logger.Debug(wi.ctx, "workflow instance execute workflow retries", "workflow_id", wi.workflowID)
+	logger.Debug(wi.ctx, "workflow instance execute workflow retries", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 	if err := retry.Do(
 		wi.ctx,
 		retry.
@@ -1650,7 +1650,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				retry.NewConstant(maxInterval)),
 		// only the execution might change
 		func(ctx context.Context) error {
-			logger.Debug(wi.ctx, "attempt execute workflow", "workflow_id", wi.workflowID)
+			logger.Debug(wi.ctx, "attempt execute workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 			// now we can create and set the execution id
 			if wi.executionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
@@ -1661,16 +1661,16 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				WorkflowExecutionData: &WorkflowExecutionData{},
 			}); err != nil {
 				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add workflow execution: %w", err))
-				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				return err
 			}
 
 			if !isRoot {
-				logger.Debug(wi.ctx, "workflow instance is not root", "workflow_id", wi.workflowID)
+				logger.Debug(wi.ctx, "workflow instance is not root", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				// Check if hierarchy already exists for this execution
 				hierarchies, err := wi.db.GetHierarchiesByChildEntity(wi.workflowID)
 				if err != nil || len(hierarchies) == 0 {
-					logger.Debug(wi.ctx, "workflow instance hierarchy does not exist", "workflow_id", wi.workflowID)
+					logger.Debug(wi.ctx, "workflow instance hierarchy does not exist", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					// Only create hierarchy if none exists
 					if _, err = wi.db.AddHierarchy(&Hierarchy{
 						RunID:             wi.runID,
@@ -1684,52 +1684,52 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 						ChildType:         EntityWorkflow,
 					}); err != nil {
 						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add hierarchy: %w", err))
-						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 						return err
 					}
 				} else {
-					logger.Debug(wi.ctx, "workflow instance hierarchy exists", "workflow_id", wi.workflowID)
+					logger.Debug(wi.ctx, "workflow instance hierarchy exists", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					// TODO: hum that's a bug no? we append all the time, we shouldn't update the hierarchy
 					// Update existing hierarchy with new execution ID
 					hierarchy := hierarchies[0]
 					hierarchy.ChildExecutionID = wi.executionID
 					if err = wi.db.UpdateHierarchy(hierarchy); err != nil {
 						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to update hierarchy: %w", err))
-						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 						return err
 					}
 				}
 			}
 
-			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID)
+			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 			// Run the real workflow
 			workflowOutput, workflowErr := wi.runWorkflow(inputs)
 
 			// success case
 			if workflowErr == nil {
-				logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID)
+				logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				// Success
 				wi.mu.Lock()
 
 				// if we detected a pause
 				if workflowOutput.Paused {
-					logger.Debug(wi.ctx, "workflow instance detected pause", "workflow_id", wi.workflowID)
+					logger.Debug(wi.ctx, "workflow instance detected pause", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusPaused)); err != nil {
 						wi.mu.Unlock()
 						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status paused: %w", err))
-						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 						return err
 					}
 
 					wi.fsm.Fire(TriggerPause)
 				} else {
-					logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID)
+					logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					// normal case
 					if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusCompleted)); err != nil {
 						wi.mu.Unlock()
 						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status completed: %w", err))
-						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 						return err
 					}
 
@@ -1740,7 +1740,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 
 				return nil
 			} else {
-				logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID)
+				logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				// real failure
 				wi.mu.Lock()
 
@@ -1761,7 +1761,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				); err != nil {
 					wi.mu.Unlock()
 					err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution status failed: %w", err))
-					logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+					logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					return err
 				}
 
@@ -1774,20 +1774,20 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				SetWorkflowEntityProperties(wi.workflowID,
 					SetWorkflowEntityRetryState(retryState)); err != nil {
 				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow entity retry state: %w", err))
-				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				return err
 			}
 
-			logger.Debug(wi.ctx, "workflow instance failed (might be retried)", "workflow_id", wi.workflowID, "retry_attempts", retryState.Attempts)
+			logger.Debug(wi.ctx, "workflow instance failed (might be retried)", "workflow_id", wi.workflowID, "execution_id", wi.executionID, "retry_attempts", retryState.Attempts)
 
-			logger.Error(wi.ctx, workflowErr.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, workflowErr.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			return retry.RetryableError(workflowErr) // directly return the workflow error, if the execution failed we will retry eventually
 		}); err != nil {
 		// Max attempts reached and not resumable
 		wi.mu.Lock()
 		// the whole workflow entity failed
 		err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to execute workflow instance: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		wi.fsm.Fire(TriggerFail, err)
 
 		wi.mu.Unlock()
@@ -1799,14 +1799,14 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 // Whatever happen in the runWorkflow is interpreted for form the WorkflowOutput or an error
 func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *WorkflowOutput, err error) {
 
-	logger.Debug(wi.ctx, "workflow instance run workflow", "workflow_id", wi.workflowID)
+	logger.Debug(wi.ctx, "workflow instance run workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 	// Get the latest execution, which may be nil if none exist
 	latestExecution, err := wi.db.GetWorkflowExecutionLatestByEntityID(wi.workflowID)
 	if err != nil {
 		// Only return if there's an actual error)
 		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to get latest workflow execution: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return nil, err
 	}
 
@@ -1814,11 +1814,11 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	// Technically, that's handled at the contest level
 	// TODO: is that really necessary?!?!
 	if latestExecution != nil && latestExecution.Status == ExecutionStatusCompleted && latestExecution.WorkflowExecutionData != nil && latestExecution.WorkflowExecutionData.Outputs != nil {
-		logger.Debug(wi.ctx, "workflow instance run workflow already completed", "workflow_id", wi.workflowID)
+		logger.Debug(wi.ctx, "workflow instance run workflow already completed", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		outputs, err := convertOutputsFromSerialization(wi.handler, latestExecution.WorkflowExecutionData.Outputs)
 		if err != nil {
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to convert outputs from serialization: %w", err))
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			return nil, err
 		}
 		return &WorkflowOutput{
@@ -1854,7 +1854,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	var workflowInputs [][]byte
 	if err = wi.db.GetWorkflowDataProperties(wi.dataID, GetWorkflowDataInputs(&workflowInputs)); err != nil {
 		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to get workflow data inputs: %w", err))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return nil, err
 	}
 
@@ -1878,7 +1878,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 
 			// allow the caller to know about the panic
 			err = errors.Join(ErrWorkflowInstanceRun, ErrWorkflowPanicked)
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			// due to the `err` it will trigger the fail state
 			outputs = &WorkflowOutput{
 				StrackTrace: &stackTrace,
@@ -1891,7 +1891,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	select {
 	case <-wi.ctx.Done():
 		err := errors.Join(ErrWorkflowInstanceRun, wi.ctx.Err(), fmt.Errorf("workflow instance context done: %w", wi.ctx.Err()))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return nil, err
 	default:
 	}
@@ -1901,7 +1901,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	numOut := len(results)
 	if numOut == 0 {
 		err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("function %s should return at least an error", handler.HandlerName))
-		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		return nil, err
 	}
 
@@ -1927,13 +1927,13 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	}
 
 	if realError != nil {
-		logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID)
+		logger.Debug(wi.ctx, "workflow instance run workflow failed", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 		// Update execution error
 		if err = wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionError(realError.Error())); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution error: %w", err))
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			return nil, err
 		}
 
@@ -1941,13 +1941,13 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			return nil, err
 		}
 
 		return nil, realError
 	} else {
-		logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID)
+		logger.Debug(wi.ctx, "workflow instance run workflow success", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 		outputs := []interface{}{}
 		if numOut > 1 {
@@ -1961,7 +1961,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		outputBytes, err := convertOutputsForSerialization(outputs)
 		if err != nil {
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to convert outputs for serialization: %w", err))
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			return nil, err
 		}
 
@@ -1969,7 +1969,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
-			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID, "data_id", wi.dataID)
 			return nil, err
 		}
 
@@ -3105,7 +3105,7 @@ func (si *SideEffectInstance) Start() {
 func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...interface{}) error {
 	var err error
 
-	logger.Debug(si.ctx, "side effect instance execute", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance execute", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 
 	// Create execution before trying side effect
 	if si.executionID, err = si.db.AddSideEffectExecution(&SideEffectExecution{
@@ -3116,7 +3116,7 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		SideEffectExecutionData: &SideEffectExecutionData{},
 	}); err != nil {
 		err := errors.Join(ErrSideEffectInstanceExecute, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setError(err)
 		}
@@ -3136,7 +3136,7 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		ChildType:         EntitySideEffect,
 	}); err != nil {
 		err := errors.Join(ErrSideEffectInstanceExecute, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setError(err)
 		}
@@ -3154,14 +3154,14 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 			si.executionID,
 			SetSideEffectExecutionStatus(ExecutionStatusCompleted)); err != nil {
 			err := errors.Join(ErrSideEffectInstanceExecute, err)
-			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 			if si.future != nil {
 				si.future.setError(err)
 			}
 			return err
 		}
 
-		logger.Debug(si.ctx, "side effect instance execute completed", "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Debug(si.ctx, "side effect instance execute completed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setResult(output.Outputs)
 		}
@@ -3181,7 +3181,7 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 
 	if err = si.db.SetSideEffectExecutionProperties(si.executionID, setters...); err != nil {
 		err := errors.Join(ErrSideEffectInstanceExecute, execErr, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setError(err)
 		}
@@ -3192,14 +3192,14 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		si.entityID,
 		SetSideEffectEntityStatus(StatusFailed)); err != nil {
 		err := errors.Join(ErrSideEffectInstanceExecute, execErr, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setError(err)
 		}
 		return err
 	}
 
-	logger.Error(si.ctx, "side effect instance execute failed", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Error(si.ctx, "side effect instance execute failed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID, "error", execErr)
 	if si.future != nil {
 		si.future.setError(execErr)
 	}
@@ -3208,7 +3208,7 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 }
 
 func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err error) {
-	logger.Debug(si.ctx, "side effect instance run", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance run", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -3221,19 +3221,20 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 			}
 
 			err = errors.Join(ErrSideEffectRun, ErrSideEffectPanicked)
-			logger.Error(si.ctx, fmt.Sprintf("side effect panicked: %v", r), "workflow_id", si.workflowID, "step_id", si.stepID)
+			logger.Error(si.ctx, fmt.Sprintf("side effect panicked: %v", r), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		}
 	}()
 
 	select {
 	case <-si.ctx.Done():
 		err := errors.Join(ErrSideEffectRun, si.ctx.Err())
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return nil, err
 	default:
 	}
 
-	results := reflect.ValueOf(si.handler.Handler).Call(nil)
+	results := reflect.ValueOf(si.handler.Handler).Call(nil) // call side effect function
+
 	outputs := make([]interface{}, len(results))
 	for i, res := range results {
 		outputs[i] = res.Interface()
@@ -3242,7 +3243,7 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 	outputBytes, err := convertOutputsForSerialization(outputs)
 	if err != nil {
 		err := errors.Join(ErrSideEffectRun, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return nil, err
 	}
 
@@ -3250,7 +3251,7 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 		si.entityID,
 		SetSideEffectExecutionDataOutputs(outputBytes)); err != nil {
 		err := errors.Join(ErrSideEffectRun, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return nil, err
 	}
 
@@ -3261,11 +3262,11 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 
 func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
-	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 
 	if len(args) != 1 {
 		err := errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected 1 argument, got %d", len(args)))
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return err
 	}
 
@@ -3273,7 +3274,7 @@ func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}
 	var sideEffectOutput *SideEffectOutput
 	if sideEffectOutput, ok = args[0].(*SideEffectOutput); !ok {
 		err := errors.Join(ErrSideEffectInstanceCompleted, fmt.Errorf("SideEffectInstance onCompleted expected *SideEffectOutput"))
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return err
 	}
 
@@ -3281,11 +3282,11 @@ func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}
 		si.entityID,
 		SetSideEffectEntityStatus(StatusCompleted)); err != nil {
 		err := errors.Join(ErrSideEffectInstanceCompleted, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return err
 	}
 
-	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setResult(sideEffectOutput.Outputs)
 	}
@@ -3295,17 +3296,17 @@ func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}
 
 func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) error {
 
-	logger.Debug(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 
 	if len(args) != 1 {
 		err := errors.Join(ErrSideEffectInstanceFailed, fmt.Errorf("SideEffectInstance onFailed expected 1 argument, got %d", len(args)))
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return err
 	}
 
 	err := args[0].(error)
 
-	logger.Error(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Error(si.ctx, "side effect instance failed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 	if si.future != nil {
 		si.future.setError(errors.Join(ErrSideEffectFailed, err))
 	}
@@ -3316,14 +3317,14 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 				si.executionID,
 				SetSideEffectExecutionStatus(ExecutionStatusCancelled)); err != nil {
 				err := errors.Join(ErrSideEffectInstanceFailed, err)
-				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 				return err
 			}
 			if err := si.db.SetSideEffectEntityProperties(
 				si.entityID,
 				SetSideEffectEntityStatus(StatusCancelled)); err != nil {
 				err := errors.Join(ErrSideEffectInstanceFailed, err)
-				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+				logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 				return err
 			}
 			return nil
@@ -3334,7 +3335,7 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 		si.entityID,
 		SetSideEffectEntityStatus(StatusFailed)); err != nil {
 		err := errors.Join(ErrSideEffectInstanceFailed, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		return err
 	}
 
@@ -3343,7 +3344,7 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 
 func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
-	logger.Debug(si.ctx, "side effect instance paused", "workflow_id", si.workflowID, "step_id", si.stepID)
+	logger.Debug(si.ctx, "side effect instance paused", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 
 	if si.future != nil {
 		si.future.setError(errors.Join(ErrSideEffectInstancePaused, ErrPaused))
@@ -3353,7 +3354,7 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 	// Tell the orchestrator to manage the case
 	if err = si.tracker.onPause(); err != nil {
 		err := errors.Join(ErrSideEffectInstancePaused, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
 			si.future.setError(err)
 		}
