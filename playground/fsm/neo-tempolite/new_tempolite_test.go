@@ -19,7 +19,7 @@ func TestQueueCrossBasic(t *testing.T) {
 	var defaultQ *QueueInstance
 	var secondQ *QueueInstance
 
-	var onCross crossWorkflow = func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var onCross crossQueueWorkflowHandler = func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 
 		queue, err := db.GetQueueByName(queueName)
 		if err != nil {

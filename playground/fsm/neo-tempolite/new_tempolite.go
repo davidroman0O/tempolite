@@ -45,32 +45,32 @@ type QueueInstance struct {
 	processingWorkers map[int]struct{}
 	freeWorkers       map[int]struct{}
 
-	onCrossWorkflow crossWorkflow
-	onContinueAsNew continueAsNew
-	onSignalNew     signalNew
+	onCrossWorkflow crossQueueWorkflowHandler
+	onContinueAsNew crossQueueContinueAsNewHandler
+	onSignalNew     workflowSignalHandler
 }
 
 type queueConfig struct {
-	onCrossWorkflow crossWorkflow
-	onContinueAsNew continueAsNew
-	onSignalNew     signalNew
+	onCrossWorkflow crossQueueWorkflowHandler
+	onContinueAsNew crossQueueContinueAsNewHandler
+	onSignalNew     workflowSignalHandler
 }
 
 type queueOption func(*queueConfig)
 
-func WithCrossWorkflowHandler(handler crossWorkflow) queueOption {
+func WithCrossWorkflowHandler(handler crossQueueWorkflowHandler) queueOption {
 	return func(c *queueConfig) {
 		c.onCrossWorkflow = handler
 	}
 }
 
-func WithContinueAsNewHandler(handler continueAsNew) queueOption {
+func WithContinueAsNewHandler(handler crossQueueContinueAsNewHandler) queueOption {
 	return func(c *queueConfig) {
 		c.onContinueAsNew = handler
 	}
 }
 
-func WithSignalNewHandler(handler signalNew) queueOption {
+func WithSignalNewHandler(handler workflowSignalHandler) queueOption {
 	return func(c *queueConfig) {
 		c.onSignalNew = handler
 	}
@@ -290,7 +290,7 @@ type QueueConfig struct {
 type TempoliteOption func(*Tempolite) error
 
 // createCrossWorkflowHandler creates the handler function for cross-queue workflow communication
-func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
+func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 	return func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.RLock()
 		queue, ok := t.queueInstances[queueName]
@@ -322,7 +322,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossWorkflow {
 	}
 }
 
-func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
+func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler {
 	return func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.Lock()
 		queue, ok := t.queueInstances[queueName]
@@ -355,7 +355,7 @@ func (t *Tempolite) createContinueAsNewHandler() continueAsNew {
 	}
 }
 
-func (t *Tempolite) createSignalNewHandler() signalNew {
+func (t *Tempolite) createSignalNewHandler() workflowSignalHandler {
 	return func(workflowID int, signal string) Future {
 
 		t.mu.Lock()

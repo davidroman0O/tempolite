@@ -45,16 +45,86 @@ func init() {
 }
 
 var (
+	// Core errors
 	ErrWorkflowPanicked   = errors.New("workflow panicked")
 	ErrActivityPanicked   = errors.New("activity panicked")
 	ErrSideEffectPanicked = errors.New("side effect panicked")
 	ErrSagaPanicked       = errors.New("saga panicked")
 
+	// Fsm errors
 	ErrWorkflowFailed   = errors.New("workflow failed")
 	ErrActivityFailed   = errors.New("activity failed")
 	ErrSideEffectFailed = errors.New("side effect failed")
 	ErrSagaFailed       = errors.New("saga failed")
 	ErrSagaCompensated  = errors.New("saga compensated")
+
+	// io
+	ErrMustPointer   = errors.New("value must be a pointer")
+	ErrEncoding      = errors.New("failed to encode value")
+	ErrSerialization = errors.New("failed to serialize")
+
+	// Saga errors
+	ErrTransactionContext         = errors.New("failed transaction context")
+	ErrCompensationContext        = errors.New("failed compensation context")
+	ErrTransactionMethodNotFound  = errors.New("transaction method not found")
+	ErrCompensationMethodNotFound = errors.New("compensation method not found")
+	ErrSagaGetValue               = errors.New("failed to get saga value")
+
+	// Orchestrator errors
+	ErrOrchestrator              = errors.New("failed orchestrator")
+	ErrGetResults                = errors.New("cannot get results")
+	ErrWorkflowPaused            = errors.New("workflow is paused")
+	ErrRegistryHandlerNotFound   = errors.New("handler not found")
+	ErrOrchestratorExecution     = errors.New("failed to execute workflow")
+	ErrOrchestratorExecuteEntity = errors.New("failed to execute workflow with entity")
+	ErrRegistryRegisteration     = errors.New("failed to register workflow")
+	ErrPreparation               = errors.New("failed to prepare workflow")
+
+	// Context errors
+	ErrActivityContext   = errors.New("failed activity context")
+	ErrSideEffectContext = errors.New("failed side effect context")
+	ErrSagaContext       = errors.New("failed saga context")
+	ErrWorkflowContext   = errors.New("failed workflow context")
+	ErrSignalContext     = errors.New("failed signal context")
+
+	// Workflow lifecycle errors
+	ErrWorkflowInstance          = errors.New("failed workflow instance")
+	ErrWorkflowInstanceExecution = errors.New("failed to execute workflow instance")
+	ErrWorkflowInstanceRun       = errors.New("failed to run workflow instance")
+	ErrWorkflowInstanceCompleted = errors.New("failed to complete workflow instance")
+	ErrWorkflowInstanceFailed    = errors.New("failed to fail workflow instance")
+	ErrWorkflowInstancePaused    = errors.New("failed to pause workflow instance")
+
+	// Activity lifecycle errors
+	ErrActivityInstance          = errors.New("failed activity instance")
+	ErrActivityInstanceExecute   = errors.New("failed to execute activity instance")
+	ErrActivityInstanceRun       = errors.New("failed to run activity instance")
+	ErrActivityInstanceCompleted = errors.New("failed to complete activity instance")
+	ErrActivityInstanceFailed    = errors.New("failed to fail activity instance")
+	ErrActivityInstancePaused    = errors.New("failed to pause activity instance")
+
+	// SideEffect lifecycle errors
+	ErrSideEffectInstance          = errors.New("failed side effect instance")
+	ErrSideEffectInstanceExecute   = errors.New("failed to execute side effect instance")
+	ErrSideEffectRun               = errors.New("failed to run side effect")
+	ErrSideEffectInstanceCompleted = errors.New("failed to complete side effect instance")
+	ErrSideEffectInstanceFailed    = errors.New("failed to fail side effect instance")
+	ErrSideEffectInstancePaused    = errors.New("failed to pause side effect instance")
+
+	// Saga lifecycle errors
+	ErrSagaContextCompensate  = errors.New("failed to compensate saga context")
+	ErrSagaInstance           = errors.New("failed saga instance")
+	ErrSagaInstanceExecute    = errors.New("failed to execute saga instance")
+	ErrSagaInstanceCompensate = errors.New("failed to compensate saga instance")
+	ErrSagaInstanceCompleted  = errors.New("failed to complete saga instance")
+	ErrSagaInstanceFailed     = errors.New("failed to fail saga instance")
+
+	// Signal lifecycle errors
+	ErrSignalInstance          = errors.New("failed signal instance")
+	ErrSignalInstanceExecute   = errors.New("failed to execute signal instance")
+	ErrSignalInstanceCompleted = errors.New("failed to complete signal instance")
+	ErrSignalInstanceFailed    = errors.New("failed to fail signal instance")
+	ErrSignalInstancePaused    = errors.New("failed to pause signal instance")
 )
 
 type Future interface {
@@ -67,11 +137,11 @@ type Future interface {
 	IsPaused() bool
 }
 
-type crossWorkflow func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueWorkflowHandler func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
-type continueAsNew func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueContinueAsNewHandler func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
-type signalNew func(workflowID int, signal string) Future
+type workflowSignalHandler func(workflowID int, signal string) Future
 
 type TransactionContext struct {
 	ctx         context.Context
@@ -80,12 +150,6 @@ type TransactionContext struct {
 	executionID int
 	stepIndex   int
 }
-
-var ErrMustPointer = errors.New("value must be a pointer")
-var ErrEncoding = errors.New("failed to encode value")
-var ErrSagaGetValue = errors.New("failed to get saga value")
-
-var ErrTransactionContext = errors.New("failed transaction context")
 
 func (tc *TransactionContext) Store(key string, value interface{}) error {
 	var err error
@@ -152,8 +216,6 @@ type CompensationContext struct {
 	executionID int
 	stepIndex   int
 }
-
-var ErrCompensationContext = errors.New("failed compensation context")
 
 func (cc *CompensationContext) Load(key string, value interface{}) error {
 	var data []byte
@@ -246,9 +308,6 @@ func (b *SagaDefinitionBuilder) AddStep(step SagaStep) *SagaDefinitionBuilder {
 	b.steps = append(b.steps, step)
 	return b
 }
-
-var ErrTransactionMethodNotFound = errors.New("transaction method not found")
-var ErrCompensationMethodNotFound = errors.New("compensation method not found")
 
 // Build creates a SagaDefinition with the HandlerInfo included.
 func (b *SagaDefinitionBuilder) Build() (*SagaDefinition, error) {
@@ -373,9 +432,9 @@ type WorkflowContext struct {
 	workflowExecutionID int
 	options             WorkflowOptions
 
-	onCrossQueueWorkflow crossWorkflow
-	onContinueAsNew      continueAsNew
-	onSignalNew          signalNew
+	onCrossQueueWorkflow crossQueueWorkflowHandler
+	onContinueAsNew      crossQueueContinueAsNewHandler
+	onSignalNew          workflowSignalHandler
 }
 
 // GetVersion retrieves or sets a version for a changeID.
@@ -504,9 +563,9 @@ type WorkflowInstance struct {
 	parentEntityID    int
 	parentStepID      string
 
-	onCrossWorkflow crossWorkflow
-	onContinueAsNew continueAsNew
-	onSignalNew     signalNew
+	onCrossWorkflow crossQueueWorkflowHandler
+	onContinueAsNew crossQueueContinueAsNewHandler
+	onSignalNew     workflowSignalHandler
 }
 
 // Future implementation of direct calling
@@ -587,8 +646,6 @@ func (f *RuntimeFuture) GetResults() ([]interface{}, error) {
 	return results, nil
 }
 
-var ErrGetResults = errors.New("cannot get results")
-
 func (f *RuntimeFuture) Get(out ...interface{}) error {
 
 	logger.Debug(context.Background(), "future wait get", "future.workflow_id", f.workflowID)
@@ -636,10 +693,7 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 
 type StateTracker interface {
 	isPaused() bool
-	// isActive() bool
 	setUnpause()
-	// setActive()
-	// setInactive()
 }
 
 type Debug interface {
@@ -647,14 +701,14 @@ type Debug interface {
 }
 
 type InstanceTracker interface {
-	onPause() error
 	addWorkflowInstance(wi *WorkflowInstance)
 	addActivityInstance(ai *ActivityInstance)
 	addSideEffectInstance(sei *SideEffectInstance)
 	addSagaInstance(si *SagaInstance)
 	newRoot(root *WorkflowInstance)
-	reset()
 	findSagaInstance(stepID string) (*SagaInstance, error)
+	onPause() error
+	reset()
 }
 
 // Orchestrator orchestrates the execution of workflows and activities.
@@ -689,32 +743,32 @@ type Orchestrator struct {
 
 	displayStackTrace bool
 
-	onCrossWorkflow crossWorkflow
-	onContinueAsNew continueAsNew
-	onSignalNew     signalNew
+	onCrossWorkflow crossQueueWorkflowHandler
+	onContinueAsNew crossQueueContinueAsNewHandler
+	onSignalNew     workflowSignalHandler
 }
 
 type orchestratorConfig struct {
-	onCrossWorkflow crossWorkflow
-	onContinueAsNew continueAsNew
-	onSignalNew     signalNew
+	onCrossWorkflow crossQueueWorkflowHandler
+	onContinueAsNew crossQueueContinueAsNewHandler
+	onSignalNew     workflowSignalHandler
 }
 
 type OrchestratorOption func(*orchestratorConfig)
 
-func WithCrossWorkflow(fn crossWorkflow) OrchestratorOption {
+func WithCrossWorkflow(fn crossQueueWorkflowHandler) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onCrossWorkflow = fn
 	}
 }
 
-func WithContinueAsNew(fn continueAsNew) OrchestratorOption {
+func WithContinueAsNew(fn crossQueueContinueAsNewHandler) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onContinueAsNew = fn
 	}
 }
 
-func WithSignalNew(fn signalNew) OrchestratorOption {
+func WithSignalNew(fn workflowSignalHandler) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onSignalNew = fn
 	}
@@ -749,14 +803,6 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 
 	return o
 }
-
-// func (o *Orchestrator) setActive() {
-// 	o.active.Store(true)
-// }
-
-// func (o *Orchestrator) setInactive() {
-// 	o.active.Store(false)
-// }
 
 func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
 	logger.Debug(o.ctx, "orchestrator find saga instance", "orchestrator.find_saga_instance.step_id", stepID)
@@ -794,8 +840,6 @@ func (o *Orchestrator) Cancel() {
 	o.cancel()
 }
 
-var ErrOrchestrator = errors.New("failed orchestrator")
-
 func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
 
 	logger.Debug(o.ctx, "orchestrator get status", "orchestrator.get_status.workflow_id", id)
@@ -829,12 +873,6 @@ func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
 	}
 }
 
-// func (o *Orchestrator) WaitActive() {
-// for o.active.Load() { // it is still active, you have to wait
-// 	<-time.After(100 * time.Millisecond)
-// }
-// }
-
 func (o *Orchestrator) isPaused() bool {
 	logger.Debug(o.ctx, "orchestrator is paused", "orchestrator.is_paused", o.paused)
 	o.pausedMu.Lock()
@@ -849,20 +887,12 @@ func (o *Orchestrator) setUnpause() {
 	o.paused = false
 }
 
-// func (o *Orchestrator) isActive() bool {
-// 	return o.active.Load()
-// }
-
 func (o *Orchestrator) canStackTrace() bool {
 	logger.Debug(o.ctx, "orchestrator can stack trace", "orchestrator.can_stack_trace", o.displayStackTrace)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.displayStackTrace
 }
-
-var ErrWorkflowPaused = errors.New("workflow is paused")
-var ErrRegistryHandlerNotFound = errors.New("handler not found")
-var ErrSerialization = errors.New("failed to serialize")
 
 func (o *Orchestrator) Resume(entityID int) Future {
 	// TODO: add timeout
@@ -992,11 +1022,6 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	// Very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
 
-	// if !o.isActive() {
-	// 	future.setError(fmt.Errorf("orchestrator is stopping"))
-	// 	return future
-	// }
-
 	o.setUnpause()
 	o.reset()
 
@@ -1038,10 +1063,6 @@ type preparationOptions struct {
 	parentWorkflowID          int
 	parentWorkflowExecutionID int
 }
-
-var ErrRegistryRegisteration = errors.New("failed to register workflow")
-
-var ErrPreparation = errors.New("failed to prepare workflow")
 
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
 func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
@@ -1172,9 +1193,11 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 			}
 		}
 	}
+
 	if continuedID != 0 {
 		data.ContinuedFrom = &continuedID
 	}
+
 	if continuedExecutionID != 0 {
 		data.ContinuedExecutionFrom = &continuedExecutionID
 	}
@@ -1226,8 +1249,6 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	return entity, nil
 }
 
-var ErrOrchestratorExecution = errors.New("failed to execute workflow")
-
 // Execute starts the execution of a workflow directly.
 func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 	var entity *WorkflowEntity
@@ -1258,8 +1279,6 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 
 	return future
 }
-
-var ErrOrchestratorExecuteEntity = errors.New("failed to execute workflow with entity")
 
 // ExecuteWithEntity starts a workflow using an existing entity ID
 func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
@@ -1370,13 +1389,6 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 
 	// Very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
-
-	// if !o.isActive() {
-	// 	future.setError(errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("orchestrator is already active")))
-	// 	return nil, errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("orchestrator is already active"))
-	// }
-
-	// o.setActive()
 
 	o.addWorkflowInstance(instance)
 
@@ -1531,8 +1543,6 @@ func (o *Orchestrator) newRoot(root *WorkflowInstance) {
 
 ////////////////////////// WorkflowInstance
 
-var ErrWorkflowInstance = errors.New("failed workflow instance")
-
 // Starting the workflow instance
 // Ideally we're already within a goroutine
 func (wi *WorkflowInstance) Start(inputs []interface{}) error {
@@ -1597,8 +1607,6 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 
 	return nil
 }
-
-var ErrWorkflowInstanceExecution = errors.New("failed to execute workflow instance")
 
 func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface{}) error {
 
@@ -1786,8 +1794,6 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 	}
 	return nil
 }
-
-var ErrWorkflowInstanceRun = errors.New("failed to run workflow instance")
 
 // YOU DONT CHANGE THE STATUS OF THE WORKFLOW HERE
 // Whatever happen in the runWorkflow is interpreted for form the WorkflowOutput or an error
@@ -1984,8 +1990,6 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	}
 }
 
-var ErrWorkflowInstanceCompleted = errors.New("failed to complete workflow instance")
-
 func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
 	logger.Debug(wi.ctx, "workflow instance on completed", "workflow_id", wi.workflowID)
@@ -2098,8 +2102,6 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 	return nil
 }
 
-var ErrWorkflowInstanceFailed = errors.New("failed to fail workflow instance")
-
 func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) error {
 
 	logger.Debug(wi.ctx, "workflow instance on failed", "workflow_id", wi.workflowID)
@@ -2187,8 +2189,6 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 	return nil
 }
 
-var ErrWorkflowInstancePaused = errors.New("failed to pause workflow instance")
-
 func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
 	logger.Debug(wi.ctx, "workflow instance on paused", "workflow_id", wi.workflowID)
@@ -2217,8 +2217,6 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 }
 
 ///////////// Activity
-
-var ErrActivityContext = errors.New("failed activity context")
 
 func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, options *ActivityOptions, args ...interface{}) Future {
 	var err error
@@ -2449,8 +2447,6 @@ type ActivityInstance struct {
 	parentStepID      string
 }
 
-var ErrActivityInstance = errors.New("failed activity instance")
-
 func (ai *ActivityInstance) Start(inputs []interface{}) {
 	logger.Debug(ai.ctx, "activity instance start", "workflow_id", ai.workflowID, "step_id", ai.stepID)
 	// ai.mu.Lock()
@@ -2485,8 +2481,6 @@ func (ai *ActivityInstance) Start(inputs []interface{}) {
 		ai.future.setError(err)
 	}
 }
-
-var ErrActivityInstanceExecute = errors.New("failed to execute activity instance")
 
 func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface{}) error {
 
@@ -2664,8 +2658,6 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 	return nil
 }
 
-var ErrActivityInstanceRun = errors.New("failed to run activity instance")
-
 // Sub-function within executeWithRetry
 func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *ActivityOutput, err error) {
 
@@ -2811,8 +2803,6 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 	}
 }
 
-var ErrActivityInstanceCompleted = errors.New("failed to complete activity instance")
-
 func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
 	logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
@@ -2837,8 +2827,6 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 	return nil
 }
-
-var ErrActivityInstanceFailed = errors.New("failed to fail activity instance")
 
 func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) error {
 
@@ -2885,8 +2873,6 @@ func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) err
 	return nil
 }
 
-var ErrActivityInstancePaused = errors.New("failed to pause activity instance")
-
 // In theory, the behavior of the pause doesn't exists
 // The Activity is supposed to finish what it was doing, the developer own the responsibility to detect the cancellation of it's own context.
 func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error {
@@ -2906,8 +2892,6 @@ type SideEffectOutput struct {
 	StrackTrace *string
 	Paused      bool
 }
-
-var ErrSideEffectContext = errors.New("failed side effect context")
 
 func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{}) Future {
 	var err error
@@ -3062,8 +3046,6 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	return future
 }
 
-var ErrSideEffectInstance = errors.New("failed side effect instance")
-
 type SideEffectInstance struct {
 	ctx     context.Context
 	mu      deadlock.Mutex
@@ -3119,8 +3101,6 @@ func (si *SideEffectInstance) Start() {
 		}
 	}
 }
-
-var ErrSideEffectInstanceExecute = errors.New("failed to execute side effect instance")
 
 func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...interface{}) error {
 	var err error
@@ -3227,8 +3207,6 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 	return errors.Join(ErrSideEffectInstanceExecute, execErr)
 }
 
-var ErrSideEffectRun = errors.New("failed to run side effect")
-
 func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err error) {
 	logger.Debug(si.ctx, "side effect instance run", "workflow_id", si.workflowID, "step_id", si.stepID)
 
@@ -3281,8 +3259,6 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 	}, nil
 }
 
-var ErrSideEffectInstanceCompleted = errors.New("failed to complete side effect instance")
-
 func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
 	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
@@ -3316,8 +3292,6 @@ func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}
 
 	return nil
 }
-
-var ErrSideEffectInstanceFailed = errors.New("failed to fail side effect instance")
 
 func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) error {
 
@@ -3367,8 +3341,6 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 	return nil
 }
 
-var ErrSideEffectInstancePaused = errors.New("failed to pause side effect instance")
-
 func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
 	logger.Debug(si.ctx, "side effect instance paused", "workflow_id", si.workflowID, "step_id", si.stepID)
@@ -3392,8 +3364,6 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 }
 
 //////////////////////////////////// SAGA
-
-var ErrSagaContext = errors.New("failed saga context")
 
 func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	var err error
@@ -3500,8 +3470,6 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	return future
 }
 
-var ErrSagaContextCompensate = errors.New("failed to compensate saga context")
-
 func (ctx WorkflowContext) CompensateSaga(stepID string) error {
 
 	logger.Debug(ctx.ctx, "compensate saga context", "workflow_id", ctx.workflowID, "step_id", stepID)
@@ -3568,8 +3536,6 @@ type SagaInstance struct {
 	parentStepID      string
 }
 
-var ErrSagaInstance = errors.New("failed saga instance")
-
 func (si *SagaInstance) Start() {
 	logger.Debug(si.ctx, "saga instance start", "workflow_id", si.workflowID, "step_id", si.stepID)
 	si.mu.Lock()
@@ -3605,8 +3571,6 @@ func (si *SagaInstance) Start() {
 		si.future.setError(err)
 	}
 }
-
-var ErrSagaInstanceExecute = errors.New("failed to execute saga instance")
 
 func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{}) (err error) {
 	// Capture panics at the function level
@@ -3722,8 +3686,6 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 	si.fsm.Fire(TriggerComplete)
 	return nil
 }
-
-var ErrSagaInstanceCompensate = errors.New("failed to compensate saga instance")
 
 func (si *SagaInstance) executeCompensations(_ context.Context, args ...interface{}) (err error) {
 	logger.Debug(si.ctx, "saga instance compensate", "workflow_id", si.workflowID, "step_id", si.stepID)
@@ -3886,8 +3848,6 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 	return nil
 }
 
-var ErrSagaInstanceCompleted = errors.New("failed to complete saga instance")
-
 func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) error {
 	logger.Debug(si.ctx, "saga instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	var status EntityStatus
@@ -3920,8 +3880,6 @@ func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) erro
 	return nil
 }
 
-var ErrSagaInstanceFailed = errors.New("failed to fail saga instance")
-
 func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 	logger.Debug(si.ctx, "saga instance failed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	var err error
@@ -3948,8 +3906,6 @@ func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 }
 
 ///////////////////////////////////////////////////// Sub Workflow
-
-var ErrWorkflowContext = errors.New("failed workflow context")
 
 // Workflow creates or retrieves a sub-workflow associated with this workflow context
 func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
@@ -4225,8 +4181,6 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 // /////////////////////////////////////////////////// Signals
 
-var ErrSignalContext = errors.New("failed signal context")
-
 // Signal allows workflow to receive named signals with type-safe output
 func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 	logger.Debug(ctx.ctx, "signal context", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
@@ -4297,8 +4251,6 @@ func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 	return instance.Start()
 }
 
-var ErrSignalInstance = errors.New("failed signal instance")
-
 type SignalInstance struct {
 	ctx     context.Context
 	db      Database
@@ -4321,7 +4273,7 @@ type SignalInstance struct {
 	outputType reflect.Type
 	done       chan error
 
-	onSignal signalNew
+	onSignal workflowSignalHandler
 }
 
 func (si *SignalInstance) Start() error {
@@ -4362,8 +4314,6 @@ func (si *SignalInstance) Start() error {
 
 	return <-si.done
 }
-
-var ErrSignalInstanceExecute = errors.New("failed to execute signal instance")
 
 func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) error {
 
@@ -4508,8 +4458,6 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	return nil
 }
 
-var ErrSignalInstanceCompleted = errors.New("failed to complete signal instance")
-
 func (si *SignalInstance) onCompleted(_ context.Context, args ...interface{}) error {
 	logger.Debug(si.ctx, "signal instance completed", "workflow_id", si.runID, "step_id", si.parentStepID)
 	if err := si.db.SetSignalEntityProperties(
@@ -4530,8 +4478,6 @@ func (si *SignalInstance) onCompleted(_ context.Context, args ...interface{}) er
 
 	return nil
 }
-
-var ErrSignalInstanceFailed = errors.New("failed to fail signal instance")
 
 func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error {
 	logger.Debug(si.ctx, "signal instance failed", "workflow_id", si.runID, "step_id", si.parentStepID)
@@ -4579,8 +4525,6 @@ func (si *SignalInstance) onFailed(_ context.Context, args ...interface{}) error
 
 	return nil
 }
-
-var ErrSignalInstancePaused = errors.New("failed to pause signal instance")
 
 func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
 	logger.Debug(si.ctx, "signal instance paused", "workflow_id", si.runID, "step_id", si.parentStepID)
