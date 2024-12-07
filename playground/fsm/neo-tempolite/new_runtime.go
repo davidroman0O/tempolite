@@ -32,7 +32,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -127,27 +127,110 @@ var (
 	ErrSignalInstancePaused    = errors.New("failed to pause signal instance")
 )
 
+type FutureEntity struct {
+	workflowID   *WorkflowEntityID
+	sideEffectID *SideEffectEntityID
+	sagaID       *SagaEntityID
+	activityID   *ActivityEntityID
+}
+
+type futureEntityOption func(*FutureEntity)
+
+func FutureEntityWithWorkflowID(id WorkflowEntityID) futureEntityOption {
+	return func(f *FutureEntity) {
+		f.workflowID = &id
+	}
+}
+
+func FutureEntityWithSideEffectID(id SideEffectEntityID) futureEntityOption {
+	return func(f *FutureEntity) {
+		f.sideEffectID = &id
+	}
+}
+
+func FutureEntityWithSagaID(id SagaEntityID) futureEntityOption {
+	return func(f *FutureEntity) {
+		f.sagaID = &id
+	}
+}
+
+func FutureEntityWithActivityID(id ActivityEntityID) futureEntityOption {
+	return func(f *FutureEntity) {
+		f.activityID = &id
+	}
+}
+
+type FutureExecution struct {
+	workflowExecutionID   *WorkflowExecutionID
+	sideEffectExecutionID *SideEffectExecutionID
+	sagaExecutionID       *SagaExecutionID
+	activityExecutionID   *ActivityExecutionID
+}
+
+type futureExecutionOption func(*FutureExecution)
+
+func FutureExecutionWithWorkflowExecutionID(id WorkflowExecutionID) futureExecutionOption {
+	return func(f *FutureExecution) {
+		f.workflowExecutionID = &id
+	}
+}
+
+func FutureExecutionWithSideEffectExecutionID(id SideEffectExecutionID) futureExecutionOption {
+	return func(f *FutureExecution) {
+		f.sideEffectExecutionID = &id
+	}
+}
+
+func FutureExecutionWithSagaExecutionID(id SagaExecutionID) futureExecutionOption {
+	return func(f *FutureExecution) {
+		f.sagaExecutionID = &id
+	}
+}
+
+func FutureExecutionWithActivityExecutionID(id ActivityExecutionID) futureExecutionOption {
+	return func(f *FutureExecution) {
+		f.activityExecutionID = &id
+	}
+}
+
 type Future interface {
+	setEntityID(fn futureEntityOption)
+	setExecutionID(fn futureExecutionOption)
+
+	HasEntity() bool
+	HasExecution() bool
+
+	EntityID() interface{}    // WorkflowEntityID, ActivityEntityID, SideEffectEntityID, SagaEntityID
+	ExecutionID() interface{} // WorkflowExecutionID, ActivityExecutionID, SideEffectExecutionID, SagaExecutionID
+
+	Type() EntityType
+
+	setParentWorkflowID(id WorkflowEntityID)
+	setParentExecutionID(id WorkflowExecutionID)
+
+	WorkflowID() WorkflowEntityID
+	WorkflowExecutionID() WorkflowExecutionID
+
 	Get(out ...interface{}) error
 	GetResults() ([]interface{}, error)
-	setEntityID(entityID int)
+
 	setError(err error)
 	setResult(results []interface{})
-	WorkflowID() int
+
 	IsPaused() bool
 }
 
-type crossQueueWorkflowHandler func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueWorkflowHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
-type crossQueueContinueAsNewHandler func(queueName string, workflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
-type workflowSignalHandler func(workflowID int, signal string) Future
+type workflowSignalHandler func(workflowID WorkflowEntityID, signal string) Future
 
 type TransactionContext struct {
 	ctx         context.Context
 	db          Database
-	contextID   int
-	executionID int
+	contextID   SagaValueID
+	executionID SagaExecutionID
 	stepIndex   int
 }
 
@@ -212,8 +295,8 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 type CompensationContext struct {
 	ctx         context.Context
 	db          Database
-	contextID   int
-	executionID int
+	contextID   SagaValueID
+	executionID SagaExecutionID
 	stepIndex   int
 }
 
@@ -425,11 +508,11 @@ type WorkflowContext struct {
 	state               StateTracker
 	tracker             InstanceTracker
 	debug               Debug
-	runID               int
-	queueID             int
+	runID               RunID
+	queueID             QueueID
 	stepID              string
-	workflowID          int
-	workflowExecutionID int
+	workflowID          WorkflowEntityID
+	workflowExecutionID WorkflowExecutionID
 	options             WorkflowOptions
 
 	onCrossQueueWorkflow crossQueueWorkflowHandler
@@ -553,14 +636,14 @@ type WorkflowInstance struct {
 	future  Future
 
 	stepID      string
-	runID       int
-	workflowID  int
-	executionID int
-	dataID      int
-	queueID     int
+	runID       RunID
+	workflowID  WorkflowEntityID
+	executionID WorkflowExecutionID
+	dataID      WorkflowDataID
+	queueID     QueueID
 
-	parentExecutionID int
-	parentEntityID    int
+	parentExecutionID WorkflowExecutionID
+	parentEntityID    WorkflowEntityID
 	parentStepID      string
 
 	onCrossWorkflow crossQueueWorkflowHandler
@@ -570,23 +653,110 @@ type WorkflowInstance struct {
 
 // Future implementation of direct calling
 type RuntimeFuture struct {
-	mu         sync.Mutex
-	results    []interface{}
-	err        error
-	done       chan struct{}
-	workflowID int
+	mu      sync.Mutex
+	results []interface{}
+	err     error
+	done    chan struct{}
+
 	once       sync.Once
 	continueAs int
-}
 
-func (f *RuntimeFuture) WorkflowID() int {
-	return f.workflowID
+	// Entity/Execuction Workflow
+	workflowID          WorkflowEntityID
+	workflowExecutionID WorkflowExecutionID
+
+	entity FutureEntity
+	exec   FutureExecution
 }
 
 func NewRuntimeFuture() Future {
 	return &RuntimeFuture{
 		done: make(chan struct{}),
 	}
+}
+
+func (f *RuntimeFuture) HasEntity() bool {
+	return f.entity.workflowID != nil || f.entity.activityID != nil || f.entity.sagaID != nil || f.entity.sideEffectID != nil
+}
+
+func (f *RuntimeFuture) HasExecution() bool {
+	return f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil || f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil
+}
+
+func (f *RuntimeFuture) setEntityID(fn futureEntityOption) {
+	e := &FutureEntity{}
+	fn(e)
+	f.entity = *e
+}
+
+func (f *RuntimeFuture) setExecutionID(fn futureExecutionOption) {
+	e := &FutureExecution{}
+	fn(e)
+	f.exec = *e
+}
+
+func (f *RuntimeFuture) EntityID() interface{} {
+	if f.entity.workflowID != nil {
+		return *f.entity.workflowID
+	}
+	if f.entity.activityID != nil {
+		return *f.entity.activityID
+	}
+	if f.entity.sagaID != nil {
+		return *f.entity.sagaID
+	}
+	if f.entity.sideEffectID != nil {
+		return *f.entity.sideEffectID
+	}
+	return nil
+}
+
+func (f *RuntimeFuture) ExecutionID() interface{} {
+	if f.exec.workflowExecutionID != nil {
+		return *f.exec.workflowExecutionID
+	}
+	if f.exec.activityExecutionID != nil {
+		return *f.exec.activityExecutionID
+	}
+	if f.exec.sagaExecutionID != nil {
+		return *f.exec.sagaExecutionID
+	}
+	if f.exec.sideEffectExecutionID != nil {
+		return *f.exec.sideEffectExecutionID
+	}
+	return nil
+}
+
+func (f *RuntimeFuture) Type() EntityType {
+	if f.entity.workflowID != nil {
+		return EntityWorkflow
+	}
+	if f.entity.activityID != nil {
+		return EntityActivity
+	}
+	if f.entity.sagaID != nil {
+		return EntitySaga
+	}
+	if f.entity.sideEffectID != nil {
+		return EntitySideEffect
+	}
+	return "unknown"
+}
+
+func (f *RuntimeFuture) setParentWorkflowID(id WorkflowEntityID) {
+	f.workflowID = id
+}
+
+func (f *RuntimeFuture) setParentExecutionID(id WorkflowExecutionID) {
+	f.workflowExecutionID = id
+}
+
+func (f *RuntimeFuture) WorkflowID() WorkflowEntityID {
+	return f.workflowID
+}
+
+func (f *RuntimeFuture) WorkflowExecutionID() WorkflowExecutionID {
+	return f.workflowExecutionID
 }
 
 func (f *RuntimeFuture) IsPaused() bool {
@@ -596,13 +766,6 @@ func (f *RuntimeFuture) IsPaused() bool {
 		return true
 	}
 	return false
-}
-
-func (f *RuntimeFuture) setEntityID(entityID int) {
-	f.mu.Lock()
-	f.workflowID = entityID
-	logger.Debug(context.Background(), "future set entity id", "future.entity_id", entityID, "future.workflow_id", f.workflowID)
-	f.mu.Unlock()
 }
 
 func (f *RuntimeFuture) setResult(results []interface{}) {
@@ -725,7 +888,7 @@ type Orchestrator struct {
 	registry *Registry
 	db       Database
 
-	runID int
+	runID RunID
 
 	rootWf *WorkflowInstance // root workflow instance
 
@@ -840,7 +1003,7 @@ func (o *Orchestrator) Cancel() {
 	o.cancel()
 }
 
-func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
+func (o *Orchestrator) GetStatus(id WorkflowEntityID) (EntityStatus, error) {
 
 	logger.Debug(o.ctx, "orchestrator get status", "orchestrator.get_status.workflow_id", id)
 
@@ -855,7 +1018,7 @@ func (o *Orchestrator) GetStatus(id int) (EntityStatus, error) {
 	return status, nil
 }
 
-func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
+func (o *Orchestrator) WaitFor(id WorkflowEntityID, status EntityStatus) error {
 
 	logger.Debug(o.ctx, "orchestrator wait for", "orchestrator.wait_for.workflow_id", id, "orchestrator.wait_for.status", status)
 
@@ -874,7 +1037,7 @@ func (o *Orchestrator) WaitFor(id int, status EntityStatus) error {
 }
 
 func (o *Orchestrator) isPaused() bool {
-	logger.Debug(o.ctx, "orchestrator is paused", "orchestrator.is_paused", o.paused)
+	logger.Debug(o.ctx, "is orchestrator paused?", "orchestrator.is_paused", o.paused)
 	o.pausedMu.Lock()
 	defer o.pausedMu.Unlock()
 	return o.paused
@@ -894,7 +1057,8 @@ func (o *Orchestrator) canStackTrace() bool {
 	return o.displayStackTrace
 }
 
-func (o *Orchestrator) Resume(entityID int) Future {
+// TODO: check that we can't resume a non-root workflow
+func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	// TODO: add timeout
 	// for o.active.Load() { // it is still active, you have to wait
 	// 	<-time.After(100 * time.Millisecond)
@@ -947,7 +1111,8 @@ func (o *Orchestrator) Resume(entityID int) Future {
 	var parentExecID, parentEntityID int
 	var parentStepID string
 	var hierarchies []*Hierarchy
-	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
+	// TODO; i will refactor the hierarchy model to support strict types
+	if hierarchies, err = o.db.GetHierarchiesByChildEntity(int(entityID)); err != nil {
 		future := NewRuntimeFuture()
 		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get hierarchies: %w", err))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
@@ -997,6 +1162,7 @@ func (o *Orchestrator) Resume(entityID int) Future {
 		executionID: latestExecution.ID,
 		dataID:      workflowEntity.WorkflowData.ID,
 		queueID:     workflowEntity.QueueID,
+
 		options: WorkflowOptions{
 			RetryPolicy: &RetryPolicy{
 				MaxAttempts: workflowEntity.RetryPolicy.MaxAttempts,
@@ -1005,8 +1171,8 @@ func (o *Orchestrator) Resume(entityID int) Future {
 			Queue: workflowEntity.Edges.Queue.Name,
 		},
 
-		parentExecutionID: parentExecID,
-		parentEntityID:    parentEntityID,
+		parentExecutionID: WorkflowExecutionID(parentExecID),
+		parentEntityID:    WorkflowEntityID(parentEntityID),
 		parentStepID:      parentStepID,
 
 		onCrossWorkflow: o.onCrossWorkflow,
@@ -1016,7 +1182,11 @@ func (o *Orchestrator) Resume(entityID int) Future {
 
 	// Create Future and start instance
 	future := NewRuntimeFuture()
-	future.setEntityID(workflowEntity.ID)
+	// future.setEntityID(workflowEntity.ID)
+	future.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+	future.setExecutionID(FutureExecutionWithWorkflowExecutionID(latestExecution.ID))
+	future.setParentWorkflowID(WorkflowEntityID(parentEntityID))
+	future.setParentExecutionID(WorkflowExecutionID(parentExecID))
 	instance.future = future
 
 	// Very important to notice the orchestrator of the real root workflow
@@ -1029,7 +1199,7 @@ func (o *Orchestrator) Resume(entityID int) Future {
 
 	// Not paused anymore
 	if err = o.db.SetWorkflowDataProperties(
-		entityID,
+		workflowEntity.WorkflowData.ID,
 		SetWorkflowDataPaused(false),
 		SetWorkflowDataResumable(false),
 	); err != nil {
@@ -1059,9 +1229,9 @@ func (o *Orchestrator) Resume(entityID int) Future {
 
 type preparationOptions struct {
 	// Mainly for continuation
-	parentRunID               int
-	parentWorkflowID          int
-	parentWorkflowExecutionID int
+	parentRunID               RunID
+	parentWorkflowID          WorkflowEntityID
+	parentWorkflowExecutionID WorkflowExecutionID
 }
 
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
@@ -1103,19 +1273,17 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		}
 	}
 
-	var continuedID int
-	var continuedExecutionID int
+	var continuedID WorkflowEntityID
+	var continuedExecutionID WorkflowExecutionID
 
 	if opttionsPreparation.parentWorkflowExecutionID != 0 {
-
 		continuedID = opttionsPreparation.parentWorkflowID
 	}
 	if opttionsPreparation.parentWorkflowID != 0 {
-
 		continuedExecutionID = opttionsPreparation.parentWorkflowExecutionID
 	}
 
-	var runID int
+	var runID RunID
 	if opttionsPreparation.parentRunID == 0 {
 		logger.Debug(context.Background(), "preparing workflow got no parentRunID", "workflow_func", getFunctionName(workflowFunc))
 		// Create or get Run
@@ -1141,7 +1309,7 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 			MaxInterval: rp.MaxInterval.Nanoseconds(),
 		}
 	} else {
-		logger.Debug(context.Background(), "preparing workflow got no retry policy (default)", "workflow_func", getFunctionName(workflowFunc))
+		logger.Debug(context.Background(), "preparing workflow got no retry policy - applying default", "workflow_func", getFunctionName(workflowFunc))
 		// Default retry policy
 		retryPolicy = DefaultRetryPolicyInternal()
 	}
@@ -1202,7 +1370,7 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		data.ContinuedExecutionFrom = &continuedExecutionID
 	}
 
-	var workflowID int
+	var workflowID WorkflowEntityID
 	// We're not even storing the HandlerInfo since it is a runtime thing
 	if workflowID, err = db.
 		AddWorkflowEntity(
@@ -1239,6 +1407,8 @@ func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		}
 	}
 
+	logger.Debug(context.Background(), "workflow added", "workflow_func", getFunctionName(workflowFunc), "workflow_id", workflowID, "run_id", runID, "queue_id", queue.ID)
+
 	var entity *WorkflowEntity
 	if entity, err = db.GetWorkflowEntity(workflowID); err != nil {
 		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get workflow entity: %w", err))
@@ -1264,11 +1434,20 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 		return future
 	}
 
+	logger.Debug(o.ctx, "orchestrator workflow prepared",
+		"workflow_func", getFunctionName(workflowFunc),
+		"entity_id", entity.ID,
+		"run_id", entity.RunID,
+		"queue_id", entity.QueueID,
+	)
+
 	// Execute using the entity
 	future, err := o.ExecuteWithEntity(entity.ID)
 	if err != nil {
 		f := NewRuntimeFuture()
-		f.setEntityID(entity.ID)
+		f.setEntityID(FutureEntityWithWorkflowID(entity.ID))
+		f.setParentWorkflowID(entity.ID)
+		future.setParentWorkflowID(entity.ID)
 		err := errors.Join(ErrOrchestratorExecution, err, fmt.Errorf("failed to execute workflow with entity %d", entity.ID))
 		logger.Error(o.ctx, err.Error(), "workflow_func", getFunctionName(workflowFunc), "entity_id", entity.ID)
 		f.setError(err)
@@ -1281,7 +1460,7 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 }
 
 // ExecuteWithEntity starts a workflow using an existing entity ID
-func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
+func (o *Orchestrator) ExecuteWithEntity(entityID WorkflowEntityID) (Future, error) {
 	var err error
 
 	logger.Debug(o.ctx, "orchestrator execute with entity", "entity_id", entityID)
@@ -1299,7 +1478,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	}
 
 	var isRoot bool
-	if err = o.db.GetWorkflowDataProperties(entityID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
+	if err = o.db.GetWorkflowDataProperties(entity.WorkflowData.ID, GetWorkflowDataIsRoot(&isRoot)); err != nil {
 		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get workflow data properties: %w", err))
 		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
 		return nil, err
@@ -1368,7 +1547,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 
 	// If this is a sub-workflow, set parent info from hierarchies
 	var hierarchies []*Hierarchy
-	if hierarchies, err = o.db.GetHierarchiesByChildEntity(entityID); err != nil {
+	if hierarchies, err = o.db.GetHierarchiesByChildEntity(int(entityID)); err != nil {
 		err := errors.Join(ErrOrchestratorExecuteEntity, fmt.Errorf("failed to get hierarchies: %w", err))
 		logger.Error(o.ctx, err.Error(), "entity_id", entityID)
 		return nil, err
@@ -1377,14 +1556,18 @@ func (o *Orchestrator) ExecuteWithEntity(entityID int) (Future, error) {
 	// If we have parents only
 	if len(hierarchies) > 0 {
 		h := hierarchies[0]
-		instance.parentExecutionID = h.ParentExecutionID
-		instance.parentEntityID = h.ParentEntityID
+		instance.parentExecutionID = WorkflowExecutionID(h.ParentExecutionID)
+		instance.parentEntityID = WorkflowEntityID(h.ParentEntityID)
 		instance.parentStepID = h.ParentStepID
 	}
 
 	// Create Future and start instance
 	future := NewRuntimeFuture()
-	future.setEntityID(entity.ID)
+
+	// we can't put the execution IDs yet, not until we start at least ONE execution
+	future.setEntityID(FutureEntityWithWorkflowID(entity.ID))
+	future.setParentWorkflowID(instance.parentEntityID)
+
 	instance.future = future
 
 	// Very important to notice the orchestrator of the real root workflow
@@ -1454,7 +1637,7 @@ func (o *Orchestrator) onPause() error {
 
 			if err = o.db.
 				SetWorkflowDataProperties(
-					workflow.workflowID,
+					workflow.dataID,
 					SetWorkflowDataPaused(true),
 					SetWorkflowDataResumable(false),
 				); err != nil {
@@ -1655,9 +1838,9 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 			// now we can create and set the execution id
 			if wi.executionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
 				BaseExecution: BaseExecution{
-					EntityID: wi.workflowID,
-					Status:   ExecutionStatusRunning,
+					Status: ExecutionStatusRunning,
 				},
+				WorkflowEntityID:      wi.workflowID,
 				WorkflowExecutionData: &WorkflowExecutionData{},
 			}); err != nil {
 				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add workflow execution: %w", err))
@@ -1665,21 +1848,23 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				return err
 			}
 
+			wi.future.setExecutionID(FutureExecutionWithWorkflowExecutionID(wi.executionID))
+
 			if !isRoot {
 				logger.Debug(wi.ctx, "workflow instance is not root", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				// Check if hierarchy already exists for this execution
-				hierarchies, err := wi.db.GetHierarchiesByChildEntity(wi.workflowID)
+				hierarchies, err := wi.db.GetHierarchiesByChildEntity(int(wi.workflowID))
 				if err != nil || len(hierarchies) == 0 {
 					logger.Debug(wi.ctx, "workflow instance hierarchy does not exist", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 					// Only create hierarchy if none exists
 					if _, err = wi.db.AddHierarchy(&Hierarchy{
 						RunID:             wi.runID,
 						ParentStepID:      wi.parentStepID,
-						ParentEntityID:    wi.parentEntityID,
-						ParentExecutionID: wi.parentExecutionID,
+						ParentEntityID:    int(wi.parentEntityID),
+						ParentExecutionID: int(wi.parentExecutionID),
 						ChildStepID:       wi.stepID,
-						ChildEntityID:     wi.workflowID,
-						ChildExecutionID:  wi.executionID,
+						ChildEntityID:     int(wi.workflowID),
+						ChildExecutionID:  int(wi.executionID),
 						ParentType:        EntityWorkflow,
 						ChildType:         EntityWorkflow,
 					}); err != nil {
@@ -1692,13 +1877,18 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 					// TODO: hum that's a bug no? we append all the time, we shouldn't update the hierarchy
 					// Update existing hierarchy with new execution ID
 					hierarchy := hierarchies[0]
-					hierarchy.ChildExecutionID = wi.executionID
+					hierarchy.ChildExecutionID = int(wi.executionID)
 					if err = wi.db.UpdateHierarchy(hierarchy); err != nil {
 						err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to update hierarchy: %w", err))
 						logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 						return err
 					}
 				}
+				wi.future.setParentExecutionID(wi.parentExecutionID)
+				wi.future.setParentWorkflowID(wi.parentEntityID)
+			} else {
+				wi.future.setParentExecutionID(wi.executionID)
+				wi.future.setParentWorkflowID(wi.workflowID)
 			}
 
 			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
@@ -1938,7 +2128,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		}
 
 		// Emptied the output data
-		if err = wi.db.SetWorkflowExecutionDataProperties(wi.dataID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
+		if err = wi.db.SetWorkflowExecutionDataProperties(wi.executionID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
 			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
@@ -2127,7 +2317,7 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 
 	if wi.ctx.Err() != nil {
 		if errors.Is(wi.ctx.Err(), context.Canceled) {
-			if err := wi.db.SetWorkflowExecutionProperties(wi.workflowID, SetWorkflowExecutionStatus(ExecutionStatusCancelled)); err != nil {
+			if err := wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionStatus(ExecutionStatusCancelled)); err != nil {
 				err := errors.Join(ErrWorkflowInstanceFailed, fmt.Errorf("failed to set Workflow execution status cancelled: %w", err))
 				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 				return err
@@ -2234,6 +2424,8 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	}
 
 	future := NewRuntimeFuture()
+	future.setParentWorkflowID(ctx.workflowID)
+	future.setParentExecutionID(ctx.workflowExecutionID)
 
 	// Register activity on-the-fly
 	handler, err := ctx.registry.RegisterActivity(activityFunc)
@@ -2244,11 +2436,11 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		return future
 	}
 
-	var activityEntityID int
+	var activityEntityID ActivityEntityID
 
 	// Get all hierarchies for this workflow+stepID combination
 	var hierarchies []*Hierarchy
-	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntityActivity); err != nil {
+	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), stepID, EntityActivity); err != nil {
 		if !errors.Is(err, ErrHierarchyNotFound) {
 			err := errors.Join(ErrActivityContext, err)
 			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
@@ -2270,19 +2462,22 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	if len(hierarchies) > 0 {
 		logger.Debug(ctx.ctx, "activity context existing", "workflow_id", ctx.workflowID, "step_id", stepID)
 		// Check if we have multiple different entity IDs (shouldn't happen)
-		activityEntityID = hierarchies[0].ChildEntityID
+		activityEntityID = ActivityEntityID(hierarchies[0].ChildEntityID)
 		for _, h := range hierarchies[1:] {
-			if h.ChildEntityID != activityEntityID {
+			if h.ChildEntityID != int(activityEntityID) {
 				// TODO: wat?!
 			}
 		}
 
 		// If not completed, reuse the existing activity entity for retry
-		future.setEntityID(activityEntityID)
+		future.setEntityID(FutureEntityWithActivityID(activityEntityID))
 
 		// Check the latest execution for completion
 		var activityExecution *ActivityExecution
-		if activityExecution, err = ctx.db.GetActivityExecution(hierarchies[0].ChildExecutionID); err != nil {
+		if activityExecution, err = ctx.db.GetActivityExecution(
+			ActivityExecutionID(hierarchies[0].ChildExecutionID),
+			ActivityExecutionWithData(), // we need it for the code below
+		); err != nil {
 			err := errors.Join(ErrActivityContext, err)
 			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
 			future.setError(err)
@@ -2293,7 +2488,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		if activityExecution.Status == ExecutionStatusCompleted {
 
 			var activityExecutionData *ActivityExecutionData
-			if activityExecutionData, err = ctx.db.GetActivityExecutionData(activityExecution.ID); err != nil {
+			if activityExecutionData, err = ctx.db.GetActivityExecutionData(activityExecution.ActivityExecutionData.ID); err != nil {
 				err := errors.Join(ErrActivityContext, err)
 				logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
 				future.setError(err)
@@ -2354,7 +2549,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 			return future
 		}
 
-		future.setEntityID(activityEntityID)
+		future.setEntityID(FutureEntityWithActivityID(activityEntityID))
 	}
 
 	logger.Debug(ctx.ctx, "activity context start", "workflow_id", ctx.workflowID, "step_id", stepID)
@@ -2434,16 +2629,16 @@ type ActivityInstance struct {
 	options ActivityOptions
 	future  Future
 
-	runID       int
+	runID       RunID
 	stepID      string
-	workflowID  int
-	entityID    int
-	executionID int
-	dataID      int
-	queueID     int
+	workflowID  WorkflowEntityID
+	entityID    ActivityEntityID
+	executionID ActivityExecutionID
+	dataID      ActivityDataID
+	queueID     QueueID
 
-	parentExecutionID int
-	parentEntityID    int
+	parentExecutionID WorkflowExecutionID
+	parentEntityID    WorkflowEntityID
 	parentStepID      string
 }
 
@@ -2522,9 +2717,9 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 			// now we can create and set the execution id
 			if ai.executionID, err = ai.db.AddActivityExecution(&ActivityExecution{
 				BaseExecution: BaseExecution{
-					EntityID: ai.entityID,
-					Status:   ExecutionStatusRunning,
+					Status: ExecutionStatusRunning,
 				},
+				ActivityEntityID:      ai.entityID,
 				ActivityExecutionData: &ActivityExecutionData{},
 			}); err != nil {
 				ai.mu.Lock()
@@ -2539,11 +2734,11 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 			if _, err = ai.db.AddHierarchy(&Hierarchy{
 				RunID:             ai.runID,
 				ParentStepID:      ai.parentStepID,
-				ParentEntityID:    ai.parentEntityID,
-				ParentExecutionID: ai.parentExecutionID,
+				ParentEntityID:    int(ai.parentEntityID),
+				ParentExecutionID: int(ai.parentExecutionID),
 				ChildStepID:       ai.stepID,
-				ChildEntityID:     ai.entityID,
-				ChildExecutionID:  ai.executionID,
+				ChildEntityID:     int(ai.entityID),
+				ChildExecutionID:  int(ai.executionID),
 				ParentType:        EntityWorkflow,
 				ChildType:         EntityActivity,
 			}); err != nil {
@@ -2751,7 +2946,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 		// Update execution error
 		if err = ai.db.SetActivityExecutionProperties(
-			ai.entityID,
+			ai.executionID,
 			SetActivityExecutionError(errorMessage)); err != nil {
 			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution error: %w", err))
 			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
@@ -2760,7 +2955,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 		// Update the execution with the execution data
 		if err = ai.db.SetActivityExecutionDataProperties(
-			ai.entityID,
+			ai.executionID,
 			SetActivityExecutionDataOutputs(nil)); err != nil {
 			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
 			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
@@ -2790,7 +2985,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 		// Update the execution with the execution data
 		if err = ai.db.SetActivityExecutionDataProperties(
-			ai.entityID,
+			ai.executionID,
 			SetActivityExecutionDataOutputs(outputBytes)); err != nil {
 			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
 			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
@@ -2847,7 +3042,7 @@ func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) err
 	if ai.ctx.Err() != nil {
 		if errors.Is(ai.ctx.Err(), context.Canceled) {
 			logger.Debug(ai.ctx, "activity instance cancelled", "workflow_id", ai.workflowID, "step_id", ai.stepID)
-			if err := ai.db.SetActivityExecutionProperties(ai.entityID, SetActivityExecutionStatus(ExecutionStatusCancelled)); err != nil {
+			if err := ai.db.SetActivityExecutionProperties(ai.executionID, SetActivityExecutionStatus(ExecutionStatusCancelled)); err != nil {
 				err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity execution status: %w", err))
 				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 				return err
@@ -2909,6 +3104,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 
 	future := NewRuntimeFuture()
 
+	future.setParentExecutionID(ctx.workflowExecutionID)
+	future.setParentWorkflowID(ctx.workflowID)
+
 	// Register side effect on-the-fly
 	handler, err := ctx.registry.RegisterSideEffect(sideEffectFunc)
 	if err != nil {
@@ -2918,7 +3116,7 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		return future
 	}
 
-	var sideEffectEntityID int
+	var sideEffectEntityID SideEffectEntityID
 
 	// First check if there's an existing side effect entity for this workflow and step
 	var sideEffectEntities []*SideEffectEntity
@@ -2972,7 +3170,8 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 						return future
 					}
 					logger.Debug(ctx.ctx, "side effect context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
-					future.setEntityID(sideEffectEntityID)
+					future.setEntityID(FutureEntityWithSideEffectID(sideEffectEntityID))
+					future.setExecutionID(FutureExecutionWithSideEffectExecutionID(exec.ID))
 					future.setResult(outputs)
 					return future
 				}
@@ -3006,7 +3205,7 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		}
 	}
 
-	future.setEntityID(sideEffectEntityID)
+	future.setEntityID(FutureEntityWithSideEffectID(sideEffectEntityID))
 
 	var data *SideEffectData
 	if data, err = ctx.db.GetSideEffectDataByEntityID(sideEffectEntityID); err != nil {
@@ -3058,14 +3257,16 @@ type SideEffectInstance struct {
 	future  Future
 	fsm     *stateless.StateMachine
 
-	stepID            string
-	runID             int
-	workflowID        int
-	entityID          int
-	dataID            int
-	executionID       int
-	parentExecutionID int
-	parentEntityID    int
+	stepID          string
+	runID           RunID
+	workflowID      WorkflowEntityID
+	entityID        SideEffectEntityID
+	dataID          SideEffectDataID
+	executionID     SideEffectExecutionID
+	executionDataID SideEffectExecutionDataID
+
+	parentExecutionID WorkflowExecutionID
+	parentEntityID    WorkflowEntityID
 	parentStepID      string
 }
 
@@ -3110,9 +3311,9 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 	// Create execution before trying side effect
 	if si.executionID, err = si.db.AddSideEffectExecution(&SideEffectExecution{
 		BaseExecution: BaseExecution{
-			EntityID: si.entityID,
-			Status:   ExecutionStatusRunning,
+			Status: ExecutionStatusRunning,
 		},
+		SideEffectEntityID:      si.entityID,
 		SideEffectExecutionData: &SideEffectExecutionData{},
 	}); err != nil {
 		err := errors.Join(ErrSideEffectInstanceExecute, err)
@@ -3123,15 +3324,31 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		return err
 	}
 
+	var executionSideEffect *SideEffectExecution
+
+	// TODO: I'm pretty sure i can make better than that, we should have a getter property function that directly get that value
+	{
+		if executionSideEffect, err = si.db.GetSideEffectExecution(si.executionID, SideEffectExecutionWithData()); err != nil {
+			err := errors.Join(ErrSideEffectInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
+			if si.future != nil {
+				si.future.setError(err)
+			}
+			return err
+		}
+
+		si.executionDataID = executionSideEffect.SideEffectExecutionData.ID
+	}
+
 	// Add hierarchy
 	if _, err = si.db.AddHierarchy(&Hierarchy{
 		RunID:             si.runID,
 		ParentStepID:      si.parentStepID,
-		ParentEntityID:    si.parentEntityID,
-		ParentExecutionID: si.parentExecutionID,
+		ParentEntityID:    int(si.parentEntityID),
+		ParentExecutionID: int(si.parentExecutionID),
 		ChildStepID:       si.stepID,
-		ChildEntityID:     si.entityID,
-		ChildExecutionID:  si.executionID,
+		ChildEntityID:     int(si.entityID),
+		ChildExecutionID:  int(si.executionID),
 		ParentType:        EntityWorkflow,
 		ChildType:         EntitySideEffect,
 	}); err != nil {
@@ -3248,7 +3465,7 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 	}
 
 	if err = si.db.SetSideEffectExecutionDataProperties(
-		si.entityID,
+		si.executionDataID,
 		SetSideEffectExecutionDataOutputs(outputBytes)); err != nil {
 		err := errors.Join(ErrSideEffectRun, err)
 		logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
@@ -3390,11 +3607,11 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	future := NewRuntimeFuture()
 
 	// Get existing saga entity if any through hierarchy
-	var entityID int
-	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntitySaga)
+	var entityID SagaEntityID
+	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), stepID, EntitySaga)
 	if err == nil && len(hierarchies) > 0 {
 		// Reuse existing entity
-		entityID = hierarchies[0].ChildEntityID
+		entityID = SagaEntityID(hierarchies[0].ChildEntityID)
 	} else {
 		// Create new entity
 		internalRetryPolicy := DefaultRetryPolicyInternal()
@@ -3449,7 +3666,7 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 		parentStepID:      ctx.stepID,
 	}
 
-	future.setEntityID(entityID)
+	future.setEntityID(FutureEntityWithSagaID(entityID))
 
 	// Add instance to tracker
 	ctx.tracker.addSagaInstance(sagaInstance)
@@ -3525,15 +3742,15 @@ type SagaInstance struct {
 	future  Future
 
 	stepID      string
-	runID       int
-	workflowID  int
-	entityID    int
-	executionID int
-	dataID      int
-	queueID     int
+	runID       RunID
+	workflowID  WorkflowEntityID
+	entityID    SagaEntityID
+	executionID SagaExecutionID
+	dataID      SagaDataID
+	queueID     QueueID
 
-	parentExecutionID int
-	parentEntityID    int
+	parentExecutionID WorkflowExecutionID
+	parentEntityID    WorkflowEntityID
 	parentStepID      string
 }
 
@@ -3621,16 +3838,16 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 	for stepIdx := 0; stepIdx < len(si.saga.Steps); stepIdx++ {
 		stepExec := &SagaExecution{
 			BaseExecution: BaseExecution{
-				EntityID: si.entityID,
-				Status:   ExecutionStatusRunning,
+				Status: ExecutionStatusRunning,
 			},
+			SagaEntityID:  si.entityID,
 			ExecutionType: ExecutionTypeTransaction,
 			SagaExecutionData: &SagaExecutionData{
 				StepIndex: stepIdx,
 			},
 		}
 
-		var stepExecID int
+		var stepExecID SagaExecutionID
 		var err error
 		if stepExecID, err = si.db.AddSagaExecution(stepExec); err != nil {
 			err := errors.Join(ErrSagaInstanceExecute, err)
@@ -3770,16 +3987,16 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 
 		compExec := &SagaExecution{
 			BaseExecution: BaseExecution{
-				EntityID: si.entityID,
-				Status:   ExecutionStatusRunning,
+				Status: ExecutionStatusRunning,
 			},
+			SagaEntityID:  si.entityID,
 			ExecutionType: ExecutionTypeCompensation,
 			SagaExecutionData: &SagaExecutionData{
 				StepIndex: stepIdx,
 			},
 		}
 
-		var compExecID int
+		var compExecID SagaExecutionID
 		if compExecID, err = si.db.AddSagaExecution(compExec); err != nil {
 			compensationFailed = true
 			compensationErr = errors.Join(compensationErr, err)
@@ -3989,11 +4206,11 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		return future
 	}
 
-	var workflowEntityID int
+	var workflowEntityID WorkflowEntityID
 
 	// Check for existing hierarchies like we do for activities/sagas
 	var hierarchies []*Hierarchy
-	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, stepID, EntityWorkflow); err != nil {
+	if hierarchies, err = ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), stepID, EntityWorkflow); err != nil {
 		err := errors.Join(ErrWorkflowContext, err)
 		if !errors.Is(err, ErrHierarchyNotFound) {
 			logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
@@ -4013,7 +4230,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	// If we have existing hierarchies
 	if len(hierarchies) > 0 {
-		workflowEntityID = hierarchies[0].ChildEntityID
+		workflowEntityID = WorkflowEntityID(hierarchies[0].ChildEntityID)
 
 		logger.Debug(ctx.ctx, "workflow context existing", "workflow_id", ctx.workflowID, "step_id", stepID)
 
@@ -4026,7 +4243,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			return future
 		}
 
-		future.setEntityID(workflowEntityID)
+		future.setEntityID(FutureEntityWithWorkflowID(workflowEntityID))
 
 		// If we have a completed execution, return its result
 		if workflowExecution.Status == ExecutionStatusCompleted {
@@ -4049,7 +4266,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 			logger.Debug(ctx.ctx, "workflow context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 
-			future.setEntityID(workflowEntityID)
+			future.setEntityID(FutureEntityWithWorkflowID(workflowEntityID))
 			future.setResult(outputs)
 			return future
 		}
@@ -4104,16 +4321,16 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			return future
 		}
 
-		future.setEntityID(workflowEntityID)
+		future.setEntityID(FutureEntityWithWorkflowID(workflowEntityID))
 
 		// Add hierarchy relationship
 		if _, err = ctx.db.AddHierarchy(&Hierarchy{
 			RunID:             ctx.runID,
 			ParentStepID:      ctx.stepID,
-			ParentEntityID:    ctx.workflowID,
-			ParentExecutionID: ctx.workflowExecutionID,
+			ParentEntityID:    int(ctx.workflowID),
+			ParentExecutionID: int(ctx.workflowExecutionID),
 			ChildStepID:       stepID,
-			ChildEntityID:     workflowEntityID,
+			ChildEntityID:     int(workflowEntityID),
 			ParentType:        EntityWorkflow,
 			ChildType:         EntityWorkflow,
 		}); err != nil {
@@ -4196,14 +4413,14 @@ func (ctx WorkflowContext) Signal(name string, output interface{}) error {
 	outputType := reflect.TypeOf(output).Elem()
 
 	// First check existing hierarchies for completed signals
-	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(ctx.workflowID, name, EntitySignal)
+	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), name, EntitySignal)
 	if err == nil && len(hierarchies) > 0 {
 		for _, h := range hierarchies {
 			var status EntityStatus
-			if err := ctx.db.GetSignalEntityProperties(h.ChildEntityID,
+			if err := ctx.db.GetSignalEntityProperties(SignalEntityID(h.ChildEntityID),
 				GetSignalEntityStatus(&status)); err == nil && status == StatusCompleted {
 				// Get existing successful signal
-				if exec, err := ctx.db.GetSignalExecutionLatestByEntityID(h.ChildEntityID); err == nil {
+				if exec, err := ctx.db.GetSignalExecutionLatestByEntityID(SignalEntityID(h.ChildEntityID)); err == nil {
 					if data, err := ctx.db.GetSignalExecutionDataByExecutionID(exec.ID); err == nil &&
 						data != nil && len(data.Value) > 0 {
 
@@ -4261,14 +4478,14 @@ type SignalInstance struct {
 	fsm     *stateless.StateMachine
 	mu      deadlock.Mutex
 
-	runID             int
-	entityID          int
-	executionID       int
+	runID             RunID
+	entityID          SignalEntityID
+	executionID       SignalExecutionID
 	name              string
-	parentExecutionID int
-	parentEntityID    int
+	parentExecutionID WorkflowExecutionID
+	parentEntityID    WorkflowEntityID
 	parentStepID      string
-	queueID           int
+	queueID           QueueID
 
 	output     interface{}
 	outputType reflect.Type
@@ -4368,9 +4585,9 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	// Create execution
 	exec := &SignalExecution{
 		BaseExecution: BaseExecution{
-			EntityID: si.entityID,
-			Status:   ExecutionStatusRunning,
+			Status: ExecutionStatusRunning,
 		},
+		EntityID:            si.entityID,
 		SignalExecutionData: &SignalExecutionData{},
 	}
 
@@ -4386,11 +4603,11 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	if _, err = si.db.AddHierarchy(&Hierarchy{
 		RunID:             si.runID,
 		ParentStepID:      si.parentStepID,
-		ParentEntityID:    si.parentEntityID,
-		ParentExecutionID: si.parentExecutionID,
+		ParentEntityID:    int(si.parentEntityID),
+		ParentExecutionID: int(si.parentExecutionID),
 		ChildStepID:       si.name,
-		ChildEntityID:     si.entityID,
-		ChildExecutionID:  si.executionID,
+		ChildEntityID:     int(si.entityID),
+		ChildExecutionID:  int(si.executionID),
 		ParentType:        EntityWorkflow,
 		ChildType:         EntitySignal,
 	}); err != nil {
@@ -4540,7 +4757,7 @@ func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
 
 /////////
 
-func (o *Orchestrator) handleContinueAsNew(parentWorkflowID int, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+func (o *Orchestrator) handleContinueAsNew(parentWorkflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 	if options == nil {
 		options = &WorkflowOptions{}
 	}

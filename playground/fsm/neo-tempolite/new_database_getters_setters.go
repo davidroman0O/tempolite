@@ -6,7 +6,7 @@ import (
 )
 
 // Run property getters/setters
-func GetRunID(id *int) RunPropertyGetter {
+func GetRunID(id *RunID) RunPropertyGetter {
 	return func(r *Run) (RunPropertyGetterOption, error) {
 		if r == nil {
 			return nil, errors.New("run is nil")
@@ -104,7 +104,7 @@ func SetRunUpdatedAt(updatedAt time.Time) RunPropertySetter {
 	}
 }
 
-func SetRunWorkflowEntity(workflowID int) RunPropertySetter {
+func SetRunWorkflowEntity(workflowID WorkflowEntityID) RunPropertySetter {
 	return func(r *Run) (RunPropertySetterOption, error) {
 		if r == nil {
 			return nil, errors.New("run is nil")
@@ -117,7 +117,7 @@ func SetRunWorkflowEntity(workflowID int) RunPropertySetter {
 }
 
 // Version property getters/setters
-func GetVersionID(id *int) VersionPropertyGetter {
+func GetVersionID(id *VersionID) VersionPropertyGetter {
 	return func(v *Version) (VersionPropertyGetterOption, error) {
 		if v == nil {
 			return nil, errors.New("version is nil")
@@ -127,7 +127,7 @@ func GetVersionID(id *int) VersionPropertyGetter {
 	}
 }
 
-func GetVersionEntityID(entityID *int) VersionPropertyGetter {
+func GetVersionEntityID(entityID *WorkflowEntityID) VersionPropertyGetter {
 	return func(v *Version) (VersionPropertyGetterOption, error) {
 		if v == nil {
 			return nil, errors.New("version is nil")
@@ -193,7 +193,7 @@ func GetVersionUpdatedAt(updatedAt *time.Time) VersionPropertyGetter {
 	}
 }
 
-func SetVersionEntityID(entityID int) VersionPropertySetter {
+func SetVersionEntityID(entityID WorkflowEntityID) VersionPropertySetter {
 	return func(v *Version) (VersionPropertySetterOption, error) {
 		if v == nil {
 			return nil, errors.New("version is nil")
@@ -257,7 +257,7 @@ func SetVersionUpdatedAt(updatedAt time.Time) VersionPropertySetter {
 }
 
 // WorkflowData property getters/setters
-func GetWorkflowDataID(id *int) WorkflowDataPropertyGetter {
+func GetWorkflowDataID(id *WorkflowDataID) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
@@ -267,7 +267,7 @@ func GetWorkflowDataID(id *int) WorkflowDataPropertyGetter {
 	}
 }
 
-func GetWorkflowDataContinuedFrom(continuedFrom *int) WorkflowDataPropertyGetter {
+func GetWorkflowDataContinuedFrom(continuedFrom *WorkflowEntityID) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
@@ -280,7 +280,7 @@ func GetWorkflowDataContinuedFrom(continuedFrom *int) WorkflowDataPropertyGetter
 	}
 }
 
-func GetWorkflowDataEntityID(entityID *int) WorkflowDataPropertyGetter {
+func GetWorkflowDataEntityID(entityID *WorkflowEntityID) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
@@ -348,7 +348,7 @@ func GetWorkflowDataInputs(inputs *[][]byte) WorkflowDataPropertyGetter {
 	}
 }
 
-func SetWorkflowDataEntityID(entityID int) WorkflowDataPropertySetter {
+func SetWorkflowDataEntityID(entityID WorkflowEntityID) WorkflowDataPropertySetter {
 	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
@@ -358,7 +358,7 @@ func SetWorkflowDataEntityID(entityID int) WorkflowDataPropertySetter {
 	}
 }
 
-func SetWorkflowDataContinuedFrom(continuedFrom *int) WorkflowDataPropertySetter {
+func SetWorkflowDataContinuedFrom(continuedFrom *WorkflowEntityID) WorkflowDataPropertySetter {
 	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow data is nil")
@@ -531,7 +531,8 @@ func AddWorkflowEntityActivityChild(activity *ActivityEntity) WorkflowEntityProp
 		}
 		e.Edges.ActivityChildren = append(e.Edges.ActivityChildren, activity)
 		return func(opts *WorkflowEntitySetterOptions) error {
-			opts.ChildID = &activity.ID
+			ptr := int(activity.ID)
+			opts.ChildID = &ptr
 			childType := EntityActivity
 			opts.ChildType = &childType
 			return nil
@@ -552,7 +553,8 @@ func AddWorkflowEntitySagaChild(saga *SagaEntity) WorkflowEntityPropertySetter {
 		}
 		e.Edges.SagaChildren = append(e.Edges.SagaChildren, saga)
 		return func(opts *WorkflowEntitySetterOptions) error {
-			opts.ChildID = &saga.ID
+			ptr := int(saga.ID)
+			opts.ChildID = &ptr
 			childType := EntitySaga
 			opts.ChildType = &childType
 			return nil
@@ -573,7 +575,8 @@ func AddWorkflowEntitySideEffectChild(sideEffect *SideEffectEntity) WorkflowEnti
 		}
 		e.Edges.SideEffectChildren = append(e.Edges.SideEffectChildren, sideEffect)
 		return func(opts *WorkflowEntitySetterOptions) error {
-			opts.ChildID = &sideEffect.ID
+			ptr := int(sideEffect.ID)
+			opts.ChildID = &ptr
 			childType := EntitySideEffect
 			opts.ChildType = &childType
 			return nil
@@ -636,7 +639,7 @@ func GetWorkflowEntityStepID(stepID *string) WorkflowEntityPropertyGetter {
 	}
 }
 
-func GetWorkflowEntityRunID(runID *int) WorkflowEntityPropertyGetter {
+func GetWorkflowEntityRunID(runID *RunID) WorkflowEntityPropertyGetter {
 	return func(e *WorkflowEntity) (WorkflowEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("workflow entity is nil")
@@ -701,7 +704,7 @@ func SetWorkflowEntityStepID(stepID string) WorkflowEntityPropertySetter {
 	}
 }
 
-func SetWorkflowEntityRunID(runID int) WorkflowEntityPropertySetter {
+func SetWorkflowEntityRunID(runID RunID) WorkflowEntityPropertySetter {
 	return func(e *WorkflowEntity) (WorkflowEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("workflow entity is nil")
@@ -735,7 +738,7 @@ func SetWorkflowEntityRetryState(state RetryState) WorkflowEntityPropertySetter 
 }
 
 // WorkflowExecution property getters/setters
-func GetWorkflowExecutionID(id *int) WorkflowExecutionPropertyGetter {
+func GetWorkflowExecutionID(id *WorkflowExecutionID) WorkflowExecutionPropertyGetter {
 	return func(e *WorkflowExecution) (WorkflowExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("workflow execution is nil")
@@ -745,12 +748,12 @@ func GetWorkflowExecutionID(id *int) WorkflowExecutionPropertyGetter {
 	}
 }
 
-func GetWorkflowExecutionEntityID(entityID *int) WorkflowExecutionPropertyGetter {
+func GetWorkflowExecutionEntityID(entityID *WorkflowEntityID) WorkflowExecutionPropertyGetter {
 	return func(e *WorkflowExecution) (WorkflowExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("workflow execution is nil")
 		}
-		*entityID = e.EntityID
+		*entityID = e.WorkflowEntityID
 		return nil, nil
 	}
 }
@@ -810,12 +813,12 @@ func GetWorkflowExecutionError(errStr *string) WorkflowExecutionPropertyGetter {
 	}
 }
 
-func SetWorkflowExecutionEntityID(entityID int) WorkflowExecutionPropertySetter {
+func SetWorkflowExecutionEntityID(entityID WorkflowEntityID) WorkflowExecutionPropertySetter {
 	return func(e *WorkflowExecution) (WorkflowExecutionPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("workflow execution is nil")
 		}
-		e.EntityID = entityID
+		e.WorkflowEntityID = entityID
 		return nil, nil
 	}
 }
@@ -871,7 +874,7 @@ func SetWorkflowExecutionError(err string) WorkflowExecutionPropertySetter {
 }
 
 // ActivityData property getters/setters
-func GetActivityDataID(id *int) ActivityDataPropertyGetter {
+func GetActivityDataID(id *ActivityDataID) ActivityDataPropertyGetter {
 	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("activity data is nil")
@@ -881,7 +884,7 @@ func GetActivityDataID(id *int) ActivityDataPropertyGetter {
 	}
 }
 
-func GetActivityDataEntityID(entityID *int) ActivityDataPropertyGetter {
+func GetActivityDataEntityID(entityID *ActivityEntityID) ActivityDataPropertyGetter {
 	return func(d *ActivityData) (ActivityDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("activity data is nil")
@@ -909,7 +912,7 @@ func GetActivityDataInputs(inputs *[][]byte) ActivityDataPropertyGetter {
 	}
 }
 
-func SetActivityDataEntityID(entityID int) ActivityDataPropertySetter {
+func SetActivityDataEntityID(entityID ActivityEntityID) ActivityDataPropertySetter {
 	return func(d *ActivityData) (ActivityDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("activity data is nil")
@@ -965,7 +968,7 @@ func GetActivityEntityStepID(stepID *string) ActivityEntityPropertyGetter {
 	}
 }
 
-func GetActivityEntityRunID(runID *int) ActivityEntityPropertyGetter {
+func GetActivityEntityRunID(runID *RunID) ActivityEntityPropertyGetter {
 	return func(e *ActivityEntity) (ActivityEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("activity entity is nil")
@@ -1031,7 +1034,7 @@ func SetActivityEntityStepID(stepID string) ActivityEntityPropertySetter {
 	}
 }
 
-func SetActivityEntityRunID(runID int) ActivityEntityPropertySetter {
+func SetActivityEntityRunID(runID RunID) ActivityEntityPropertySetter {
 	return func(e *ActivityEntity) (ActivityEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("activity entity is nil")
@@ -1089,7 +1092,7 @@ func SetActivityEntityData(data *ActivityData) ActivityEntityPropertySetter {
 }
 
 // ActivityExecution property getters/setters
-func GetActivityExecutionID(id *int) ActivityExecutionPropertyGetter {
+func GetActivityExecutionID(id *ActivityExecutionID) ActivityExecutionPropertyGetter {
 	return func(e *ActivityExecution) (ActivityExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("activity execution is nil")
@@ -1099,12 +1102,12 @@ func GetActivityExecutionID(id *int) ActivityExecutionPropertyGetter {
 	}
 }
 
-func GetActivityExecutionEntityID(entityID *int) ActivityExecutionPropertyGetter {
+func GetActivityExecutionEntityID(entityID *ActivityEntityID) ActivityExecutionPropertyGetter {
 	return func(e *ActivityExecution) (ActivityExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("activity execution is nil")
 		}
-		*entityID = e.EntityID
+		*entityID = e.ActivityEntityID
 		return nil, nil
 	}
 }
@@ -1164,12 +1167,12 @@ func GetActivityExecutionError(errStr *string) ActivityExecutionPropertyGetter {
 	}
 }
 
-func SetActivityExecutionEntityID(entityID int) ActivityExecutionPropertySetter {
+func SetActivityExecutionEntityID(entityID ActivityEntityID) ActivityExecutionPropertySetter {
 	return func(e *ActivityExecution) (ActivityExecutionPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("activity execution is nil")
 		}
-		e.EntityID = entityID
+		e.ActivityEntityID = entityID
 		return nil, nil
 	}
 }
@@ -1224,7 +1227,7 @@ func SetActivityExecutionError(err string) ActivityExecutionPropertySetter {
 	}
 }
 
-func GetActivityExecutionDataID(id *int) ActivityExecutionDataPropertyGetter {
+func GetActivityExecutionDataID(id *ActivityExecutionDataID) ActivityExecutionDataPropertyGetter {
 	return func(d *ActivityExecutionData) (ActivityExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("activity execution data is nil")
@@ -1268,7 +1271,7 @@ func SetActivityExecutionDataOutputs(outputs [][]byte) ActivityExecutionDataProp
 }
 
 // SagaData property getters/setters
-func GetSagaDataID(id *int) SagaDataPropertyGetter {
+func GetSagaDataID(id *SagaDataID) SagaDataPropertyGetter {
 	return func(d *SagaData) (SagaDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga data is nil")
@@ -1278,7 +1281,7 @@ func GetSagaDataID(id *int) SagaDataPropertyGetter {
 	}
 }
 
-func GetSagaDataEntityID(entityID *int) SagaDataPropertyGetter {
+func GetSagaDataEntityID(entityID *SagaEntityID) SagaDataPropertyGetter {
 	return func(d *SagaData) (SagaDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga data is nil")
@@ -1288,7 +1291,7 @@ func GetSagaDataEntityID(entityID *int) SagaDataPropertyGetter {
 	}
 }
 
-func SetSagaDataEntityID(entityID int) SagaDataPropertySetter {
+func SetSagaDataEntityID(entityID SagaEntityID) SagaDataPropertySetter {
 	return func(d *SagaData) (SagaDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga data is nil")
@@ -1329,7 +1332,7 @@ func GetSagaEntityStepID(stepID *string) SagaEntityPropertyGetter {
 	}
 }
 
-func GetSagaEntityRunID(runID *int) SagaEntityPropertyGetter {
+func GetSagaEntityRunID(runID *RunID) SagaEntityPropertyGetter {
 	return func(e *SagaEntity) (SagaEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("saga entity is nil")
@@ -1394,7 +1397,7 @@ func SetSagaEntityStepID(stepID string) SagaEntityPropertySetter {
 	}
 }
 
-func SetSagaEntityRunID(runID int) SagaEntityPropertySetter {
+func SetSagaEntityRunID(runID RunID) SagaEntityPropertySetter {
 	return func(e *SagaEntity) (SagaEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("saga entity is nil")
@@ -1448,7 +1451,7 @@ func SetSagaEntityData(data *SagaData) SagaEntityPropertySetter {
 	}
 }
 
-func GetSagaExecutionID(id *int) SagaExecutionPropertyGetter {
+func GetSagaExecutionID(id *SagaExecutionID) SagaExecutionPropertyGetter {
 	return func(e *SagaExecution) (SagaExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("saga execution is nil")
@@ -1458,12 +1461,12 @@ func GetSagaExecutionID(id *int) SagaExecutionPropertyGetter {
 	}
 }
 
-func GetSagaExecutionEntityID(entityID *int) SagaExecutionPropertyGetter {
+func GetSagaExecutionEntityID(entityID *SagaEntityID) SagaExecutionPropertyGetter {
 	return func(e *SagaExecution) (SagaExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("saga execution is nil")
 		}
-		*entityID = e.EntityID
+		*entityID = e.SagaEntityID
 		return nil, nil
 	}
 }
@@ -1523,12 +1526,12 @@ func GetSagaExecutionError(errStr *string) SagaExecutionPropertyGetter {
 	}
 }
 
-func SetSagaExecutionEntityID(entityID int) SagaExecutionPropertySetter {
+func SetSagaExecutionEntityID(entityID SagaEntityID) SagaExecutionPropertySetter {
 	return func(e *SagaExecution) (SagaExecutionPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("saga execution is nil")
 		}
-		e.EntityID = entityID
+		e.SagaEntityID = entityID
 		return nil, nil
 	}
 }
@@ -1584,7 +1587,7 @@ func SetSagaExecutionError(err string) SagaExecutionPropertySetter {
 }
 
 // SagaExecutionData property getters/setters
-func GetSagaExecutionDataID(id *int) SagaExecutionDataPropertyGetter {
+func GetSagaExecutionDataID(id *SagaExecutionDataID) SagaExecutionDataPropertyGetter {
 	return func(d *SagaExecutionData) (SagaExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga execution data is nil")
@@ -1594,7 +1597,7 @@ func GetSagaExecutionDataID(id *int) SagaExecutionDataPropertyGetter {
 	}
 }
 
-func GetSagaExecutionDataExecutionID(executionID *int) SagaExecutionDataPropertyGetter {
+func GetSagaExecutionDataExecutionID(executionID *SagaExecutionID) SagaExecutionDataPropertyGetter {
 	return func(d *SagaExecutionData) (SagaExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga execution data is nil")
@@ -1616,7 +1619,7 @@ func GetSagaExecutionDataLastHeartbeat(lastHeartbeat *time.Time) SagaExecutionDa
 	}
 }
 
-func SetSagaExecutionDataExecutionID(executionID int) SagaExecutionDataPropertySetter {
+func SetSagaExecutionDataExecutionID(executionID SagaExecutionID) SagaExecutionDataPropertySetter {
 	return func(d *SagaExecutionData) (SagaExecutionDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("saga execution data is nil")
@@ -1637,7 +1640,7 @@ func SetSagaExecutionDataLastHeartbeat(lastHeartbeat time.Time) SagaExecutionDat
 }
 
 // SideEffectData property getters/setters
-func GetSideEffectDataID(id *int) SideEffectDataPropertyGetter {
+func GetSideEffectDataID(id *SideEffectDataID) SideEffectDataPropertyGetter {
 	return func(d *SideEffectData) (SideEffectDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect data is nil")
@@ -1647,7 +1650,7 @@ func GetSideEffectDataID(id *int) SideEffectDataPropertyGetter {
 	}
 }
 
-func GetSideEffectDataEntityID(entityID *int) SideEffectDataPropertyGetter {
+func GetSideEffectDataEntityID(entityID *SideEffectEntityID) SideEffectDataPropertyGetter {
 	return func(d *SideEffectData) (SideEffectDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect data is nil")
@@ -1657,7 +1660,7 @@ func GetSideEffectDataEntityID(entityID *int) SideEffectDataPropertyGetter {
 	}
 }
 
-func SetSideEffectDataEntityID(entityID int) SideEffectDataPropertySetter {
+func SetSideEffectDataEntityID(entityID SideEffectEntityID) SideEffectDataPropertySetter {
 	return func(d *SideEffectData) (SideEffectDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect data is nil")
@@ -1698,7 +1701,7 @@ func GetSideEffectEntityStepID(stepID *string) SideEffectEntityPropertyGetter {
 	}
 }
 
-func GetSideEffectEntityRunID(runID *int) SideEffectEntityPropertyGetter {
+func GetSideEffectEntityRunID(runID *RunID) SideEffectEntityPropertyGetter {
 	return func(e *SideEffectEntity) (SideEffectEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("side effect entity is nil")
@@ -1761,7 +1764,7 @@ func SetSideEffectEntityStepID(stepID string) SideEffectEntityPropertySetter {
 	}
 }
 
-func SetSideEffectEntityRunID(runID int) SideEffectEntityPropertySetter {
+func SetSideEffectEntityRunID(runID RunID) SideEffectEntityPropertySetter {
 	return func(e *SideEffectEntity) (SideEffectEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("side effect entity is nil")
@@ -1816,7 +1819,7 @@ func SetSideEffectEntityData(data *SideEffectData) SideEffectEntityPropertySette
 }
 
 // SideEffectExecution property getters/setters
-func GetSideEffectExecutionID(id *int) SideEffectExecutionPropertyGetter {
+func GetSideEffectExecutionID(id *SideEffectExecutionID) SideEffectExecutionPropertyGetter {
 	return func(e *SideEffectExecution) (SideEffectExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("side effect execution is nil")
@@ -1826,12 +1829,12 @@ func GetSideEffectExecutionID(id *int) SideEffectExecutionPropertyGetter {
 	}
 }
 
-func GetSideEffectExecutionEntityID(entityID *int) SideEffectExecutionPropertyGetter {
+func GetSideEffectExecutionEntityID(entityID *SideEffectEntityID) SideEffectExecutionPropertyGetter {
 	return func(e *SideEffectExecution) (SideEffectExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("side effect execution is nil")
 		}
-		*entityID = e.EntityID
+		*entityID = e.SideEffectEntityID
 		return nil, nil
 	}
 }
@@ -1891,10 +1894,20 @@ func GetSideEffectExecutionError(errStr *string) SideEffectExecutionPropertyGett
 	}
 }
 
-func SetSideEffectExecutionEntityID(entityID int) SideEffectExecutionPropertySetter {
+func SetSideEffectExecutionEntityID(entityID SideEffectEntityID) SideEffectExecutionPropertySetter {
 	return func(e *SideEffectExecution) (SideEffectExecutionPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("side effect execution is nil")
+		}
+		e.SideEffectEntityID = entityID
+		return nil, nil
+	}
+}
+
+func SetSignalExecutionEntityID(entityID SignalEntityID) SignalExecutionPropertySetter {
+	return func(e *SignalExecution) (SignalExecutionPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("signal execution is nil")
 		}
 		e.EntityID = entityID
 		return nil, nil
@@ -1952,7 +1965,7 @@ func SetSideEffectExecutionError(err string) SideEffectExecutionPropertySetter {
 }
 
 // SideEffectExecutionData property getters/setters
-func GetSideEffectExecutionDataID(id *int) SideEffectExecutionDataPropertyGetter {
+func GetSideEffectExecutionDataID(id *SideEffectExecutionDataID) SideEffectExecutionDataPropertyGetter {
 	return func(d *SideEffectExecutionData) (SideEffectExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect execution data is nil")
@@ -1962,7 +1975,7 @@ func GetSideEffectExecutionDataID(id *int) SideEffectExecutionDataPropertyGetter
 	}
 }
 
-func GetSideEffectExecutionDataExecutionID(executionID *int) SideEffectExecutionDataPropertyGetter {
+func GetSideEffectExecutionDataExecutionID(executionID *SideEffectExecutionID) SideEffectExecutionDataPropertyGetter {
 	return func(d *SideEffectExecutionData) (SideEffectExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect execution data is nil")
@@ -1990,7 +2003,7 @@ func GetSideEffectExecutionDataOutputs(outputs *[][]byte) SideEffectExecutionDat
 	}
 }
 
-func SetSideEffectExecutionDataExecutionID(executionID int) SideEffectExecutionDataPropertySetter {
+func SetSideEffectExecutionDataExecutionID(executionID SideEffectExecutionID) SideEffectExecutionDataPropertySetter {
 	return func(d *SideEffectExecutionData) (SideEffectExecutionDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("side effect execution data is nil")
@@ -2016,7 +2029,7 @@ func SetSideEffectExecutionDataOutputs(outputs [][]byte) SideEffectExecutionData
 }
 
 // Queue property getters/setters
-func GetQueueID(id *int) QueuePropertyGetter {
+func GetQueueID(id *QueueID) QueuePropertyGetter {
 	return func(q *Queue) (QueuePropertyGetterOption, error) {
 		if q == nil {
 			return nil, errors.New("queue is nil")
@@ -2108,7 +2121,7 @@ func SetQueueEntities(entities []*WorkflowEntity) QueuePropertySetter {
 		q.Entities = make([]*WorkflowEntity, len(entities))
 		copy(q.Entities, entities)
 		return func(opts *QueueSetterOptions) error {
-			workflowIDs := make([]int, len(entities))
+			workflowIDs := make([]WorkflowEntityID, len(entities))
 			for i, entity := range entities {
 				workflowIDs[i] = entity.ID
 			}
@@ -2120,7 +2133,7 @@ func SetQueueEntities(entities []*WorkflowEntity) QueuePropertySetter {
 
 // Hierarchy property getters/setters
 
-func GetHierarchyID(id *int) HierarchyPropertyGetter {
+func GetHierarchyID(id *HierarchyID) HierarchyPropertyGetter {
 	return func(h *Hierarchy) (HierarchyPropertyGetterOption, error) {
 		if h == nil {
 			return nil, errors.New("hierarchy is nil")
@@ -2130,7 +2143,7 @@ func GetHierarchyID(id *int) HierarchyPropertyGetter {
 	}
 }
 
-func GetHierarchyRunID(runID *int) HierarchyPropertyGetter {
+func GetHierarchyRunID(runID *RunID) HierarchyPropertyGetter {
 	return func(h *Hierarchy) (HierarchyPropertyGetterOption, error) {
 		if h == nil {
 			return nil, errors.New("hierarchy is nil")
@@ -2220,7 +2233,7 @@ func GetHierarchyChildType(childType *EntityType) HierarchyPropertyGetter {
 	}
 }
 
-func SetHierarchyRunID(runID int) HierarchyPropertySetter {
+func SetHierarchyRunID(runID RunID) HierarchyPropertySetter {
 	return func(h *Hierarchy) (HierarchyPropertySetterOption, error) {
 		if h == nil {
 			return nil, errors.New("hierarchy is nil")
@@ -2311,15 +2324,6 @@ func SetHierarchyChildType(childType EntityType) HierarchyPropertySetter {
 }
 
 // Base entity getters/setters
-func GetBaseEntityID(id *int) BaseEntityPropertyGetter {
-	return func(e *BaseEntity) (BaseEntityPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base entity is nil")
-		}
-		*id = e.ID
-		return nil, nil
-	}
-}
 
 func GetBaseEntityHandlerName(name *string) BaseEntityPropertyGetter {
 	return func(e *BaseEntity) (BaseEntityPropertyGetterOption, error) {
@@ -2381,7 +2385,18 @@ func GetBaseEntityUpdatedAt(updatedAt *time.Time) BaseEntityPropertyGetter {
 	}
 }
 
-func GetBaseEntityRunID(runID *int) BaseEntityPropertyGetter {
+// GetBaseEntityID needs to be generic to work with all entity types now
+func GetBaseEntityQueueID(queueID *QueueID) BaseEntityPropertyGetter {
+	return func(e *BaseEntity) (BaseEntityPropertyGetterOption, error) {
+		if e == nil {
+			return nil, errors.New("base entity is nil")
+		}
+		*queueID = e.QueueID
+		return nil, nil
+	}
+}
+
+func GetBaseEntityRunID(runID *RunID) BaseEntityPropertyGetter {
 	return func(e *BaseEntity) (BaseEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("base entity is nil")
@@ -2420,6 +2435,16 @@ func SetBaseEntityHandlerName(name string) BaseEntityPropertySetter {
 			return nil, errors.New("base entity is nil")
 		}
 		e.HandlerName = name
+		return nil, nil
+	}
+}
+
+func SetBaseEntityQueueID(queueID QueueID) BaseEntityPropertySetter {
+	return func(e *BaseEntity) (BaseEntityPropertySetterOption, error) {
+		if e == nil {
+			return nil, errors.New("base entity is nil")
+		}
+		e.QueueID = queueID
 		return nil, nil
 	}
 }
@@ -2474,7 +2499,7 @@ func SetBaseEntityUpdatedAt(updatedAt time.Time) BaseEntityPropertySetter {
 	}
 }
 
-func SetBaseEntityRunID(runID int) BaseEntityPropertySetter {
+func SetBaseEntityRunID(runID RunID) BaseEntityPropertySetter {
 	return func(e *BaseEntity) (BaseEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("base entity is nil")
@@ -2505,25 +2530,6 @@ func SetBaseEntityRetryState(state RetryState) BaseEntityPropertySetter {
 }
 
 // Base execution getters/setters
-func GetBaseExecutionID(id *int) BaseExecutionPropertyGetter {
-	return func(e *BaseExecution) (BaseExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base execution is nil")
-		}
-		*id = e.ID
-		return nil, nil
-	}
-}
-
-func GetBaseExecutionEntityID(entityID *int) BaseExecutionPropertyGetter {
-	return func(e *BaseExecution) (BaseExecutionPropertyGetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base execution is nil")
-		}
-		*entityID = e.EntityID
-		return nil, nil
-	}
-}
 
 func GetBaseExecutionStartedAt(startedAt *time.Time) BaseExecutionPropertyGetter {
 	return func(e *BaseExecution) (BaseExecutionPropertyGetterOption, error) {
@@ -2596,16 +2602,6 @@ func GetBaseExecutionUpdatedAt(updatedAt *time.Time) BaseExecutionPropertyGetter
 	}
 }
 
-func SetBaseExecutionEntityID(entityID int) BaseExecutionPropertySetter {
-	return func(e *BaseExecution) (BaseExecutionPropertySetterOption, error) {
-		if e == nil {
-			return nil, errors.New("base execution is nil")
-		}
-		e.EntityID = entityID
-		return nil, nil
-	}
-}
-
 func SetBaseExecutionStartedAt(startedAt time.Time) BaseExecutionPropertySetter {
 	return func(e *BaseExecution) (BaseExecutionPropertySetterOption, error) {
 		if e == nil {
@@ -2667,7 +2663,7 @@ func SetBaseExecutionUpdatedAt(updatedAt time.Time) BaseExecutionPropertySetter 
 }
 
 // WorkflowExecutionData getters/setters
-func GetWorkflowExecutionDataID(id *int) WorkflowExecutionDataPropertyGetter {
+func GetWorkflowExecutionDataID(id *WorkflowExecutionDataID) WorkflowExecutionDataPropertyGetter {
 	return func(d *WorkflowExecutionData) (WorkflowExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow execution data is nil")
@@ -2677,7 +2673,7 @@ func GetWorkflowExecutionDataID(id *int) WorkflowExecutionDataPropertyGetter {
 	}
 }
 
-func GetWorkflowExecutionDataExecutionID(executionID *int) WorkflowExecutionDataPropertyGetter {
+func GetWorkflowExecutionDataExecutionID(executionID *WorkflowExecutionID) WorkflowExecutionDataPropertyGetter {
 	return func(d *WorkflowExecutionData) (WorkflowExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow execution data is nil")
@@ -2717,10 +2713,20 @@ func GetWorkflowExecutionDataOutputs(outputs *[][]byte) WorkflowExecutionDataPro
 	}
 }
 
-func SetWorkflowExecutionDataExecutionID(executionID int) WorkflowExecutionDataPropertySetter {
+func SetWorkflowExecutionDataExecutionID(executionID WorkflowExecutionID) WorkflowExecutionDataPropertySetter {
 	return func(d *WorkflowExecutionData) (WorkflowExecutionDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("workflow execution data is nil")
+		}
+		d.ExecutionID = executionID
+		return nil, nil
+	}
+}
+
+func SetActivityExecutionDataExecutionID(executionID ActivityExecutionID) ActivityExecutionDataPropertySetter {
+	return func(d *ActivityExecutionData) (ActivityExecutionDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("activity execution data is nil")
 		}
 		d.ExecutionID = executionID
 		return nil, nil
@@ -2753,7 +2759,7 @@ func SetWorkflowExecutionDataOutputs(outputs [][]byte) WorkflowExecutionDataProp
 }
 
 // ActivityExecutionData getters/setters
-func GetActivityExecutionDataExecutionID(executionID *int) ActivityExecutionDataPropertyGetter {
+func GetActivityExecutionDataExecutionID(executionID *ActivityExecutionID) ActivityExecutionDataPropertyGetter {
 	return func(d *ActivityExecutionData) (ActivityExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("activity execution data is nil")
@@ -3029,7 +3035,7 @@ func GetSignalEntityStepID(stepID *string) SignalEntityPropertyGetter {
 	}
 }
 
-func GetSignalEntityRunID(runID *int) SignalEntityPropertyGetter {
+func GetSignalEntityRunID(runID *RunID) SignalEntityPropertyGetter {
 	return func(e *SignalEntity) (SignalEntityPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("signal entity is nil")
@@ -3105,7 +3111,7 @@ func SetSignalEntityStepID(stepID string) SignalEntityPropertySetter {
 	}
 }
 
-func SetSignalEntityRunID(runID int) SignalEntityPropertySetter {
+func SetSignalEntityRunID(runID RunID) SignalEntityPropertySetter {
 	return func(e *SignalEntity) (SignalEntityPropertySetterOption, error) {
 		if e == nil {
 			return nil, errors.New("signal entity is nil")
@@ -3136,7 +3142,7 @@ func SetSignalEntityRetryState(state RetryState) SignalEntityPropertySetter {
 }
 
 // Signal Data Property getters/setters
-func GetSignalDataID(id *int) SignalDataPropertyGetter {
+func GetSignalDataID(id *SignalDataID) SignalDataPropertyGetter {
 	return func(d *SignalData) (SignalDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal data is nil")
@@ -3146,7 +3152,7 @@ func GetSignalDataID(id *int) SignalDataPropertyGetter {
 	}
 }
 
-func GetSignalDataEntityID(entityID *int) SignalDataPropertyGetter {
+func GetSignalDataEntityID(entityID *SignalEntityID) SignalDataPropertyGetter {
 	return func(d *SignalData) (SignalDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal data is nil")
@@ -3166,7 +3172,7 @@ func GetSignalDataName(name *string) SignalDataPropertyGetter {
 	}
 }
 
-func SetSignalDataEntityID(entityID int) SignalDataPropertySetter {
+func SetSignalDataEntityID(entityID SignalEntityID) SignalDataPropertySetter {
 	return func(d *SignalData) (SignalDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal data is nil")
@@ -3187,7 +3193,7 @@ func SetSignalDataName(name string) SignalDataPropertySetter {
 }
 
 // Signal Execution Property getters/setters
-func GetSignalExecutionID(id *int) SignalExecutionPropertyGetter {
+func GetSignalExecutionID(id *SignalExecutionID) SignalExecutionPropertyGetter {
 	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("signal execution is nil")
@@ -3197,7 +3203,7 @@ func GetSignalExecutionID(id *int) SignalExecutionPropertyGetter {
 	}
 }
 
-func GetSignalExecutionEntityID(entityID *int) SignalExecutionPropertyGetter {
+func GetSignalExecutionEntityID(entityID *SignalEntityID) SignalExecutionPropertyGetter {
 	return func(e *SignalExecution) (SignalExecutionPropertyGetterOption, error) {
 		if e == nil {
 			return nil, errors.New("signal execution is nil")
@@ -3310,7 +3316,7 @@ func SetSignalExecutionStackTrace(stackTrace string) SignalExecutionPropertySett
 }
 
 // Signal Execution Data Property getters/setters
-func GetSignalExecutionDataID(id *int) SignalExecutionDataPropertyGetter {
+func GetSignalExecutionDataID(id *SignalExecutionDataID) SignalExecutionDataPropertyGetter {
 	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal execution data is nil")
@@ -3320,7 +3326,7 @@ func GetSignalExecutionDataID(id *int) SignalExecutionDataPropertyGetter {
 	}
 }
 
-func GetSignalExecutionDataExecutionID(executionID *int) SignalExecutionDataPropertyGetter {
+func GetSignalExecutionDataExecutionID(executionID *SignalExecutionID) SignalExecutionDataPropertyGetter {
 	return func(d *SignalExecutionData) (SignalExecutionDataPropertyGetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal execution data is nil")
@@ -3354,7 +3360,7 @@ func GetSignalExecutionKind(kind *uint) SignalExecutionDataPropertyGetter {
 	}
 }
 
-func SetSignalExecutionDataExecutionID(executionID int) SignalExecutionDataPropertySetter {
+func SetSignalExecutionDataExecutionID(executionID SignalExecutionID) SignalExecutionDataPropertySetter {
 	return func(d *SignalExecutionData) (SignalExecutionDataPropertySetterOption, error) {
 		if d == nil {
 			return nil, errors.New("signal execution data is nil")

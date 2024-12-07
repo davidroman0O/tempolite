@@ -52,54 +52,59 @@ type MemoryDatabase struct {
 	signalExecutionDataCounter int
 
 	// Saga specific
-	sagaValues map[int]map[string]*SagaValue // executionID -> key -> value
+	sagaValues map[SagaExecutionID]map[string]*SagaValue
 
 	// Core maps
-	runs        map[int]*Run
-	versions    map[int]*Version
-	hierarchies map[int]*Hierarchy
-	queues      map[int]*Queue
-	queueNames  map[string]int
+	runs        map[RunID]*Run
+	versions    map[VersionID]*Version
+	hierarchies map[HierarchyID]*Hierarchy
+	queues      map[QueueID]*Queue
+	queueNames  map[string]QueueID
 
 	// Entity maps
-	workflowEntities   map[int]*WorkflowEntity
-	activityEntities   map[int]*ActivityEntity
-	sagaEntities       map[int]*SagaEntity
-	sideEffectEntities map[int]*SideEffectEntity
+	workflowEntities   map[WorkflowEntityID]*WorkflowEntity
+	activityEntities   map[ActivityEntityID]*ActivityEntity
+	sagaEntities       map[SagaEntityID]*SagaEntity
+	sideEffectEntities map[SideEffectEntityID]*SideEffectEntity
 
 	// Entity Data maps
-	workflowData   map[int]*WorkflowData
-	activityData   map[int]*ActivityData
-	sagaData       map[int]*SagaData
-	sideEffectData map[int]*SideEffectData
+	workflowData   map[WorkflowDataID]*WorkflowData
+	activityData   map[ActivityDataID]*ActivityData
+	sagaData       map[SagaDataID]*SagaData
+	sideEffectData map[SideEffectDataID]*SideEffectData
 
 	// Execution maps
-	workflowExecutions   map[int]*WorkflowExecution
-	activityExecutions   map[int]*ActivityExecution
-	sagaExecutions       map[int]*SagaExecution
-	sideEffectExecutions map[int]*SideEffectExecution
+	workflowExecutions   map[WorkflowExecutionID]*WorkflowExecution
+	activityExecutions   map[ActivityExecutionID]*ActivityExecution
+	sagaExecutions       map[SagaExecutionID]*SagaExecution
+	sideEffectExecutions map[SideEffectExecutionID]*SideEffectExecution
 
 	// Execution Data maps
-	workflowExecutionData   map[int]*WorkflowExecutionData
-	activityExecutionData   map[int]*ActivityExecutionData
-	sagaExecutionData       map[int]*SagaExecutionData
-	sideEffectExecutionData map[int]*SideEffectExecutionData
+	workflowExecutionData   map[WorkflowExecutionDataID]*WorkflowExecutionData
+	activityExecutionData   map[ActivityExecutionDataID]*ActivityExecutionData
+	sagaExecutionData       map[SagaExecutionDataID]*SagaExecutionData
+	sideEffectExecutionData map[SideEffectExecutionDataID]*SideEffectExecutionData
 
 	// Signal maps
-	signalEntities      map[int]*SignalEntity
-	signalExecutions    map[int]*SignalExecution
-	signalData          map[int]*SignalData
-	signalExecutionData map[int]*SignalExecutionData
+	signalEntities      map[SignalEntityID]*SignalEntity
+	signalExecutions    map[SignalExecutionID]*SignalExecution
+	signalData          map[SignalDataID]*SignalData
+	signalExecutionData map[SignalExecutionDataID]*SignalExecutionData
 
 	// Relationship maps
-	entityToWorkflow   map[int]int                  // entity ID -> workflow ID
-	workflowToChildren map[int]map[EntityType][]int // workflow ID -> type -> child IDs
-	workflowToVersion  map[int][]int                // workflow ID -> version IDs
-	workflowToQueue    map[int]int                  // workflow ID -> queue ID
-	queueToWorkflows   map[int][]int                // queue ID -> workflow IDs
-	runToWorkflows     map[int][]int                // run ID -> workflow IDs
-	workflowVersions   map[int][]int                // WorkflowID -> []VersionID
-	execToDataMap      map[int]int                  // execution ID -> data ID
+	entityToWorkflow   map[int]WorkflowEntityID
+	workflowToChildren map[WorkflowEntityID]map[EntityType][]int
+	workflowToVersion  map[WorkflowEntityID][]VersionID
+	workflowToQueue    map[WorkflowEntityID]QueueID
+	queueToWorkflows   map[QueueID][]WorkflowEntityID
+	runToWorkflows     map[RunID][]WorkflowEntityID
+	workflowVersions   map[WorkflowEntityID][]VersionID
+
+	workflowExecToDataMap   map[WorkflowExecutionID]WorkflowExecutionDataID
+	activityExecToDataMap   map[ActivityExecutionID]ActivityExecutionDataID
+	sagaExecToDataMap       map[SagaExecutionID]SagaExecutionDataID
+	sideEffectExecToDataMap map[SideEffectExecutionID]SideEffectExecutionDataID
+	signalExecToDataMap     map[SignalExecutionID]SignalExecutionDataID
 
 	// Locks for each category of data
 	rwMutexRuns        deadlock.RWMutex
@@ -137,54 +142,59 @@ type MemoryDatabase struct {
 func NewMemoryDatabase() *MemoryDatabase {
 	db := &MemoryDatabase{
 		// Core maps
-		runs:        make(map[int]*Run),
-		versions:    make(map[int]*Version),
-		hierarchies: make(map[int]*Hierarchy),
-		queues:      make(map[int]*Queue),
-		queueNames:  make(map[string]int),
+		runs:        make(map[RunID]*Run),
+		versions:    make(map[VersionID]*Version),
+		hierarchies: make(map[HierarchyID]*Hierarchy),
+		queues:      make(map[QueueID]*Queue),
+		queueNames:  make(map[string]QueueID),
 
 		// Entity maps
-		workflowEntities:   make(map[int]*WorkflowEntity),
-		activityEntities:   make(map[int]*ActivityEntity),
-		sagaEntities:       make(map[int]*SagaEntity),
-		sideEffectEntities: make(map[int]*SideEffectEntity),
+		workflowEntities:   make(map[WorkflowEntityID]*WorkflowEntity),
+		activityEntities:   make(map[ActivityEntityID]*ActivityEntity),
+		sagaEntities:       make(map[SagaEntityID]*SagaEntity),
+		sideEffectEntities: make(map[SideEffectEntityID]*SideEffectEntity),
 
 		// Entity Data maps
-		workflowData:   make(map[int]*WorkflowData),
-		activityData:   make(map[int]*ActivityData),
-		sagaData:       make(map[int]*SagaData),
-		sideEffectData: make(map[int]*SideEffectData),
+		workflowData:   make(map[WorkflowDataID]*WorkflowData),
+		activityData:   make(map[ActivityDataID]*ActivityData),
+		sagaData:       make(map[SagaDataID]*SagaData),
+		sideEffectData: make(map[SideEffectDataID]*SideEffectData),
 
 		// Execution maps
-		workflowExecutions:   make(map[int]*WorkflowExecution),
-		activityExecutions:   make(map[int]*ActivityExecution),
-		sagaExecutions:       make(map[int]*SagaExecution),
-		sideEffectExecutions: make(map[int]*SideEffectExecution),
+		workflowExecutions:   make(map[WorkflowExecutionID]*WorkflowExecution),
+		activityExecutions:   make(map[ActivityExecutionID]*ActivityExecution),
+		sagaExecutions:       make(map[SagaExecutionID]*SagaExecution),
+		sideEffectExecutions: make(map[SideEffectExecutionID]*SideEffectExecution),
 
 		// Execution Data maps
-		workflowExecutionData:   make(map[int]*WorkflowExecutionData),
-		activityExecutionData:   make(map[int]*ActivityExecutionData),
-		sagaExecutionData:       make(map[int]*SagaExecutionData),
-		sideEffectExecutionData: make(map[int]*SideEffectExecutionData),
+		workflowExecutionData:   make(map[WorkflowExecutionDataID]*WorkflowExecutionData),
+		activityExecutionData:   make(map[ActivityExecutionDataID]*ActivityExecutionData),
+		sagaExecutionData:       make(map[SagaExecutionDataID]*SagaExecutionData),
+		sideEffectExecutionData: make(map[SideEffectExecutionDataID]*SideEffectExecutionData),
 
 		// Signal maps
-		signalEntities:      make(map[int]*SignalEntity),
-		signalExecutions:    make(map[int]*SignalExecution),
-		signalData:          make(map[int]*SignalData),
-		signalExecutionData: make(map[int]*SignalExecutionData),
+		signalEntities:      make(map[SignalEntityID]*SignalEntity),
+		signalExecutions:    make(map[SignalExecutionID]*SignalExecution),
+		signalData:          make(map[SignalDataID]*SignalData),
+		signalExecutionData: make(map[SignalExecutionDataID]*SignalExecutionData),
 
 		// Saga context
-		sagaValues: make(map[int]map[string]*SagaValue),
+		sagaValues: make(map[SagaExecutionID]map[string]*SagaValue),
 
 		// Relationship maps
-		entityToWorkflow:   make(map[int]int),
-		workflowToChildren: make(map[int]map[EntityType][]int),
-		workflowToVersion:  make(map[int][]int),
-		workflowToQueue:    make(map[int]int),
-		queueToWorkflows:   make(map[int][]int),
-		runToWorkflows:     make(map[int][]int),
-		workflowVersions:   make(map[int][]int),
-		execToDataMap:      make(map[int]int),
+		entityToWorkflow:   make(map[int]WorkflowEntityID),
+		workflowToChildren: make(map[WorkflowEntityID]map[EntityType][]int),
+		workflowToVersion:  make(map[WorkflowEntityID][]VersionID),
+		workflowToQueue:    make(map[WorkflowEntityID]QueueID),
+		queueToWorkflows:   make(map[QueueID][]WorkflowEntityID),
+		runToWorkflows:     make(map[RunID][]WorkflowEntityID),
+		workflowVersions:   make(map[WorkflowEntityID][]VersionID),
+
+		workflowExecToDataMap:   make(map[WorkflowExecutionID]WorkflowExecutionDataID),
+		activityExecToDataMap:   make(map[ActivityExecutionID]ActivityExecutionDataID),
+		sagaExecToDataMap:       make(map[SagaExecutionID]SagaExecutionDataID),
+		sideEffectExecToDataMap: make(map[SideEffectExecutionID]SideEffectExecutionDataID),
+		signalExecToDataMap:     make(map[SignalExecutionID]SignalExecutionDataID),
 
 		queueCounter: 1,
 	}
@@ -208,81 +218,91 @@ func NewMemoryDatabase() *MemoryDatabase {
 func (db *MemoryDatabase) SaveAsJSON(path string) error {
 	// We need to lock all relevant structures for a consistent snapshot.
 	// We'll lock everything in alphabetical order to avoid deadlocks.
-	db.rwMutexActivityData.RLock()
-	db.rwMutexActivityExec.RLock()
-	db.rwMutexActivities.RLock()
+	db.rwMutexRuns.RLock()
+	db.rwMutexVersions.RLock()
 	db.rwMutexHierarchies.RLock()
 	db.rwMutexQueues.RLock()
-	db.rwMutexRelationships.RLock()
-	db.rwMutexRuns.RLock()
-	db.rwMutexSagaData.RLock()
-	db.rwMutexSagaExec.RLock()
-	db.rwMutexSagas.RLock()
-	db.rwMutexSideEffectData.RLock()
-	db.rwMutexSideEffectExec.RLock()
-	db.rwMutexSideEffects.RLock()
-	db.rwMutexSignalData.RLock()
-	db.rwMutexSignalExec.RLock()
-	db.rwMutexSignals.RLock()
-	db.rwMutexVersions.RLock()
-	db.rwMutexWorkflowData.RLock()
-	db.rwMutexWorkflowExec.RLock()
 	db.rwMutexWorkflows.RLock()
+	db.rwMutexActivities.RLock()
+	db.rwMutexSagas.RLock()
+	db.rwMutexSideEffects.RLock()
+	db.rwMutexSignals.RLock()
+	db.rwMutexWorkflowData.RLock()
+	db.rwMutexActivityData.RLock()
+	db.rwMutexSagaData.RLock()
+	db.rwMutexSideEffectData.RLock()
+	db.rwMutexSignalData.RLock()
+	db.rwMutexWorkflowExec.RLock()
+	db.rwMutexActivityExec.RLock()
+	db.rwMutexSagaExec.RLock()
+	db.rwMutexSideEffectExec.RLock()
+	db.rwMutexSignalExec.RLock()
+	db.rwMutexWorkflowExecData.RLock()
+	db.rwMutexActivityExecData.RLock()
+	db.rwMutexSagaExecData.RLock()
+	db.rwMutexSideEffectExecData.RLock()
+	db.rwMutexSignalExecData.RLock()
+	db.rwMutexRelationships.RLock()
 
-	defer db.rwMutexWorkflows.RUnlock()
-	defer db.rwMutexWorkflowExec.RUnlock()
-	defer db.rwMutexWorkflowData.RUnlock()
-	defer db.rwMutexVersions.RUnlock()
-	defer db.rwMutexSignals.RUnlock()
-	defer db.rwMutexSignalExec.RUnlock()
-	defer db.rwMutexSignalData.RUnlock()
-	defer db.rwMutexSideEffects.RUnlock()
-	defer db.rwMutexSideEffectExec.RUnlock()
-	defer db.rwMutexSideEffectData.RUnlock()
-	defer db.rwMutexSagas.RUnlock()
-	defer db.rwMutexSagaExec.RUnlock()
-	defer db.rwMutexSagaData.RUnlock()
 	defer db.rwMutexRuns.RUnlock()
-	defer db.rwMutexRelationships.RUnlock()
-	defer db.rwMutexQueues.RUnlock()
+	defer db.rwMutexVersions.RUnlock()
 	defer db.rwMutexHierarchies.RUnlock()
+	defer db.rwMutexQueues.RUnlock()
+	defer db.rwMutexWorkflows.RUnlock()
 	defer db.rwMutexActivities.RUnlock()
-	defer db.rwMutexActivityExec.RUnlock()
+	defer db.rwMutexSagas.RUnlock()
+	defer db.rwMutexSideEffects.RUnlock()
+	defer db.rwMutexSignals.RUnlock()
+	defer db.rwMutexWorkflowData.RUnlock()
 	defer db.rwMutexActivityData.RUnlock()
+	defer db.rwMutexSagaData.RUnlock()
+	defer db.rwMutexSideEffectData.RUnlock()
+	defer db.rwMutexSignalData.RUnlock()
+	defer db.rwMutexWorkflowExec.RUnlock()
+	defer db.rwMutexActivityExec.RUnlock()
+	defer db.rwMutexSagaExec.RUnlock()
+	defer db.rwMutexSideEffectExec.RUnlock()
+	defer db.rwMutexSignalExec.RUnlock()
+	defer db.rwMutexWorkflowExecData.RUnlock()
+	defer db.rwMutexActivityExecData.RUnlock()
+	defer db.rwMutexSagaExecData.RUnlock()
+	defer db.rwMutexSideEffectExecData.RUnlock()
+	defer db.rwMutexSignalExecData.RUnlock()
+	defer db.rwMutexRelationships.RUnlock()
 
 	data := struct {
-		Runs                    map[int]*Run
-		Versions                map[int]*Version
-		Hierarchies             map[int]*Hierarchy
-		Queues                  map[int]*Queue
-		QueueNames              map[string]int
-		WorkflowEntities        map[int]*WorkflowEntity
-		ActivityEntities        map[int]*ActivityEntity
-		SagaEntities            map[int]*SagaEntity
-		SideEffectEntities      map[int]*SideEffectEntity
-		WorkflowData            map[int]*WorkflowData
-		ActivityData            map[int]*ActivityData
-		SagaData                map[int]*SagaData
-		SideEffectData          map[int]*SideEffectData
-		WorkflowExecutions      map[int]*WorkflowExecution
-		ActivityExecutions      map[int]*ActivityExecution
-		SagaExecutions          map[int]*SagaExecution
-		SideEffectExecutions    map[int]*SideEffectExecution
-		WorkflowExecutionData   map[int]*WorkflowExecutionData
-		ActivityExecutionData   map[int]*ActivityExecutionData
-		SagaExecutionData       map[int]*SagaExecutionData
-		SideEffectExecutionData map[int]*SideEffectExecutionData
-		EntityToWorkflow        map[int]int
-		WorkflowToChildren      map[int]map[EntityType][]int
-		WorkflowToVersion       map[int][]int
-		WorkflowToQueue         map[int]int
-		QueueToWorkflows        map[int][]int
-		RunToWorkflows          map[int][]int
-		SagaValues              map[int]map[string]*SagaValue
-		SignalEntities          map[int]*SignalEntity
-		SignalExecutions        map[int]*SignalExecution
-		SignalData              map[int]*SignalData
-		SignalExecutionData     map[int]*SignalExecutionData
+		Runs                    map[RunID]*Run
+		Versions                map[VersionID]*Version
+		Hierarchies             map[HierarchyID]*Hierarchy
+		Queues                  map[QueueID]*Queue
+		QueueNames              map[string]QueueID
+		WorkflowEntities        map[WorkflowEntityID]*WorkflowEntity
+		ActivityEntities        map[ActivityEntityID]*ActivityEntity
+		SagaEntities            map[SagaEntityID]*SagaEntity
+		SideEffectEntities      map[SideEffectEntityID]*SideEffectEntity
+		WorkflowData            map[WorkflowDataID]*WorkflowData
+		ActivityData            map[ActivityDataID]*ActivityData
+		SagaData                map[SagaDataID]*SagaData
+		SideEffectData          map[SideEffectDataID]*SideEffectData
+		WorkflowExecutions      map[WorkflowExecutionID]*WorkflowExecution
+		ActivityExecutions      map[ActivityExecutionID]*ActivityExecution
+		SagaExecutions          map[SagaExecutionID]*SagaExecution
+		SideEffectExecutions    map[SideEffectExecutionID]*SideEffectExecution
+		WorkflowExecutionData   map[WorkflowExecutionDataID]*WorkflowExecutionData
+		ActivityExecutionData   map[ActivityExecutionDataID]*ActivityExecutionData
+		SagaExecutionData       map[SagaExecutionDataID]*SagaExecutionData
+		SideEffectExecutionData map[SideEffectExecutionDataID]*SideEffectExecutionData
+		EntityToWorkflow        map[int]WorkflowEntityID
+		WorkflowToChildren      map[WorkflowEntityID]map[EntityType][]int
+		WorkflowToVersion       map[WorkflowEntityID][]VersionID
+		WorkflowToQueue         map[WorkflowEntityID]QueueID
+		QueueToWorkflows        map[QueueID][]WorkflowEntityID
+		RunToWorkflows          map[RunID][]WorkflowEntityID
+		SagaValues              map[SagaExecutionID]map[string]*SagaValue
+		SignalEntities          map[SignalEntityID]*SignalEntity
+		SignalExecutions        map[SignalExecutionID]*SignalExecution
+		SignalData              map[SignalDataID]*SignalData
+		SignalExecutionData     map[SignalExecutionDataID]*SignalExecutionData
 	}{
 		Runs:                    db.runs,
 		Versions:                db.versions,
@@ -334,12 +354,12 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 // From here on, we replace all uses of db.mu with fine-grained locks targeting the structures involved.
 
 // AddRun
-func (db *MemoryDatabase) AddRun(run *Run) (int, error) {
+func (db *MemoryDatabase) AddRun(run *Run) (RunID, error) {
 	db.rwMutexRuns.Lock()
 	defer db.rwMutexRuns.Unlock()
 
 	db.runCounter++
-	run.ID = db.runCounter
+	run.ID = RunID(db.runCounter)
 	run.CreatedAt = time.Now()
 	run.UpdatedAt = run.CreatedAt
 
@@ -348,7 +368,7 @@ func (db *MemoryDatabase) AddRun(run *Run) (int, error) {
 }
 
 // GetRun
-func (db *MemoryDatabase) GetRun(id int, opts ...RunGetOption) (*Run, error) {
+func (db *MemoryDatabase) GetRun(id RunID, opts ...RunGetOption) (*Run, error) {
 	db.rwMutexRuns.RLock()
 	r, exists := db.runs[id]
 	if !exists {
@@ -411,7 +431,7 @@ func (db *MemoryDatabase) UpdateRun(run *Run) error {
 	return nil
 }
 
-func (db *MemoryDatabase) GetRunProperties(id int, getters ...RunPropertyGetter) error {
+func (db *MemoryDatabase) GetRunProperties(id RunID, getters ...RunPropertyGetter) error {
 	db.rwMutexRuns.RLock()
 	run, exists := db.runs[id]
 	if !exists {
@@ -467,7 +487,7 @@ func (db *MemoryDatabase) GetRunProperties(id int, getters ...RunPropertyGetter)
 	return nil
 }
 
-func (db *MemoryDatabase) SetRunProperties(id int, setters ...RunPropertySetter) error {
+func (db *MemoryDatabase) SetRunProperties(id RunID, setters ...RunPropertySetter) error {
 	db.rwMutexRuns.Lock()
 	run, exists := db.runs[id]
 	if !exists {
@@ -513,16 +533,16 @@ func (db *MemoryDatabase) SetRunProperties(id int, setters ...RunPropertySetter)
 	return nil
 }
 
-func (db *MemoryDatabase) AddQueue(queue *Queue) (int, error) {
+func (db *MemoryDatabase) AddQueue(queue *Queue) (QueueID, error) {
 	db.rwMutexQueues.Lock()
 	defer db.rwMutexQueues.Unlock()
 
 	if _, exists := db.queueNames[queue.Name]; exists {
-		return 0, ErrQueueExists
+		return QueueID(0), ErrQueueExists
 	}
 
 	db.queueCounter++
-	queue.ID = db.queueCounter
+	queue.ID = QueueID(db.queueCounter)
 	queue.CreatedAt = time.Now()
 	queue.UpdatedAt = queue.CreatedAt
 	queue.Entities = make([]*WorkflowEntity, 0)
@@ -532,7 +552,7 @@ func (db *MemoryDatabase) AddQueue(queue *Queue) (int, error) {
 	return queue.ID, nil
 }
 
-func (db *MemoryDatabase) GetQueue(id int, opts ...QueueGetOption) (*Queue, error) {
+func (db *MemoryDatabase) GetQueue(id QueueID, opts ...QueueGetOption) (*Queue, error) {
 	db.rwMutexQueues.RLock()
 	q, exists := db.queues[id]
 	if !exists {
@@ -613,12 +633,12 @@ func (db *MemoryDatabase) GetQueueByName(name string, opts ...QueueGetOption) (*
 	return queueCopy, nil
 }
 
-func (db *MemoryDatabase) AddVersion(version *Version) (int, error) {
+func (db *MemoryDatabase) AddVersion(version *Version) (VersionID, error) {
 	db.rwMutexVersions.Lock()
 	defer db.rwMutexVersions.Unlock()
 
 	db.versionCounter++
-	version.ID = db.versionCounter
+	version.ID = VersionID(db.versionCounter)
 	version.CreatedAt = time.Now()
 	version.UpdatedAt = version.CreatedAt
 
@@ -632,7 +652,7 @@ func (db *MemoryDatabase) AddVersion(version *Version) (int, error) {
 	return version.ID, nil
 }
 
-func (db *MemoryDatabase) GetVersion(id int, opts ...VersionGetOption) (*Version, error) {
+func (db *MemoryDatabase) GetVersion(id VersionID, opts ...VersionGetOption) (*Version, error) {
 	db.rwMutexVersions.RLock()
 	v, exists := db.versions[id]
 	if !exists {
@@ -642,7 +662,6 @@ func (db *MemoryDatabase) GetVersion(id int, opts ...VersionGetOption) (*Version
 	versionCopy := copyVersion(v)
 	db.rwMutexVersions.RUnlock()
 
-	// Options
 	cfg := &VersionGetterOptions{}
 	for _, opt := range opts {
 		if err := opt(cfg); err != nil {
@@ -653,18 +672,18 @@ func (db *MemoryDatabase) GetVersion(id int, opts ...VersionGetOption) (*Version
 	return versionCopy, nil
 }
 
-func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (int, error) {
+func (db *MemoryDatabase) AddHierarchy(hierarchy *Hierarchy) (HierarchyID, error) {
 	db.rwMutexHierarchies.Lock()
 	defer db.rwMutexHierarchies.Unlock()
 
 	db.hierarchyCounter++
-	hierarchy.ID = db.hierarchyCounter
+	hierarchy.ID = HierarchyID(db.hierarchyCounter)
 
 	db.hierarchies[hierarchy.ID] = copyHierarchy(hierarchy)
 	return hierarchy.ID, nil
 }
 
-func (db *MemoryDatabase) GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error) {
+func (db *MemoryDatabase) GetHierarchy(id HierarchyID, opts ...HierarchyGetOption) (*Hierarchy, error) {
 	db.rwMutexHierarchies.RLock()
 	h, exists := db.hierarchies[id]
 	if !exists {
@@ -684,62 +703,64 @@ func (db *MemoryDatabase) GetHierarchy(id int, opts ...HierarchyGetOption) (*Hie
 	return hCopy, nil
 }
 
-func (db *MemoryDatabase) AddWorkflowEntity(entity *WorkflowEntity) (int, error) {
+func (db *MemoryDatabase) AddWorkflowEntity(entity *WorkflowEntity) (WorkflowEntityID, error) {
+	db.rwMutexQueues.Lock()
+	db.rwMutexRelationships.Lock()
+	db.rwMutexWorkflowData.Lock()
 	db.rwMutexWorkflows.Lock()
+
 	db.workflowEntityCounter++
-	entity.ID = db.workflowEntityCounter
+	entity.ID = WorkflowEntityID(db.workflowEntityCounter)
 
 	if entity.WorkflowData != nil {
-		db.rwMutexWorkflowData.Lock()
 		db.workflowDataCounter++
-		entity.WorkflowData.ID = db.workflowDataCounter
+		entity.WorkflowData.ID = WorkflowDataID(db.workflowDataCounter)
 		entity.WorkflowData.EntityID = entity.ID
 		db.workflowData[entity.WorkflowData.ID] = copyWorkflowData(entity.WorkflowData)
-		db.rwMutexWorkflowData.Unlock()
 	}
 
 	entity.CreatedAt = time.Now()
 	entity.UpdatedAt = entity.CreatedAt
 
 	// Default queue if none
-	db.rwMutexQueues.RLock()
-	defaultQueueID := 1
-	db.rwMutexQueues.RUnlock()
+	defaultQueueID := QueueID(1)
 	if entity.QueueID == 0 {
 		entity.QueueID = defaultQueueID
-		db.rwMutexRelationships.Lock()
 		db.queueToWorkflows[defaultQueueID] = append(db.queueToWorkflows[defaultQueueID], entity.ID)
-		db.rwMutexRelationships.Unlock()
 	} else {
-		db.rwMutexRelationships.Lock()
 		db.workflowToQueue[entity.ID] = entity.QueueID
 		db.queueToWorkflows[entity.QueueID] = append(db.queueToWorkflows[entity.QueueID], entity.ID)
-		db.rwMutexRelationships.Unlock()
 	}
 
 	db.workflowEntities[entity.ID] = copyWorkflowEntity(entity)
+
+	db.rwMutexQueues.Unlock()
+	db.rwMutexRelationships.Unlock()
+	db.rwMutexWorkflowData.Unlock()
 	db.rwMutexWorkflows.Unlock()
+
 	return entity.ID, nil
 }
 
-func (db *MemoryDatabase) AddWorkflowExecution(exec *WorkflowExecution) (int, error) {
+func (db *MemoryDatabase) AddWorkflowExecution(exec *WorkflowExecution) (WorkflowExecutionID, error) {
 	db.rwMutexWorkflowExec.Lock()
 	db.rwMutexWorkflowExecData.Lock()
+	db.rwMutexRelationships.Lock()
+	defer db.rwMutexRelationships.Unlock()
 	defer db.rwMutexWorkflowExec.Unlock()
 	defer db.rwMutexWorkflowExecData.Unlock()
 
 	db.workflowExecutionCounter++
-	exec.ID = db.workflowExecutionCounter
+	exec.ID = WorkflowExecutionID(db.workflowExecutionCounter)
 
 	if exec.WorkflowExecutionData != nil {
 		db.workflowExecutionDataCounter++
-		exec.WorkflowExecutionData.ID = db.workflowExecutionDataCounter
+		exec.WorkflowExecutionData.ID = WorkflowExecutionDataID(db.workflowExecutionDataCounter)
 		exec.WorkflowExecutionData.ExecutionID = exec.ID
 		db.workflowExecutionData[exec.WorkflowExecutionData.ID] = copyWorkflowExecutionData(exec.WorkflowExecutionData)
 
-		db.rwMutexRelationships.Lock()
-		db.execToDataMap[exec.ID] = exec.WorkflowExecutionData.ID
-		db.rwMutexRelationships.Unlock()
+		db.workflowExecToDataMap[exec.ID] = exec.WorkflowExecutionData.ID
+
 	}
 	exec.CreatedAt = time.Now()
 	exec.UpdatedAt = exec.CreatedAt
@@ -748,7 +769,7 @@ func (db *MemoryDatabase) AddWorkflowExecution(exec *WorkflowExecution) (int, er
 	return exec.ID, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error) {
+func (db *MemoryDatabase) GetWorkflowEntity(id WorkflowEntityID, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error) {
 	db.rwMutexWorkflows.RLock()
 	e, exists := db.workflowEntities[id]
 	if !exists {
@@ -795,7 +816,7 @@ func (db *MemoryDatabase) GetWorkflowEntity(id int, opts ...WorkflowEntityGetOpt
 	return entityCopy, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetWorkflowEntityProperties(id WorkflowEntityID, getters ...WorkflowEntityPropertyGetter) error {
 	db.rwMutexWorkflows.RLock()
 	entity, exists := db.workflowEntities[id]
 	if !exists {
@@ -870,7 +891,7 @@ func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...Workflo
 				db.rwMutexActivities.RLock()
 				activities := make([]*ActivityEntity, 0, len(activityIDs))
 				for _, aID := range activityIDs {
-					if a, aexists := db.activityEntities[aID]; aexists {
+					if a, aexists := db.activityEntities[ActivityEntityID(aID)]; aexists {
 						activities = append(activities, copyActivityEntity(a))
 					}
 				}
@@ -882,7 +903,7 @@ func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...Workflo
 				db.rwMutexSagas.RLock()
 				sagas := make([]*SagaEntity, 0, len(sagaIDs))
 				for _, sID := range sagaIDs {
-					if s, sexists := db.sagaEntities[sID]; sexists {
+					if s, sexists := db.sagaEntities[SagaEntityID(sID)]; sexists {
 						sagas = append(sagas, copySagaEntity(s))
 					}
 				}
@@ -894,7 +915,7 @@ func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...Workflo
 				db.rwMutexSideEffects.RLock()
 				sideEffects := make([]*SideEffectEntity, 0, len(sideEffectIDs))
 				for _, seID := range sideEffectIDs {
-					if se, seexists := db.sideEffectEntities[seID]; seexists {
+					if se, seexists := db.sideEffectEntities[SideEffectEntityID(seID)]; seexists {
 						sideEffects = append(sideEffects, copySideEffectEntity(se))
 					}
 				}
@@ -918,7 +939,7 @@ func (db *MemoryDatabase) GetWorkflowEntityProperties(id int, getters ...Workflo
 	return nil
 }
 
-func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error {
+func (db *MemoryDatabase) SetWorkflowEntityProperties(id WorkflowEntityID, setters ...WorkflowEntityPropertySetter) error {
 	db.rwMutexWorkflows.Lock()
 	entity, exists := db.workflowEntities[id]
 	if !exists {
@@ -954,12 +975,13 @@ func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...Workflo
 		// Remove from old queue
 		if oldQueueID, ok := db.workflowToQueue[id]; ok {
 			if workflows, exists := db.queueToWorkflows[oldQueueID]; exists {
-				for i, wID := range workflows {
-					if wID == id {
-						db.queueToWorkflows[oldQueueID] = append(workflows[:i], workflows[i+1:]...)
-						break
+				newWorkflows := make([]WorkflowEntityID, 0)
+				for _, wID := range workflows {
+					if wID != id {
+						newWorkflows = append(newWorkflows, wID)
 					}
 				}
+				db.queueToWorkflows[oldQueueID] = newWorkflows
 			}
 		}
 
@@ -985,6 +1007,19 @@ func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...Workflo
 		db.rwMutexRelationships.Unlock()
 	}
 
+	if opts.RunID != nil {
+		db.rwMutexRuns.RLock()
+		_, exists := db.runs[*opts.RunID]
+		db.rwMutexRuns.RUnlock()
+		if !exists {
+			return ErrRunNotFound
+		}
+
+		db.rwMutexRelationships.Lock()
+		db.runToWorkflows[*opts.RunID] = append(db.runToWorkflows[*opts.RunID], id)
+		db.rwMutexRelationships.Unlock()
+	}
+
 	db.rwMutexWorkflows.Lock()
 	entity.UpdatedAt = time.Now()
 	db.workflowEntities[id] = copyWorkflowEntity(entity)
@@ -993,19 +1028,20 @@ func (db *MemoryDatabase) SetWorkflowEntityProperties(id int, setters ...Workflo
 	return nil
 }
 
-func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity, parentWorkflowID int) (int, error) {
+func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity, parentWorkflowID WorkflowEntityID) (ActivityEntityID, error) {
 	db.rwMutexActivityData.Lock()
 	db.rwMutexActivities.Lock()
 	db.rwMutexRelationships.Lock()
 	defer db.rwMutexRelationships.Unlock()
 	defer db.rwMutexActivities.Unlock()
 	defer db.rwMutexActivityData.Unlock()
+
 	db.activityEntityCounter++
-	entity.ID = db.activityEntityCounter
+	entity.ID = ActivityEntityID(db.activityEntityCounter)
 
 	if entity.ActivityData != nil {
 		db.activityDataCounter++
-		entity.ActivityData.ID = db.activityDataCounter
+		entity.ActivityData.ID = ActivityDataID(db.activityDataCounter)
 		entity.ActivityData.EntityID = entity.ID
 		db.activityData[entity.ActivityData.ID] = copyActivityData(entity.ActivityData)
 	}
@@ -1018,20 +1054,23 @@ func (db *MemoryDatabase) AddActivityEntity(entity *ActivityEntity, parentWorkfl
 	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
 		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
 	}
-	db.workflowToChildren[parentWorkflowID][EntityActivity] = append(db.workflowToChildren[parentWorkflowID][EntityActivity], entity.ID)
+	db.workflowToChildren[parentWorkflowID][EntityActivity] = append(
+		db.workflowToChildren[parentWorkflowID][EntityActivity],
+		int(entity.ID),
+	)
 
 	return entity.ID, nil
 }
 
-func (db *MemoryDatabase) AddActivityExecution(exec *ActivityExecution) (int, error) {
+func (db *MemoryDatabase) AddActivityExecution(exec *ActivityExecution) (ActivityExecutionID, error) {
 	db.rwMutexActivityExec.Lock()
 	db.activityExecutionCounter++
-	exec.ID = db.activityExecutionCounter
+	exec.ID = ActivityExecutionID(db.activityExecutionCounter)
 
 	if exec.ActivityExecutionData != nil {
 		db.rwMutexActivityExecData.Lock()
 		db.activityExecutionDataCounter++
-		exec.ActivityExecutionData.ID = db.activityExecutionDataCounter
+		exec.ActivityExecutionData.ID = ActivityExecutionDataID(db.activityExecutionDataCounter)
 		exec.ActivityExecutionData.ExecutionID = exec.ID
 		db.activityExecutionData[exec.ActivityExecutionData.ID] = copyActivityExecutionData(exec.ActivityExecutionData)
 		db.rwMutexActivityExecData.Unlock()
@@ -1045,7 +1084,7 @@ func (db *MemoryDatabase) AddActivityExecution(exec *ActivityExecution) (int, er
 	return exec.ID, nil
 }
 
-func (db *MemoryDatabase) GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error) {
+func (db *MemoryDatabase) GetActivityEntity(id ActivityEntityID, opts ...ActivityEntityGetOption) (*ActivityEntity, error) {
 	db.rwMutexActivities.RLock()
 	entity, exists := db.activityEntities[id]
 	if !exists {
@@ -1076,14 +1115,14 @@ func (db *MemoryDatabase) GetActivityEntity(id int, opts ...ActivityEntityGetOpt
 	return eCopy, nil
 }
 
-func (db *MemoryDatabase) GetActivityEntities(workflowID int, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error) {
+func (db *MemoryDatabase) GetActivityEntities(workflowID WorkflowEntityID, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error) {
 	db.rwMutexRelationships.RLock()
 	activityIDs := db.workflowToChildren[workflowID][EntityActivity]
 	db.rwMutexRelationships.RUnlock()
 
 	entities := make([]*ActivityEntity, 0, len(activityIDs))
 	for _, aID := range activityIDs {
-		e, err := db.GetActivityEntity(aID, opts...)
+		e, err := db.GetActivityEntity(ActivityEntityID(aID), opts...)
 		if err != nil && err != ErrActivityEntityNotFound {
 			return nil, err
 		}
@@ -1095,7 +1134,7 @@ func (db *MemoryDatabase) GetActivityEntities(workflowID int, opts ...ActivityEn
 	return entities, nil
 }
 
-func (db *MemoryDatabase) GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityEntityProperties(id ActivityEntityID, getters ...ActivityEntityPropertyGetter) error {
 	db.rwMutexActivities.RLock()
 	entity, exists := db.activityEntities[id]
 	if !exists {
@@ -1132,7 +1171,7 @@ func (db *MemoryDatabase) GetActivityEntityProperties(id int, getters ...Activit
 	return nil
 }
 
-func (db *MemoryDatabase) SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error {
+func (db *MemoryDatabase) SetActivityEntityProperties(id ActivityEntityID, setters ...ActivityEntityPropertySetter) error {
 	db.rwMutexActivities.Lock()
 	entity, exists := db.activityEntities[id]
 	if !exists {
@@ -1165,12 +1204,24 @@ func (db *MemoryDatabase) SetActivityEntityProperties(id int, setters ...Activit
 		}
 
 		db.rwMutexRelationships.Lock()
-		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		db.entityToWorkflow[int(id)] = *opts.ParentWorkflowID
 		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
 			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
 		}
-		db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity] = append(db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity], id)
+		db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntityActivity],
+			int(id),
+		)
 		db.rwMutexRelationships.Unlock()
+	}
+
+	if opts.ParentRunID != nil {
+		db.rwMutexRuns.RLock()
+		_, rExists := db.runs[*opts.ParentRunID]
+		db.rwMutexRuns.RUnlock()
+		if !rExists {
+			return ErrRunNotFound
+		}
 	}
 
 	db.rwMutexActivities.Lock()
@@ -1181,15 +1232,15 @@ func (db *MemoryDatabase) SetActivityEntityProperties(id int, setters ...Activit
 	return nil
 }
 
-func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity, parentWorkflowID int) (int, error) {
+func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity, parentWorkflowID WorkflowEntityID) (SagaEntityID, error) {
 	db.rwMutexSagas.Lock()
 	db.sagaEntityCounter++
-	entity.ID = db.sagaEntityCounter
+	entity.ID = SagaEntityID(db.sagaEntityCounter)
 
 	if entity.SagaData != nil {
 		db.rwMutexSagaData.Lock()
 		db.sagaDataCounter++
-		entity.SagaData.ID = db.sagaDataCounter
+		entity.SagaData.ID = SagaDataID(db.sagaDataCounter)
 		entity.SagaData.EntityID = entity.ID
 		db.sagaData[entity.SagaData.ID] = copySagaData(entity.SagaData)
 		db.rwMutexSagaData.Unlock()
@@ -1205,20 +1256,23 @@ func (db *MemoryDatabase) AddSagaEntity(entity *SagaEntity, parentWorkflowID int
 	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
 		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
 	}
-	db.workflowToChildren[parentWorkflowID][EntitySaga] = append(db.workflowToChildren[parentWorkflowID][EntitySaga], entity.ID)
+	db.workflowToChildren[parentWorkflowID][EntitySaga] = append(
+		db.workflowToChildren[parentWorkflowID][EntitySaga],
+		int(entity.ID),
+	)
 	db.rwMutexRelationships.Unlock()
 
 	return entity.ID, nil
 }
 
-func (db *MemoryDatabase) GetSagaEntities(workflowID int, opts ...SagaEntityGetOption) ([]*SagaEntity, error) {
+func (db *MemoryDatabase) GetSagaEntities(workflowID WorkflowEntityID, opts ...SagaEntityGetOption) ([]*SagaEntity, error) {
 	db.rwMutexRelationships.RLock()
 	sagaIDs := db.workflowToChildren[workflowID][EntitySaga]
 	db.rwMutexRelationships.RUnlock()
 
 	entities := make([]*SagaEntity, 0, len(sagaIDs))
 	for _, sID := range sagaIDs {
-		e, err := db.GetSagaEntity(sID, opts...)
+		e, err := db.GetSagaEntity(SagaEntityID(sID), opts...)
 		if err != nil && err != ErrSagaEntityNotFound {
 			return nil, err
 		}
@@ -1230,15 +1284,15 @@ func (db *MemoryDatabase) GetSagaEntities(workflowID int, opts ...SagaEntityGetO
 	return entities, nil
 }
 
-func (db *MemoryDatabase) AddSagaExecution(exec *SagaExecution) (int, error) {
+func (db *MemoryDatabase) AddSagaExecution(exec *SagaExecution) (SagaExecutionID, error) {
 	db.rwMutexSagaExec.Lock()
 	db.sagaExecutionCounter++
-	exec.ID = db.sagaExecutionCounter
+	exec.ID = SagaExecutionID(db.sagaExecutionCounter)
 
 	if exec.SagaExecutionData != nil {
 		db.rwMutexSagaExecData.Lock()
 		db.sagaExecutionDataCounter++
-		exec.SagaExecutionData.ID = db.sagaExecutionDataCounter
+		exec.SagaExecutionData.ID = SagaExecutionDataID(db.sagaExecutionDataCounter)
 		exec.SagaExecutionData.ExecutionID = exec.ID
 		db.sagaExecutionData[exec.SagaExecutionData.ID] = copySagaExecutionData(exec.SagaExecutionData)
 		db.rwMutexSagaExecData.Unlock()
@@ -1252,7 +1306,7 @@ func (db *MemoryDatabase) AddSagaExecution(exec *SagaExecution) (int, error) {
 	return exec.ID, nil
 }
 
-func (db *MemoryDatabase) GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error) {
+func (db *MemoryDatabase) GetSagaEntity(id SagaEntityID, opts ...SagaEntityGetOption) (*SagaEntity, error) {
 	db.rwMutexSagas.RLock()
 	entity, exists := db.sagaEntities[id]
 	if !exists {
@@ -1283,7 +1337,7 @@ func (db *MemoryDatabase) GetSagaEntity(id int, opts ...SagaEntityGetOption) (*S
 	return eCopy, nil
 }
 
-func (db *MemoryDatabase) GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaEntityProperties(id SagaEntityID, getters ...SagaEntityPropertyGetter) error {
 	db.rwMutexSagas.RLock()
 	entity, exists := db.sagaEntities[id]
 	if !exists {
@@ -1320,7 +1374,7 @@ func (db *MemoryDatabase) GetSagaEntityProperties(id int, getters ...SagaEntityP
 	return nil
 }
 
-func (db *MemoryDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error {
+func (db *MemoryDatabase) SetSagaEntityProperties(id SagaEntityID, setters ...SagaEntityPropertySetter) error {
 	db.rwMutexSagas.Lock()
 	entity, exists := db.sagaEntities[id]
 	if !exists {
@@ -1353,11 +1407,14 @@ func (db *MemoryDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityP
 		}
 
 		db.rwMutexRelationships.Lock()
-		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		db.entityToWorkflow[int(id)] = *opts.ParentWorkflowID
 		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
 			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
 		}
-		db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga] = append(db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga], id)
+		db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntitySaga],
+			int(id),
+		)
 		db.rwMutexRelationships.Unlock()
 	}
 
@@ -1369,15 +1426,15 @@ func (db *MemoryDatabase) SetSagaEntityProperties(id int, setters ...SagaEntityP
 	return nil
 }
 
-func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID int) (int, error) {
+func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID WorkflowEntityID) (SideEffectEntityID, error) {
 	db.rwMutexSideEffects.Lock()
 	db.sideEffectEntityCounter++
-	entity.ID = db.sideEffectEntityCounter
+	entity.ID = SideEffectEntityID(db.sideEffectEntityCounter)
 
 	if entity.SideEffectData != nil {
 		db.rwMutexSideEffectData.Lock()
 		db.sideEffectDataCounter++
-		entity.SideEffectData.ID = db.sideEffectDataCounter
+		entity.SideEffectData.ID = SideEffectDataID(db.sideEffectDataCounter)
 		entity.SideEffectData.EntityID = entity.ID
 		db.sideEffectData[entity.SideEffectData.ID] = copySideEffectData(entity.SideEffectData)
 		db.rwMutexSideEffectData.Unlock()
@@ -1393,20 +1450,23 @@ func (db *MemoryDatabase) AddSideEffectEntity(entity *SideEffectEntity, parentWo
 	if _, ok := db.workflowToChildren[parentWorkflowID]; !ok {
 		db.workflowToChildren[parentWorkflowID] = make(map[EntityType][]int)
 	}
-	db.workflowToChildren[parentWorkflowID][EntitySideEffect] = append(db.workflowToChildren[parentWorkflowID][EntitySideEffect], entity.ID)
+	db.workflowToChildren[parentWorkflowID][EntitySideEffect] = append(
+		db.workflowToChildren[parentWorkflowID][EntitySideEffect],
+		int(entity.ID),
+	)
 	db.rwMutexRelationships.Unlock()
 
 	return entity.ID, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectEntities(workflowID int, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error) {
+func (db *MemoryDatabase) GetSideEffectEntities(workflowID WorkflowEntityID, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error) {
 	db.rwMutexRelationships.RLock()
 	sideEffectIDs := db.workflowToChildren[workflowID][EntitySideEffect]
 	db.rwMutexRelationships.RUnlock()
 
 	entities := make([]*SideEffectEntity, 0, len(sideEffectIDs))
 	for _, seID := range sideEffectIDs {
-		e, err := db.GetSideEffectEntity(seID, opts...)
+		e, err := db.GetSideEffectEntity(SideEffectEntityID(seID), opts...)
 		if err != nil && err != ErrSideEffectEntityNotFound {
 			return nil, err
 		}
@@ -1418,15 +1478,15 @@ func (db *MemoryDatabase) GetSideEffectEntities(workflowID int, opts ...SideEffe
 	return entities, nil
 }
 
-func (db *MemoryDatabase) AddSideEffectExecution(exec *SideEffectExecution) (int, error) {
+func (db *MemoryDatabase) AddSideEffectExecution(exec *SideEffectExecution) (SideEffectExecutionID, error) {
 	db.rwMutexSideEffectExec.Lock()
 	db.sideEffectExecutionCounter++
-	exec.ID = db.sideEffectExecutionCounter
+	exec.ID = SideEffectExecutionID(db.sideEffectExecutionCounter)
 
 	if exec.SideEffectExecutionData != nil {
 		db.rwMutexSideEffectExecData.Lock()
 		db.sideEffectExecutionDataCounter++
-		exec.SideEffectExecutionData.ID = db.sideEffectExecutionDataCounter
+		exec.SideEffectExecutionData.ID = SideEffectExecutionDataID(db.sideEffectExecutionDataCounter)
 		exec.SideEffectExecutionData.ExecutionID = exec.ID
 		db.sideEffectExecutionData[exec.SideEffectExecutionData.ID] = copySideEffectExecutionData(exec.SideEffectExecutionData)
 		db.rwMutexSideEffectExecData.Unlock()
@@ -1440,7 +1500,7 @@ func (db *MemoryDatabase) AddSideEffectExecution(exec *SideEffectExecution) (int
 	return exec.ID, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error) {
+func (db *MemoryDatabase) GetSideEffectEntity(id SideEffectEntityID, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error) {
 	db.rwMutexSideEffects.RLock()
 	entity, exists := db.sideEffectEntities[id]
 	if !exists {
@@ -1471,7 +1531,7 @@ func (db *MemoryDatabase) GetSideEffectEntity(id int, opts ...SideEffectEntityGe
 	return eCopy, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetSideEffectEntityProperties(id SideEffectEntityID, getters ...SideEffectEntityPropertyGetter) error {
 	db.rwMutexSideEffects.RLock()
 	entity, exists := db.sideEffectEntities[id]
 	if !exists {
@@ -1491,24 +1551,23 @@ func (db *MemoryDatabase) GetSideEffectEntityProperties(id int, getters ...SideE
 			if err := opt(opts); err != nil {
 				return err
 			}
-		}
-	}
-
-	if opts.IncludeData {
-		db.rwMutexSideEffectData.RLock()
-		for _, d := range db.sideEffectData {
-			if d.EntityID == id {
-				eCopy.SideEffectData = copySideEffectData(d)
-				break
+			if opts.IncludeData {
+				db.rwMutexSideEffectData.RLock()
+				for _, d := range db.sideEffectData {
+					if d.EntityID == id {
+						eCopy.SideEffectData = copySideEffectData(d)
+						break
+					}
+				}
+				db.rwMutexSideEffectData.RUnlock()
 			}
 		}
-		db.rwMutexSideEffectData.RUnlock()
 	}
 
 	return nil
 }
 
-func (db *MemoryDatabase) SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error {
+func (db *MemoryDatabase) SetSideEffectEntityProperties(id SideEffectEntityID, setters ...SideEffectEntityPropertySetter) error {
 	db.rwMutexSideEffects.Lock()
 	entity, exists := db.sideEffectEntities[id]
 	if !exists {
@@ -1530,7 +1589,6 @@ func (db *MemoryDatabase) SetSideEffectEntityProperties(id int, setters ...SideE
 			}
 		}
 	}
-	db.rwMutexSideEffects.Unlock()
 
 	if opts.ParentWorkflowID != nil {
 		db.rwMutexWorkflows.RLock()
@@ -1541,15 +1599,17 @@ func (db *MemoryDatabase) SetSideEffectEntityProperties(id int, setters ...SideE
 		}
 
 		db.rwMutexRelationships.Lock()
-		db.entityToWorkflow[id] = *opts.ParentWorkflowID
+		db.entityToWorkflow[int(id)] = *opts.ParentWorkflowID
 		if db.workflowToChildren[*opts.ParentWorkflowID] == nil {
 			db.workflowToChildren[*opts.ParentWorkflowID] = make(map[EntityType][]int)
 		}
-		db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect] = append(db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect], id)
+		db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect] = append(
+			db.workflowToChildren[*opts.ParentWorkflowID][EntitySideEffect],
+			int(id),
+		)
 		db.rwMutexRelationships.Unlock()
 	}
 
-	db.rwMutexSideEffects.Lock()
 	entity.UpdatedAt = time.Now()
 	db.sideEffectEntities[id] = copySideEffectEntity(entity)
 	db.rwMutexSideEffects.Unlock()
@@ -1557,7 +1617,7 @@ func (db *MemoryDatabase) SetSideEffectEntityProperties(id int, setters ...SideE
 	return nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error) {
+func (db *MemoryDatabase) GetWorkflowExecution(id WorkflowExecutionID, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error) {
 	db.rwMutexWorkflowExec.RLock()
 	exec, exists := db.workflowExecutions[id]
 	if !exists {
@@ -1588,11 +1648,11 @@ func (db *MemoryDatabase) GetWorkflowExecution(id int, opts ...WorkflowExecution
 	return execCopy, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecutions(entityID int) ([]*WorkflowExecution, error) {
+func (db *MemoryDatabase) GetWorkflowExecutions(entityID WorkflowEntityID) ([]*WorkflowExecution, error) {
 	db.rwMutexWorkflowExec.RLock()
 	results := make([]*WorkflowExecution, 0)
 	for _, exec := range db.workflowExecutions {
-		if exec.EntityID == entityID {
+		if exec.WorkflowEntityID == entityID {
 			results = append(results, copyWorkflowExecution(exec))
 		}
 	}
@@ -1600,7 +1660,7 @@ func (db *MemoryDatabase) GetWorkflowExecutions(entityID int) ([]*WorkflowExecut
 	return results, nil
 }
 
-func (db *MemoryDatabase) GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error) {
+func (db *MemoryDatabase) GetActivityExecution(id ActivityExecutionID, opts ...ActivityExecutionGetOption) (*ActivityExecution, error) {
 	db.rwMutexActivityExec.RLock()
 	exec, exists := db.activityExecutions[id]
 	if !exists {
@@ -1631,11 +1691,11 @@ func (db *MemoryDatabase) GetActivityExecution(id int, opts ...ActivityExecution
 	return execCopy, nil
 }
 
-func (db *MemoryDatabase) GetActivityExecutions(entityID int) ([]*ActivityExecution, error) {
+func (db *MemoryDatabase) GetActivityExecutions(entityID ActivityEntityID) ([]*ActivityExecution, error) {
 	db.rwMutexActivityExec.RLock()
 	results := make([]*ActivityExecution, 0)
 	for _, exec := range db.activityExecutions {
-		if exec.EntityID == entityID {
+		if exec.ActivityEntityID == entityID {
 			results = append(results, copyActivityExecution(exec))
 		}
 	}
@@ -1643,7 +1703,7 @@ func (db *MemoryDatabase) GetActivityExecutions(entityID int) ([]*ActivityExecut
 	return results, nil
 }
 
-func (db *MemoryDatabase) GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error) {
+func (db *MemoryDatabase) GetSagaExecution(id SagaExecutionID, opts ...SagaExecutionGetOption) (*SagaExecution, error) {
 	db.rwMutexSagaExec.RLock()
 	exec, exists := db.sagaExecutions[id]
 	if !exists {
@@ -1674,11 +1734,11 @@ func (db *MemoryDatabase) GetSagaExecution(id int, opts ...SagaExecutionGetOptio
 	return execCopy, nil
 }
 
-func (db *MemoryDatabase) GetSagaExecutions(entityID int) ([]*SagaExecution, error) {
+func (db *MemoryDatabase) GetSagaExecutions(entityID SagaEntityID) ([]*SagaExecution, error) {
 	db.rwMutexSagaExec.RLock()
 	results := make([]*SagaExecution, 0)
 	for _, exec := range db.sagaExecutions {
-		if exec.EntityID == entityID {
+		if exec.SagaEntityID == entityID {
 			results = append(results, copySagaExecution(exec))
 		}
 	}
@@ -1695,7 +1755,7 @@ func (db *MemoryDatabase) GetSagaExecutions(entityID int) ([]*SagaExecution, err
 	return results, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error) {
+func (db *MemoryDatabase) GetSideEffectExecution(id SideEffectExecutionID, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error) {
 	db.rwMutexSideEffectExec.RLock()
 	exec, exists := db.sideEffectExecutions[id]
 	if !exists {
@@ -1726,11 +1786,11 @@ func (db *MemoryDatabase) GetSideEffectExecution(id int, opts ...SideEffectExecu
 	return execCopy, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectExecutions(entityID int) ([]*SideEffectExecution, error) {
+func (db *MemoryDatabase) GetSideEffectExecutions(entityID SideEffectEntityID) ([]*SideEffectExecution, error) {
 	db.rwMutexSideEffectExec.RLock()
 	results := make([]*SideEffectExecution, 0)
 	for _, exec := range db.sideEffectExecutions {
-		if exec.EntityID == entityID {
+		if exec.SideEffectEntityID == entityID {
 			results = append(results, copySideEffectExecution(exec))
 		}
 	}
@@ -1738,14 +1798,12 @@ func (db *MemoryDatabase) GetSideEffectExecutions(entityID int) ([]*SideEffectEx
 	return results, nil
 }
 
-// Activity Data properties
-func (db *MemoryDatabase) GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityDataProperties(entityID ActivityEntityID, getters ...ActivityDataPropertyGetter) error {
 	db.rwMutexActivityData.RLock()
 	var data *ActivityData
 	for _, d := range db.activityData {
 		if d.EntityID == entityID {
-			tmp := d
-			data = tmp
+			data = d
 			break
 		}
 	}
@@ -1764,7 +1822,7 @@ func (db *MemoryDatabase) GetActivityDataProperties(entityID int, getters ...Act
 	return nil
 }
 
-func (db *MemoryDatabase) SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error {
+func (db *MemoryDatabase) SetActivityDataProperties(entityID ActivityEntityID, setters ...ActivityDataPropertySetter) error {
 	db.rwMutexActivityData.Lock()
 	defer db.rwMutexActivityData.Unlock()
 
@@ -1789,8 +1847,7 @@ func (db *MemoryDatabase) SetActivityDataProperties(entityID int, setters ...Act
 	return nil
 }
 
-// Saga Data properties
-func (db *MemoryDatabase) GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaDataProperties(entityID SagaEntityID, getters ...SagaDataPropertyGetter) error {
 	db.rwMutexSagaData.RLock()
 	var data *SagaData
 	for _, d := range db.sagaData {
@@ -1814,7 +1871,7 @@ func (db *MemoryDatabase) GetSagaDataProperties(entityID int, getters ...SagaDat
 	return nil
 }
 
-func (db *MemoryDatabase) SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error {
+func (db *MemoryDatabase) SetSagaDataProperties(entityID SagaEntityID, setters ...SagaDataPropertySetter) error {
 	db.rwMutexSagaData.Lock()
 	defer db.rwMutexSagaData.Unlock()
 
@@ -1839,8 +1896,7 @@ func (db *MemoryDatabase) SetSagaDataProperties(entityID int, setters ...SagaDat
 	return nil
 }
 
-// SideEffect Data properties
-func (db *MemoryDatabase) GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSideEffectDataProperties(entityID SideEffectEntityID, getters ...SideEffectDataPropertyGetter) error {
 	db.rwMutexSideEffectData.RLock()
 	var data *SideEffectData
 	for _, d := range db.sideEffectData {
@@ -1864,7 +1920,7 @@ func (db *MemoryDatabase) GetSideEffectDataProperties(entityID int, getters ...S
 	return nil
 }
 
-func (db *MemoryDatabase) SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error {
+func (db *MemoryDatabase) SetSideEffectDataProperties(entityID SideEffectEntityID, setters ...SideEffectDataPropertySetter) error {
 	db.rwMutexSideEffectData.Lock()
 	defer db.rwMutexSideEffectData.Unlock()
 
@@ -1889,24 +1945,18 @@ func (db *MemoryDatabase) SetSideEffectDataProperties(entityID int, setters ...S
 	return nil
 }
 
-// Workflow Data properties
-func (db *MemoryDatabase) GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error {
+func (db *MemoryDatabase) GetWorkflowDataProperties(id WorkflowDataID, getters ...WorkflowDataPropertyGetter) error {
 	db.rwMutexWorkflowData.RLock()
-	var data *WorkflowData
-	for _, d := range db.workflowData {
-		if d.EntityID == entityID {
-			data = d
-			break
-		}
-	}
-	db.rwMutexWorkflowData.RUnlock()
-
-	if data == nil {
+	data, exists := db.workflowData[id]
+	if !exists {
+		db.rwMutexWorkflowData.RUnlock()
 		return ErrWorkflowEntityNotFound
 	}
+	dataCopy := copyWorkflowData(data)
+	db.rwMutexWorkflowData.RUnlock()
 
 	for _, getter := range getters {
-		if _, err := getter(data); err != nil {
+		if _, err := getter(dataCopy); err != nil {
 			return err
 		}
 	}
@@ -1914,33 +1964,27 @@ func (db *MemoryDatabase) GetWorkflowDataProperties(entityID int, getters ...Wor
 	return nil
 }
 
-func (db *MemoryDatabase) SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error {
+func (db *MemoryDatabase) SetWorkflowDataProperties(id WorkflowDataID, setters ...WorkflowDataPropertySetter) error {
 	db.rwMutexWorkflowData.Lock()
-	defer db.rwMutexWorkflowData.Unlock()
-
-	var data *WorkflowData
-	for _, d := range db.workflowData {
-		if d.EntityID == entityID {
-			data = d
-			break
-		}
-	}
-
-	if data == nil {
+	data, exists := db.workflowData[id]
+	if !exists {
+		db.rwMutexWorkflowData.Unlock()
 		return ErrWorkflowEntityNotFound
 	}
 
 	for _, setter := range setters {
 		if _, err := setter(data); err != nil {
+			db.rwMutexWorkflowData.Unlock()
 			return err
 		}
 	}
 
+	db.workflowData[id] = copyWorkflowData(data)
+	db.rwMutexWorkflowData.Unlock()
 	return nil
 }
 
-// Execution Data properties
-func (db *MemoryDatabase) GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error {
+func (db *MemoryDatabase) GetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error {
 	db.rwMutexWorkflowExecData.RLock()
 	var data *WorkflowExecutionData
 	for _, d := range db.workflowExecutionData {
@@ -1964,7 +2008,7 @@ func (db *MemoryDatabase) GetWorkflowExecutionDataProperties(entityID int, gette
 	return nil
 }
 
-func (db *MemoryDatabase) SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error {
+func (db *MemoryDatabase) SetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error {
 	db.rwMutexWorkflowExecData.Lock()
 	defer db.rwMutexWorkflowExecData.Unlock()
 
@@ -1989,7 +2033,7 @@ func (db *MemoryDatabase) SetWorkflowExecutionDataProperties(entityID int, sette
 	return nil
 }
 
-func (db *MemoryDatabase) GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityExecutionDataProperties(entityID ActivityExecutionID, getters ...ActivityExecutionDataPropertyGetter) error {
 	db.rwMutexActivityExecData.RLock()
 	var data *ActivityExecutionData
 	for _, d := range db.activityExecutionData {
@@ -2013,7 +2057,7 @@ func (db *MemoryDatabase) GetActivityExecutionDataProperties(entityID int, gette
 	return nil
 }
 
-func (db *MemoryDatabase) SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error {
+func (db *MemoryDatabase) SetActivityExecutionDataProperties(entityID ActivityExecutionID, setters ...ActivityExecutionDataPropertySetter) error {
 	db.rwMutexActivityExecData.Lock()
 	defer db.rwMutexActivityExecData.Unlock()
 
@@ -2038,7 +2082,7 @@ func (db *MemoryDatabase) SetActivityExecutionDataProperties(entityID int, sette
 	return nil
 }
 
-func (db *MemoryDatabase) GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaExecutionDataProperties(entityID SagaExecutionID, getters ...SagaExecutionDataPropertyGetter) error {
 	db.rwMutexSagaExecData.RLock()
 	var data *SagaExecutionData
 	for _, d := range db.sagaExecutionData {
@@ -2062,7 +2106,7 @@ func (db *MemoryDatabase) GetSagaExecutionDataProperties(entityID int, getters .
 	return nil
 }
 
-func (db *MemoryDatabase) SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error {
+func (db *MemoryDatabase) SetSagaExecutionDataProperties(entityID SagaExecutionID, setters ...SagaExecutionDataPropertySetter) error {
 	db.rwMutexSagaExecData.Lock()
 	defer db.rwMutexSagaExecData.Unlock()
 
@@ -2087,23 +2131,18 @@ func (db *MemoryDatabase) SetSagaExecutionDataProperties(entityID int, setters .
 	return nil
 }
 
-func (db *MemoryDatabase) GetSideEffectExecutionDataProperties(entityID int, getters ...SideEffectExecutionDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, getters ...SideEffectExecutionDataPropertyGetter) error {
 	db.rwMutexSideEffectExecData.RLock()
-	var data *SideEffectExecutionData
-	for _, d := range db.sideEffectExecutionData {
-		if d.ExecutionID == entityID {
-			data = d
-			break
-		}
-	}
-	db.rwMutexSideEffectExecData.RUnlock()
-
-	if data == nil {
+	data, exists := db.sideEffectExecutionData[id]
+	if !exists {
+		db.rwMutexSideEffectExecData.RUnlock()
 		return ErrSideEffectExecutionNotFound
 	}
+	dataCopy := copySideEffectExecutionData(data)
+	db.rwMutexSideEffectExecData.RUnlock()
 
 	for _, getter := range getters {
-		if _, err := getter(data); err != nil {
+		if _, err := getter(dataCopy); err != nil {
 			return err
 		}
 	}
@@ -2111,33 +2150,27 @@ func (db *MemoryDatabase) GetSideEffectExecutionDataProperties(entityID int, get
 	return nil
 }
 
-func (db *MemoryDatabase) SetSideEffectExecutionDataProperties(entityID int, setters ...SideEffectExecutionDataPropertySetter) error {
+func (db *MemoryDatabase) SetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, setters ...SideEffectExecutionDataPropertySetter) error {
 	db.rwMutexSideEffectExecData.Lock()
-	defer db.rwMutexSideEffectExecData.Unlock()
-
-	var data *SideEffectExecutionData
-	for _, d := range db.sideEffectExecutionData {
-		if d.ExecutionID == entityID {
-			data = d
-			break
-		}
-	}
-
-	if data == nil {
+	data, exists := db.sideEffectExecutionData[id]
+	if !exists {
+		db.rwMutexSideEffectExecData.Unlock()
 		return ErrSideEffectExecutionNotFound
 	}
 
 	for _, setter := range setters {
 		if _, err := setter(data); err != nil {
+			db.rwMutexSideEffectExecData.Unlock()
 			return err
 		}
 	}
 
+	db.sideEffectExecutionData[id] = copySideEffectExecutionData(data)
+	db.rwMutexSideEffectExecData.Unlock()
 	return nil
 }
 
-// Workflow Execution properties
-func (db *MemoryDatabase) GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetWorkflowExecutionProperties(id WorkflowExecutionID, getters ...WorkflowExecutionPropertyGetter) error {
 	db.rwMutexWorkflowExec.RLock()
 	exec, exists := db.workflowExecutions[id]
 	if !exists {
@@ -2173,7 +2206,7 @@ func (db *MemoryDatabase) GetWorkflowExecutionProperties(id int, getters ...Work
 	return nil
 }
 
-func (db *MemoryDatabase) SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error {
+func (db *MemoryDatabase) SetWorkflowExecutionProperties(id WorkflowExecutionID, setters ...WorkflowExecutionPropertySetter) error {
 	db.rwMutexWorkflowExec.Lock()
 	exec, exists := db.workflowExecutions[id]
 	if !exists {
@@ -2191,8 +2224,7 @@ func (db *MemoryDatabase) SetWorkflowExecutionProperties(id int, setters ...Work
 	return nil
 }
 
-// Activity Execution properties
-func (db *MemoryDatabase) GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetActivityExecutionProperties(id ActivityExecutionID, getters ...ActivityExecutionPropertyGetter) error {
 	db.rwMutexActivityExec.RLock()
 	exec, exists := db.activityExecutions[id]
 	if !exists {
@@ -2228,7 +2260,7 @@ func (db *MemoryDatabase) GetActivityExecutionProperties(id int, getters ...Acti
 	return nil
 }
 
-func (db *MemoryDatabase) SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error {
+func (db *MemoryDatabase) SetActivityExecutionProperties(id ActivityExecutionID, setters ...ActivityExecutionPropertySetter) error {
 	db.rwMutexActivityExec.Lock()
 	exec, exists := db.activityExecutions[id]
 	if !exists {
@@ -2246,8 +2278,7 @@ func (db *MemoryDatabase) SetActivityExecutionProperties(id int, setters ...Acti
 	return nil
 }
 
-// Saga Execution properties
-func (db *MemoryDatabase) GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetSagaExecutionProperties(id SagaExecutionID, getters ...SagaExecutionPropertyGetter) error {
 	db.rwMutexSagaExec.RLock()
 	exec, exists := db.sagaExecutions[id]
 	if !exists {
@@ -2283,7 +2314,7 @@ func (db *MemoryDatabase) GetSagaExecutionProperties(id int, getters ...SagaExec
 	return nil
 }
 
-func (db *MemoryDatabase) SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error {
+func (db *MemoryDatabase) SetSagaExecutionProperties(id SagaExecutionID, setters ...SagaExecutionPropertySetter) error {
 	db.rwMutexSagaExec.Lock()
 	exec, exists := db.sagaExecutions[id]
 	if !exists {
@@ -2301,8 +2332,7 @@ func (db *MemoryDatabase) SetSagaExecutionProperties(id int, setters ...SagaExec
 	return nil
 }
 
-// SideEffect Execution properties
-func (db *MemoryDatabase) GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetSideEffectExecutionProperties(id SideEffectExecutionID, getters ...SideEffectExecutionPropertyGetter) error {
 	db.rwMutexSideEffectExec.RLock()
 	exec, exists := db.sideEffectExecutions[id]
 	if !exists {
@@ -2338,7 +2368,7 @@ func (db *MemoryDatabase) GetSideEffectExecutionProperties(id int, getters ...Si
 	return nil
 }
 
-func (db *MemoryDatabase) SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error {
+func (db *MemoryDatabase) SetSideEffectExecutionProperties(id SideEffectExecutionID, setters ...SideEffectExecutionPropertySetter) error {
 	db.rwMutexSideEffectExec.Lock()
 	exec, exists := db.sideEffectExecutions[id]
 	if !exists {
@@ -2356,8 +2386,7 @@ func (db *MemoryDatabase) SetSideEffectExecutionProperties(id int, setters ...Si
 	return nil
 }
 
-// Hierarchy properties
-func (db *MemoryDatabase) GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error {
+func (db *MemoryDatabase) GetHierarchyProperties(id HierarchyID, getters ...HierarchyPropertyGetter) error {
 	db.rwMutexHierarchies.RLock()
 	hierarchy, exists := db.hierarchies[id]
 	if !exists {
@@ -2407,7 +2436,7 @@ func (db *MemoryDatabase) GetHierarchiesByParentEntityAndStep(parentEntityID int
 	return results, nil
 }
 
-func (db *MemoryDatabase) SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error {
+func (db *MemoryDatabase) SetHierarchyProperties(id HierarchyID, setters ...HierarchyPropertySetter) error {
 	db.rwMutexHierarchies.Lock()
 	hierarchy, exists := db.hierarchies[id]
 	if !exists {
@@ -2463,7 +2492,7 @@ func (db *MemoryDatabase) UpdateHierarchy(hierarchy *Hierarchy) error {
 	return nil
 }
 
-func (db *MemoryDatabase) GetQueueProperties(id int, getters ...QueuePropertyGetter) error {
+func (db *MemoryDatabase) GetQueueProperties(id QueueID, getters ...QueuePropertyGetter) error {
 	db.rwMutexQueues.RLock()
 	queue, exists := db.queues[id]
 	if !exists {
@@ -2506,7 +2535,7 @@ func (db *MemoryDatabase) GetQueueProperties(id int, getters ...QueuePropertyGet
 	return nil
 }
 
-func (db *MemoryDatabase) SetQueueProperties(id int, setters ...QueuePropertySetter) error {
+func (db *MemoryDatabase) SetQueueProperties(id QueueID, setters ...QueuePropertySetter) error {
 	db.rwMutexQueues.Lock()
 	queue, exists := db.queues[id]
 	if !exists {
@@ -2566,7 +2595,7 @@ func (db *MemoryDatabase) UpdateQueue(queue *Queue) error {
 }
 
 // GetVersionByWorkflowAndChangeID
-func (db *MemoryDatabase) GetVersionByWorkflowAndChangeID(workflowID int, changeID string) (*Version, error) {
+func (db *MemoryDatabase) GetVersionByWorkflowAndChangeID(workflowID WorkflowEntityID, changeID string) (*Version, error) {
 	db.rwMutexRelationships.RLock()
 	versionIDs := db.workflowVersions[workflowID]
 	db.rwMutexRelationships.RUnlock()
@@ -2582,7 +2611,7 @@ func (db *MemoryDatabase) GetVersionByWorkflowAndChangeID(workflowID int, change
 	return nil, ErrVersionNotFound
 }
 
-func (db *MemoryDatabase) GetVersionsByWorkflowID(workflowID int) ([]*Version, error) {
+func (db *MemoryDatabase) GetVersionsByWorkflowID(workflowID WorkflowEntityID) ([]*Version, error) {
 	db.rwMutexRelationships.RLock()
 	versionIDs := db.workflowVersions[workflowID]
 	db.rwMutexRelationships.RUnlock()
@@ -2606,7 +2635,7 @@ func (db *MemoryDatabase) SetVersion(version *Version) error {
 
 	if version.ID == 0 {
 		db.versionCounter++
-		version.ID = db.versionCounter
+		version.ID = VersionID(db.versionCounter)
 		version.CreatedAt = time.Now()
 	}
 	version.UpdatedAt = time.Now()
@@ -2630,7 +2659,7 @@ func (db *MemoryDatabase) SetVersion(version *Version) error {
 	return nil
 }
 
-func (db *MemoryDatabase) DeleteVersionsForWorkflow(workflowID int) error {
+func (db *MemoryDatabase) DeleteVersionsForWorkflow(workflowID WorkflowEntityID) error {
 	db.rwMutexVersions.Lock()
 	db.rwMutexRelationships.Lock()
 	versionIDs, ok := db.workflowVersions[workflowID]
@@ -2645,7 +2674,7 @@ func (db *MemoryDatabase) DeleteVersionsForWorkflow(workflowID int) error {
 	return nil
 }
 
-func (db *MemoryDatabase) GetVersionProperties(id int, getters ...VersionPropertyGetter) error {
+func (db *MemoryDatabase) GetVersionProperties(id VersionID, getters ...VersionPropertyGetter) error {
 	db.rwMutexVersions.RLock()
 	version, exists := db.versions[id]
 	if !exists {
@@ -2664,7 +2693,7 @@ func (db *MemoryDatabase) GetVersionProperties(id int, getters ...VersionPropert
 	return nil
 }
 
-func (db *MemoryDatabase) SetVersionProperties(id int, setters ...VersionPropertySetter) error {
+func (db *MemoryDatabase) SetVersionProperties(id VersionID, setters ...VersionPropertySetter) error {
 	db.rwMutexVersions.Lock()
 	version, exists := db.versions[id]
 	if !exists {
@@ -2750,47 +2779,47 @@ func (db *MemoryDatabase) UpdateWorkflowEntity(entity *WorkflowEntity) error {
 	return nil
 }
 
-func (db *MemoryDatabase) AddWorkflowData(entityID int, data *WorkflowData) (int, error) {
+func (db *MemoryDatabase) AddWorkflowData(entityID WorkflowEntityID, data *WorkflowData) (WorkflowDataID, error) {
 	db.rwMutexWorkflowData.Lock()
 	db.workflowDataCounter++
-	data.ID = db.workflowDataCounter
+	data.ID = WorkflowDataID(db.workflowDataCounter)
 	data.EntityID = entityID
 	db.workflowData[data.ID] = copyWorkflowData(data)
 	db.rwMutexWorkflowData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddActivityData(entityID int, data *ActivityData) (int, error) {
+func (db *MemoryDatabase) AddActivityData(entityID ActivityEntityID, data *ActivityData) (ActivityDataID, error) {
 	db.rwMutexActivityData.Lock()
 	db.activityDataCounter++
-	data.ID = db.activityDataCounter
+	data.ID = ActivityDataID(db.activityDataCounter)
 	data.EntityID = entityID
 	db.activityData[data.ID] = copyActivityData(data)
 	db.rwMutexActivityData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddSagaData(entityID int, data *SagaData) (int, error) {
+func (db *MemoryDatabase) AddSagaData(entityID SagaEntityID, data *SagaData) (SagaDataID, error) {
 	db.rwMutexSagaData.Lock()
 	db.sagaDataCounter++
-	data.ID = db.sagaDataCounter
+	data.ID = SagaDataID(db.sagaDataCounter)
 	data.EntityID = entityID
 	db.sagaData[data.ID] = copySagaData(data)
 	db.rwMutexSagaData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddSideEffectData(entityID int, data *SideEffectData) (int, error) {
+func (db *MemoryDatabase) AddSideEffectData(entityID SideEffectEntityID, data *SideEffectData) (SideEffectDataID, error) {
 	db.rwMutexSideEffectData.Lock()
 	db.sideEffectDataCounter++
-	data.ID = db.sideEffectDataCounter
+	data.ID = SideEffectDataID(db.sideEffectDataCounter)
 	data.EntityID = entityID
 	db.sideEffectData[data.ID] = copySideEffectData(data)
 	db.rwMutexSideEffectData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowData(id int) (*WorkflowData, error) {
+func (db *MemoryDatabase) GetWorkflowData(id WorkflowDataID) (*WorkflowData, error) {
 	db.rwMutexWorkflowData.RLock()
 	d, exists := db.workflowData[id]
 	if !exists {
@@ -2802,7 +2831,7 @@ func (db *MemoryDatabase) GetWorkflowData(id int) (*WorkflowData, error) {
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetActivityData(id int) (*ActivityData, error) {
+func (db *MemoryDatabase) GetActivityData(id ActivityDataID) (*ActivityData, error) {
 	db.rwMutexActivityData.RLock()
 	d, exists := db.activityData[id]
 	if !exists {
@@ -2814,44 +2843,7 @@ func (db *MemoryDatabase) GetActivityData(id int) (*ActivityData, error) {
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetSagaData(id int) (*SagaData, error) {
-	db.rwMutexSagaData.RLock()
-	d, exists := db.sagaData[id]
-	if !exists {
-		db.rwMutexSagaData.RUnlock()
-		return nil, ErrSagaEntityNotFound
-	}
-	dCopy := copySagaData(d)
-	db.rwMutexSagaData.RUnlock()
-	return dCopy, nil
-}
-
-func (db *MemoryDatabase) GetSideEffectData(id int) (*SideEffectData, error) {
-	db.rwMutexSideEffectData.RLock()
-	d, exists := db.sideEffectData[id]
-	if !exists {
-		db.rwMutexSideEffectData.RUnlock()
-		return nil, ErrSideEffectEntityNotFound
-	}
-	dCopy := copySideEffectData(d)
-	db.rwMutexSideEffectData.RUnlock()
-	return dCopy, nil
-}
-
-func (db *MemoryDatabase) GetWorkflowDataByEntityID(entityID int) (*WorkflowData, error) {
-	db.rwMutexWorkflowData.RLock()
-	for _, d := range db.workflowData {
-		if d.EntityID == entityID {
-			dCopy := copyWorkflowData(d)
-			db.rwMutexWorkflowData.RUnlock()
-			return dCopy, nil
-		}
-	}
-	db.rwMutexWorkflowData.RUnlock()
-	return nil, ErrWorkflowEntityNotFound
-}
-
-func (db *MemoryDatabase) GetActivityDataByEntityID(entityID int) (*ActivityData, error) {
+func (db *MemoryDatabase) GetActivityDataByEntityID(entityID ActivityEntityID) (*ActivityData, error) {
 	db.rwMutexActivityData.RLock()
 	for _, d := range db.activityData {
 		if d.EntityID == entityID {
@@ -2864,7 +2856,44 @@ func (db *MemoryDatabase) GetActivityDataByEntityID(entityID int) (*ActivityData
 	return nil, ErrActivityEntityNotFound
 }
 
-func (db *MemoryDatabase) GetSagaDataByEntityID(entityID int) (*SagaData, error) {
+func (db *MemoryDatabase) GetSagaData(id SagaDataID) (*SagaData, error) {
+	db.rwMutexSagaData.RLock()
+	d, exists := db.sagaData[id]
+	if !exists {
+		db.rwMutexSagaData.RUnlock()
+		return nil, ErrSagaEntityNotFound
+	}
+	dCopy := copySagaData(d)
+	db.rwMutexSagaData.RUnlock()
+	return dCopy, nil
+}
+
+func (db *MemoryDatabase) GetSideEffectData(id SideEffectDataID) (*SideEffectData, error) {
+	db.rwMutexSideEffectData.RLock()
+	d, exists := db.sideEffectData[id]
+	if !exists {
+		db.rwMutexSideEffectData.RUnlock()
+		return nil, ErrSideEffectEntityNotFound
+	}
+	dCopy := copySideEffectData(d)
+	db.rwMutexSideEffectData.RUnlock()
+	return dCopy, nil
+}
+
+func (db *MemoryDatabase) GetWorkflowDataByEntityID(entityID WorkflowEntityID) (*WorkflowData, error) {
+	db.rwMutexWorkflowData.RLock()
+	for _, d := range db.workflowData {
+		if d.EntityID == entityID {
+			dCopy := copyWorkflowData(d)
+			db.rwMutexWorkflowData.RUnlock()
+			return dCopy, nil
+		}
+	}
+	db.rwMutexWorkflowData.RUnlock()
+	return nil, ErrWorkflowEntityNotFound
+}
+
+func (db *MemoryDatabase) GetSagaDataByEntityID(entityID SagaEntityID) (*SagaData, error) {
 	db.rwMutexSagaData.RLock()
 	for _, d := range db.sagaData {
 		if d.EntityID == entityID {
@@ -2877,7 +2906,7 @@ func (db *MemoryDatabase) GetSagaDataByEntityID(entityID int) (*SagaData, error)
 	return nil, ErrSagaEntityNotFound
 }
 
-func (db *MemoryDatabase) GetSideEffectDataByEntityID(entityID int) (*SideEffectData, error) {
+func (db *MemoryDatabase) GetSideEffectDataByEntityID(entityID SideEffectEntityID) (*SideEffectData, error) {
 	db.rwMutexSideEffectData.RLock()
 	for _, d := range db.sideEffectData {
 		if d.EntityID == entityID {
@@ -2890,47 +2919,47 @@ func (db *MemoryDatabase) GetSideEffectDataByEntityID(entityID int) (*SideEffect
 	return nil, ErrSideEffectEntityNotFound
 }
 
-func (db *MemoryDatabase) AddWorkflowExecutionData(executionID int, data *WorkflowExecutionData) (int, error) {
+func (db *MemoryDatabase) AddWorkflowExecutionData(executionID WorkflowExecutionID, data *WorkflowExecutionData) (WorkflowExecutionDataID, error) {
 	db.rwMutexWorkflowExecData.Lock()
 	db.workflowExecutionDataCounter++
-	data.ID = db.workflowExecutionDataCounter
+	data.ID = WorkflowExecutionDataID(db.workflowExecutionDataCounter)
 	data.ExecutionID = executionID
 	db.workflowExecutionData[data.ID] = copyWorkflowExecutionData(data)
 	db.rwMutexWorkflowExecData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddActivityExecutionData(executionID int, data *ActivityExecutionData) (int, error) {
+func (db *MemoryDatabase) AddActivityExecutionData(executionID ActivityExecutionID, data *ActivityExecutionData) (ActivityExecutionDataID, error) {
 	db.rwMutexActivityExecData.Lock()
 	db.activityExecutionDataCounter++
-	data.ID = db.activityExecutionDataCounter
+	data.ID = ActivityExecutionDataID(db.activityExecutionDataCounter)
 	data.ExecutionID = executionID
 	db.activityExecutionData[data.ID] = copyActivityExecutionData(data)
 	db.rwMutexActivityExecData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddSagaExecutionData(executionID int, data *SagaExecutionData) (int, error) {
+func (db *MemoryDatabase) AddSagaExecutionData(executionID SagaExecutionID, data *SagaExecutionData) (SagaExecutionDataID, error) {
 	db.rwMutexSagaExecData.Lock()
 	db.sagaExecutionDataCounter++
-	data.ID = db.sagaExecutionDataCounter
+	data.ID = SagaExecutionDataID(db.sagaExecutionDataCounter)
 	data.ExecutionID = executionID
 	db.sagaExecutionData[data.ID] = copySagaExecutionData(data)
 	db.rwMutexSagaExecData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) AddSideEffectExecutionData(executionID int, data *SideEffectExecutionData) (int, error) {
+func (db *MemoryDatabase) AddSideEffectExecutionData(executionID SideEffectExecutionID, data *SideEffectExecutionData) (SideEffectExecutionDataID, error) {
 	db.rwMutexSideEffectExecData.Lock()
 	db.sideEffectExecutionDataCounter++
-	data.ID = db.sideEffectExecutionDataCounter
+	data.ID = SideEffectExecutionDataID(db.sideEffectExecutionDataCounter)
 	data.ExecutionID = executionID
 	db.sideEffectExecutionData[data.ID] = copySideEffectExecutionData(data)
 	db.rwMutexSideEffectExecData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecutionData(id int) (*WorkflowExecutionData, error) {
+func (db *MemoryDatabase) GetWorkflowExecutionData(id WorkflowExecutionDataID) (*WorkflowExecutionData, error) {
 	db.rwMutexWorkflowExecData.RLock()
 	d, exists := db.workflowExecutionData[id]
 	if !exists {
@@ -2942,7 +2971,7 @@ func (db *MemoryDatabase) GetWorkflowExecutionData(id int) (*WorkflowExecutionDa
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetActivityExecutionData(id int) (*ActivityExecutionData, error) {
+func (db *MemoryDatabase) GetActivityExecutionData(id ActivityExecutionDataID) (*ActivityExecutionData, error) {
 	db.rwMutexActivityExecData.RLock()
 	d, exists := db.activityExecutionData[id]
 	if !exists {
@@ -2954,7 +2983,7 @@ func (db *MemoryDatabase) GetActivityExecutionData(id int) (*ActivityExecutionDa
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetSagaExecutionData(id int) (*SagaExecutionData, error) {
+func (db *MemoryDatabase) GetSagaExecutionData(id SagaExecutionDataID) (*SagaExecutionData, error) {
 	db.rwMutexSagaExecData.RLock()
 	d, exists := db.sagaExecutionData[id]
 	if !exists {
@@ -2966,7 +2995,7 @@ func (db *MemoryDatabase) GetSagaExecutionData(id int) (*SagaExecutionData, erro
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetSideEffectExecutionData(id int) (*SideEffectExecutionData, error) {
+func (db *MemoryDatabase) GetSideEffectExecutionData(id SideEffectExecutionDataID) (*SideEffectExecutionData, error) {
 	db.rwMutexSideEffectExecData.RLock()
 	d, exists := db.sideEffectExecutionData[id]
 	if !exists {
@@ -2978,20 +3007,26 @@ func (db *MemoryDatabase) GetSideEffectExecutionData(id int) (*SideEffectExecuti
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecutionDataByExecutionID(executionID int) (*WorkflowExecutionData, error) {
-	db.rwMutexWorkflowExecData.RLock()
-	for _, d := range db.workflowExecutionData {
-		if d.ExecutionID == executionID {
-			dCopy := copyWorkflowExecutionData(d)
-			db.rwMutexWorkflowExecData.RUnlock()
-			return dCopy, nil
-		}
+func (db *MemoryDatabase) GetWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (*WorkflowExecutionData, error) {
+	db.rwMutexRelationships.RLock()
+	dataID, exists := db.workflowExecToDataMap[executionID]
+	db.rwMutexRelationships.RUnlock()
+
+	if !exists {
+		return nil, ErrWorkflowExecutionNotFound
 	}
-	db.rwMutexWorkflowExecData.RUnlock()
+
+	db.rwMutexWorkflowExecData.RLock()
+	defer db.rwMutexWorkflowExecData.RUnlock()
+
+	if data, ok := db.workflowExecutionData[dataID]; ok {
+		return copyWorkflowExecutionData(data), nil
+	}
+
 	return nil, ErrWorkflowExecutionNotFound
 }
 
-func (db *MemoryDatabase) GetActivityExecutionDataByExecutionID(executionID int) (*ActivityExecutionData, error) {
+func (db *MemoryDatabase) GetActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (*ActivityExecutionData, error) {
 	db.rwMutexActivityExecData.RLock()
 	for _, d := range db.activityExecutionData {
 		if d.ExecutionID == executionID {
@@ -3004,7 +3039,7 @@ func (db *MemoryDatabase) GetActivityExecutionDataByExecutionID(executionID int)
 	return nil, ErrActivityExecutionNotFound
 }
 
-func (db *MemoryDatabase) GetSagaExecutionDataByExecutionID(executionID int) (*SagaExecutionData, error) {
+func (db *MemoryDatabase) GetSagaExecutionDataByExecutionID(executionID SagaExecutionID) (*SagaExecutionData, error) {
 	db.rwMutexSagaExecData.RLock()
 	for _, d := range db.sagaExecutionData {
 		if d.ExecutionID == executionID {
@@ -3017,7 +3052,7 @@ func (db *MemoryDatabase) GetSagaExecutionDataByExecutionID(executionID int) (*S
 	return nil, ErrSagaExecutionNotFound
 }
 
-func (db *MemoryDatabase) GetSideEffectExecutionDataByExecutionID(executionID int) (*SideEffectExecutionData, error) {
+func (db *MemoryDatabase) GetSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (*SideEffectExecutionData, error) {
 	db.rwMutexSideEffectExecData.RLock()
 	for _, d := range db.sideEffectExecutionData {
 		if d.ExecutionID == executionID {
@@ -3030,28 +3065,28 @@ func (db *MemoryDatabase) GetSideEffectExecutionDataByExecutionID(executionID in
 	return nil, ErrSideEffectExecutionNotFound
 }
 
-func (db *MemoryDatabase) HasRun(id int) (bool, error) {
+func (db *MemoryDatabase) HasRun(id RunID) (bool, error) {
 	db.rwMutexRuns.RLock()
 	_, exists := db.runs[id]
 	db.rwMutexRuns.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasVersion(id int) (bool, error) {
+func (db *MemoryDatabase) HasVersion(id VersionID) (bool, error) {
 	db.rwMutexVersions.RLock()
 	_, exists := db.versions[id]
 	db.rwMutexVersions.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasHierarchy(id int) (bool, error) {
+func (db *MemoryDatabase) HasHierarchy(id HierarchyID) (bool, error) {
 	db.rwMutexHierarchies.RLock()
 	_, exists := db.hierarchies[id]
 	db.rwMutexHierarchies.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasQueue(id int) (bool, error) {
+func (db *MemoryDatabase) HasQueue(id QueueID) (bool, error) {
 	db.rwMutexQueues.RLock()
 	_, exists := db.queues[id]
 	db.rwMutexQueues.RUnlock()
@@ -3065,91 +3100,91 @@ func (db *MemoryDatabase) HasQueueName(name string) (bool, error) {
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowEntity(id int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowEntity(id WorkflowEntityID) (bool, error) {
 	db.rwMutexWorkflows.RLock()
 	_, exists := db.workflowEntities[id]
 	db.rwMutexWorkflows.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasActivityEntity(id int) (bool, error) {
+func (db *MemoryDatabase) HasActivityEntity(id ActivityEntityID) (bool, error) {
 	db.rwMutexActivities.RLock()
 	_, exists := db.activityEntities[id]
 	db.rwMutexActivities.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSagaEntity(id int) (bool, error) {
+func (db *MemoryDatabase) HasSagaEntity(id SagaEntityID) (bool, error) {
 	db.rwMutexSagas.RLock()
 	_, exists := db.sagaEntities[id]
 	db.rwMutexSagas.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectEntity(id int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectEntity(id SideEffectEntityID) (bool, error) {
 	db.rwMutexSideEffects.RLock()
 	_, exists := db.sideEffectEntities[id]
 	db.rwMutexSideEffects.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowExecution(id int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowExecution(id WorkflowExecutionID) (bool, error) {
 	db.rwMutexWorkflowExec.RLock()
 	_, exists := db.workflowExecutions[id]
 	db.rwMutexWorkflowExec.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasActivityExecution(id int) (bool, error) {
+func (db *MemoryDatabase) HasActivityExecution(id ActivityExecutionID) (bool, error) {
 	db.rwMutexActivityExec.RLock()
 	_, exists := db.activityExecutions[id]
 	db.rwMutexActivityExec.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSagaExecution(id int) (bool, error) {
+func (db *MemoryDatabase) HasSagaExecution(id SagaExecutionID) (bool, error) {
 	db.rwMutexSagaExec.RLock()
 	_, exists := db.sagaExecutions[id]
 	db.rwMutexSagaExec.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectExecution(id int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectExecution(id SideEffectExecutionID) (bool, error) {
 	db.rwMutexSideEffectExec.RLock()
 	_, exists := db.sideEffectExecutions[id]
 	db.rwMutexSideEffectExec.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowData(id int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowData(id WorkflowDataID) (bool, error) {
 	db.rwMutexWorkflowData.RLock()
 	_, exists := db.workflowData[id]
 	db.rwMutexWorkflowData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasActivityData(id int) (bool, error) {
+func (db *MemoryDatabase) HasActivityData(id ActivityDataID) (bool, error) {
 	db.rwMutexActivityData.RLock()
 	_, exists := db.activityData[id]
 	db.rwMutexActivityData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSagaData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSagaData(id SagaDataID) (bool, error) {
 	db.rwMutexSagaData.RLock()
 	_, exists := db.sagaData[id]
 	db.rwMutexSagaData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectData(id SideEffectDataID) (bool, error) {
 	db.rwMutexSideEffectData.RLock()
 	_, exists := db.sideEffectData[id]
 	db.rwMutexSideEffectData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowDataByEntityID(entityID int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowDataByEntityID(entityID WorkflowEntityID) (bool, error) {
 	db.rwMutexWorkflowData.RLock()
 	for _, d := range db.workflowData {
 		if d.EntityID == entityID {
@@ -3161,7 +3196,7 @@ func (db *MemoryDatabase) HasWorkflowDataByEntityID(entityID int) (bool, error) 
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasActivityDataByEntityID(entityID int) (bool, error) {
+func (db *MemoryDatabase) HasActivityDataByEntityID(entityID ActivityEntityID) (bool, error) {
 	db.rwMutexActivityData.RLock()
 	for _, d := range db.activityData {
 		if d.EntityID == entityID {
@@ -3173,7 +3208,7 @@ func (db *MemoryDatabase) HasActivityDataByEntityID(entityID int) (bool, error) 
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasSagaDataByEntityID(entityID int) (bool, error) {
+func (db *MemoryDatabase) HasSagaDataByEntityID(entityID SagaEntityID) (bool, error) {
 	db.rwMutexSagaData.RLock()
 	for _, d := range db.sagaData {
 		if d.EntityID == entityID {
@@ -3185,7 +3220,7 @@ func (db *MemoryDatabase) HasSagaDataByEntityID(entityID int) (bool, error) {
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectDataByEntityID(entityID int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectDataByEntityID(entityID SideEffectEntityID) (bool, error) {
 	db.rwMutexSideEffectData.RLock()
 	for _, d := range db.sideEffectData {
 		if d.EntityID == entityID {
@@ -3197,35 +3232,35 @@ func (db *MemoryDatabase) HasSideEffectDataByEntityID(entityID int) (bool, error
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowExecutionData(id int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowExecutionData(id WorkflowExecutionDataID) (bool, error) {
 	db.rwMutexWorkflowExecData.RLock()
 	_, exists := db.workflowExecutionData[id]
 	db.rwMutexWorkflowExecData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasActivityExecutionData(id int) (bool, error) {
+func (db *MemoryDatabase) HasActivityExecutionData(id ActivityExecutionDataID) (bool, error) {
 	db.rwMutexActivityExecData.RLock()
 	_, exists := db.activityExecutionData[id]
 	db.rwMutexActivityExecData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSagaExecutionData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSagaExecutionData(id SagaExecutionDataID) (bool, error) {
 	db.rwMutexSagaExecData.RLock()
 	_, exists := db.sagaExecutionData[id]
 	db.rwMutexSagaExecData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectExecutionData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectExecutionData(id SideEffectExecutionDataID) (bool, error) {
 	db.rwMutexSideEffectExecData.RLock()
 	_, exists := db.sideEffectExecutionData[id]
 	db.rwMutexSideEffectExecData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasWorkflowExecutionDataByExecutionID(executionID int) (bool, error) {
+func (db *MemoryDatabase) HasWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (bool, error) {
 	db.rwMutexWorkflowExecData.RLock()
 	for _, d := range db.workflowExecutionData {
 		if d.ExecutionID == executionID {
@@ -3237,7 +3272,7 @@ func (db *MemoryDatabase) HasWorkflowExecutionDataByExecutionID(executionID int)
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasActivityExecutionDataByExecutionID(executionID int) (bool, error) {
+func (db *MemoryDatabase) HasActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (bool, error) {
 	db.rwMutexActivityExecData.RLock()
 	for _, d := range db.activityExecutionData {
 		if d.ExecutionID == executionID {
@@ -3249,7 +3284,7 @@ func (db *MemoryDatabase) HasActivityExecutionDataByExecutionID(executionID int)
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasSagaExecutionDataByExecutionID(executionID int) (bool, error) {
+func (db *MemoryDatabase) HasSagaExecutionDataByExecutionID(executionID SagaExecutionID) (bool, error) {
 	db.rwMutexSagaExecData.RLock()
 	for _, d := range db.sagaExecutionData {
 		if d.ExecutionID == executionID {
@@ -3261,7 +3296,7 @@ func (db *MemoryDatabase) HasSagaExecutionDataByExecutionID(executionID int) (bo
 	return false, nil
 }
 
-func (db *MemoryDatabase) HasSideEffectExecutionDataByExecutionID(executionID int) (bool, error) {
+func (db *MemoryDatabase) HasSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (bool, error) {
 	db.rwMutexSideEffectExecData.RLock()
 	for _, d := range db.sideEffectExecutionData {
 		if d.ExecutionID == executionID {
@@ -3273,12 +3308,12 @@ func (db *MemoryDatabase) HasSideEffectExecutionDataByExecutionID(executionID in
 	return false, nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecutionLatestByEntityID(entityID int) (*WorkflowExecution, error) {
+func (db *MemoryDatabase) GetWorkflowExecutionLatestByEntityID(entityID WorkflowEntityID) (*WorkflowExecution, error) {
 	db.rwMutexWorkflowExec.RLock()
 	var latestExec *WorkflowExecution
 	var latestTime time.Time
 	for _, exec := range db.workflowExecutions {
-		if exec.EntityID == entityID {
+		if exec.WorkflowEntityID == entityID {
 			if latestExec == nil || exec.CreatedAt.After(latestTime) {
 				latestExec = exec
 				latestTime = exec.CreatedAt
@@ -3293,12 +3328,12 @@ func (db *MemoryDatabase) GetWorkflowExecutionLatestByEntityID(entityID int) (*W
 	return copyWorkflowExecution(latestExec), nil
 }
 
-func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID int) (*ActivityExecution, error) {
+func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID ActivityEntityID) (*ActivityExecution, error) {
 	db.rwMutexActivityExec.RLock()
 	var latestExec *ActivityExecution
 	var latestTime time.Time
 	for _, exec := range db.activityExecutions {
-		if exec.EntityID == entityID {
+		if exec.ActivityEntityID == entityID {
 			if latestExec == nil || exec.CreatedAt.After(latestTime) {
 				latestExec = exec
 				latestTime = exec.CreatedAt
@@ -3313,7 +3348,7 @@ func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID int) (*A
 	return copyActivityExecution(latestExec), nil
 }
 
-func (db *MemoryDatabase) SetSagaValue(executionID int, key string, value []byte) (int, error) {
+func (db *MemoryDatabase) SetSagaValue(executionID SagaExecutionID, key string, value []byte) (SagaValueID, error) {
 	db.rwMutexSagas.Lock()
 	defer db.rwMutexSagas.Unlock()
 
@@ -3322,7 +3357,7 @@ func (db *MemoryDatabase) SetSagaValue(executionID int, key string, value []byte
 	}
 
 	sv := &SagaValue{
-		ID:          len(db.sagaValues[executionID]) + 1,
+		ID:          SagaValueID(len(db.sagaValues[executionID]) + 1),
 		ExecutionID: executionID,
 		Key:         key,
 		Value:       value,
@@ -3331,7 +3366,7 @@ func (db *MemoryDatabase) SetSagaValue(executionID int, key string, value []byte
 	return sv.ID, nil
 }
 
-func (db *MemoryDatabase) GetSagaValue(id int, key string) ([]byte, error) {
+func (db *MemoryDatabase) GetSagaValue(id SagaValueID, key string) ([]byte, error) {
 	db.rwMutexSagas.RLock()
 	defer db.rwMutexSagas.RUnlock()
 
@@ -3343,7 +3378,7 @@ func (db *MemoryDatabase) GetSagaValue(id int, key string) ([]byte, error) {
 	return nil, ErrSagaValueNotFound
 }
 
-func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID int, key string) ([]byte, error) {
+func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID SagaExecutionID, key string) ([]byte, error) {
 	db.rwMutexSagas.RLock()
 	defer db.rwMutexSagas.RUnlock()
 
@@ -3355,15 +3390,15 @@ func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID int, key string)
 	return nil, ErrSagaValueNotFound
 }
 
-func (db *MemoryDatabase) AddSignalEntity(entity *SignalEntity, parentWorkflowID int) (int, error) {
+func (db *MemoryDatabase) AddSignalEntity(entity *SignalEntity, parentWorkflowID WorkflowEntityID) (SignalEntityID, error) {
 	db.rwMutexSignals.Lock()
 	db.signalEntityCounter++
-	entity.ID = db.signalEntityCounter
+	entity.ID = SignalEntityID(db.signalEntityCounter)
 
 	if entity.SignalData != nil {
 		db.rwMutexSignalData.Lock()
 		db.signalDataCounter++
-		entity.SignalData.ID = db.signalDataCounter
+		entity.SignalData.ID = SignalDataID(db.signalDataCounter)
 		entity.SignalData.EntityID = entity.ID
 		db.signalData[entity.SignalData.ID] = copySignalData(entity.SignalData)
 		db.rwMutexSignalData.Unlock()
@@ -3380,7 +3415,7 @@ func (db *MemoryDatabase) AddSignalEntity(entity *SignalEntity, parentWorkflowID
 	return entity.ID, nil
 }
 
-func (db *MemoryDatabase) GetSignalEntity(id int, opts ...SignalEntityGetOption) (*SignalEntity, error) {
+func (db *MemoryDatabase) GetSignalEntity(id SignalEntityID, opts ...SignalEntityGetOption) (*SignalEntity, error) {
 	db.rwMutexSignals.RLock()
 	entity, exists := db.signalEntities[id]
 	if !exists {
@@ -3411,14 +3446,13 @@ func (db *MemoryDatabase) GetSignalEntity(id int, opts ...SignalEntityGetOption)
 	return eCopy, nil
 }
 
-func (db *MemoryDatabase) GetSignalEntities(workflowID int, opts ...SignalEntityGetOption) ([]*SignalEntity, error) {
-	// Signals linked via hierarchies
+func (db *MemoryDatabase) GetSignalEntities(workflowID WorkflowEntityID, opts ...SignalEntityGetOption) ([]*SignalEntity, error) {
 	db.rwMutexHierarchies.RLock()
 	var entities []*SignalEntity
 	for _, h := range db.hierarchies {
-		if h.ParentEntityID == workflowID && h.ChildType == EntitySignal {
+		if h.ParentEntityID == int(workflowID) && h.ChildType == EntitySignal {
 			db.rwMutexSignals.RLock()
-			if e, ex := db.signalEntities[h.ChildEntityID]; ex {
+			if e, ex := db.signalEntities[SignalEntityID(h.ChildEntityID)]; ex {
 				entities = append(entities, copySignalEntity(e))
 			}
 			db.rwMutexSignals.RUnlock()
@@ -3429,15 +3463,15 @@ func (db *MemoryDatabase) GetSignalEntities(workflowID int, opts ...SignalEntity
 	return entities, nil
 }
 
-func (db *MemoryDatabase) AddSignalExecution(exec *SignalExecution) (int, error) {
+func (db *MemoryDatabase) AddSignalExecution(exec *SignalExecution) (SignalExecutionID, error) {
 	db.rwMutexSignalExec.Lock()
 	db.signalExecutionCounter++
-	exec.ID = db.signalExecutionCounter
+	exec.ID = SignalExecutionID(db.signalExecutionCounter)
 
 	if exec.SignalExecutionData != nil {
 		db.rwMutexSignalExecData.Lock()
 		db.signalExecutionDataCounter++
-		exec.SignalExecutionData.ID = db.signalExecutionDataCounter
+		exec.SignalExecutionData.ID = SignalExecutionDataID(db.signalExecutionDataCounter)
 		exec.SignalExecutionData.ExecutionID = exec.ID
 		db.signalExecutionData[exec.SignalExecutionData.ID] = copySignalExecutionData(exec.SignalExecutionData)
 		db.rwMutexSignalExecData.Unlock()
@@ -3451,7 +3485,7 @@ func (db *MemoryDatabase) AddSignalExecution(exec *SignalExecution) (int, error)
 	return exec.ID, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecution(id int, opts ...SignalExecutionGetOption) (*SignalExecution, error) {
+func (db *MemoryDatabase) GetSignalExecution(id SignalExecutionID, opts ...SignalExecutionGetOption) (*SignalExecution, error) {
 	db.rwMutexSignalExec.RLock()
 	exec, exists := db.signalExecutions[id]
 	if !exists {
@@ -3482,7 +3516,7 @@ func (db *MemoryDatabase) GetSignalExecution(id int, opts ...SignalExecutionGetO
 	return execCopy, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutions(entityID int) ([]*SignalExecution, error) {
+func (db *MemoryDatabase) GetSignalExecutions(entityID SignalEntityID) ([]*SignalExecution, error) {
 	db.rwMutexSignalExec.RLock()
 	var executions []*SignalExecution
 	for _, exec := range db.signalExecutions {
@@ -3494,7 +3528,7 @@ func (db *MemoryDatabase) GetSignalExecutions(entityID int) ([]*SignalExecution,
 	return executions, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutionLatestByEntityID(entityID int) (*SignalExecution, error) {
+func (db *MemoryDatabase) GetSignalExecutionLatestByEntityID(entityID SignalEntityID) (*SignalExecution, error) {
 	db.rwMutexSignalExec.RLock()
 	var latest *SignalExecution
 	var latestTime time.Time
@@ -3515,35 +3549,35 @@ func (db *MemoryDatabase) GetSignalExecutionLatestByEntityID(entityID int) (*Sig
 	return copySignalExecution(latest), nil
 }
 
-func (db *MemoryDatabase) HasSignalEntity(id int) (bool, error) {
+func (db *MemoryDatabase) HasSignalEntity(id SignalEntityID) (bool, error) {
 	db.rwMutexSignals.RLock()
 	_, exists := db.signalEntities[id]
 	db.rwMutexSignals.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSignalExecution(id int) (bool, error) {
+func (db *MemoryDatabase) HasSignalExecution(id SignalExecutionID) (bool, error) {
 	db.rwMutexSignalExec.RLock()
 	_, exists := db.signalExecutions[id]
 	db.rwMutexSignalExec.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSignalData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSignalData(id SignalDataID) (bool, error) {
 	db.rwMutexSignalData.RLock()
 	_, exists := db.signalData[id]
 	db.rwMutexSignalData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) HasSignalExecutionData(id int) (bool, error) {
+func (db *MemoryDatabase) HasSignalExecutionData(id SignalExecutionDataID) (bool, error) {
 	db.rwMutexSignalExecData.RLock()
 	_, exists := db.signalExecutionData[id]
 	db.rwMutexSignalExecData.RUnlock()
 	return exists, nil
 }
 
-func (db *MemoryDatabase) GetSignalEntityProperties(id int, getters ...SignalEntityPropertyGetter) error {
+func (db *MemoryDatabase) GetSignalEntityProperties(id SignalEntityID, getters ...SignalEntityPropertyGetter) error {
 	db.rwMutexSignals.RLock()
 	entity, exists := db.signalEntities[id]
 	if !exists {
@@ -3579,7 +3613,7 @@ func (db *MemoryDatabase) GetSignalEntityProperties(id int, getters ...SignalEnt
 	return nil
 }
 
-func (db *MemoryDatabase) SetSignalEntityProperties(id int, setters ...SignalEntityPropertySetter) error {
+func (db *MemoryDatabase) SetSignalEntityProperties(id SignalEntityID, setters ...SignalEntityPropertySetter) error {
 	db.rwMutexSignals.Lock()
 	entity, exists := db.signalEntities[id]
 	if !exists {
@@ -3600,7 +3634,7 @@ func (db *MemoryDatabase) SetSignalEntityProperties(id int, setters ...SignalEnt
 	return nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutionProperties(id int, getters ...SignalExecutionPropertyGetter) error {
+func (db *MemoryDatabase) GetSignalExecutionProperties(id SignalExecutionID, getters ...SignalExecutionPropertyGetter) error {
 	db.rwMutexSignalExec.RLock()
 	exec, exists := db.signalExecutions[id]
 	if !exists {
@@ -3636,7 +3670,7 @@ func (db *MemoryDatabase) GetSignalExecutionProperties(id int, getters ...Signal
 	return nil
 }
 
-func (db *MemoryDatabase) SetSignalExecutionProperties(id int, setters ...SignalExecutionPropertySetter) error {
+func (db *MemoryDatabase) SetSignalExecutionProperties(id SignalExecutionID, setters ...SignalExecutionPropertySetter) error {
 	db.rwMutexSignalExec.Lock()
 	exec, exists := db.signalExecutions[id]
 	if !exists {
@@ -3656,17 +3690,17 @@ func (db *MemoryDatabase) SetSignalExecutionProperties(id int, setters ...Signal
 	return nil
 }
 
-func (db *MemoryDatabase) AddSignalData(entityID int, data *SignalData) (int, error) {
+func (db *MemoryDatabase) AddSignalData(entityID SignalEntityID, data *SignalData) (SignalDataID, error) {
 	db.rwMutexSignalData.Lock()
 	db.signalDataCounter++
-	data.ID = db.signalDataCounter
+	data.ID = SignalDataID(db.signalDataCounter)
 	data.EntityID = entityID
 	db.signalData[data.ID] = copySignalData(data)
 	db.rwMutexSignalData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) GetSignalData(id int) (*SignalData, error) {
+func (db *MemoryDatabase) GetSignalData(id SignalDataID) (*SignalData, error) {
 	db.rwMutexSignalData.RLock()
 	d, exists := db.signalData[id]
 	if !exists {
@@ -3678,7 +3712,7 @@ func (db *MemoryDatabase) GetSignalData(id int) (*SignalData, error) {
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetSignalDataByEntityID(entityID int) (*SignalData, error) {
+func (db *MemoryDatabase) GetSignalDataByEntityID(entityID SignalEntityID) (*SignalData, error) {
 	db.rwMutexSignalData.RLock()
 	for _, d := range db.signalData {
 		if d.EntityID == entityID {
@@ -3691,7 +3725,7 @@ func (db *MemoryDatabase) GetSignalDataByEntityID(entityID int) (*SignalData, er
 	return nil, fmt.Errorf("signal data not found for entity")
 }
 
-func (db *MemoryDatabase) HasSignalDataByEntityID(entityID int) (bool, error) {
+func (db *MemoryDatabase) HasSignalDataByEntityID(entityID SignalEntityID) (bool, error) {
 	db.rwMutexSignalData.RLock()
 	for _, d := range db.signalData {
 		if d.EntityID == entityID {
@@ -3703,7 +3737,7 @@ func (db *MemoryDatabase) HasSignalDataByEntityID(entityID int) (bool, error) {
 	return false, nil
 }
 
-func (db *MemoryDatabase) GetSignalDataProperties(entityID int, getters ...SignalDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSignalDataProperties(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error {
 	db.rwMutexSignalData.RLock()
 	var data *SignalData
 	for _, d := range db.signalData {
@@ -3727,7 +3761,7 @@ func (db *MemoryDatabase) GetSignalDataProperties(entityID int, getters ...Signa
 	return nil
 }
 
-func (db *MemoryDatabase) SetSignalDataProperties(entityID int, setters ...SignalDataPropertySetter) error {
+func (db *MemoryDatabase) SetSignalDataProperties(entityID SignalEntityID, setters ...SignalDataPropertySetter) error {
 	db.rwMutexSignalData.Lock()
 	var data *SignalData
 	for _, d := range db.signalData {
@@ -3751,17 +3785,17 @@ func (db *MemoryDatabase) SetSignalDataProperties(entityID int, setters ...Signa
 	return nil
 }
 
-func (db *MemoryDatabase) AddSignalExecutionData(executionID int, data *SignalExecutionData) (int, error) {
+func (db *MemoryDatabase) AddSignalExecutionData(executionID SignalExecutionID, data *SignalExecutionData) (SignalExecutionDataID, error) {
 	db.rwMutexSignalExecData.Lock()
 	db.signalExecutionDataCounter++
-	data.ID = db.signalExecutionDataCounter
+	data.ID = SignalExecutionDataID(db.signalExecutionDataCounter)
 	data.ExecutionID = executionID
 	db.signalExecutionData[data.ID] = copySignalExecutionData(data)
 	db.rwMutexSignalExecData.Unlock()
 	return data.ID, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutionData(id int) (*SignalExecutionData, error) {
+func (db *MemoryDatabase) GetSignalExecutionData(id SignalExecutionDataID) (*SignalExecutionData, error) {
 	db.rwMutexSignalExecData.RLock()
 	d, exists := db.signalExecutionData[id]
 	if !exists {
@@ -3773,7 +3807,7 @@ func (db *MemoryDatabase) GetSignalExecutionData(id int) (*SignalExecutionData, 
 	return dCopy, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutionDataByExecutionID(executionID int) (*SignalExecutionData, error) {
+func (db *MemoryDatabase) GetSignalExecutionDataByExecutionID(executionID SignalExecutionID) (*SignalExecutionData, error) {
 	db.rwMutexSignalExecData.RLock()
 	for _, d := range db.signalExecutionData {
 		if d.ExecutionID == executionID {
@@ -3786,7 +3820,7 @@ func (db *MemoryDatabase) GetSignalExecutionDataByExecutionID(executionID int) (
 	return nil, fmt.Errorf("signal execution data not found for execution")
 }
 
-func (db *MemoryDatabase) HasSignalExecutionDataByExecutionID(executionID int) (bool, error) {
+func (db *MemoryDatabase) HasSignalExecutionDataByExecutionID(executionID SignalExecutionID) (bool, error) {
 	db.rwMutexSignalExecData.RLock()
 	for _, d := range db.signalExecutionData {
 		if d.ExecutionID == executionID {
@@ -3798,7 +3832,7 @@ func (db *MemoryDatabase) HasSignalExecutionDataByExecutionID(executionID int) (
 	return false, nil
 }
 
-func (db *MemoryDatabase) GetSignalExecutionDataProperties(entityID int, getters ...SignalExecutionDataPropertyGetter) error {
+func (db *MemoryDatabase) GetSignalExecutionDataProperties(entityID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error {
 	db.rwMutexSignalExecData.RLock()
 	var data *SignalExecutionData
 	for _, d := range db.signalExecutionData {
@@ -3822,7 +3856,7 @@ func (db *MemoryDatabase) GetSignalExecutionDataProperties(entityID int, getters
 	return nil
 }
 
-func (db *MemoryDatabase) SetSignalExecutionDataProperties(entityID int, setters ...SignalExecutionDataPropertySetter) error {
+func (db *MemoryDatabase) SetSignalExecutionDataProperties(entityID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error {
 	db.rwMutexSignalExecData.Lock()
 	var data *SignalExecutionData
 	for _, d := range db.signalExecutionData {
@@ -3859,11 +3893,9 @@ func (db *MemoryDatabase) UpdateSignalEntity(entity *SignalEntity) error {
 	return nil
 }
 
-// DeleteRunsByStatus - lock and delete in a safe manner
 func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
-	// Identify runs
 	db.rwMutexRuns.RLock()
-	runsToDelete := make([]int, 0)
+	runsToDelete := make([]RunID, 0)
 	for _, run := range db.runs {
 		if run.Status == status {
 			runsToDelete = append(runsToDelete, run.ID)
@@ -3877,7 +3909,7 @@ func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
 
 	for _, runID := range runsToDelete {
 		db.rwMutexRelationships.RLock()
-		workflowIDs := make([]int, len(db.runToWorkflows[runID]))
+		workflowIDs := make([]WorkflowEntityID, len(db.runToWorkflows[runID]))
 		copy(workflowIDs, db.runToWorkflows[runID])
 		db.rwMutexRelationships.RUnlock()
 
@@ -3899,11 +3931,11 @@ func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
 	return nil
 }
 
-func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID int) error {
+func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID WorkflowEntityID) error {
 	db.rwMutexHierarchies.RLock()
 	var hierarchies []*Hierarchy
 	for _, h := range db.hierarchies {
-		if h.ParentEntityID == workflowID {
+		if h.ParentEntityID == int(workflowID) {
 			hierarchies = append(hierarchies, copyHierarchy(h))
 		}
 	}
@@ -3912,19 +3944,19 @@ func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID int) error {
 	for _, h := range hierarchies {
 		switch h.ChildType {
 		case EntityActivity:
-			if err := db.deleteActivityEntity(h.ChildEntityID); err != nil {
+			if err := db.deleteActivityEntity(ActivityEntityID(h.ChildEntityID)); err != nil {
 				return err
 			}
 		case EntitySaga:
-			if err := db.deleteSagaEntity(h.ChildEntityID); err != nil {
+			if err := db.deleteSagaEntity(SagaEntityID(h.ChildEntityID)); err != nil {
 				return err
 			}
 		case EntitySideEffect:
-			if err := db.deleteSideEffectEntity(h.ChildEntityID); err != nil {
+			if err := db.deleteSideEffectEntity(SideEffectEntityID(h.ChildEntityID)); err != nil {
 				return err
 			}
 		case EntitySignal:
-			if err := db.deleteSignalEntity(h.ChildEntityID); err != nil {
+			if err := db.deleteSignalEntity(SignalEntityID(h.ChildEntityID)); err != nil {
 				return err
 			}
 		}
@@ -3936,7 +3968,7 @@ func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID int) error {
 
 	db.rwMutexHierarchies.Lock()
 	for id, hh := range db.hierarchies {
-		if hh.ParentEntityID == workflowID || hh.ChildEntityID == workflowID {
+		if hh.ParentEntityID == int(workflowID) || hh.ChildEntityID == int(workflowID) {
 			delete(db.hierarchies, id)
 		}
 	}
@@ -3945,24 +3977,22 @@ func (db *MemoryDatabase) deleteWorkflowAndChildren(workflowID int) error {
 	return nil
 }
 
-// deleteWorkflowEntity
-func (db *MemoryDatabase) deleteWorkflowEntity(workflowID int) error {
-	// Delete workflow execution data
+func (db *MemoryDatabase) deleteWorkflowEntity(workflowID WorkflowEntityID) error {
 	db.rwMutexWorkflowExec.Lock()
 	for id, exec := range db.workflowExecutions {
-		if exec.EntityID == workflowID {
-			db.rwMutexWorkflowExecData.Lock()
-			delete(db.workflowExecutionData, db.execToDataMap[exec.ID])
-			db.rwMutexWorkflowExecData.Unlock()
-			delete(db.workflowExecutions, id)
+		if exec.WorkflowEntityID == workflowID {
 			db.rwMutexRelationships.Lock()
-			delete(db.execToDataMap, exec.ID)
+			if dataID, exists := db.workflowExecToDataMap[id]; exists {
+				db.rwMutexWorkflowExecData.Lock()
+				delete(db.workflowExecutionData, dataID)
+				db.rwMutexWorkflowExecData.Unlock()
+				delete(db.workflowExecToDataMap, id)
+			}
 			db.rwMutexRelationships.Unlock()
 		}
 	}
 	db.rwMutexWorkflowExec.Unlock()
 
-	// Delete workflow data
 	db.rwMutexWorkflowData.Lock()
 	for id, data := range db.workflowData {
 		if data.EntityID == workflowID {
@@ -3971,7 +4001,6 @@ func (db *MemoryDatabase) deleteWorkflowEntity(workflowID int) error {
 	}
 	db.rwMutexWorkflowData.Unlock()
 
-	// Delete versions
 	db.rwMutexRelationships.Lock()
 	versionIDs := db.workflowToVersion[workflowID]
 	delete(db.workflowToVersion, workflowID)
@@ -3984,11 +4013,10 @@ func (db *MemoryDatabase) deleteWorkflowEntity(workflowID int) error {
 	}
 	db.rwMutexVersions.Unlock()
 
-	// Clean up queue mappings
 	db.rwMutexRelationships.Lock()
 	if queueID, ok := db.workflowToQueue[workflowID]; ok {
 		if workflows, exists := db.queueToWorkflows[queueID]; exists {
-			newWorkflows := make([]int, 0, len(workflows)-1)
+			newWorkflows := make([]WorkflowEntityID, 0, len(workflows)-1)
 			for _, wID := range workflows {
 				if wID != workflowID {
 					newWorkflows = append(newWorkflows, wID)
@@ -4007,13 +4035,18 @@ func (db *MemoryDatabase) deleteWorkflowEntity(workflowID int) error {
 	return nil
 }
 
-func (db *MemoryDatabase) deleteActivityEntity(entityID int) error {
+func (db *MemoryDatabase) deleteActivityEntity(entityID ActivityEntityID) error {
 	db.rwMutexActivityExec.Lock()
 	for id, exec := range db.activityExecutions {
-		if exec.EntityID == entityID {
-			db.rwMutexActivityExecData.Lock()
-			delete(db.activityExecutionData, exec.ID)
-			db.rwMutexActivityExecData.Unlock()
+		if exec.ActivityEntityID == entityID {
+			db.rwMutexRelationships.Lock()
+			if dataID, exists := db.activityExecToDataMap[id]; exists {
+				db.rwMutexActivityExecData.Lock()
+				delete(db.activityExecutionData, dataID)
+				db.rwMutexActivityExecData.Unlock()
+				delete(db.activityExecToDataMap, id)
+			}
+			db.rwMutexRelationships.Unlock()
 			delete(db.activityExecutions, id)
 		}
 	}
@@ -4034,13 +4067,18 @@ func (db *MemoryDatabase) deleteActivityEntity(entityID int) error {
 	return nil
 }
 
-func (db *MemoryDatabase) deleteSagaEntity(entityID int) error {
+func (db *MemoryDatabase) deleteSagaEntity(entityID SagaEntityID) error {
 	db.rwMutexSagaExec.Lock()
 	for id, exec := range db.sagaExecutions {
-		if exec.EntityID == entityID {
-			db.rwMutexSagaExecData.Lock()
-			delete(db.sagaExecutionData, exec.ID)
-			db.rwMutexSagaExecData.Unlock()
+		if exec.SagaEntityID == entityID {
+			db.rwMutexRelationships.Lock()
+			if dataID, exists := db.sagaExecToDataMap[id]; exists {
+				db.rwMutexSagaExecData.Lock()
+				delete(db.sagaExecutionData, dataID)
+				db.rwMutexSagaExecData.Unlock()
+				delete(db.sagaExecToDataMap, id)
+			}
+			db.rwMutexRelationships.Unlock()
 
 			db.rwMutexSagas.Lock()
 			delete(db.sagaValues, exec.ID)
@@ -4066,13 +4104,18 @@ func (db *MemoryDatabase) deleteSagaEntity(entityID int) error {
 	return nil
 }
 
-func (db *MemoryDatabase) deleteSideEffectEntity(entityID int) error {
+func (db *MemoryDatabase) deleteSideEffectEntity(entityID SideEffectEntityID) error {
 	db.rwMutexSideEffectExec.Lock()
 	for id, exec := range db.sideEffectExecutions {
-		if exec.EntityID == entityID {
-			db.rwMutexSideEffectExecData.Lock()
-			delete(db.sideEffectExecutionData, exec.ID)
-			db.rwMutexSideEffectExecData.Unlock()
+		if exec.SideEffectEntityID == entityID {
+			db.rwMutexRelationships.Lock()
+			if dataID, exists := db.sideEffectExecToDataMap[id]; exists {
+				db.rwMutexSideEffectExecData.Lock()
+				delete(db.sideEffectExecutionData, dataID)
+				db.rwMutexSideEffectExecData.Unlock()
+				delete(db.sideEffectExecToDataMap, id)
+			}
+			db.rwMutexRelationships.Unlock()
 			delete(db.sideEffectExecutions, id)
 		}
 	}
@@ -4093,13 +4136,18 @@ func (db *MemoryDatabase) deleteSideEffectEntity(entityID int) error {
 	return nil
 }
 
-func (db *MemoryDatabase) deleteSignalEntity(entityID int) error {
+func (db *MemoryDatabase) deleteSignalEntity(entityID SignalEntityID) error {
 	db.rwMutexSignalExec.Lock()
 	for id, exec := range db.signalExecutions {
 		if exec.EntityID == entityID {
-			db.rwMutexSignalExecData.Lock()
-			delete(db.signalExecutionData, exec.ID)
-			db.rwMutexSignalExecData.Unlock()
+			db.rwMutexRelationships.Lock()
+			if dataID, exists := db.signalExecToDataMap[id]; exists {
+				db.rwMutexSignalExecData.Lock()
+				delete(db.signalExecutionData, dataID)
+				db.rwMutexSignalExecData.Unlock()
+				delete(db.signalExecToDataMap, id)
+			}
+			db.rwMutexRelationships.Unlock()
 			delete(db.signalExecutions, id)
 		}
 	}
@@ -4204,4 +4252,503 @@ func sortRuns(runs []*Run, sort *RunSort) {
 	}
 
 	slices.SortFunc(runs, sortFn)
+}
+
+// Copy functions
+func copyRun(run *Run) *Run {
+	if run == nil {
+		return nil
+	}
+
+	copy := &Run{
+		ID:        run.ID,
+		Status:    run.Status,
+		CreatedAt: run.CreatedAt,
+		UpdatedAt: run.UpdatedAt,
+	}
+
+	if run.Entities != nil {
+		copy.Entities = make([]*WorkflowEntity, len(run.Entities))
+		for i, entity := range run.Entities {
+			copy.Entities[i] = copyWorkflowEntity(entity)
+		}
+	}
+
+	if run.Hierarchies != nil {
+		copy.Hierarchies = make([]*Hierarchy, len(run.Hierarchies))
+		for i, hierarchy := range run.Hierarchies {
+			copy.Hierarchies[i] = copyHierarchy(hierarchy)
+		}
+	}
+
+	return copy
+}
+
+// func copyVersion(version *Version) *Version {
+// 	if version == nil {
+// 		return nil
+// 	}
+
+// 	copy := &Version{
+// 		ID:       version.ID,
+// 		EntityID: version.EntityID,
+// 		ChangeID: version.ChangeID,
+// 		Version:  version.Version,
+// 	}
+
+// 	if version.Data != nil {
+// 		copy.Data = make(map[string]interface{}, len(version.Data))
+// 		for k, v := range version.Data {
+// 			copy.Data[k] = v
+// 		}
+// 	}
+
+//		return copy
+//	}
+func copyVersion(v *Version) *Version {
+	if v == nil {
+		return nil
+	}
+	copied := *v
+	if v.Data != nil {
+		copied.Data = make(map[string]interface{})
+		for k, v := range v.Data {
+			copied.Data[k] = v
+		}
+	}
+	return &copied
+}
+
+func copyHierarchy(hierarchy *Hierarchy) *Hierarchy {
+	if hierarchy == nil {
+		return nil
+	}
+
+	return &Hierarchy{
+		ID:                hierarchy.ID,
+		RunID:             hierarchy.RunID,
+		ParentEntityID:    hierarchy.ParentEntityID,
+		ChildEntityID:     hierarchy.ChildEntityID,
+		ParentExecutionID: hierarchy.ParentExecutionID,
+		ChildExecutionID:  hierarchy.ChildExecutionID,
+		ParentStepID:      hierarchy.ParentStepID,
+		ChildStepID:       hierarchy.ChildStepID,
+		ParentType:        hierarchy.ParentType,
+		ChildType:         hierarchy.ChildType,
+	}
+}
+
+func copyQueue(queue *Queue) *Queue {
+	if queue == nil {
+		return nil
+	}
+
+	copy := &Queue{
+		ID:        queue.ID,
+		Name:      queue.Name,
+		CreatedAt: queue.CreatedAt,
+		UpdatedAt: queue.UpdatedAt,
+	}
+
+	if queue.Entities != nil {
+		copy.Entities = make([]*WorkflowEntity, len(queue.Entities))
+		for i, entity := range queue.Entities {
+			copy.Entities[i] = copyWorkflowEntity(entity)
+		}
+	}
+
+	return copy
+}
+
+func copyBaseEntity(base *BaseEntity) *BaseEntity {
+	if base == nil {
+		return nil
+	}
+
+	return &BaseEntity{
+		HandlerName: base.HandlerName,
+		Type:        base.Type,
+		Status:      base.Status,
+		QueueID:     base.QueueID,
+		StepID:      base.StepID,
+		CreatedAt:   base.CreatedAt,
+		UpdatedAt:   base.UpdatedAt,
+		RunID:       base.RunID,
+		RetryPolicy: base.RetryPolicy,
+		RetryState:  base.RetryState,
+	}
+}
+
+func copyBaseExecution(base *BaseExecution) *BaseExecution {
+	if base == nil {
+		return nil
+	}
+
+	copy := *base
+
+	if base.CompletedAt != nil {
+		completedAtCopy := *base.CompletedAt
+		copy.CompletedAt = &completedAtCopy
+	}
+
+	return &copy
+}
+
+// Entity Data copy functions
+func copyWorkflowData(data *WorkflowData) *WorkflowData {
+	if data == nil {
+		return nil
+	}
+
+	c := *data
+
+	// Deep copy versions map
+	if data.Versions != nil {
+		c.Versions = make(map[string]int)
+		for k, v := range data.Versions {
+			c.Versions[k] = v
+		}
+	}
+
+	if data.Inputs != nil {
+		c.Inputs = make([][]byte, len(data.Inputs))
+		for i, input := range data.Inputs {
+			inputCopy := make([]byte, len(input))
+			copy(inputCopy, input)
+			c.Inputs[i] = inputCopy
+		}
+	}
+
+	return &c
+}
+
+func copyWorkflowEntityEdges(e *WorkflowEntityEdges) *WorkflowEntityEdges {
+	if e == nil {
+		return nil
+	}
+	copy := *e
+	if e.Queue != nil {
+		copy.Queue = copyQueue(e.Queue)
+	}
+	if e.Versions != nil {
+		copy.Versions = make([]*Version, len(e.Versions))
+		for i, v := range e.Versions {
+			copy.Versions[i] = copyVersion(v)
+		}
+	}
+	if e.ActivityChildren != nil {
+		copy.ActivityChildren = make([]*ActivityEntity, len(e.ActivityChildren))
+		for i, a := range e.ActivityChildren {
+			copy.ActivityChildren[i] = copyActivityEntity(a)
+		}
+	}
+	if e.SagaChildren != nil {
+		copy.SagaChildren = make([]*SagaEntity, len(e.SagaChildren))
+		for i, s := range e.SagaChildren {
+			copy.SagaChildren[i] = copySagaEntity(s)
+		}
+	}
+	if e.SideEffectChildren != nil {
+		copy.SideEffectChildren = make([]*SideEffectEntity, len(e.SideEffectChildren))
+		for i, se := range e.SideEffectChildren {
+			copy.SideEffectChildren[i] = copySideEffectEntity(se)
+		}
+	}
+	return &copy
+}
+
+func copyActivityData(data *ActivityData) *ActivityData {
+	if data == nil {
+		return nil
+	}
+
+	c := *data
+
+	if data.Inputs != nil {
+		c.Inputs = make([][]byte, len(data.Inputs))
+		for i, input := range data.Inputs {
+			inputCopy := make([]byte, len(input))
+			copy(inputCopy, input)
+			c.Inputs[i] = inputCopy
+		}
+	}
+
+	if data.Output != nil {
+		c.Output = make([][]byte, len(data.Output))
+		for i, output := range data.Output {
+			outputCopy := make([]byte, len(output))
+			copy(outputCopy, output)
+			c.Output[i] = outputCopy
+		}
+	}
+
+	return &c
+}
+
+func copySagaData(data *SagaData) *SagaData {
+	if data == nil {
+		return nil
+	}
+	return &SagaData{
+		ID:       data.ID,
+		EntityID: data.EntityID,
+	}
+}
+
+func copySagaExecutionData(data *SagaExecutionData) *SagaExecutionData {
+	if data == nil {
+		return nil
+	}
+
+	c := &SagaExecutionData{
+		ID:          data.ID,
+		ExecutionID: data.ExecutionID,
+		StepIndex:   data.StepIndex,
+	}
+
+	if data.LastHeartbeat != nil {
+		heartbeatCopy := *data.LastHeartbeat
+		c.LastHeartbeat = &heartbeatCopy
+	}
+
+	return c
+}
+
+func copySagaExecution(exec *SagaExecution) *SagaExecution {
+	if exec == nil {
+		return nil
+	}
+
+	return &SagaExecution{
+		BaseExecution:     *copyBaseExecution(&exec.BaseExecution),
+		ExecutionType:     exec.ExecutionType,
+		SagaExecutionData: copySagaExecutionData(exec.SagaExecutionData),
+	}
+}
+
+func copySagaEntity(entity *SagaEntity) *SagaEntity {
+	if entity == nil {
+		return nil
+	}
+
+	return &SagaEntity{
+		BaseEntity: *copyBaseEntity(&entity.BaseEntity),
+		SagaData:   copySagaData(entity.SagaData),
+	}
+}
+
+func copySideEffectData(data *SideEffectData) *SideEffectData {
+	if data == nil {
+		return nil
+	}
+	copy := *data
+	return &copy
+}
+
+// Execution Data copy functions
+func copyWorkflowExecutionData(data *WorkflowExecutionData) *WorkflowExecutionData {
+	if data == nil {
+		return nil
+	}
+
+	c := *data
+
+	if data.LastHeartbeat != nil {
+		heartbeatCopy := *data.LastHeartbeat
+		c.LastHeartbeat = &heartbeatCopy
+	}
+
+	if data.Outputs != nil {
+		c.Outputs = make([][]byte, len(data.Outputs))
+		for i, output := range data.Outputs {
+			outputCopy := make([]byte, len(output))
+			copy(outputCopy, output)
+			c.Outputs[i] = outputCopy
+		}
+	}
+
+	return &c
+}
+
+func copyActivityExecutionData(data *ActivityExecutionData) *ActivityExecutionData {
+	if data == nil {
+		return nil
+	}
+
+	c := *data
+
+	if data.LastHeartbeat != nil {
+		heartbeatCopy := *data.LastHeartbeat
+		c.LastHeartbeat = &heartbeatCopy
+	}
+
+	if data.Outputs != nil {
+		c.Outputs = make([][]byte, len(data.Outputs))
+		for i, output := range data.Outputs {
+			outputCopy := make([]byte, len(output))
+			copy(outputCopy, output)
+			c.Outputs[i] = outputCopy
+		}
+	}
+
+	return &c
+}
+
+func copySideEffectExecutionData(data *SideEffectExecutionData) *SideEffectExecutionData {
+	if data == nil {
+		return nil
+	}
+
+	c := *data
+
+	if data.Outputs != nil {
+		c.Outputs = make([][]byte, len(data.Outputs))
+		for i, output := range data.Outputs {
+			outputCopy := make([]byte, len(output))
+			copy(outputCopy, output)
+			c.Outputs[i] = outputCopy
+		}
+	}
+
+	return &c
+}
+
+// Entity copy functions
+func copyWorkflowEntity(entity *WorkflowEntity) *WorkflowEntity {
+	if entity == nil {
+		return nil
+	}
+
+	copy := WorkflowEntity{
+		ID:           entity.ID,
+		BaseEntity:   *copyBaseEntity(&entity.BaseEntity),
+		WorkflowData: copyWorkflowData(entity.WorkflowData),
+		Edges:        copyWorkflowEntityEdges(entity.Edges),
+	}
+
+	return &copy
+}
+
+func copyActivityEntity(entity *ActivityEntity) *ActivityEntity {
+	if entity == nil {
+		return nil
+	}
+
+	copy := ActivityEntity{
+		ID:           entity.ID,
+		BaseEntity:   *copyBaseEntity(&entity.BaseEntity),
+		ActivityData: copyActivityData(entity.ActivityData),
+	}
+
+	return &copy
+}
+
+func copySideEffectEntity(entity *SideEffectEntity) *SideEffectEntity {
+	if entity == nil {
+		return nil
+	}
+
+	copy := SideEffectEntity{
+		ID:             entity.ID,
+		BaseEntity:     *copyBaseEntity(&entity.BaseEntity),
+		SideEffectData: copySideEffectData(entity.SideEffectData),
+	}
+
+	return &copy
+}
+
+// Execution copy functions
+func copyWorkflowExecution(exec *WorkflowExecution) *WorkflowExecution {
+	if exec == nil {
+		return nil
+	}
+
+	copy := WorkflowExecution{
+		ID:                    exec.ID,
+		WorkflowEntityID:      exec.WorkflowEntityID,
+		BaseExecution:         *copyBaseExecution(&exec.BaseExecution),
+		WorkflowExecutionData: copyWorkflowExecutionData(exec.WorkflowExecutionData),
+	}
+
+	return &copy
+}
+
+func copyActivityExecution(exec *ActivityExecution) *ActivityExecution {
+	if exec == nil {
+		return nil
+	}
+
+	copy := ActivityExecution{
+		ID:                    exec.ID,
+		ActivityEntityID:      exec.ActivityEntityID,
+		BaseExecution:         *copyBaseExecution(&exec.BaseExecution),
+		ActivityExecutionData: copyActivityExecutionData(exec.ActivityExecutionData),
+	}
+
+	return &copy
+}
+
+func copySideEffectExecution(exec *SideEffectExecution) *SideEffectExecution {
+	if exec == nil {
+		return nil
+	}
+
+	copy := SideEffectExecution{
+		ID:                      exec.ID,
+		SideEffectEntityID:      exec.SideEffectEntityID,
+		BaseExecution:           *copyBaseExecution(&exec.BaseExecution),
+		SideEffectExecutionData: copySideEffectExecutionData(exec.SideEffectExecutionData),
+	}
+
+	return &copy
+}
+
+func copySignalEntity(entity *SignalEntity) *SignalEntity {
+	if entity == nil {
+		return nil
+	}
+	copy := *entity
+
+	if entity.SignalData != nil {
+		copy.SignalData = copySignalData(entity.SignalData)
+	}
+
+	return &copy
+}
+
+func copySignalData(data *SignalData) *SignalData {
+	if data == nil {
+		return nil
+	}
+	copy := *data
+	return &copy
+}
+
+func copySignalExecution(exec *SignalExecution) *SignalExecution {
+	if exec == nil {
+		return nil
+	}
+	copy := SignalExecution{
+		BaseExecution: *copyBaseExecution(&exec.BaseExecution),
+	}
+
+	if exec.SignalExecutionData != nil {
+		copy.SignalExecutionData = copySignalExecutionData(exec.SignalExecutionData)
+	}
+
+	return &copy
+}
+
+func copySignalExecutionData(data *SignalExecutionData) *SignalExecutionData {
+	if data == nil {
+		return nil
+	}
+	c := *data
+
+	if data.Value != nil {
+		c.Value = make([]byte, len(data.Value))
+		copy(c.Value, data.Value)
+	}
+
+	return &c
 }

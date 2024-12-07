@@ -125,6 +125,33 @@ const (
 	ExecutionStatusCompensated ExecutionStatus = "Compensated"
 )
 
+// ID type definitions
+type WorkflowEntityID int
+type WorkflowExecutionID int
+type WorkflowDataID int
+type WorkflowExecutionDataID int
+type ActivityEntityID int
+type ActivityExecutionID int
+type ActivityDataID int
+type ActivityExecutionDataID int
+type SagaEntityID int
+type SagaExecutionID int
+type SagaDataID int
+type SagaExecutionDataID int
+type SideEffectEntityID int
+type SideEffectExecutionID int
+type SideEffectDataID int
+type SideEffectExecutionDataID int
+type SignalEntityID int
+type SignalExecutionID int
+type SignalDataID int
+type SignalExecutionDataID int
+type SagaValueID int
+type RunID int
+type VersionID int
+type HierarchyID int
+type QueueID int
+
 // Add to existing ExecutionType
 type ExecutionType string
 
@@ -162,7 +189,7 @@ type RunGetterOptions struct {
 }
 
 type RunSetterOptions struct {
-	WorkflowID *int
+	WorkflowID *WorkflowEntityID
 	// Add more options as needed
 }
 
@@ -176,12 +203,12 @@ type WorkflowEntityGetterOptions struct {
 }
 
 type WorkflowEntitySetterOptions struct {
-	QueueID   *int
+	QueueID   *QueueID
 	QueueName *string
 	Version   *Version
 	ChildID   *int
 	ChildType *EntityType
-	RunID     *int
+	RunID     *RunID
 	// Add more options as needed
 }
 
@@ -191,8 +218,8 @@ type ActivityEntityGetterOptions struct {
 }
 
 type ActivityEntitySetterOptions struct {
-	ParentWorkflowID *int
-	ParentRunID      *int
+	ParentWorkflowID *WorkflowEntityID
+	ParentRunID      *RunID
 	// Add more options as needed
 }
 
@@ -202,7 +229,7 @@ type SagaEntityGetterOptions struct {
 }
 
 type SagaEntitySetterOptions struct {
-	ParentWorkflowID *int
+	ParentWorkflowID *WorkflowEntityID
 	// Add more options as needed
 }
 
@@ -212,7 +239,7 @@ type SideEffectEntityGetterOptions struct {
 }
 
 type SideEffectEntitySetterOptions struct {
-	ParentWorkflowID *int
+	ParentWorkflowID *WorkflowEntityID
 	// Add more options as needed
 }
 
@@ -222,7 +249,7 @@ type QueueGetterOptions struct {
 }
 
 type QueueSetterOptions struct {
-	WorkflowIDs []int
+	WorkflowIDs []WorkflowEntityID
 	// Add more options as needed
 }
 
@@ -632,8 +659,8 @@ type HandlerInfo struct {
 
 // Core entity structures
 type Version struct {
-	ID        int
-	EntityID  int                    // Workflow ID this version belongs to
+	ID        VersionID
+	EntityID  WorkflowEntityID       // Workflow ID this version belongs to
 	ChangeID  string                 // Identifier for the change (e.g., "format-change")
 	Version   int                    // The actual version number
 	Data      map[string]interface{} // Additional version metadata if needed
@@ -642,7 +669,7 @@ type Version struct {
 }
 
 type Run struct {
-	ID          int
+	ID          RunID
 	Status      RunStatus
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -651,7 +678,7 @@ type Run struct {
 }
 
 type Queue struct {
-	ID        int
+	ID        QueueID
 	Name      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -659,8 +686,8 @@ type Queue struct {
 }
 
 type Hierarchy struct {
-	ID                int
-	RunID             int
+	ID                HierarchyID
+	RunID             RunID
 	ParentEntityID    int
 	ChildEntityID     int
 	ParentExecutionID int
@@ -673,48 +700,47 @@ type Hierarchy struct {
 
 // Base entity type
 type BaseEntity struct {
-	ID          int
-	QueueID     int
+	QueueID     QueueID
 	HandlerName string
 	Type        EntityType
 	Status      EntityStatus
 	StepID      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	RunID       int
+	RunID       RunID
 	RetryPolicy retryPolicyInternal
 	RetryState  RetryState
 }
 
 // Entity Data structures
 type WorkflowData struct {
-	ID                     int            `json:"id,omitempty"`
-	EntityID               int            `json:"entity_id,omitempty"`
-	Duration               string         `json:"duration,omitempty"`
-	Paused                 bool           `json:"paused"`
-	Resumable              bool           `json:"resumable"`
-	Inputs                 [][]byte       `json:"inputs,omitempty"`
-	IsRoot                 bool           `json:"is_root"`
-	ContinuedFrom          *int           `json:"continued_from,omitempty"`
-	ContinuedExecutionFrom *int           `json:"continued_execution_from,omitempty"`
-	Versions               map[string]int // Tracks versions used in this workflow
+	ID                     WorkflowDataID       `json:"id,omitempty"`
+	EntityID               WorkflowEntityID     `json:"entity_id,omitempty"`
+	Duration               string               `json:"duration,omitempty"`
+	Paused                 bool                 `json:"paused"`
+	Resumable              bool                 `json:"resumable"`
+	Inputs                 [][]byte             `json:"inputs,omitempty"`
+	IsRoot                 bool                 `json:"is_root"`
+	ContinuedFrom          *WorkflowEntityID    `json:"continued_from,omitempty"`
+	ContinuedExecutionFrom *WorkflowExecutionID `json:"continued_execution_from,omitempty"`
+	Versions               map[string]int       // Tracks versions used in this workflow
 }
 
 type ActivityData struct {
-	ID       int      `json:"id,omitempty"`
-	EntityID int      `json:"entity_id,omitempty"`
-	Inputs   [][]byte `json:"inputs,omitempty"`
-	Output   [][]byte `json:"output,omitempty"`
+	ID       ActivityDataID   `json:"id,omitempty"`
+	EntityID ActivityEntityID `json:"entity_id,omitempty"`
+	Inputs   [][]byte         `json:"inputs,omitempty"`
+	Output   [][]byte         `json:"output,omitempty"`
 }
 
 type SagaData struct {
-	ID       int `json:"id,omitempty"`
-	EntityID int `json:"entity_id,omitempty"`
+	ID       SagaDataID   `json:"id,omitempty"`
+	EntityID SagaEntityID `json:"entity_id,omitempty"`
 }
 
 type SideEffectData struct {
-	ID       int `json:"id,omitempty"`
-	EntityID int `json:"entity_id,omitempty"`
+	ID       SideEffectDataID   `json:"id,omitempty"`
+	EntityID SideEffectEntityID `json:"entity_id,omitempty"`
 	// No fields as per schema
 }
 
@@ -730,39 +756,44 @@ type WorkflowEntityEdges struct {
 
 type WorkflowEntity struct {
 	BaseEntity
+	ID           WorkflowEntityID
 	WorkflowData *WorkflowData
 	Edges        *WorkflowEntityEdges
 }
 
 type ActivityEntity struct {
 	BaseEntity
+	ID           ActivityEntityID
 	ActivityData *ActivityData
 }
 
 type SagaEntity struct {
 	BaseEntity
+	ID       SagaEntityID
 	SagaData *SagaData
 }
 
 type SideEffectEntity struct {
 	BaseEntity
+	ID             SideEffectEntityID
 	SideEffectData *SideEffectData
 }
 
 type SignalEntity struct {
 	BaseEntity
+	ID         SignalEntityID
 	SignalData *SignalData
 }
 
 type SignalExecution struct {
 	BaseExecution
+	ID                  SignalExecutionID
+	EntityID            SignalEntityID
 	SignalExecutionData *SignalExecutionData
 }
 
 // Base execution type
 type BaseExecution struct {
-	ID          int
-	EntityID    int
 	StartedAt   time.Time
 	CompletedAt *time.Time
 	Status      ExecutionStatus
@@ -774,71 +805,79 @@ type BaseExecution struct {
 
 // Execution Data structures
 type WorkflowExecutionData struct {
-	ID            int        `json:"id,omitempty"`
-	ExecutionID   int        `json:"execution_id,omitempty"`
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	Outputs       [][]byte   `json:"outputs,omitempty"`
+	ID            WorkflowExecutionDataID `json:"id,omitempty"`
+	ExecutionID   WorkflowExecutionID     `json:"execution_id,omitempty"`
+	LastHeartbeat *time.Time              `json:"last_heartbeat,omitempty"`
+	Outputs       [][]byte                `json:"outputs,omitempty"`
 }
 
 type ActivityExecutionData struct {
-	ID            int        `json:"id,omitempty"`
-	ExecutionID   int        `json:"execution_id,omitempty"`
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	Outputs       [][]byte   `json:"outputs,omitempty"`
+	ID            ActivityExecutionDataID `json:"id,omitempty"`
+	ExecutionID   ActivityExecutionID     `json:"execution_id,omitempty"`
+	LastHeartbeat *time.Time              `json:"last_heartbeat,omitempty"`
+	Outputs       [][]byte                `json:"outputs,omitempty"`
 }
 
 type SagaExecutionData struct {
-	ID            int        `json:"id,omitempty"`
-	ExecutionID   int        `json:"execution_id,omitempty"`
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	StepIndex     int        `json:"step_index"` // Which step this execution is for
+	ID            SagaExecutionDataID `json:"id,omitempty"`
+	ExecutionID   SagaExecutionID     `json:"execution_id,omitempty"`
+	LastHeartbeat *time.Time          `json:"last_heartbeat,omitempty"`
+	StepIndex     int                 `json:"step_index"` // Which step this execution is for
 }
 
 type SignalData struct {
-	ID       int    `json:"id,omitempty"`
-	EntityID int    `json:"entity_id,omitempty"`
-	Name     string `json:"name"`
+	ID       SignalDataID   `json:"id,omitempty"`
+	EntityID SignalEntityID `json:"entity_id,omitempty"`
+	Name     string         `json:"name"`
 }
 
 type SignalExecutionData struct {
-	ID          int    `json:"id,omitempty"`
-	ExecutionID int    `json:"execution_id,omitempty"`
-	Value       []byte `json:"value,omitempty"`
-	Kind        uint   `json:"kind"`
+	ID          SignalExecutionDataID `json:"id,omitempty"`
+	ExecutionID SignalExecutionID     `json:"execution_id,omitempty"`
+	Value       []byte                `json:"value,omitempty"`
+	Kind        uint                  `json:"kind"`
 }
 
 type SagaValue struct {
-	ID          int    `json:"id,omitempty"`
-	ExecutionID int    `json:"executionID"`
-	Key         string `json:"key"`
+	ID          SagaValueID     `json:"id,omitempty"`
+	ExecutionID SagaExecutionID `json:"executionID"`
+	Key         string          `json:"key"`
 
 	Value []byte `json:"value"` // TODO: this is WRONG
 }
 
 type SideEffectExecutionData struct {
-	ID          int      `json:"id,omitempty"`
-	ExecutionID int      `json:"execution_id,omitempty"`
-	Outputs     [][]byte `json:"outputs,omitempty"`
+	ID          SideEffectExecutionDataID `json:"id,omitempty"`
+	ExecutionID SideEffectExecutionID     `json:"execution_id,omitempty"`
+	Outputs     [][]byte                  `json:"outputs,omitempty"`
 }
 
 // Execution types
 type WorkflowExecution struct {
 	BaseExecution
+	ID                    WorkflowExecutionID
+	WorkflowEntityID      WorkflowEntityID
 	WorkflowExecutionData *WorkflowExecutionData
 }
 
 type ActivityExecution struct {
 	BaseExecution
+	ID                    ActivityExecutionID
+	ActivityEntityID      ActivityEntityID
 	ActivityExecutionData *ActivityExecutionData
 }
 
 type SagaExecution struct {
 	BaseExecution
+	ID                SagaExecutionID
+	SagaEntityID      SagaEntityID
 	ExecutionType     ExecutionType `json:"execution_type"` // transaction or compensation
 	SagaExecutionData *SagaExecutionData
 }
 type SideEffectExecution struct {
 	BaseExecution
+	ID                      SideEffectExecutionID
+	SideEffectEntityID      SideEffectEntityID
 	SideEffectExecutionData *SideEffectExecutionData
 }
 
@@ -864,233 +903,233 @@ type Database interface {
 
 	// WORKFLOW-RELATED OPERATIONS
 	// Workflow Entity
-	AddWorkflowEntity(entity *WorkflowEntity) (int, error)
-	GetWorkflowEntity(id int, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error)
-	HasWorkflowEntity(id int) (bool, error)
+	AddWorkflowEntity(entity *WorkflowEntity) (WorkflowEntityID, error)
+	GetWorkflowEntity(id WorkflowEntityID, opts ...WorkflowEntityGetOption) (*WorkflowEntity, error)
+	HasWorkflowEntity(id WorkflowEntityID) (bool, error)
 	UpdateWorkflowEntity(entity *WorkflowEntity) error
-	GetWorkflowEntityProperties(id int, getters ...WorkflowEntityPropertyGetter) error
-	SetWorkflowEntityProperties(id int, setters ...WorkflowEntityPropertySetter) error
+	GetWorkflowEntityProperties(id WorkflowEntityID, getters ...WorkflowEntityPropertyGetter) error
+	SetWorkflowEntityProperties(id WorkflowEntityID, setters ...WorkflowEntityPropertySetter) error
 
 	// Workflow Data
-	AddWorkflowData(entityID int, data *WorkflowData) (int, error)
-	GetWorkflowData(id int) (*WorkflowData, error)
-	HasWorkflowData(id int) (bool, error)
-	GetWorkflowDataByEntityID(entityID int) (*WorkflowData, error)
-	HasWorkflowDataByEntityID(entityID int) (bool, error)
-	GetWorkflowDataProperties(entityID int, getters ...WorkflowDataPropertyGetter) error
-	SetWorkflowDataProperties(entityID int, setters ...WorkflowDataPropertySetter) error
+	AddWorkflowData(entityID WorkflowEntityID, data *WorkflowData) (WorkflowDataID, error)
+	GetWorkflowData(id WorkflowDataID) (*WorkflowData, error)
+	HasWorkflowData(id WorkflowDataID) (bool, error)
+	GetWorkflowDataByEntityID(entityID WorkflowEntityID) (*WorkflowData, error)
+	HasWorkflowDataByEntityID(entityID WorkflowEntityID) (bool, error)
+	GetWorkflowDataProperties(id WorkflowDataID, getters ...WorkflowDataPropertyGetter) error
+	SetWorkflowDataProperties(id WorkflowDataID, setters ...WorkflowDataPropertySetter) error
 
 	// Workflow Execution
-	AddWorkflowExecution(exec *WorkflowExecution) (int, error)
-	GetWorkflowExecution(id int, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
-	GetWorkflowExecutions(entityID int) ([]*WorkflowExecution, error)
-	HasWorkflowExecution(id int) (bool, error)
-	GetWorkflowExecutionLatestByEntityID(entityID int) (*WorkflowExecution, error)
-	GetWorkflowExecutionProperties(id int, getters ...WorkflowExecutionPropertyGetter) error
-	SetWorkflowExecutionProperties(id int, setters ...WorkflowExecutionPropertySetter) error
+	AddWorkflowExecution(exec *WorkflowExecution) (WorkflowExecutionID, error)
+	GetWorkflowExecution(id WorkflowExecutionID, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
+	GetWorkflowExecutions(entityID WorkflowEntityID) ([]*WorkflowExecution, error)
+	HasWorkflowExecution(id WorkflowExecutionID) (bool, error)
+	GetWorkflowExecutionLatestByEntityID(entityID WorkflowEntityID) (*WorkflowExecution, error)
+	GetWorkflowExecutionProperties(id WorkflowExecutionID, getters ...WorkflowExecutionPropertyGetter) error
+	SetWorkflowExecutionProperties(id WorkflowExecutionID, setters ...WorkflowExecutionPropertySetter) error
 
 	// Workflow Execution Data
-	AddWorkflowExecutionData(executionID int, data *WorkflowExecutionData) (int, error)
-	GetWorkflowExecutionData(id int) (*WorkflowExecutionData, error)
-	HasWorkflowExecutionData(id int) (bool, error)
-	GetWorkflowExecutionDataByExecutionID(executionID int) (*WorkflowExecutionData, error)
-	HasWorkflowExecutionDataByExecutionID(executionID int) (bool, error)
-	GetWorkflowExecutionDataProperties(entityID int, getters ...WorkflowExecutionDataPropertyGetter) error
-	SetWorkflowExecutionDataProperties(entityID int, setters ...WorkflowExecutionDataPropertySetter) error
+	AddWorkflowExecutionData(executionID WorkflowExecutionID, data *WorkflowExecutionData) (WorkflowExecutionDataID, error)
+	GetWorkflowExecutionData(id WorkflowExecutionDataID) (*WorkflowExecutionData, error)
+	HasWorkflowExecutionData(id WorkflowExecutionDataID) (bool, error)
+	GetWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (*WorkflowExecutionData, error)
+	HasWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (bool, error)
+	GetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error
+	SetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error
 
 	// ACTIVITY-RELATED OPERATIONS
 	// Activity Entity
-	AddActivityEntity(entity *ActivityEntity, parentWorkflowID int) (int, error)
-	GetActivityEntity(id int, opts ...ActivityEntityGetOption) (*ActivityEntity, error)
-	GetActivityEntities(workflowID int, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error)
-	HasActivityEntity(id int) (bool, error)
+	AddActivityEntity(entity *ActivityEntity, parentWorkflowID WorkflowEntityID) (ActivityEntityID, error)
+	GetActivityEntity(id ActivityEntityID, opts ...ActivityEntityGetOption) (*ActivityEntity, error)
+	GetActivityEntities(workflowID WorkflowEntityID, opts ...ActivityEntityGetOption) ([]*ActivityEntity, error)
+	HasActivityEntity(id ActivityEntityID) (bool, error)
 	UpdateActivityEntity(entity *ActivityEntity) error
-	GetActivityEntityProperties(id int, getters ...ActivityEntityPropertyGetter) error
-	SetActivityEntityProperties(id int, setters ...ActivityEntityPropertySetter) error
+	GetActivityEntityProperties(id ActivityEntityID, getters ...ActivityEntityPropertyGetter) error
+	SetActivityEntityProperties(id ActivityEntityID, setters ...ActivityEntityPropertySetter) error
 
 	// Activity Data
-	AddActivityData(entityID int, data *ActivityData) (int, error)
-	GetActivityData(id int) (*ActivityData, error)
-	HasActivityData(id int) (bool, error)
-	GetActivityDataByEntityID(entityID int) (*ActivityData, error)
-	HasActivityDataByEntityID(entityID int) (bool, error)
-	GetActivityDataProperties(entityID int, getters ...ActivityDataPropertyGetter) error
-	SetActivityDataProperties(entityID int, setters ...ActivityDataPropertySetter) error
+	AddActivityData(entityID ActivityEntityID, data *ActivityData) (ActivityDataID, error)
+	GetActivityData(id ActivityDataID) (*ActivityData, error)
+	HasActivityData(id ActivityDataID) (bool, error)
+	GetActivityDataByEntityID(entityID ActivityEntityID) (*ActivityData, error)
+	HasActivityDataByEntityID(entityID ActivityEntityID) (bool, error)
+	GetActivityDataProperties(entityID ActivityEntityID, getters ...ActivityDataPropertyGetter) error
+	SetActivityDataProperties(entityID ActivityEntityID, setters ...ActivityDataPropertySetter) error
 
 	// Activity Execution
-	AddActivityExecution(exec *ActivityExecution) (int, error)
-	GetActivityExecution(id int, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
-	HasActivityExecution(id int) (bool, error)
-	GetActivityExecutions(entityID int) ([]*ActivityExecution, error)
-	GetActivityExecutionLatestByEntityID(entityID int) (*ActivityExecution, error)
-	GetActivityExecutionProperties(id int, getters ...ActivityExecutionPropertyGetter) error
-	SetActivityExecutionProperties(id int, setters ...ActivityExecutionPropertySetter) error
+	AddActivityExecution(exec *ActivityExecution) (ActivityExecutionID, error)
+	GetActivityExecution(id ActivityExecutionID, opts ...ActivityExecutionGetOption) (*ActivityExecution, error)
+	HasActivityExecution(id ActivityExecutionID) (bool, error)
+	GetActivityExecutions(entityID ActivityEntityID) ([]*ActivityExecution, error)
+	GetActivityExecutionLatestByEntityID(entityID ActivityEntityID) (*ActivityExecution, error)
+	GetActivityExecutionProperties(id ActivityExecutionID, getters ...ActivityExecutionPropertyGetter) error
+	SetActivityExecutionProperties(id ActivityExecutionID, setters ...ActivityExecutionPropertySetter) error
 
 	// Activity Execution Data
-	AddActivityExecutionData(executionID int, data *ActivityExecutionData) (int, error)
-	GetActivityExecutionData(id int) (*ActivityExecutionData, error)
-	HasActivityExecutionData(id int) (bool, error)
-	GetActivityExecutionDataByExecutionID(executionID int) (*ActivityExecutionData, error)
-	HasActivityExecutionDataByExecutionID(executionID int) (bool, error)
-	GetActivityExecutionDataProperties(entityID int, getters ...ActivityExecutionDataPropertyGetter) error
-	SetActivityExecutionDataProperties(entityID int, setters ...ActivityExecutionDataPropertySetter) error
+	AddActivityExecutionData(executionID ActivityExecutionID, data *ActivityExecutionData) (ActivityExecutionDataID, error)
+	GetActivityExecutionData(id ActivityExecutionDataID) (*ActivityExecutionData, error)
+	HasActivityExecutionData(id ActivityExecutionDataID) (bool, error)
+	GetActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (*ActivityExecutionData, error)
+	HasActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (bool, error)
+	GetActivityExecutionDataProperties(entityID ActivityExecutionID, getters ...ActivityExecutionDataPropertyGetter) error
+	SetActivityExecutionDataProperties(entityID ActivityExecutionID, setters ...ActivityExecutionDataPropertySetter) error
 
 	// SAGA-RELATED OPERATIONS
 	// Saga Entity
-	AddSagaEntity(entity *SagaEntity, parentWorkflowID int) (int, error)
-	GetSagaEntity(id int, opts ...SagaEntityGetOption) (*SagaEntity, error)
-	GetSagaEntities(workflowID int, opts ...SagaEntityGetOption) ([]*SagaEntity, error)
-	HasSagaEntity(id int) (bool, error)
+	AddSagaEntity(entity *SagaEntity, parentWorkflowID WorkflowEntityID) (SagaEntityID, error)
+	GetSagaEntity(id SagaEntityID, opts ...SagaEntityGetOption) (*SagaEntity, error)
+	GetSagaEntities(workflowID WorkflowEntityID, opts ...SagaEntityGetOption) ([]*SagaEntity, error)
+	HasSagaEntity(id SagaEntityID) (bool, error)
 	UpdateSagaEntity(entity *SagaEntity) error
-	GetSagaEntityProperties(id int, getters ...SagaEntityPropertyGetter) error
-	SetSagaEntityProperties(id int, setters ...SagaEntityPropertySetter) error
+	GetSagaEntityProperties(id SagaEntityID, getters ...SagaEntityPropertyGetter) error
+	SetSagaEntityProperties(id SagaEntityID, setters ...SagaEntityPropertySetter) error
 
 	// Saga Data
-	AddSagaData(entityID int, data *SagaData) (int, error)
-	GetSagaData(id int) (*SagaData, error)
-	HasSagaData(id int) (bool, error)
-	GetSagaDataByEntityID(entityID int) (*SagaData, error)
-	HasSagaDataByEntityID(entityID int) (bool, error)
-	GetSagaDataProperties(entityID int, getters ...SagaDataPropertyGetter) error
-	SetSagaDataProperties(entityID int, setters ...SagaDataPropertySetter) error
+	AddSagaData(entityID SagaEntityID, data *SagaData) (SagaDataID, error)
+	GetSagaData(id SagaDataID) (*SagaData, error)
+	HasSagaData(id SagaDataID) (bool, error)
+	GetSagaDataByEntityID(entityID SagaEntityID) (*SagaData, error)
+	HasSagaDataByEntityID(entityID SagaEntityID) (bool, error)
+	GetSagaDataProperties(entityID SagaEntityID, getters ...SagaDataPropertyGetter) error
+	SetSagaDataProperties(entityID SagaEntityID, setters ...SagaDataPropertySetter) error
 
 	// Saga Execution
-	AddSagaExecution(exec *SagaExecution) (int, error)
-	GetSagaExecution(id int, opts ...SagaExecutionGetOption) (*SagaExecution, error)
-	GetSagaExecutions(entityID int) ([]*SagaExecution, error)
-	HasSagaExecution(id int) (bool, error)
-	GetSagaExecutionProperties(id int, getters ...SagaExecutionPropertyGetter) error
-	SetSagaExecutionProperties(id int, setters ...SagaExecutionPropertySetter) error
+	AddSagaExecution(exec *SagaExecution) (SagaExecutionID, error)
+	GetSagaExecution(id SagaExecutionID, opts ...SagaExecutionGetOption) (*SagaExecution, error)
+	GetSagaExecutions(entityID SagaEntityID) ([]*SagaExecution, error)
+	HasSagaExecution(id SagaExecutionID) (bool, error)
+	GetSagaExecutionProperties(id SagaExecutionID, getters ...SagaExecutionPropertyGetter) error
+	SetSagaExecutionProperties(id SagaExecutionID, setters ...SagaExecutionPropertySetter) error
 
 	// Saga Execution Data
-	AddSagaExecutionData(executionID int, data *SagaExecutionData) (int, error)
-	GetSagaExecutionData(id int) (*SagaExecutionData, error)
-	HasSagaExecutionData(id int) (bool, error)
-	GetSagaExecutionDataByExecutionID(executionID int) (*SagaExecutionData, error)
-	HasSagaExecutionDataByExecutionID(executionID int) (bool, error)
-	GetSagaExecutionDataProperties(entityID int, getters ...SagaExecutionDataPropertyGetter) error
-	SetSagaExecutionDataProperties(entityID int, setters ...SagaExecutionDataPropertySetter) error
+	AddSagaExecutionData(executionID SagaExecutionID, data *SagaExecutionData) (SagaExecutionDataID, error)
+	GetSagaExecutionData(id SagaExecutionDataID) (*SagaExecutionData, error)
+	HasSagaExecutionData(id SagaExecutionDataID) (bool, error)
+	GetSagaExecutionDataByExecutionID(executionID SagaExecutionID) (*SagaExecutionData, error)
+	HasSagaExecutionDataByExecutionID(executionID SagaExecutionID) (bool, error)
+	GetSagaExecutionDataProperties(entityID SagaExecutionID, getters ...SagaExecutionDataPropertyGetter) error
+	SetSagaExecutionDataProperties(entityID SagaExecutionID, setters ...SagaExecutionDataPropertySetter) error
 
 	// Saga Context operations
-	SetSagaValue(executionID int, key string, value []byte) (int, error) // return the ID of the sagaValue
-	GetSagaValue(id int, key string) ([]byte, error)
-	GetSagaValueByExecutionID(executionID int, key string) ([]byte, error) // using the executionID plus key to access it
+	SetSagaValue(executionID SagaExecutionID, key string, value []byte) (SagaValueID, error) // return the ID of the sagaValue
+	GetSagaValue(id SagaValueID, key string) ([]byte, error)
+	GetSagaValueByExecutionID(executionID SagaExecutionID, key string) ([]byte, error) // using the executionID plus key to access it
 
 	// SIDE-EFFECT-RELATED OPERATIONS
 	// SideEffect Entity
-	AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID int) (int, error)
-	GetSideEffectEntity(id int, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error)
-	GetSideEffectEntities(workflowID int, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error)
-	HasSideEffectEntity(id int) (bool, error)
+	AddSideEffectEntity(entity *SideEffectEntity, parentWorkflowID WorkflowEntityID) (SideEffectEntityID, error)
+	GetSideEffectEntity(id SideEffectEntityID, opts ...SideEffectEntityGetOption) (*SideEffectEntity, error)
+	GetSideEffectEntities(workflowID WorkflowEntityID, opts ...SideEffectEntityGetOption) ([]*SideEffectEntity, error)
+	HasSideEffectEntity(id SideEffectEntityID) (bool, error)
 	UpdateSideEffectEntity(entity *SideEffectEntity) error
-	GetSideEffectEntityProperties(id int, getters ...SideEffectEntityPropertyGetter) error
-	SetSideEffectEntityProperties(id int, setters ...SideEffectEntityPropertySetter) error
+	GetSideEffectEntityProperties(id SideEffectEntityID, getters ...SideEffectEntityPropertyGetter) error
+	SetSideEffectEntityProperties(id SideEffectEntityID, setters ...SideEffectEntityPropertySetter) error
 
 	// SideEffect Data
-	AddSideEffectData(entityID int, data *SideEffectData) (int, error)
-	GetSideEffectData(id int) (*SideEffectData, error)
-	HasSideEffectData(id int) (bool, error)
-	GetSideEffectDataByEntityID(entityID int) (*SideEffectData, error)
-	HasSideEffectDataByEntityID(entityID int) (bool, error)
-	GetSideEffectDataProperties(entityID int, getters ...SideEffectDataPropertyGetter) error
-	SetSideEffectDataProperties(entityID int, setters ...SideEffectDataPropertySetter) error
+	AddSideEffectData(entityID SideEffectEntityID, data *SideEffectData) (SideEffectDataID, error)
+	GetSideEffectData(id SideEffectDataID) (*SideEffectData, error)
+	HasSideEffectData(id SideEffectDataID) (bool, error)
+	GetSideEffectDataByEntityID(entityID SideEffectEntityID) (*SideEffectData, error)
+	HasSideEffectDataByEntityID(entityID SideEffectEntityID) (bool, error)
+	GetSideEffectDataProperties(entityID SideEffectEntityID, getters ...SideEffectDataPropertyGetter) error
+	SetSideEffectDataProperties(entityID SideEffectEntityID, setters ...SideEffectDataPropertySetter) error
 
 	// SideEffect Execution
-	AddSideEffectExecution(exec *SideEffectExecution) (int, error)
-	GetSideEffectExecution(id int, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
-	HasSideEffectExecution(id int) (bool, error)
-	GetSideEffectExecutions(entityID int) ([]*SideEffectExecution, error)
-	GetSideEffectExecutionProperties(id int, getters ...SideEffectExecutionPropertyGetter) error
-	SetSideEffectExecutionProperties(id int, setters ...SideEffectExecutionPropertySetter) error
+	AddSideEffectExecution(exec *SideEffectExecution) (SideEffectExecutionID, error)
+	GetSideEffectExecution(id SideEffectExecutionID, opts ...SideEffectExecutionGetOption) (*SideEffectExecution, error)
+	HasSideEffectExecution(id SideEffectExecutionID) (bool, error)
+	GetSideEffectExecutions(entityID SideEffectEntityID) ([]*SideEffectExecution, error)
+	GetSideEffectExecutionProperties(id SideEffectExecutionID, getters ...SideEffectExecutionPropertyGetter) error
+	SetSideEffectExecutionProperties(id SideEffectExecutionID, setters ...SideEffectExecutionPropertySetter) error
 
 	// SideEffect Execution Data
-	AddSideEffectExecutionData(executionID int, data *SideEffectExecutionData) (int, error)
-	GetSideEffectExecutionData(id int) (*SideEffectExecutionData, error)
-	HasSideEffectExecutionData(id int) (bool, error)
-	GetSideEffectExecutionDataByExecutionID(executionID int) (*SideEffectExecutionData, error)
-	HasSideEffectExecutionDataByExecutionID(executionID int) (bool, error)
-	GetSideEffectExecutionDataProperties(entityID int, getters ...SideEffectExecutionDataPropertyGetter) error
-	SetSideEffectExecutionDataProperties(entityID int, setters ...SideEffectExecutionDataPropertySetter) error
+	AddSideEffectExecutionData(executionID SideEffectExecutionID, data *SideEffectExecutionData) (SideEffectExecutionDataID, error)
+	GetSideEffectExecutionData(id SideEffectExecutionDataID) (*SideEffectExecutionData, error)
+	HasSideEffectExecutionData(id SideEffectExecutionDataID) (bool, error)
+	GetSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (*SideEffectExecutionData, error)
+	HasSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (bool, error)
+	GetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, getters ...SideEffectExecutionDataPropertyGetter) error
+	SetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, setters ...SideEffectExecutionDataPropertySetter) error
 
 	// RUN-RELATED OPERATIONS
-	AddRun(run *Run) (int, error)
-	GetRun(id int, opts ...RunGetOption) (*Run, error)
-	HasRun(id int) (bool, error)
+	AddRun(run *Run) (RunID, error)
+	GetRun(id RunID, opts ...RunGetOption) (*Run, error)
+	HasRun(id RunID) (bool, error)
 	UpdateRun(run *Run) error
-	GetRunProperties(id int, getters ...RunPropertyGetter) error
-	SetRunProperties(id int, setters ...RunPropertySetter) error
+	GetRunProperties(id RunID, getters ...RunPropertyGetter) error
+	SetRunProperties(id RunID, setters ...RunPropertySetter) error
 	DeleteRunsByStatus(status RunStatus) error
 	GetRunsPaginated(page, pageSize int, filter *RunFilter, sort *RunSort) (*PaginatedRuns, error)
 
 	// VERSION-RELATED OPERATIONS
-	AddVersion(version *Version) (int, error)
-	GetVersion(id int, opts ...VersionGetOption) (*Version, error)
-	HasVersion(id int) (bool, error)
+	AddVersion(version *Version) (VersionID, error)
+	GetVersion(id VersionID, opts ...VersionGetOption) (*Version, error)
+	HasVersion(id VersionID) (bool, error)
 	UpdateVersion(version *Version) error
-	GetVersionByWorkflowAndChangeID(workflowID int, changeID string) (*Version, error)
-	GetVersionsByWorkflowID(workflowID int) ([]*Version, error)
+	GetVersionByWorkflowAndChangeID(workflowID WorkflowEntityID, changeID string) (*Version, error)
+	GetVersionsByWorkflowID(workflowID WorkflowEntityID) ([]*Version, error)
 	SetVersion(version *Version) error
-	GetVersionProperties(id int, getters ...VersionPropertyGetter) error
-	SetVersionProperties(id int, setters ...VersionPropertySetter) error
+	GetVersionProperties(id VersionID, getters ...VersionPropertyGetter) error
+	SetVersionProperties(id VersionID, setters ...VersionPropertySetter) error
 
 	// HIERARCHY-RELATED OPERATIONS
-	AddHierarchy(hierarchy *Hierarchy) (int, error)
-	GetHierarchy(id int, opts ...HierarchyGetOption) (*Hierarchy, error)
+	AddHierarchy(hierarchy *Hierarchy) (HierarchyID, error)
+	GetHierarchy(id HierarchyID, opts ...HierarchyGetOption) (*Hierarchy, error)
 	GetHierarchyByParentEntity(parentEntityID int, childStepID string, specificType EntityType) (*Hierarchy, error)
 	GetHierarchiesByParentEntityAndStep(parentEntityID int, childStepID string, specificType EntityType) ([]*Hierarchy, error)
-	HasHierarchy(id int) (bool, error)
+	HasHierarchy(id HierarchyID) (bool, error)
 	UpdateHierarchy(hierarchy *Hierarchy) error
-	GetHierarchyProperties(id int, getters ...HierarchyPropertyGetter) error
-	SetHierarchyProperties(id int, setters ...HierarchyPropertySetter) error
+	GetHierarchyProperties(id HierarchyID, getters ...HierarchyPropertyGetter) error
+	SetHierarchyProperties(id HierarchyID, setters ...HierarchyPropertySetter) error
 	// specific one, might refactor that
 	GetHierarchiesByChildEntity(childEntityID int) ([]*Hierarchy, error)
 	GetHierarchiesByParentEntity(parentEntityID int) ([]*Hierarchy, error)
 
 	// QUEUE-RELATED OPERATIONS
-	AddQueue(queue *Queue) (int, error)
-	GetQueue(id int, opts ...QueueGetOption) (*Queue, error)
+	AddQueue(queue *Queue) (QueueID, error)
+	GetQueue(id QueueID, opts ...QueueGetOption) (*Queue, error)
 	GetQueueByName(name string, opts ...QueueGetOption) (*Queue, error)
-	HasQueue(id int) (bool, error)
+	HasQueue(id QueueID) (bool, error)
 	HasQueueName(name string) (bool, error)
 	UpdateQueue(queue *Queue) error
-	GetQueueProperties(id int, getters ...QueuePropertyGetter) error
-	SetQueueProperties(id int, setters ...QueuePropertySetter) error
+	GetQueueProperties(id QueueID, getters ...QueuePropertyGetter) error
+	SetQueueProperties(id QueueID, setters ...QueuePropertySetter) error
 
 	// Signal Entity operations
-	AddSignalEntity(entity *SignalEntity, parentWorkflowID int) (int, error)
-	GetSignalEntity(id int, opts ...SignalEntityGetOption) (*SignalEntity, error)
-	GetSignalEntities(workflowID int, opts ...SignalEntityGetOption) ([]*SignalEntity, error)
-	HasSignalEntity(id int) (bool, error)
+	AddSignalEntity(entity *SignalEntity, parentWorkflowID WorkflowEntityID) (SignalEntityID, error)
+	GetSignalEntity(id SignalEntityID, opts ...SignalEntityGetOption) (*SignalEntity, error)
+	GetSignalEntities(workflowID WorkflowEntityID, opts ...SignalEntityGetOption) ([]*SignalEntity, error)
+	HasSignalEntity(id SignalEntityID) (bool, error)
 	UpdateSignalEntity(entity *SignalEntity) error
-	GetSignalEntityProperties(id int, getters ...SignalEntityPropertyGetter) error
-	SetSignalEntityProperties(id int, setters ...SignalEntityPropertySetter) error
+	GetSignalEntityProperties(id SignalEntityID, getters ...SignalEntityPropertyGetter) error
+	SetSignalEntityProperties(id SignalEntityID, setters ...SignalEntityPropertySetter) error
 
 	// Signal Data
-	AddSignalData(entityID int, data *SignalData) (int, error)
-	GetSignalData(id int) (*SignalData, error)
-	HasSignalData(id int) (bool, error)
-	GetSignalDataByEntityID(entityID int) (*SignalData, error)
-	HasSignalDataByEntityID(entityID int) (bool, error)
-	GetSignalDataProperties(entityID int, getters ...SignalDataPropertyGetter) error
-	SetSignalDataProperties(entityID int, setters ...SignalDataPropertySetter) error
+	AddSignalData(entityID SignalEntityID, data *SignalData) (SignalDataID, error)
+	GetSignalData(id SignalDataID) (*SignalData, error)
+	HasSignalData(id SignalDataID) (bool, error)
+	GetSignalDataByEntityID(entityID SignalEntityID) (*SignalData, error)
+	HasSignalDataByEntityID(entityID SignalEntityID) (bool, error)
+	GetSignalDataProperties(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error
+	SetSignalDataProperties(entityID SignalEntityID, setters ...SignalDataPropertySetter) error
 
 	// Signal Execution
-	AddSignalExecution(exec *SignalExecution) (int, error)
-	GetSignalExecution(id int, opts ...SignalExecutionGetOption) (*SignalExecution, error)
-	GetSignalExecutions(entityID int) ([]*SignalExecution, error)
-	HasSignalExecution(id int) (bool, error)
-	GetSignalExecutionLatestByEntityID(entityID int) (*SignalExecution, error)
-	GetSignalExecutionProperties(id int, getters ...SignalExecutionPropertyGetter) error
-	SetSignalExecutionProperties(id int, setters ...SignalExecutionPropertySetter) error
+	AddSignalExecution(exec *SignalExecution) (SignalExecutionID, error)
+	GetSignalExecution(id SignalExecutionID, opts ...SignalExecutionGetOption) (*SignalExecution, error)
+	GetSignalExecutions(entityID SignalEntityID) ([]*SignalExecution, error)
+	HasSignalExecution(id SignalExecutionID) (bool, error)
+	GetSignalExecutionLatestByEntityID(entityID SignalEntityID) (*SignalExecution, error)
+	GetSignalExecutionProperties(id SignalExecutionID, getters ...SignalExecutionPropertyGetter) error
+	SetSignalExecutionProperties(id SignalExecutionID, setters ...SignalExecutionPropertySetter) error
 
 	// Signal Execution Data
-	AddSignalExecutionData(executionID int, data *SignalExecutionData) (int, error)
-	GetSignalExecutionData(id int) (*SignalExecutionData, error)
-	HasSignalExecutionData(id int) (bool, error)
-	GetSignalExecutionDataByExecutionID(executionID int) (*SignalExecutionData, error)
-	HasSignalExecutionDataByExecutionID(executionID int) (bool, error)
-	GetSignalExecutionDataProperties(entityID int, getters ...SignalExecutionDataPropertyGetter) error
-	SetSignalExecutionDataProperties(entityID int, setters ...SignalExecutionDataPropertySetter) error
+	AddSignalExecutionData(executionID SignalExecutionID, data *SignalExecutionData) (SignalExecutionDataID, error)
+	GetSignalExecutionData(id SignalExecutionDataID) (*SignalExecutionData, error)
+	HasSignalExecutionData(id SignalExecutionDataID) (bool, error)
+	GetSignalExecutionDataByExecutionID(executionID SignalExecutionID) (*SignalExecutionData, error)
+	HasSignalExecutionDataByExecutionID(executionID SignalExecutionID) (bool, error)
+	GetSignalExecutionDataProperties(entityID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error
+	SetSignalExecutionDataProperties(entityID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error
 }
 
 // RetryPolicy helper functions
@@ -1245,495 +1284,4 @@ func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutp
 	}
 
 	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
-}
-
-// Copy functions
-func copyRun(run *Run) *Run {
-	if run == nil {
-		return nil
-	}
-
-	copy := &Run{
-		ID:        run.ID,
-		Status:    run.Status,
-		CreatedAt: run.CreatedAt,
-		UpdatedAt: run.UpdatedAt,
-	}
-
-	if run.Entities != nil {
-		copy.Entities = make([]*WorkflowEntity, len(run.Entities))
-		for i, entity := range run.Entities {
-			copy.Entities[i] = copyWorkflowEntity(entity)
-		}
-	}
-
-	if run.Hierarchies != nil {
-		copy.Hierarchies = make([]*Hierarchy, len(run.Hierarchies))
-		for i, hierarchy := range run.Hierarchies {
-			copy.Hierarchies[i] = copyHierarchy(hierarchy)
-		}
-	}
-
-	return copy
-}
-
-// func copyVersion(version *Version) *Version {
-// 	if version == nil {
-// 		return nil
-// 	}
-
-// 	copy := &Version{
-// 		ID:       version.ID,
-// 		EntityID: version.EntityID,
-// 		ChangeID: version.ChangeID,
-// 		Version:  version.Version,
-// 	}
-
-// 	if version.Data != nil {
-// 		copy.Data = make(map[string]interface{}, len(version.Data))
-// 		for k, v := range version.Data {
-// 			copy.Data[k] = v
-// 		}
-// 	}
-
-//		return copy
-//	}
-func copyVersion(v *Version) *Version {
-	if v == nil {
-		return nil
-	}
-	copied := *v
-	if v.Data != nil {
-		copied.Data = make(map[string]interface{})
-		for k, v := range v.Data {
-			copied.Data[k] = v
-		}
-	}
-	return &copied
-}
-
-func copyHierarchy(hierarchy *Hierarchy) *Hierarchy {
-	if hierarchy == nil {
-		return nil
-	}
-
-	return &Hierarchy{
-		ID:                hierarchy.ID,
-		RunID:             hierarchy.RunID,
-		ParentEntityID:    hierarchy.ParentEntityID,
-		ChildEntityID:     hierarchy.ChildEntityID,
-		ParentExecutionID: hierarchy.ParentExecutionID,
-		ChildExecutionID:  hierarchy.ChildExecutionID,
-		ParentStepID:      hierarchy.ParentStepID,
-		ChildStepID:       hierarchy.ChildStepID,
-		ParentType:        hierarchy.ParentType,
-		ChildType:         hierarchy.ChildType,
-	}
-}
-
-func copyQueue(queue *Queue) *Queue {
-	if queue == nil {
-		return nil
-	}
-
-	copy := &Queue{
-		ID:        queue.ID,
-		Name:      queue.Name,
-		CreatedAt: queue.CreatedAt,
-		UpdatedAt: queue.UpdatedAt,
-	}
-
-	if queue.Entities != nil {
-		copy.Entities = make([]*WorkflowEntity, len(queue.Entities))
-		for i, entity := range queue.Entities {
-			copy.Entities[i] = copyWorkflowEntity(entity)
-		}
-	}
-
-	return copy
-}
-
-func copyBaseEntity(base *BaseEntity) *BaseEntity {
-	if base == nil {
-		return nil
-	}
-
-	return &BaseEntity{
-		ID:          base.ID,
-		HandlerName: base.HandlerName,
-		Type:        base.Type,
-		Status:      base.Status,
-		QueueID:     base.QueueID,
-		StepID:      base.StepID,
-		CreatedAt:   base.CreatedAt,
-		UpdatedAt:   base.UpdatedAt,
-		RunID:       base.RunID,
-		RetryPolicy: base.RetryPolicy,
-		RetryState:  base.RetryState,
-	}
-}
-
-func copyBaseExecution(base *BaseExecution) *BaseExecution {
-	if base == nil {
-		return nil
-	}
-
-	copy := *base
-
-	if base.CompletedAt != nil {
-		completedAtCopy := *base.CompletedAt
-		copy.CompletedAt = &completedAtCopy
-	}
-
-	return &copy
-}
-
-// Entity Data copy functions
-func copyWorkflowData(data *WorkflowData) *WorkflowData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	// Deep copy versions map
-	if data.Versions != nil {
-		c.Versions = make(map[string]int)
-		for k, v := range data.Versions {
-			c.Versions[k] = v
-		}
-	}
-
-	if data.Inputs != nil {
-		c.Inputs = make([][]byte, len(data.Inputs))
-		for i, input := range data.Inputs {
-			inputCopy := make([]byte, len(input))
-			copy(inputCopy, input)
-			c.Inputs[i] = inputCopy
-		}
-	}
-
-	return &c
-}
-
-func copyWorkflowEntityEdges(e *WorkflowEntityEdges) *WorkflowEntityEdges {
-	if e == nil {
-		return nil
-	}
-	copy := *e
-	if e.Queue != nil {
-		copy.Queue = copyQueue(e.Queue)
-	}
-	if e.Versions != nil {
-		copy.Versions = make([]*Version, len(e.Versions))
-		for i, v := range e.Versions {
-			copy.Versions[i] = copyVersion(v)
-		}
-	}
-	if e.ActivityChildren != nil {
-		copy.ActivityChildren = make([]*ActivityEntity, len(e.ActivityChildren))
-		for i, a := range e.ActivityChildren {
-			copy.ActivityChildren[i] = copyActivityEntity(a)
-		}
-	}
-	if e.SagaChildren != nil {
-		copy.SagaChildren = make([]*SagaEntity, len(e.SagaChildren))
-		for i, s := range e.SagaChildren {
-			copy.SagaChildren[i] = copySagaEntity(s)
-		}
-	}
-	if e.SideEffectChildren != nil {
-		copy.SideEffectChildren = make([]*SideEffectEntity, len(e.SideEffectChildren))
-		for i, se := range e.SideEffectChildren {
-			copy.SideEffectChildren[i] = copySideEffectEntity(se)
-		}
-	}
-	return &copy
-}
-
-func copyActivityData(data *ActivityData) *ActivityData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	if data.Inputs != nil {
-		c.Inputs = make([][]byte, len(data.Inputs))
-		for i, input := range data.Inputs {
-			inputCopy := make([]byte, len(input))
-			copy(inputCopy, input)
-			c.Inputs[i] = inputCopy
-		}
-	}
-
-	if data.Output != nil {
-		c.Output = make([][]byte, len(data.Output))
-		for i, output := range data.Output {
-			outputCopy := make([]byte, len(output))
-			copy(outputCopy, output)
-			c.Output[i] = outputCopy
-		}
-	}
-
-	return &c
-}
-
-func copySagaData(data *SagaData) *SagaData {
-	if data == nil {
-		return nil
-	}
-	return &SagaData{
-		ID:       data.ID,
-		EntityID: data.EntityID,
-	}
-}
-
-func copySagaExecutionData(data *SagaExecutionData) *SagaExecutionData {
-	if data == nil {
-		return nil
-	}
-
-	c := &SagaExecutionData{
-		ID:          data.ID,
-		ExecutionID: data.ExecutionID,
-		StepIndex:   data.StepIndex,
-	}
-
-	if data.LastHeartbeat != nil {
-		heartbeatCopy := *data.LastHeartbeat
-		c.LastHeartbeat = &heartbeatCopy
-	}
-
-	return c
-}
-
-func copySagaExecution(exec *SagaExecution) *SagaExecution {
-	if exec == nil {
-		return nil
-	}
-
-	return &SagaExecution{
-		BaseExecution:     *copyBaseExecution(&exec.BaseExecution),
-		ExecutionType:     exec.ExecutionType,
-		SagaExecutionData: copySagaExecutionData(exec.SagaExecutionData),
-	}
-}
-
-func copySagaEntity(entity *SagaEntity) *SagaEntity {
-	if entity == nil {
-		return nil
-	}
-
-	return &SagaEntity{
-		BaseEntity: *copyBaseEntity(&entity.BaseEntity),
-		SagaData:   copySagaData(entity.SagaData),
-	}
-}
-
-func copySideEffectData(data *SideEffectData) *SideEffectData {
-	if data == nil {
-		return nil
-	}
-	copy := *data
-	return &copy
-}
-
-// Execution Data copy functions
-func copyWorkflowExecutionData(data *WorkflowExecutionData) *WorkflowExecutionData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	if data.LastHeartbeat != nil {
-		heartbeatCopy := *data.LastHeartbeat
-		c.LastHeartbeat = &heartbeatCopy
-	}
-
-	if data.Outputs != nil {
-		c.Outputs = make([][]byte, len(data.Outputs))
-		for i, output := range data.Outputs {
-			outputCopy := make([]byte, len(output))
-			copy(outputCopy, output)
-			c.Outputs[i] = outputCopy
-		}
-	}
-
-	return &c
-}
-
-func copyActivityExecutionData(data *ActivityExecutionData) *ActivityExecutionData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	if data.LastHeartbeat != nil {
-		heartbeatCopy := *data.LastHeartbeat
-		c.LastHeartbeat = &heartbeatCopy
-	}
-
-	if data.Outputs != nil {
-		c.Outputs = make([][]byte, len(data.Outputs))
-		for i, output := range data.Outputs {
-			outputCopy := make([]byte, len(output))
-			copy(outputCopy, output)
-			c.Outputs[i] = outputCopy
-		}
-	}
-
-	return &c
-}
-
-func copySideEffectExecutionData(data *SideEffectExecutionData) *SideEffectExecutionData {
-	if data == nil {
-		return nil
-	}
-
-	c := *data
-
-	if data.Outputs != nil {
-		c.Outputs = make([][]byte, len(data.Outputs))
-		for i, output := range data.Outputs {
-			outputCopy := make([]byte, len(output))
-			copy(outputCopy, output)
-			c.Outputs[i] = outputCopy
-		}
-	}
-
-	return &c
-}
-
-// Entity copy functions
-func copyWorkflowEntity(entity *WorkflowEntity) *WorkflowEntity {
-	if entity == nil {
-		return nil
-	}
-
-	copy := WorkflowEntity{
-		BaseEntity:   *copyBaseEntity(&entity.BaseEntity),
-		WorkflowData: copyWorkflowData(entity.WorkflowData),
-		Edges:        copyWorkflowEntityEdges(entity.Edges),
-	}
-
-	return &copy
-}
-
-func copyActivityEntity(entity *ActivityEntity) *ActivityEntity {
-	if entity == nil {
-		return nil
-	}
-
-	copy := ActivityEntity{
-		BaseEntity:   *copyBaseEntity(&entity.BaseEntity),
-		ActivityData: copyActivityData(entity.ActivityData),
-	}
-
-	return &copy
-}
-
-func copySideEffectEntity(entity *SideEffectEntity) *SideEffectEntity {
-	if entity == nil {
-		return nil
-	}
-
-	copy := SideEffectEntity{
-		BaseEntity:     *copyBaseEntity(&entity.BaseEntity),
-		SideEffectData: copySideEffectData(entity.SideEffectData),
-	}
-
-	return &copy
-}
-
-// Execution copy functions
-func copyWorkflowExecution(exec *WorkflowExecution) *WorkflowExecution {
-	if exec == nil {
-		return nil
-	}
-
-	copy := WorkflowExecution{
-		BaseExecution:         *copyBaseExecution(&exec.BaseExecution),
-		WorkflowExecutionData: copyWorkflowExecutionData(exec.WorkflowExecutionData),
-	}
-
-	return &copy
-}
-
-func copyActivityExecution(exec *ActivityExecution) *ActivityExecution {
-	if exec == nil {
-		return nil
-	}
-
-	copy := ActivityExecution{
-		BaseExecution:         *copyBaseExecution(&exec.BaseExecution),
-		ActivityExecutionData: copyActivityExecutionData(exec.ActivityExecutionData),
-	}
-
-	return &copy
-}
-
-func copySideEffectExecution(exec *SideEffectExecution) *SideEffectExecution {
-	if exec == nil {
-		return nil
-	}
-
-	copy := SideEffectExecution{
-		BaseExecution:           *copyBaseExecution(&exec.BaseExecution),
-		SideEffectExecutionData: copySideEffectExecutionData(exec.SideEffectExecutionData),
-	}
-
-	return &copy
-}
-
-func copySignalEntity(entity *SignalEntity) *SignalEntity {
-	if entity == nil {
-		return nil
-	}
-	copy := *entity
-
-	if entity.SignalData != nil {
-		copy.SignalData = copySignalData(entity.SignalData)
-	}
-
-	return &copy
-}
-
-func copySignalData(data *SignalData) *SignalData {
-	if data == nil {
-		return nil
-	}
-	copy := *data
-	return &copy
-}
-
-func copySignalExecution(exec *SignalExecution) *SignalExecution {
-	if exec == nil {
-		return nil
-	}
-	copy := SignalExecution{
-		BaseExecution: *copyBaseExecution(&exec.BaseExecution),
-	}
-
-	if exec.SignalExecutionData != nil {
-		copy.SignalExecutionData = copySignalExecutionData(exec.SignalExecutionData)
-	}
-
-	return &copy
-}
-
-func copySignalExecutionData(data *SignalExecutionData) *SignalExecutionData {
-	if data == nil {
-		return nil
-	}
-	c := *data
-
-	if data.Value != nil {
-		c.Value = make([]byte, len(data.Value))
-		copy(c.Value, data.Value)
-	}
-
-	return &c
 }

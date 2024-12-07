@@ -364,7 +364,7 @@ func testConcurrentVersionOperations(t *testing.T, db *MemoryDatabase) {
 
 			// Create version
 			version := &Version{
-				EntityID: i,
+				EntityID: WorkflowEntityID(i),
 				ChangeID: fmt.Sprintf("change_%d", i),
 				Version:  i,
 				Data: map[string]interface{}{
