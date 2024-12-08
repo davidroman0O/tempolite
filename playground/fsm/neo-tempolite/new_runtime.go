@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/qmuntal/stateless"
@@ -32,7 +31,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -207,9 +206,6 @@ type Future interface {
 
 	setParentWorkflowID(id WorkflowEntityID) error
 	setParentWorkflowExecutionID(id WorkflowExecutionID) error
-
-	// IsReady() chan struct{}
-	// resolve()
 
 	WorkflowID() WorkflowEntityID
 	WorkflowExecutionID() WorkflowExecutionID
@@ -659,51 +655,51 @@ type WorkflowInstance struct {
 
 // Future implementation of direct calling
 type RuntimeFuture struct {
-	mu      sync.Mutex
+	// Protects state access
+	mu deadlock.RWMutex
+
+	// Core state
 	results []interface{}
 	err     error
-	done    chan struct{}
+	doneCh  chan struct{}
+	closed  bool
 
-	once       sync.Once
-	continueAs int
-
-	// Entity/Execuction Workflow
+	// Workflow identifiers
 	parentWorkflowID          WorkflowEntityID
 	parentWorkflowExecutionID WorkflowExecutionID
-
-	entity FutureEntity
-	exec   FutureExecution
-
-	// hasExecution chan struct{}
+	entity                    FutureEntity
+	exec                      FutureExecution
 }
 
 func NewRuntimeFuture() Future {
 	return &RuntimeFuture{
-		done: make(chan struct{}),
-		// hasExecution: make(chan struct{}),
+		doneCh: make(chan struct{}),
 	}
 }
 
-// func (f *RuntimeFuture) IsReady() chan struct{} {
-// 	return f.hasExecution
-// }
-
-// func (f *RuntimeFuture) resolve() {
-// 	close(f.hasExecution)
-// }
-
 func (f *RuntimeFuture) HasEntity() bool {
-	return f.entity.workflowID != nil || f.entity.activityID != nil || f.entity.sagaID != nil || f.entity.sideEffectID != nil
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.entity.workflowID != nil || f.entity.activityID != nil ||
+		f.entity.sagaID != nil || f.entity.sideEffectID != nil
 }
 
 func (f *RuntimeFuture) HasExecution() bool {
-	return f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil || f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil ||
+		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil
 }
 
 func (f *RuntimeFuture) setEntityID(fn futureEntityOption) error {
-	if f.HasEntity() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.entity.workflowID != nil || f.entity.activityID != nil ||
+		f.entity.sagaID != nil || f.entity.sideEffectID != nil {
 		return fmt.Errorf("entity already set")
 	}
+
 	e := &FutureEntity{}
 	fn(e)
 	f.entity = *e
@@ -711,9 +707,14 @@ func (f *RuntimeFuture) setEntityID(fn futureEntityOption) error {
 }
 
 func (f *RuntimeFuture) setExecutionID(fn futureExecutionOption) error {
-	if f.HasExecution() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil ||
+		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil {
 		return fmt.Errorf("execution already set")
 	}
+
 	e := &FutureExecution{}
 	fn(e)
 	f.exec = *e
@@ -721,6 +722,9 @@ func (f *RuntimeFuture) setExecutionID(fn futureExecutionOption) error {
 }
 
 func (f *RuntimeFuture) EntityID() interface{} {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	if f.entity.workflowID != nil {
 		return *f.entity.workflowID
 	}
@@ -737,6 +741,9 @@ func (f *RuntimeFuture) EntityID() interface{} {
 }
 
 func (f *RuntimeFuture) ExecutionID() interface{} {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	if f.exec.workflowExecutionID != nil {
 		return *f.exec.workflowExecutionID
 	}
@@ -753,6 +760,9 @@ func (f *RuntimeFuture) ExecutionID() interface{} {
 }
 
 func (f *RuntimeFuture) Type() EntityType {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	if f.entity.workflowID != nil {
 		return EntityWorkflow
 	}
@@ -769,6 +779,9 @@ func (f *RuntimeFuture) Type() EntityType {
 }
 
 func (f *RuntimeFuture) setParentWorkflowID(id WorkflowEntityID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.parentWorkflowID != 0 {
 		return fmt.Errorf("parent workflow already set")
 	}
@@ -777,6 +790,9 @@ func (f *RuntimeFuture) setParentWorkflowID(id WorkflowEntityID) error {
 }
 
 func (f *RuntimeFuture) setParentWorkflowExecutionID(id WorkflowExecutionID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	if f.parentWorkflowExecutionID != 0 {
 		return fmt.Errorf("parent workflow execution already set")
 	}
@@ -785,6 +801,9 @@ func (f *RuntimeFuture) setParentWorkflowExecutionID(id WorkflowExecutionID) err
 }
 
 func (f *RuntimeFuture) WorkflowID() WorkflowEntityID {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	if f.entity.workflowID != nil {
 		return *f.entity.workflowID
 	}
@@ -792,6 +811,9 @@ func (f *RuntimeFuture) WorkflowID() WorkflowEntityID {
 }
 
 func (f *RuntimeFuture) WorkflowExecutionID() WorkflowExecutionID {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	if f.exec.workflowExecutionID != nil {
 		return *f.exec.workflowExecutionID
 	}
@@ -799,83 +821,130 @@ func (f *RuntimeFuture) WorkflowExecutionID() WorkflowExecutionID {
 }
 
 func (f *RuntimeFuture) ParentWorkflowID() WorkflowEntityID {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	return f.parentWorkflowID
 }
 
 func (f *RuntimeFuture) ParentWorkflowExecutionID() WorkflowExecutionID {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	return f.parentWorkflowExecutionID
 }
 
 func (f *RuntimeFuture) IsPaused() bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return errors.Is(f.err, ErrPaused)
+}
+
+func (f *RuntimeFuture) complete() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if errors.Is(f.err, ErrPaused) {
-		return true
+
+	if !f.closed {
+		close(f.doneCh)
+		f.closed = true
 	}
-	return false
 }
 
 func (f *RuntimeFuture) setResult(results []interface{}) {
 	f.mu.Lock()
-	f.results = results
-	logger.Debug(context.Background(), "future set results", "future.results", len(results), "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+	logWorkflowID := f.parentWorkflowID
+	logExecutionID := f.parentWorkflowExecutionID
+	f.results = make([]interface{}, len(results))
+	copy(f.results, results)
 	f.mu.Unlock()
-	f.once.Do(func() {
-		close(f.done)
-	})
+
+	logger.Debug(context.Background(), "future set results",
+		"future.results", len(results),
+		"future.workflow_id", logWorkflowID,
+		"future.workflow_execution_id", logExecutionID)
+
+	f.complete()
 }
 
 func (f *RuntimeFuture) setError(err error) {
 	f.mu.Lock()
+	logWorkflowID := f.parentWorkflowID
+	logExecutionID := f.parentWorkflowExecutionID
 	f.err = err
-	logger.Debug(context.Background(), "future set error", "future.error", err, "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
 	f.mu.Unlock()
-	f.once.Do(func() {
-		close(f.done)
-	})
+
+	logger.Debug(context.Background(), "future set error",
+		"future.error", err,
+		"future.workflow_id", logWorkflowID,
+		"future.workflow_execution_id", logExecutionID)
+
+	f.complete()
 }
 
 func (f *RuntimeFuture) GetResults() ([]interface{}, error) {
-	logger.Debug(context.Background(), "future wait results", "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+	// Wait for completion without holding lock
+	<-f.doneCh
 
-	<-f.done
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	f.mu.RLock()
+	logWorkflowID := f.parentWorkflowID
+	logExecutionID := f.parentWorkflowExecutionID
 
-	logger.Debug(context.Background(), "future get results", "future.results", len(f.results), "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+	logger.Debug(context.Background(), "future get results",
+		"future.results", len(f.results),
+		"future.workflow_id", logWorkflowID,
+		"future.workflow_execution_id", logExecutionID)
 
 	if f.err != nil {
-		logger.Debug(context.Background(), "future get results error", "future.error", f.err, "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
-		return nil, f.err
+		logger.Debug(context.Background(), "future get results error",
+			"future.error", f.err,
+			"future.workflow_id", logWorkflowID,
+			"future.workflow_execution_id", logExecutionID)
+		rerr := f.err
+		f.mu.RUnlock()
+		return nil, rerr
 	}
 
-	// Return a copy of results to prevent modification
+	// Make a copy of results
 	results := make([]interface{}, len(f.results))
 	copy(results, f.results)
+	f.mu.RUnlock()
 
 	return results, nil
 }
 
 func (f *RuntimeFuture) Get(out ...interface{}) error {
+	// Wait for completion without holding lock
+	<-f.doneCh
 
-	logger.Debug(context.Background(), "future wait get", "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 
-	<-f.done
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	logWorkflowID := f.parentWorkflowID
+	logExecutionID := f.parentWorkflowExecutionID
+
+	logger.Debug(context.Background(), "future wait get",
+		"future.workflow_id", logWorkflowID,
+		"future.workflow_execution_id", logExecutionID)
+
 	if f.err != nil {
-		logger.Debug(context.Background(), "future get error", "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+		logger.Debug(context.Background(), "future get error",
+			"future.workflow_id", logWorkflowID,
+			"future.workflow_execution_id", logExecutionID)
 		return f.err
 	}
 
 	if len(out) == 0 {
-		logger.Debug(context.Background(), "future get no output", "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+		logger.Debug(context.Background(), "future get no output",
+			"future.workflow_id", logWorkflowID,
+			"future.workflow_execution_id", logExecutionID)
 		return nil
 	}
 
 	if len(out) > len(f.results) {
-		err := errors.Join(ErrGetResults, fmt.Errorf("number of outputs (%d) exceeds number of results (%d)", len(out), len(f.results)))
-		logger.Error(context.Background(), err.Error(), "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+		err := errors.Join(ErrGetResults,
+			fmt.Errorf("number of outputs (%d) exceeds number of results (%d)",
+				len(out), len(f.results)))
+		logger.Error(context.Background(), err.Error(),
+			"future.workflow_id", logWorkflowID,
+			"future.workflow_execution_id", logExecutionID)
 		return err
 	}
 
@@ -883,15 +952,21 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 		val := reflect.ValueOf(out[i])
 		if val.Kind() != reflect.Ptr {
 			err := errors.Join(ErrGetResults, ErrMustPointer)
-			logger.Error(context.Background(), err.Error(), "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+			logger.Error(context.Background(), err.Error(),
+				"future.workflow_id", logWorkflowID,
+				"future.workflow_execution_id", logExecutionID)
 			return err
 		}
 		val = val.Elem()
 
 		result := reflect.ValueOf(f.results[i])
 		if !result.Type().AssignableTo(val.Type()) {
-			err := errors.Join(ErrGetResults, fmt.Errorf("cannot assign type %v to %v for parameter %d", result.Type(), val.Type(), i))
-			logger.Error(context.Background(), err.Error(), "future.workflow_id", f.parentWorkflowID, "future.workflow_execution_id", f.parentWorkflowExecutionID, "future.entity_ID", f.EntityID(), "future.execution_id", f.ExecutionID())
+			err := errors.Join(ErrGetResults,
+				fmt.Errorf("cannot assign type %v to %v for parameter %d",
+					result.Type(), val.Type(), i))
+			logger.Error(context.Background(), err.Error(),
+				"future.workflow_id", logWorkflowID,
+				"future.workflow_execution_id", logExecutionID)
 			return err
 		}
 
@@ -2372,8 +2447,6 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
 		return err
 	}
-
-	fmt.Println(wi.future.WorkflowID(), wi.future.WorkflowExecutionID(), wi.future.EntityID(), wi.future.ExecutionID())
 
 	// Normal completion
 	// if wi.future != nil {

@@ -457,10 +457,14 @@ func TestTempoliteWorkflowsConcurrent(t *testing.T) {
 	ctx := context.Background()
 	db := NewMemoryDatabase()
 
+	defer db.SaveAsJSON("./json/tempolite_workflows_concurrent.json")
+
+	howMuch := 1000
+
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(100),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -472,10 +476,10 @@ func TestTempoliteWorkflowsConcurrent(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	errChan := make(chan error, 10)
+	errChan := make(chan error, howMuch)
 
 	// Launch workflows concurrently
-	for i := 0; i < 10; i++ {
+	for i := 0; i < howMuch; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
