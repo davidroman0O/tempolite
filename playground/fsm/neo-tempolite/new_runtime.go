@@ -124,6 +124,8 @@ var (
 	ErrSignalInstanceCompleted = errors.New("failed to complete signal instance")
 	ErrSignalInstanceFailed    = errors.New("failed to fail signal instance")
 	ErrSignalInstancePaused    = errors.New("failed to pause signal instance")
+
+	ErrSagaInstanceNotFound = errors.New("saga instance not found")
 )
 
 type FutureEntity struct {
@@ -276,6 +278,8 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key)
 		return err
 	}
+
+	fmt.Println("key", key, "executionID", tc.executionID)
 
 	if data, err = tc.db.GetSagaValueByExecutionID(tc.executionID, key); err != nil {
 		err := errors.Join(ErrSagaGetValue, err)
@@ -992,6 +996,7 @@ type InstanceTracker interface {
 	addSagaInstance(si *SagaInstance)
 	newRoot(root *WorkflowInstance)
 	findSagaInstance(stepID string) (*SagaInstance, error)
+	hasSagaInstance(stepID string) bool
 	onPause() error
 	reset()
 }
@@ -1099,6 +1104,16 @@ func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
 	err := errors.Join(ErrOrchestrator, fmt.Errorf("not found step %s", stepID))
 	logger.Error(o.ctx, err.Error(), "orchestrator.find_saga_instance.step_id", stepID)
 	return nil, err
+}
+
+func (o *Orchestrator) hasSagaInstance(stepID string) bool {
+	logger.Debug(o.ctx, "orchestrator has saga instance", "orchestrator.has_saga_instance.step_id", stepID)
+	for _, saga := range o.sagas {
+		if saga.stepID == stepID {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *Orchestrator) reset() {
@@ -3763,15 +3778,12 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 		return future
 	}
 
-	var existingSaga *SagaInstance
-
-	// First check if we already have a saga instance for this stepID
-	if existingSaga, err = ctx.tracker.findSagaInstance(stepID); err == nil {
-		return existingSaga.future
-	}
-
-	if existingSaga == nil {
-		logger.Debug(ctx.ctx, "ignore previous error - saga context create new", "workflow_id", ctx.workflowID, "step_id", stepID)
+	if ctx.tracker.hasSagaInstance(stepID) {
+		var existingSaga *SagaInstance
+		// First check if we already have a saga instance for this stepID
+		if existingSaga, err = ctx.tracker.findSagaInstance(stepID); err == nil {
+			return existingSaga.future
+		}
 	}
 
 	future := NewRuntimeFuture()
@@ -3861,6 +3873,11 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 func (ctx WorkflowContext) CompensateSaga(stepID string) error {
 
 	logger.Debug(ctx.ctx, "compensate saga context", "workflow_id", ctx.workflowID, "step_id", stepID)
+
+	if !ctx.tracker.hasSagaInstance(stepID) {
+		err := errors.Join(ErrSagaContextCompensate, ErrSagaInstanceNotFound)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", stepID)
+	}
 
 	// Find the saga instance through the tracker
 	sagaInst, err := ctx.tracker.findSagaInstance(stepID)

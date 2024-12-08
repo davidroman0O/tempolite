@@ -51,6 +51,8 @@ type MemoryDatabase struct {
 	signalDataCounter          int
 	signalExecutionDataCounter int
 
+	sagaValueCounter int
+
 	// Saga specific
 	sagaValues map[SagaExecutionID]map[string]*SagaValue
 
@@ -3352,13 +3354,16 @@ func (db *MemoryDatabase) SetSagaValue(executionID SagaExecutionID, key string, 
 		db.sagaValues[executionID] = make(map[string]*SagaValue)
 	}
 
+	db.sagaValueCounter++ // Increment the counter
 	sv := &SagaValue{
-		ID:          SagaValueID(len(db.sagaValues[executionID]) + 1),
+		ID:          SagaValueID(db.sagaValueCounter), // Use the counter
 		ExecutionID: executionID,
 		Key:         key,
 		Value:       value,
 	}
+
 	db.sagaValues[executionID][key] = sv
+
 	return sv.ID, nil
 }
 

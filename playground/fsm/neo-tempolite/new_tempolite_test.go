@@ -544,7 +544,9 @@ func TestTempoliteRunDelete(t *testing.T) {
 		sagaDef, err := NewSaga().
 			Add(
 				func(tc TransactionContext) error {
-					tc.Store("life", &life)
+					if err := tc.Store("life", &life); err != nil {
+						return err
+					}
 					return nil
 				},
 				func(tc CompensationContext) error {
@@ -561,7 +563,9 @@ func TestTempoliteRunDelete(t *testing.T) {
 			).
 			Add(
 				func(tc TransactionContext) error {
-					tc.Load("life", &life)
+					if err := tc.Load("life", &life); err != nil {
+						return err
+					}
 					return nil
 				},
 				func(tc CompensationContext) error {
