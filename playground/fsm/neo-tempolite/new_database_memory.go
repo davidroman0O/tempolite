@@ -4262,10 +4262,220 @@ func (db *MemoryDatabase) UpdateSignalEntity(entity *SignalEntity) error {
 	return nil
 }
 
-func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
+func (db *MemoryDatabase) DeleteRuns(ids ...RunID) error {
+	if len(ids) == 0 {
+		return nil
+	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	// For each run to delete
+	for _, runID := range ids {
+		// Skip if run doesn't exist
+		if _, exists := db.runs[runID]; !exists {
+			continue
+		}
+
+		// Clean up Activities by RunID
+		for activityID, activity := range db.activityEntities {
+			if activity.RunID == runID {
+				// Clean up all activity executions
+				for execID, exec := range db.activityExecutions {
+					if exec.ActivityEntityID == activityID {
+						// Delete activity execution data
+						if dataID, exists := db.activityExecToDataMap[execID]; exists {
+							delete(db.activityExecutionData, dataID)
+							delete(db.activityExecToDataMap, execID)
+						}
+						delete(db.activityExecutions, execID)
+					}
+				}
+
+				// Clean up activity data
+				for dataID, data := range db.activityData {
+					if data.EntityID == activityID {
+						delete(db.activityData, dataID)
+					}
+				}
+
+				delete(db.activityEntities, activityID)
+			}
+		}
+
+		// Clean up Sagas by RunID
+		for sagaID, saga := range db.sagaEntities {
+			if saga.RunID == runID {
+				// Clean up all saga executions
+				for execID, exec := range db.sagaExecutions {
+					if exec.SagaEntityID == sagaID {
+						// Delete saga execution data
+						if dataID, exists := db.sagaExecToDataMap[execID]; exists {
+							delete(db.sagaExecutionData, dataID)
+							delete(db.sagaExecToDataMap, execID)
+						}
+						// Delete saga values
+						delete(db.sagaValues, execID)
+						delete(db.sagaExecutions, execID)
+					}
+				}
+
+				// Clean up all saga data
+				for dataID, data := range db.sagaData {
+					if data.EntityID == sagaID {
+						delete(db.sagaData, dataID)
+					}
+				}
+
+				// Clean up saga execution data
+				for dataID := range db.sagaExecutionData {
+					delete(db.sagaExecutionData, dataID)
+				}
+
+				delete(db.sagaEntities, sagaID)
+			}
+		}
+
+		// Clean up SideEffects by RunID
+		for sideEffectID, sideEffect := range db.sideEffectEntities {
+			if sideEffect.RunID == runID {
+				// Clean up all side effect executions
+				for execID, exec := range db.sideEffectExecutions {
+					if exec.SideEffectEntityID == sideEffectID {
+						// Delete side effect execution data
+						if dataID, exists := db.sideEffectExecToDataMap[execID]; exists {
+							delete(db.sideEffectExecutionData, dataID)
+							delete(db.sideEffectExecToDataMap, execID)
+						}
+						delete(db.sideEffectExecutions, execID)
+					}
+				}
+
+				// Clean up side effect data
+				for dataID, data := range db.sideEffectData {
+					if data.EntityID == sideEffectID {
+						delete(db.sideEffectData, dataID)
+					}
+				}
+
+				// Clean up side effect execution data
+				for dataID := range db.sideEffectExecutionData {
+					delete(db.sideEffectExecutionData, dataID)
+				}
+
+				delete(db.sideEffectEntities, sideEffectID)
+			}
+		}
+
+		// Clean up Signals by RunID
+		for signalID, signal := range db.signalEntities {
+			if signal.RunID == runID {
+				// Clean up all signal executions
+				for execID, exec := range db.signalExecutions {
+					if exec.EntityID == signalID {
+						// Delete signal execution data
+						if dataID, exists := db.signalExecToDataMap[execID]; exists {
+							delete(db.signalExecutionData, dataID)
+							delete(db.signalExecToDataMap, execID)
+						}
+						delete(db.signalExecutions, execID)
+					}
+				}
+
+				// Clean up signal data
+				for dataID, data := range db.signalData {
+					if data.EntityID == signalID {
+						delete(db.signalData, dataID)
+					}
+				}
+
+				delete(db.signalEntities, signalID)
+			}
+		}
+
+		// Clean up Workflows by RunID
+		for wfID, wf := range db.workflowEntities {
+			if wf.RunID == runID {
+				// Clean up all workflow executions
+				for execID, exec := range db.workflowExecutions {
+					if exec.WorkflowEntityID == wfID {
+						// Delete workflow execution data
+						if dataID, exists := db.workflowExecToDataMap[execID]; exists {
+							delete(db.workflowExecutionData, dataID)
+							delete(db.workflowExecToDataMap, execID)
+						}
+						delete(db.workflowExecutions, execID)
+					}
+				}
+
+				// Clean up workflow data
+				for dataID, data := range db.workflowData {
+					if data.EntityID == wfID {
+						delete(db.workflowData, dataID)
+					}
+				}
+
+				// Clean up workflow versions
+				if versions, ok := db.workflowToVersion[wfID]; ok {
+					for _, versionID := range versions {
+						delete(db.versions, versionID)
+					}
+				}
+				delete(db.workflowToVersion, wfID)
+				delete(db.workflowVersions, wfID)
+
+				// Clean up queue associations
+				if queueID, ok := db.workflowToQueue[wfID]; ok {
+					if workflows, exists := db.queueToWorkflows[queueID]; exists {
+						newWorkflows := make([]WorkflowEntityID, 0)
+						for _, id := range workflows {
+							if id != wfID {
+								newWorkflows = append(newWorkflows, id)
+							}
+						}
+						if len(newWorkflows) > 0 {
+							db.queueToWorkflows[queueID] = newWorkflows
+						} else {
+							delete(db.queueToWorkflows, queueID)
+						}
+					}
+					delete(db.workflowToQueue, wfID)
+				}
+
+				// Clean up workflow children mappings
+				delete(db.workflowToChildren, wfID)
+
+				delete(db.workflowEntities, wfID)
+			}
+		}
+
+		// Clean up entity to workflow mappings
+		for entityID, workflowID := range db.entityToWorkflow {
+			if _, exists := db.workflowEntities[workflowID]; !exists {
+				delete(db.entityToWorkflow, entityID)
+			}
+		}
+
+		// Clean up hierarchies
+		for id, h := range db.hierarchies {
+			if h.RunID == runID {
+				delete(db.hierarchies, id)
+			}
+		}
+
+		// Clean up run mappings
+		delete(db.runToWorkflows, runID)
+		delete(db.runs, runID)
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Collect all runs with matching status
 	runsToDelete := make([]RunID, 0)
 	for _, run := range db.runs {
 		if run.Status == status {
@@ -4277,19 +4487,197 @@ func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
 		return nil
 	}
 
+	// For each run to delete
 	for _, runID := range runsToDelete {
-		workflowIDs := make([]WorkflowEntityID, len(db.runToWorkflows[runID]))
-		copy(workflowIDs, db.runToWorkflows[runID])
+		// Clean up Activities by RunID
+		for activityID, activity := range db.activityEntities {
+			if activity.RunID == runID {
+				// Clean up all activity executions
+				for execID, exec := range db.activityExecutions {
+					if exec.ActivityEntityID == activityID {
+						// Delete activity execution data
+						if dataID, exists := db.activityExecToDataMap[execID]; exists {
+							delete(db.activityExecutionData, dataID)
+							delete(db.activityExecToDataMap, execID)
+						}
+						delete(db.activityExecutions, execID)
+					}
+				}
 
-		for _, wfID := range workflowIDs {
-			if err := db.deleteWorkflowAndChildren(wfID); err != nil {
-				return fmt.Errorf("failed to delete workflow %d: %w", wfID, err)
+				// Clean up activity data
+				for dataID, data := range db.activityData {
+					if data.EntityID == activityID {
+						delete(db.activityData, dataID)
+					}
+				}
+
+				delete(db.activityEntities, activityID)
 			}
 		}
 
-		delete(db.runs, runID)
+		// Clean up Sagas by RunID
+		for sagaID, saga := range db.sagaEntities {
+			if saga.RunID == runID {
+				// Clean up all saga executions
+				for execID, exec := range db.sagaExecutions {
+					if exec.SagaEntityID == sagaID {
+						// Delete saga execution data
+						if dataID, exists := db.sagaExecToDataMap[execID]; exists {
+							delete(db.sagaExecutionData, dataID)
+							delete(db.sagaExecToDataMap, execID)
+						}
+						// Delete saga values
+						delete(db.sagaValues, execID)
+						delete(db.sagaExecutions, execID)
+					}
+				}
 
+				// Clean up all saga data
+				for dataID, data := range db.sagaData {
+					if data.EntityID == sagaID {
+						delete(db.sagaData, dataID)
+					}
+				}
+
+				// Clean up saga execution data
+				for dataID := range db.sagaExecutionData {
+					delete(db.sagaExecutionData, dataID)
+				}
+
+				delete(db.sagaEntities, sagaID)
+			}
+		}
+
+		// Clean up SideEffects by RunID
+		for sideEffectID, sideEffect := range db.sideEffectEntities {
+			if sideEffect.RunID == runID {
+				// Clean up all side effect executions
+				for execID, exec := range db.sideEffectExecutions {
+					if exec.SideEffectEntityID == sideEffectID {
+						// Delete side effect execution data
+						if dataID, exists := db.sideEffectExecToDataMap[execID]; exists {
+							delete(db.sideEffectExecutionData, dataID)
+							delete(db.sideEffectExecToDataMap, execID)
+						}
+						delete(db.sideEffectExecutions, execID)
+					}
+				}
+
+				// Clean up side effect data
+				for dataID, data := range db.sideEffectData {
+					if data.EntityID == sideEffectID {
+						delete(db.sideEffectData, dataID)
+					}
+				}
+
+				// Clean up side effect execution data
+				for dataID := range db.sideEffectExecutionData {
+					delete(db.sideEffectExecutionData, dataID)
+				}
+
+				delete(db.sideEffectEntities, sideEffectID)
+			}
+		}
+
+		// Clean up Signals by RunID
+		for signalID, signal := range db.signalEntities {
+			if signal.RunID == runID {
+				// Clean up all signal executions
+				for execID, exec := range db.signalExecutions {
+					if exec.EntityID == signalID {
+						// Delete signal execution data
+						if dataID, exists := db.signalExecToDataMap[execID]; exists {
+							delete(db.signalExecutionData, dataID)
+							delete(db.signalExecToDataMap, execID)
+						}
+						delete(db.signalExecutions, execID)
+					}
+				}
+
+				// Clean up signal data
+				for dataID, data := range db.signalData {
+					if data.EntityID == signalID {
+						delete(db.signalData, dataID)
+					}
+				}
+
+				delete(db.signalEntities, signalID)
+			}
+		}
+
+		// Clean up Workflows by RunID
+		for wfID, wf := range db.workflowEntities {
+			if wf.RunID == runID {
+				// Clean up all workflow executions
+				for execID, exec := range db.workflowExecutions {
+					if exec.WorkflowEntityID == wfID {
+						// Delete workflow execution data
+						if dataID, exists := db.workflowExecToDataMap[execID]; exists {
+							delete(db.workflowExecutionData, dataID)
+							delete(db.workflowExecToDataMap, execID)
+						}
+						delete(db.workflowExecutions, execID)
+					}
+				}
+
+				// Clean up workflow data
+				for dataID, data := range db.workflowData {
+					if data.EntityID == wfID {
+						delete(db.workflowData, dataID)
+					}
+				}
+
+				// Clean up workflow versions
+				if versions, ok := db.workflowToVersion[wfID]; ok {
+					for _, versionID := range versions {
+						delete(db.versions, versionID)
+					}
+				}
+				delete(db.workflowToVersion, wfID)
+				delete(db.workflowVersions, wfID)
+
+				// Clean up queue associations
+				if queueID, ok := db.workflowToQueue[wfID]; ok {
+					if workflows, exists := db.queueToWorkflows[queueID]; exists {
+						newWorkflows := make([]WorkflowEntityID, 0)
+						for _, id := range workflows {
+							if id != wfID {
+								newWorkflows = append(newWorkflows, id)
+							}
+						}
+						if len(newWorkflows) > 0 {
+							db.queueToWorkflows[queueID] = newWorkflows
+						} else {
+							delete(db.queueToWorkflows, queueID)
+						}
+					}
+					delete(db.workflowToQueue, wfID)
+				}
+
+				// Clean up workflow children mappings
+				delete(db.workflowToChildren, wfID)
+
+				delete(db.workflowEntities, wfID)
+			}
+		}
+
+		// Clean up entity to workflow mappings
+		for entityID, workflowID := range db.entityToWorkflow {
+			if _, exists := db.workflowEntities[workflowID]; !exists {
+				delete(db.entityToWorkflow, entityID)
+			}
+		}
+
+		// Clean up hierarchies
+		for id, h := range db.hierarchies {
+			if h.RunID == runID {
+				delete(db.hierarchies, id)
+			}
+		}
+
+		// Clean up run mappings
 		delete(db.runToWorkflows, runID)
+		delete(db.runs, runID)
 	}
 
 	return nil

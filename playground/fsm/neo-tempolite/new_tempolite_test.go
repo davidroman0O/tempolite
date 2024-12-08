@@ -598,7 +598,7 @@ func TestTempoliteRunDelete(t *testing.T) {
 		}
 	}
 
-	// defer db.SaveAsJSON("./json/tempolite_run_delete.json")
+	defer db.SaveAsJSON("./json/tempolite_run_delete.json")
 
 	runs, err := db.GetRunsPaginated(1, 50, &RunFilter{
 		Status: RunStatusCompleted,
@@ -616,6 +616,10 @@ func TestTempoliteRunDelete(t *testing.T) {
 	}
 
 	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.DeleteRunsByStatus(RunStatusCompleted); err != nil {
 		t.Fatal(err)
 	}
 }

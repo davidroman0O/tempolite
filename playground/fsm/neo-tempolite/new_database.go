@@ -1083,6 +1083,7 @@ type Database interface {
 	GetRunProperties(id RunID, getters ...RunPropertyGetter) error
 	SetRunProperties(id RunID, setters ...RunPropertySetter) error
 	DeleteRunsByStatus(status RunStatus) error
+	DeleteRuns(ids ...RunID) error
 	GetRunsPaginated(page, pageSize int, filter *RunFilter, sort *RunSort) (*PaginatedRuns, error)
 
 	// VERSION-RELATED OPERATIONS
