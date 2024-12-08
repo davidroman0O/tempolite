@@ -31,7 +31,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -231,17 +231,18 @@ type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEn
 type workflowSignalHandler func(workflowID WorkflowEntityID, signal string) Future
 
 type TransactionContext struct {
-	ctx         context.Context
-	db          Database
-	contextID   SagaValueID
-	executionID SagaExecutionID
-	stepIndex   int
+	ctx                 context.Context
+	db                  Database
+	workflowExecutionID WorkflowExecutionID
+	sagaEntityID        SagaEntityID
+	sagaExecutionID     SagaExecutionID
+	stepIndex           int
 }
 
 func (tc *TransactionContext) Store(key string, value interface{}) error {
 	var err error
 
-	logger.Debug(tc.ctx, "transaction storing value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+	logger.Debug(tc.ctx, "transaction storing value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.saga_execution_id", tc.sagaExecutionID, "transaction_context.step_index", tc.stepIndex)
 
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
 		err := errors.Join(ErrTransactionContext, ErrMustPointer)
@@ -256,13 +257,15 @@ func (tc *TransactionContext) Store(key string, value interface{}) error {
 		return err
 	}
 
-	if _, err = tc.db.SetSagaValue(tc.executionID, key, buf.Bytes()); err != nil {
+	logger.Debug(tc.ctx, "transaction encoded value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.saga_entity_id", tc.sagaEntityID, "transaction_context.saga_execution_id", tc.sagaExecutionID, "transaction_context.step_index", tc.stepIndex)
+
+	if _, err = tc.db.SetSagaValue(tc.sagaEntityID, tc.sagaExecutionID, key, buf.Bytes()); err != nil {
 		err := errors.Join(ErrTransactionContext, err)
 		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
 		return err
 	}
 
-	logger.Debug(tc.ctx, "transaction stored value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+	logger.Debug(tc.ctx, "transaction stored value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.saga_execution_id", tc.sagaExecutionID, "transaction_context.step_index", tc.stepIndex)
 
 	return nil
 }
@@ -271,7 +274,7 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 	var data []byte
 	var err error
 
-	logger.Debug(tc.ctx, "transaction loading value", "transaction_context.key", key, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+	logger.Debug(tc.ctx, "transaction loading value", "transaction_context.key", key, "transaction_context.saga_execution_id", tc.sagaExecutionID, "transaction_context.step_index", tc.stepIndex)
 
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
 		err := errors.Join(ErrTransactionContext, ErrMustPointer)
@@ -279,9 +282,9 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 		return err
 	}
 
-	fmt.Println("key", key, "executionID", tc.executionID)
+	fmt.Println("key", key, "executionID", tc.sagaExecutionID)
 
-	if data, err = tc.db.GetSagaValueByExecutionID(tc.executionID, key); err != nil {
+	if data, err = tc.db.GetSagaValueByKey(tc.sagaEntityID, key); err != nil {
 		err := errors.Join(ErrSagaGetValue, err)
 		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
 		return err
@@ -293,24 +296,31 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 		return err
 	}
 
-	logger.Debug(tc.ctx, "transaction loaded value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.execution_id", tc.executionID, "transaction_context.step_index", tc.stepIndex, "transaction_context.context_id", tc.contextID)
+	logger.Debug(tc.ctx, "transaction loaded value", "transaction_context.key", key, "transaction_context.value", value, "transaction_context.saga_execution_id", tc.sagaExecutionID, "transaction_context.step_index", tc.stepIndex)
 
 	return nil
 }
 
 type CompensationContext struct {
-	ctx         context.Context
-	db          Database
-	contextID   SagaValueID
-	executionID SagaExecutionID
-	stepIndex   int
+	ctx                 context.Context
+	db                  Database
+	contextID           SagaValueID
+	workflowExecutionID WorkflowExecutionID
+	sagaEntityID        SagaEntityID
+	sagaExecutionID     SagaExecutionID
+	stepIndex           int
 }
 
 func (cc *CompensationContext) Load(key string, value interface{}) error {
 	var data []byte
 	var err error
 
-	logger.Debug(cc.ctx, "compensation loading value", "compensation_context.key", key, "compensation_context.execution_id", cc.executionID, "compensation_context.step_index", cc.stepIndex, "compensation_context.context_id", cc.contextID)
+	logger.Debug(cc.ctx, "compensation loading value",
+		"compensation_context.key", key,
+		"compensation_context.workflow_execution_id", cc.workflowExecutionID,
+		"compensation_context.saga_entity_id", cc.sagaEntityID,
+		"compensation_context.saga_execution_id", cc.sagaExecutionID,
+		"compensation_context.step_index", cc.stepIndex)
 
 	if reflect.TypeOf(value).Kind() != reflect.Ptr {
 		err := errors.Join(ErrCompensationContext, ErrMustPointer)
@@ -318,7 +328,7 @@ func (cc *CompensationContext) Load(key string, value interface{}) error {
 		return err
 	}
 
-	if data, err = cc.db.GetSagaValueByExecutionID(cc.executionID, key); err != nil {
+	if data, err = cc.db.GetSagaValueByKey(cc.sagaEntityID, key); err != nil {
 		err := errors.Join(ErrSagaGetValue, err)
 		logger.Error(cc.ctx, err.Error(), "compensation_context.key", key, "error", err)
 		return err
@@ -330,7 +340,13 @@ func (cc *CompensationContext) Load(key string, value interface{}) error {
 		return err
 	}
 
-	logger.Debug(cc.ctx, "compensation loaded value", "compensation_context.key", key, "compensation_context.value", value, "compensation_context.execution_id", cc.executionID, "compensation_context.step_index", cc.stepIndex, "compensation_context.context_id", cc.contextID)
+	logger.Debug(cc.ctx, "compensation loaded value",
+		"compensation_context.key", key,
+		"compensation_context.value", value,
+		"compensation_context.workflow_execution_id", cc.workflowExecutionID,
+		"compensation_context.saga_entity_id", cc.sagaEntityID,
+		"compensation_context.saga_execution_id", cc.sagaExecutionID,
+		"compensation_context.step_index", cc.stepIndex)
 
 	return nil
 }
@@ -4044,12 +4060,17 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 			return nil
 		}
 
+		si.executionID = stepExecID
+
 		step := si.saga.Steps[stepIdx]
 		txContext := TransactionContext{
-			ctx:         si.ctx,
-			db:          si.db,
-			executionID: stepExecID,
-			stepIndex:   stepIdx,
+			ctx:                 si.ctx,
+			db:                  si.db,
+			workflowExecutionID: si.parentExecutionID,
+			sagaEntityID:        si.entityID,
+			sagaExecutionID:     si.executionID,
+			// executionID: stepExecID,
+			stepIndex: stepIdx,
 		}
 
 		err = step.Transaction(txContext)
@@ -4193,10 +4214,13 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 
 		step := si.saga.Steps[stepIdx]
 		compContext := CompensationContext{
-			ctx:         si.ctx,
-			db:          si.db,
-			executionID: txExec.ID,
-			stepIndex:   stepIdx,
+			ctx: si.ctx,
+			db:  si.db,
+			// executionID: txExec.ID,
+			workflowExecutionID: si.parentExecutionID,
+			sagaEntityID:        si.entityID,
+			sagaExecutionID:     txExec.ID,
+			stepIndex:           stepIdx,
 		}
 
 		err = step.Compensation(compContext)

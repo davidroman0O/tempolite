@@ -1719,7 +1719,7 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 	}
 
 	// Check saga values
-	val, err := db.GetSagaValueByExecutionID(3, "something")
+	val, err := db.GetSagaValueByKey(sagaEntity.ID, "something")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1727,7 +1727,7 @@ func TestUnitPrepareRootWorkflowEntitySagaCompensate(t *testing.T) {
 		t.Fatal("expected saga value 'something' to exist")
 	}
 
-	val, err = db.GetSagaValueByExecutionID(3, "something2")
+	val, err = db.GetSagaValueByKey(sagaEntity.ID, "something2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2118,7 +2118,7 @@ func TestUnitSequentialSagasWithManualCompensation(t *testing.T) {
 	}
 
 	// Verify saga value was accessible
-	val, err := db.GetSagaValueByExecutionID(saga1Execs[0].ID, "saga1_value")
+	val, err := db.GetSagaValueByKey(saga1ID, "saga1_value")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2256,7 +2256,7 @@ func TestUnitSagaSkipOnWorkflowRetry(t *testing.T) {
 	}
 
 	// Verify saga value was stored and preserved across retry
-	val, err := db.GetSagaValueByExecutionID(sagaExecutions[0].ID, "test_value")
+	val, err := db.GetSagaValueByKey(saga.ID, "test_value")
 	if err != nil {
 		t.Fatal(err)
 	}

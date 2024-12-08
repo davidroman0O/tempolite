@@ -54,7 +54,12 @@ type MemoryDatabase struct {
 	sagaValueCounter int
 
 	// Saga specific
-	sagaValues map[SagaExecutionID]map[string]*SagaValue
+	sagaValues map[SagaValueID]*SagaValue
+
+	// Relationship maps for quick lookups
+	sagaEntityToValues    map[SagaEntityID][]SagaValueID          // Get all values for a saga
+	sagaExecutionToValues map[SagaExecutionID][]SagaValueID       // Get values for specific execution
+	sagaEntityKeyToValue  map[SagaEntityID]map[string]SagaValueID // Get latest value by key
 
 	// Core maps
 	runs        map[RunID]*Run
@@ -153,7 +158,10 @@ func NewMemoryDatabase() *MemoryDatabase {
 		signalExecutionData: make(map[SignalExecutionDataID]*SignalExecutionData),
 
 		// Saga context
-		sagaValues: make(map[SagaExecutionID]map[string]*SagaValue),
+		sagaValues:            make(map[SagaValueID]*SagaValue),
+		sagaEntityToValues:    make(map[SagaEntityID][]SagaValueID),
+		sagaExecutionToValues: make(map[SagaExecutionID][]SagaValueID),
+		sagaEntityKeyToValue:  make(map[SagaEntityID]map[string]SagaValueID),
 
 		// Relationship maps
 		entityToWorkflow:   make(map[int]WorkflowEntityID),
@@ -224,11 +232,16 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		WorkflowToQueue         map[WorkflowEntityID]QueueID
 		QueueToWorkflows        map[QueueID][]WorkflowEntityID
 		RunToWorkflows          map[RunID][]WorkflowEntityID
-		SagaValues              map[SagaExecutionID]map[string]*SagaValue
-		SignalEntities          map[SignalEntityID]*SignalEntity
-		SignalExecutions        map[SignalExecutionID]*SignalExecution
-		SignalData              map[SignalDataID]*SignalData
-		SignalExecutionData     map[SignalExecutionDataID]*SignalExecutionData
+
+		SagaValues            map[SagaValueID]*SagaValue
+		SagaEntityToValues    map[SagaEntityID][]SagaValueID
+		SagaExecutionToValues map[SagaExecutionID][]SagaValueID
+		SagaEntityKeyToValue  map[SagaEntityID]map[string]SagaValueID
+
+		SignalEntities      map[SignalEntityID]*SignalEntity
+		SignalExecutions    map[SignalExecutionID]*SignalExecution
+		SignalData          map[SignalDataID]*SignalData
+		SignalExecutionData map[SignalExecutionDataID]*SignalExecutionData
 		// Relationship
 		WorkflowVersions        map[WorkflowEntityID][]VersionID
 		WorkflowExecToDataMap   map[WorkflowExecutionID]WorkflowExecutionDataID
@@ -265,10 +278,14 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		QueueToWorkflows:        db.queueToWorkflows,
 		RunToWorkflows:          db.runToWorkflows,
 		SagaValues:              db.sagaValues,
-		SignalEntities:          db.signalEntities,
-		SignalExecutions:        db.signalExecutions,
-		SignalData:              db.signalData,
-		SignalExecutionData:     db.signalExecutionData,
+		SagaEntityToValues:      db.sagaEntityToValues,
+		SagaExecutionToValues:   db.sagaExecutionToValues,
+		SagaEntityKeyToValue:    db.sagaEntityKeyToValue,
+
+		SignalEntities:      db.signalEntities,
+		SignalExecutions:    db.signalExecutions,
+		SignalData:          db.signalData,
+		SignalExecutionData: db.signalExecutionData,
 		// Relationship
 		WorkflowVersions:        db.workflowVersions,
 		WorkflowExecToDataMap:   db.workflowExecToDataMap,
@@ -3345,52 +3362,111 @@ func (db *MemoryDatabase) GetActivityExecutionLatestByEntityID(entityID Activity
 	return copyActivityExecution(latestExec), nil
 }
 
-func (db *MemoryDatabase) SetSagaValue(executionID SagaExecutionID, key string, value []byte) (SagaValueID, error) {
-
+func (db *MemoryDatabase) SetSagaValue(sagaEntityID SagaEntityID, sagaExecID SagaExecutionID, key string, value []byte) (SagaValueID, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if _, exists := db.sagaValues[executionID]; !exists {
-		db.sagaValues[executionID] = make(map[string]*SagaValue)
+	// Validate that the saga entity and execution exist
+	if _, exists := db.sagaEntities[sagaEntityID]; !exists {
+		return 0, ErrSagaEntityNotFound
+	}
+	if _, exists := db.sagaExecutions[sagaExecID]; !exists {
+		return 0, ErrSagaExecutionNotFound
 	}
 
-	db.sagaValueCounter++ // Increment the counter
+	// Create new saga value
+	db.sagaValueCounter++
+	newID := SagaValueID(db.sagaValueCounter)
+
+	valueCopy := make([]byte, len(value))
+	copy(valueCopy, value)
+
 	sv := &SagaValue{
-		ID:          SagaValueID(db.sagaValueCounter), // Use the counter
-		ExecutionID: executionID,
-		Key:         key,
-		Value:       value,
+		ID:              newID,
+		SagaEntityID:    sagaEntityID,
+		SagaExecutionID: sagaExecID,
+		Key:             key,
+		Value:           valueCopy,
 	}
 
-	db.sagaValues[executionID][key] = sv
+	// Store the value
+	db.sagaValues[newID] = sv
 
-	return sv.ID, nil
+	// Update relationships
+	db.sagaEntityToValues[sagaEntityID] = append(db.sagaEntityToValues[sagaEntityID], newID)
+	db.sagaExecutionToValues[sagaExecID] = append(db.sagaExecutionToValues[sagaExecID], newID)
+
+	// Update latest value for key
+	if db.sagaEntityKeyToValue[sagaEntityID] == nil {
+		db.sagaEntityKeyToValue[sagaEntityID] = make(map[string]SagaValueID)
+	}
+	db.sagaEntityKeyToValue[sagaEntityID][key] = newID
+
+	return newID, nil
 }
 
-func (db *MemoryDatabase) GetSagaValue(id SagaValueID, key string) ([]byte, error) {
-
+func (db *MemoryDatabase) GetSagaValue(id SagaValueID) (*SagaValue, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	for _, keyMap := range db.sagaValues {
-		if val, exists := keyMap[key]; exists && val.ID == id {
-			return val.Value, nil
+	if value, exists := db.sagaValues[id]; exists {
+		return copySagaValue(value), nil
+	}
+	return nil, ErrSagaValueNotFound
+}
+
+func (db *MemoryDatabase) GetSagaValueByKey(sagaEntityID SagaEntityID, key string) ([]byte, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if keyMap, exists := db.sagaEntityKeyToValue[sagaEntityID]; exists {
+		if valueID, exists := keyMap[key]; exists {
+			if value, exists := db.sagaValues[valueID]; exists {
+				valueCopy := make([]byte, len(value.Value))
+				copy(valueCopy, value.Value)
+				return valueCopy, nil
+			}
 		}
 	}
 	return nil, ErrSagaValueNotFound
 }
 
-func (db *MemoryDatabase) GetSagaValueByExecutionID(executionID SagaExecutionID, key string) ([]byte, error) {
-
+func (db *MemoryDatabase) GetSagaValuesByEntity(sagaEntityID SagaEntityID) ([]*SagaValue, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if keyMap, exists := db.sagaValues[executionID]; exists {
-		if val, vexists := keyMap[key]; vexists {
-			return val.Value, nil
+	valueIDs, exists := db.sagaEntityToValues[sagaEntityID]
+	if !exists {
+		return []*SagaValue{}, nil
+	}
+
+	values := make([]*SagaValue, 0, len(valueIDs))
+	for _, id := range valueIDs {
+		if value, exists := db.sagaValues[id]; exists {
+			values = append(values, copySagaValue(value))
 		}
 	}
-	return nil, ErrSagaValueNotFound
+
+	return values, nil
+}
+
+func (db *MemoryDatabase) GetSagaValuesByExecution(sagaExecID SagaExecutionID) ([]*SagaValue, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	valueIDs, exists := db.sagaExecutionToValues[sagaExecID]
+	if !exists {
+		return []*SagaValue{}, nil
+	}
+
+	values := make([]*SagaValue, 0, len(valueIDs))
+	for _, id := range valueIDs {
+		if value, exists := db.sagaValues[id]; exists {
+			values = append(values, copySagaValue(value))
+		}
+	}
+
+	return values, nil
 }
 
 func (db *MemoryDatabase) AddSignalEntity(entity *SignalEntity, parentWorkflowID WorkflowEntityID) (SignalEntityID, error) {
@@ -4319,22 +4395,18 @@ func (db *MemoryDatabase) DeleteRuns(ids ...RunID) error {
 							delete(db.sagaExecutionData, dataID)
 							delete(db.sagaExecToDataMap, execID)
 						}
-						// Delete saga values
-						delete(db.sagaValues, execID)
 						delete(db.sagaExecutions, execID)
 					}
 				}
+
+				// Clean up all saga values and relationships
+				db.cleanupSagaValuesForEntity(sagaID)
 
 				// Clean up all saga data
 				for dataID, data := range db.sagaData {
 					if data.EntityID == sagaID {
 						delete(db.sagaData, dataID)
 					}
-				}
-
-				// Clean up saga execution data
-				for dataID := range db.sagaExecutionData {
-					delete(db.sagaExecutionData, dataID)
 				}
 
 				delete(db.sagaEntities, sagaID)
@@ -4531,22 +4603,18 @@ func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
 							delete(db.sagaExecutionData, dataID)
 							delete(db.sagaExecToDataMap, execID)
 						}
-						// Delete saga values
-						delete(db.sagaValues, execID)
 						delete(db.sagaExecutions, execID)
 					}
 				}
+
+				// Clean up all saga values and relationships
+				db.cleanupSagaValuesForEntity(sagaID)
 
 				// Clean up all saga data
 				for dataID, data := range db.sagaData {
 					if data.EntityID == sagaID {
 						delete(db.sagaData, dataID)
 					}
-				}
-
-				// Clean up saga execution data
-				for dataID := range db.sagaExecutionData {
-					delete(db.sagaExecutionData, dataID)
 				}
 
 				delete(db.sagaEntities, sagaID)
@@ -4798,20 +4866,21 @@ func (db *MemoryDatabase) deleteActivityEntity(entityID ActivityEntityID) error 
 }
 
 func (db *MemoryDatabase) deleteSagaEntity(entityID SagaEntityID) error {
+	// Clean up all saga values associated with this entity
+	db.cleanupSagaValuesForEntity(entityID)
 
+	// Clean up executions
 	for id, exec := range db.sagaExecutions {
 		if exec.SagaEntityID == entityID {
 			if dataID, exists := db.sagaExecToDataMap[id]; exists {
 				delete(db.sagaExecutionData, dataID)
 				delete(db.sagaExecToDataMap, id)
 			}
-
-			delete(db.sagaValues, exec.ID)
-
 			delete(db.sagaExecutions, id)
 		}
 	}
 
+	// Clean up saga data
 	for id, data := range db.sagaData {
 		if data.EntityID == entityID {
 			delete(db.sagaData, id)
@@ -4819,7 +4888,6 @@ func (db *MemoryDatabase) deleteSagaEntity(entityID SagaEntityID) error {
 	}
 
 	delete(db.sagaEntities, entityID)
-
 	return nil
 }
 
@@ -4986,6 +5054,49 @@ func copyRun(run *Run) *Run {
 	}
 
 	return copy
+}
+
+func copySagaValue(sv *SagaValue) *SagaValue {
+	if sv == nil {
+		return nil
+	}
+
+	c := *sv
+	if sv.Value != nil {
+		c.Value = make([]byte, len(sv.Value))
+		copy(c.Value, sv.Value)
+	}
+
+	return &c
+}
+
+// Add cleanup in DeleteRuns
+func (db *MemoryDatabase) cleanupSagaValuesForEntity(sagaEntityID SagaEntityID) {
+	// Clean up values
+	if valueIDs, exists := db.sagaEntityToValues[sagaEntityID]; exists {
+		for _, valueID := range valueIDs {
+			delete(db.sagaValues, valueID)
+			// Clean up execution relationships
+			if value, exists := db.sagaValues[valueID]; exists {
+				execValues := db.sagaExecutionToValues[value.SagaExecutionID]
+				newExecValues := make([]SagaValueID, 0)
+				for _, id := range execValues {
+					if id != valueID {
+						newExecValues = append(newExecValues, id)
+					}
+				}
+				if len(newExecValues) > 0 {
+					db.sagaExecutionToValues[value.SagaExecutionID] = newExecValues
+				} else {
+					delete(db.sagaExecutionToValues, value.SagaExecutionID)
+				}
+			}
+		}
+		delete(db.sagaEntityToValues, sagaEntityID)
+	}
+
+	// Clean up key-value mappings
+	delete(db.sagaEntityKeyToValue, sagaEntityID)
 }
 
 // func copyVersion(version *Version) *Version {

@@ -839,9 +839,11 @@ type SignalExecutionData struct {
 }
 
 type SagaValue struct {
-	ID          SagaValueID     `json:"id,omitempty"`
-	ExecutionID SagaExecutionID `json:"executionID"`
-	Key         string          `json:"key"`
+	ID                  SagaValueID         `json:"id,omitempty"`
+	SagaExecutionID     SagaExecutionID     `json:"saga_executionID"`
+	WorkflowExecutionID WorkflowExecutionID `json:"workflow_executionID"`
+	SagaEntityID        SagaEntityID        `json:"saga_entityID"`
+	Key                 string              `json:"key"`
 
 	Value []byte `json:"value"` // TODO: this is WRONG
 }
@@ -1029,9 +1031,11 @@ type Database interface {
 	SetSagaExecutionDataPropertiesByEntities(entityID SagaExecutionID, setters ...SagaExecutionDataPropertySetter) error
 
 	// Saga Context operations
-	SetSagaValue(executionID SagaExecutionID, key string, value []byte) (SagaValueID, error) // return the ID of the sagaValue
-	GetSagaValue(id SagaValueID, key string) ([]byte, error)
-	GetSagaValueByExecutionID(executionID SagaExecutionID, key string) ([]byte, error) // using the executionID plus key to access it
+	SetSagaValue(sagaEntityID SagaEntityID, sagaExecID SagaExecutionID, key string, value []byte) (SagaValueID, error)
+	GetSagaValue(id SagaValueID) (*SagaValue, error)
+	GetSagaValueByKey(sagaEntityID SagaEntityID, key string) ([]byte, error)
+	GetSagaValuesByEntity(sagaEntityID SagaEntityID) ([]*SagaValue, error)
+	GetSagaValuesByExecution(sagaExecID SagaExecutionID) ([]*SagaValue, error)
 
 	// SIDE-EFFECT-RELATED OPERATIONS
 	// SideEffect Entity
