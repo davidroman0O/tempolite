@@ -438,141 +438,141 @@ func TestUnitPrepareRootWorkflowActivityEntityFailureOnce(t *testing.T) {
 
 }
 
-// func TestUnitPrepareRootWorkflowActivityEntityWithOutputFailureOnce(t *testing.T) {
+func TestUnitPrepareRootWorkflowActivityEntityWithOutputFailureOnce(t *testing.T) {
 
-// 	ctx := context.Background()
-// 	db := NewMemoryDatabase()
-// 	registry := NewRegistry()
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
 
-// 	o := NewOrchestrator(ctx, db, registry)
+	o := NewOrchestrator(ctx, db, registry)
 
-// 	var counterActivityCalled atomic.Int32
+	var counterActivityCalled atomic.Int32
 
-// 	act := func(ctx ActivityContext) (int, error) {
-// 		fmt.Println("Activity, World!")
-// 		counterActivityCalled.Add(1)
-// 		return 420, nil
-// 	}
+	act := func(ctx ActivityContext) (int, error) {
+		fmt.Println("Activity, World!")
+		counterActivityCalled.Add(1)
+		return 420, nil
+	}
 
-// 	var atomicFailure atomic.Bool
-// 	atomicFailure.Store(true)
+	var atomicFailure atomic.Bool
+	atomicFailure.Store(true)
 
-// 	var counterWorkflowCalled atomic.Int32
+	var counterWorkflowCalled atomic.Int32
 
-// 	wrfl := func(ctx WorkflowContext) (int, error) {
-// 		fmt.Println("Hello, World!")
-// 		counterWorkflowCalled.Add(1)
-// 		if err := ctx.Activity("activity", act, nil).Get(); err != nil {
-// 			return -1, err
-// 		}
-// 		if atomicFailure.Load() {
-// 			atomicFailure.Store(false)
-// 			return -1, fmt.Errorf("on purpose")
-// 		}
-// 		return 420 + 1, nil
-// 	}
+	wrfl := func(ctx WorkflowContext) (int, error) {
+		fmt.Println("Hello, World!")
+		counterWorkflowCalled.Add(1)
+		if err := ctx.Activity("activity", act, nil).Get(); err != nil {
+			return -1, err
+		}
+		if atomicFailure.Load() {
+			atomicFailure.Store(false)
+			return -1, fmt.Errorf("on purpose")
+		}
+		return 420 + 1, nil
+	}
 
-// 	future := o.Execute(wrfl, &WorkflowOptions{
-// 		RetryPolicy: &RetryPolicy{
-// 			MaxAttempts: 1, // which is the default already
-// 		},
-// 	})
+	future := o.Execute(wrfl, &WorkflowOptions{
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts: 1, // which is the default already
+		},
+	})
 
-// 	if future == nil {
-// 		t.Fatal("future is nil")
-// 	}
+	if future == nil {
+		t.Fatal("future is nil")
+	}
 
-// 	finalRes := 0
+	finalRes := 0
 
-// 	if err := future.Get(&finalRes); err != nil {
-// 		t.Fatal(err)
-// 	}
+	if err := future.Get(&finalRes); err != nil {
+		t.Fatal(err)
+	}
 
-// 	wexecs, err := db.GetWorkflowExecutions(future.WorkflowID())
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	wexecs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	if len(wexecs) != 2 {
-// 		t.Fatalf("expected 2 executions, got %d", len(wexecs))
-// 	}
+	if len(wexecs) != 2 {
+		t.Fatalf("expected 2 executions, got %d", len(wexecs))
+	}
 
-// 	hierarchies, err := db.GetHierarchiesByParentEntity(int(future.WorkflowID()))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	hierarchies, err := db.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	countActivityChildren := 0
+	countActivityChildren := 0
 
-// 	for _, h := range hierarchies {
-// 		if h.ParentEntityID == int(future.WorkflowID()) && h.ChildType == EntityActivity {
-// 			countActivityChildren++
-// 		}
-// 	}
+	for _, h := range hierarchies {
+		if h.ParentEntityID == int(future.WorkflowID()) && h.ChildType == EntityActivity {
+			countActivityChildren++
+		}
+	}
 
-// 	if countActivityChildren != 1 {
-// 		t.Fatalf("expected 1 activity children, got %d", countActivityChildren)
-// 	}
+	if countActivityChildren != 1 {
+		t.Fatalf("expected 1 activity children, got %d", countActivityChildren)
+	}
 
-// 	if finalRes != 421 {
-// 		t.Fatalf("expected 421, got %d", finalRes)
-// 	}
+	if finalRes != 421 {
+		t.Fatalf("expected 421, got %d", finalRes)
+	}
 
-// 	if counterActivityCalled.Load() != 1 {
-// 		t.Fatalf("expected 1 activity call, got %d", counterActivityCalled.Load())
-// 	}
+	if counterActivityCalled.Load() != 1 {
+		t.Fatalf("expected 1 activity call, got %d", counterActivityCalled.Load())
+	}
 
-// 	if counterWorkflowCalled.Load() != 2 {
-// 		t.Fatalf("expected 2 workflow call, got %d", counterWorkflowCalled.Load())
-// 	}
+	if counterWorkflowCalled.Load() != 2 {
+		t.Fatalf("expected 2 workflow call, got %d", counterWorkflowCalled.Load())
+	}
 
-// 	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	workflowEntity, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	if workflowEntity.Status != StatusCompleted {
-// 		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
-// 	}
+	if workflowEntity.Status != StatusCompleted {
+		t.Fatalf("expected %s, got %s", StatusCompleted, workflowEntity.Status)
+	}
 
-// 	activities, err := db.GetActivityEntities(future.WorkflowID())
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	activities, err := db.GetActivityEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	if len(activities) != 1 {
-// 		t.Fatalf("expected 1 activity, got %d", len(activities))
-// 	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
 
-// 	exects, err := db.GetActivityExecutions(activities[0].ID)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	exects, err := db.GetActivityExecutions(activities[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	data, err := db.GetActivityExecutionData(exects[0].ID)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	data, err := db.GetActivityExecutionDataByExecutionID(exects[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	handler, ok := o.registry.GetActivityFunc(act)
-// 	if !ok {
-// 		t.Fatal("activity not found")
-// 	}
+	handler, ok := o.registry.GetActivityFunc(act)
+	if !ok {
+		t.Fatal("activity not found")
+	}
 
-// 	outputBytes, err := convertOutputsFromSerialization(handler, data.Outputs)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	outputBytes, err := convertOutputsFromSerialization(handler, data.Outputs)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	if len(outputBytes) != 1 {
-// 		t.Fatalf("expected 1 output, got %d", len(outputBytes))
-// 	}
+	if len(outputBytes) != 1 {
+		t.Fatalf("expected 1 output, got %d", len(outputBytes))
+	}
 
-// 	if outputBytes[0].(int) != 420 {
-// 		t.Fatalf("expected 420, got %d", outputBytes[0].(int))
-// 	}
+	if outputBytes[0].(int) != 420 {
+		t.Fatalf("expected 420, got %d", outputBytes[0].(int))
+	}
 
-// }
+}
 
 func TestUnitPrepareRootWorkflowActivityEntityPanic(t *testing.T) {
 
