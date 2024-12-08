@@ -280,6 +280,19 @@ func GetWorkflowDataContinuedFrom(continuedFrom *WorkflowEntityID) WorkflowDataP
 	}
 }
 
+func GetWorkflowDataContinuedExecutionFrom(continuedExecutionFrom *WorkflowExecutionID) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		if d.ContinuedExecutionFrom == nil {
+			return nil, nil
+		}
+		*continuedExecutionFrom = *d.ContinuedExecutionFrom
+		return nil, nil
+	}
+}
+
 func GetWorkflowDataEntityID(entityID *WorkflowEntityID) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {

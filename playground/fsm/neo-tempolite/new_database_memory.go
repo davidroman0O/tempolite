@@ -4833,6 +4833,8 @@ func copySagaExecution(exec *SagaExecution) *SagaExecution {
 	return &SagaExecution{
 		BaseExecution:     *copyBaseExecution(&exec.BaseExecution),
 		ExecutionType:     exec.ExecutionType,
+		ID:                exec.ID,
+		SagaEntityID:      exec.SagaEntityID,
 		SagaExecutionData: copySagaExecutionData(exec.SagaExecutionData),
 	}
 }
@@ -4844,6 +4846,7 @@ func copySagaEntity(entity *SagaEntity) *SagaEntity {
 
 	return &SagaEntity{
 		BaseEntity: *copyBaseEntity(&entity.BaseEntity),
+		ID:         entity.ID,
 		SagaData:   copySagaData(entity.SagaData),
 	}
 }

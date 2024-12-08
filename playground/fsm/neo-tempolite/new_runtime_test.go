@@ -696,10 +696,12 @@ func TestUnitPrepareRootWorkflowContinueAsNew(t *testing.T) {
 		t.Fatalf("expected 48, got %d", secondRes)
 	}
 
+	fmt.Println(futureFirst.WorkflowID())
 	first, err := db.GetWorkflowEntity(futureFirst.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(futureSecond.WorkflowID())
 	second, err := db.GetWorkflowEntity(futureSecond.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
@@ -1495,6 +1497,7 @@ func TestUnitPrepareRootWorkflowEntitySaga(t *testing.T) {
 	wrfl := func(ctx WorkflowContext) error {
 		fmt.Println("Hello, World!")
 
+		// There are TWO steps, read carefully, one func based and one struct based
 		def, err := NewSaga().
 			Add(
 				func(ctx TransactionContext) error {
