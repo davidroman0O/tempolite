@@ -1051,7 +1051,7 @@ func (o *Orchestrator) setUnpause() {
 }
 
 func (o *Orchestrator) canStackTrace() bool {
-	logger.Debug(o.ctx, "orchestrator can stack trace", "orchestrator.can_stack_trace", o.displayStackTrace)
+	logger.Debug(o.ctx, "can orchestrator display the stack trace?", "orchestrator.can_stack_trace", o.displayStackTrace)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.displayStackTrace
@@ -1836,13 +1836,15 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 			logger.Debug(wi.ctx, "attempt execute workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
 			// now we can create and set the execution id
-			if wi.executionID, err = wi.db.AddWorkflowExecution(&WorkflowExecution{
-				BaseExecution: BaseExecution{
-					Status: ExecutionStatusRunning,
-				},
-				WorkflowEntityID:      wi.workflowID,
-				WorkflowExecutionData: &WorkflowExecutionData{},
-			}); err != nil {
+			if wi.executionID, err = wi.db.AddWorkflowExecution(
+				wi.workflowID,
+				&WorkflowExecution{
+					BaseExecution: BaseExecution{
+						Status: ExecutionStatusRunning,
+					},
+					WorkflowEntityID:      wi.workflowID,
+					WorkflowExecutionData: &WorkflowExecutionData{},
+				}); err != nil {
 				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to add workflow execution: %w", err))
 				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 				return err
@@ -1895,6 +1897,12 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 
 			// Run the real workflow
 			workflowOutput, workflowErr := wi.runWorkflow(inputs)
+
+			if err := wi.db.SetWorkflowExecutionProperties(wi.executionID, SetWorkflowExecutionCompletedAt(time.Now())); err != nil {
+				err := errors.Join(ErrWorkflowInstanceExecution, fmt.Errorf("failed to set workflow execution completed at: %w", err))
+				logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
+				return err
+			}
 
 			// success case
 			if workflowErr == nil {
@@ -2128,7 +2136,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		}
 
 		// Emptied the output data
-		if err = wi.db.SetWorkflowExecutionDataProperties(wi.executionID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
+		if err = wi.db.SetWorkflowExecutionDataPropertiesByExecutionID(wi.executionID, SetWorkflowExecutionDataOutputs(nil)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
 			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
@@ -2156,7 +2164,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		}
 
 		// save result
-		if err = wi.db.SetWorkflowExecutionDataProperties(wi.executionID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
+		if err = wi.db.SetWorkflowExecutionDataPropertiesByExecutionID(wi.executionID, SetWorkflowExecutionDataOutputs(outputBytes)); err != nil {
 			// wi.mu.Unlock()
 			err := errors.Join(ErrWorkflowInstanceRun, fmt.Errorf("failed to set workflow execution data outputs: %w", err))
 			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID, "data_id", wi.dataID)
@@ -2856,12 +2864,12 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 // Sub-function within executeWithRetry
 func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *ActivityOutput, err error) {
 
-	logger.Debug(ai.ctx, "activity instance run", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+	logger.Debug(ai.ctx, "activity instance run", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 
 	activityExecution, err := ai.db.GetActivityExecutionLatestByEntityID(ai.entityID)
 	if err != nil {
 		err := errors.Join(ErrActivityInstanceRun, err)
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return nil, err
 	}
 
@@ -2872,7 +2880,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 		outputsData, err := convertOutputsFromSerialization(ai.handler, activityExecution.ActivityExecutionData.Outputs)
 		if err != nil {
 			err := errors.Join(ErrActivityInstanceRun, err)
-			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			return nil, err
 		}
 		return &ActivityOutput{
@@ -2897,7 +2905,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 			ai.mu.Lock()
 			// allow the caller to know about the panic
 			err = errors.Join(ErrActivityInstanceRun, ErrActivityPanicked)
-			logger.Error(ai.ctx, fmt.Sprintf("activity panicked: %v", r), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			logger.Error(ai.ctx, fmt.Sprintf("activity panicked: %v", r), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			outputs = &ActivityOutput{
 				StrackTrace: &stackTrace,
 			}
@@ -2907,9 +2915,9 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 	}()
 
 	var activityInputs [][]byte
-	if err = ai.db.GetActivityDataProperties(ai.entityID, GetActivityDataInputs(&activityInputs)); err != nil {
+	if err = ai.db.GetActivityDataPropertiesByEntityID(ai.entityID, GetActivityDataInputs(&activityInputs)); err != nil {
 		err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to get activity data inputs: %w", err))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return nil, err
 	}
 
@@ -2921,7 +2929,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 	select {
 	case <-ai.ctx.Done():
 		err := errors.Join(ErrActivityInstanceRun, ai.ctx.Err())
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return nil, err
 	default:
 	}
@@ -2930,14 +2938,14 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 	numOut := len(results)
 	if numOut == 0 {
 		err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("activity %s should return at least an error", handler.HandlerName))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return nil, err
 	}
 
 	errInterface := results[numOut-1].Interface()
 	if errInterface != nil {
 
-		logger.Debug(ai.ctx, "activity instance run failed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Debug(ai.ctx, "activity instance run failed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 
 		errActivity := errInterface.(error)
 
@@ -2949,23 +2957,23 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 			ai.executionID,
 			SetActivityExecutionError(errorMessage)); err != nil {
 			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution error: %w", err))
-			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			return nil, err
 		}
 
 		// Update the execution with the execution data
-		if err = ai.db.SetActivityExecutionDataProperties(
+		if err = ai.db.SetActivityExecutionDataPropertiesByExecutionID(
 			ai.executionID,
 			SetActivityExecutionDataOutputs(nil)); err != nil {
-			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
-			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data nil outputs: %w", err))
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			return nil, err
 		}
 
 		return nil, errors.Join(ErrActivityInstanceRun, errActivity)
 	} else {
 
-		logger.Debug(ai.ctx, "activity instance run completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Debug(ai.ctx, "activity instance run completed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 
 		outputs := []interface{}{}
 		if numOut > 1 {
@@ -2979,16 +2987,16 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 		outputBytes, err := convertOutputsForSerialization(outputs)
 		if err != nil {
 			err := errors.Join(ErrActivityInstanceRun, err)
-			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			return nil, err
 		}
 
 		// Update the execution with the execution data
-		if err = ai.db.SetActivityExecutionDataProperties(
+		if err = ai.db.SetActivityExecutionDataPropertiesByExecutionID(
 			ai.executionID,
 			SetActivityExecutionDataOutputs(outputBytes)); err != nil {
-			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data outputs: %w", err))
-			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			err := errors.Join(ErrActivityInstanceRun, fmt.Errorf("failed to set activity execution data bytes outputs: %w", err))
+			logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			return nil, err
 		}
 
@@ -3000,23 +3008,23 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) error {
 
-	logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+	logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 
 	if len(args) != 1 {
 		err := errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("activity instance onCompleted expected 1 argument, got %d", len(args)))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return err
 	}
 
 	if ai.future != nil {
 		activtyOutput := args[0].(*ActivityOutput)
-		logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		ai.future.setResult(activtyOutput.Outputs)
 	}
 
 	if err := ai.db.SetActivityEntityProperties(ai.entityID, SetActivityEntityStatus(StatusCompleted)); err != nil {
 		err := errors.Join(ErrActivityInstanceCompleted, fmt.Errorf("failed to set activity entity status: %w", err))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return err
 	}
 
@@ -3025,31 +3033,31 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) error {
 
-	logger.Debug(ai.ctx, "activity instance failed", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+	logger.Debug(ai.ctx, "activity instance failed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 
 	if len(args) != 1 {
 		err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("activity instance onFailed expected 1 argument, got %d", len(args)))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return err
 	}
 	if ai.future != nil {
 		err := args[0].(error)
 		err = errors.Join(ErrActivityInstanceFailed, err)
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		ai.future.setError(err)
 	}
 
 	if ai.ctx.Err() != nil {
 		if errors.Is(ai.ctx.Err(), context.Canceled) {
-			logger.Debug(ai.ctx, "activity instance cancelled", "workflow_id", ai.workflowID, "step_id", ai.stepID)
+			logger.Debug(ai.ctx, "activity instance cancelled", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			if err := ai.db.SetActivityExecutionProperties(ai.executionID, SetActivityExecutionStatus(ExecutionStatusCancelled)); err != nil {
 				err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity execution status: %w", err))
-				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 				return err
 			}
 			if err := ai.db.SetActivityEntityProperties(ai.entityID, SetActivityEntityStatus(StatusCancelled)); err != nil {
 				err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
-				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 				return err
 			}
 			return nil
@@ -3061,7 +3069,7 @@ func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) err
 		SetActivityEntityStatus(StatusFailed),
 	); err != nil {
 		err := errors.Join(ErrActivityInstanceFailed, fmt.Errorf("failed to set activity entity status: %w", err))
-		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
+		logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 		return err
 	}
 

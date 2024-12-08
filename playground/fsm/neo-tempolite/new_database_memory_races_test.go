@@ -10,7 +10,7 @@ import (
 func TestMemoryDatabaseRaces(t *testing.T) {
 	tests := []struct {
 		name string
-		test func(*testing.T, *MemoryDatabase)
+		test func(*testing.T, Database)
 	}{
 		{"ConcurrentWorkflowOperations", testConcurrentWorkflowOperations},
 		{"ConcurrentActivityOperations", testConcurrentActivityOperations},
@@ -29,7 +29,7 @@ func TestMemoryDatabaseRaces(t *testing.T) {
 	}
 }
 
-func testConcurrentWorkflowOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentWorkflowOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -77,7 +77,7 @@ func testConcurrentWorkflowOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentActivityOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentActivityOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -137,7 +137,7 @@ func testConcurrentActivityOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentSagaOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentSagaOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -195,7 +195,7 @@ func testConcurrentSagaOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentSideEffectOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentSideEffectOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -253,7 +253,7 @@ func testConcurrentSideEffectOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentSignalOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentSignalOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -313,7 +313,7 @@ func testConcurrentSignalOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentQueueOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentQueueOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -353,7 +353,7 @@ func testConcurrentQueueOperations(t *testing.T, db *MemoryDatabase) {
 	wg.Wait()
 }
 
-func testConcurrentVersionOperations(t *testing.T, db *MemoryDatabase) {
+func testConcurrentVersionOperations(t *testing.T, db Database) {
 	const numGoroutines = 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)

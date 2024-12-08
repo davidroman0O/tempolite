@@ -912,15 +912,18 @@ type Database interface {
 
 	// Workflow Data
 	AddWorkflowData(entityID WorkflowEntityID, data *WorkflowData) (WorkflowDataID, error)
+	GetWorkflowDataIDByEntityID(entityID WorkflowEntityID) (WorkflowDataID, error)
 	GetWorkflowData(id WorkflowDataID) (*WorkflowData, error)
 	HasWorkflowData(id WorkflowDataID) (bool, error)
-	GetWorkflowDataByEntityID(entityID WorkflowEntityID) (*WorkflowData, error)
-	HasWorkflowDataByEntityID(entityID WorkflowEntityID) (bool, error)
 	GetWorkflowDataProperties(id WorkflowDataID, getters ...WorkflowDataPropertyGetter) error
 	SetWorkflowDataProperties(id WorkflowDataID, setters ...WorkflowDataPropertySetter) error
+	GetWorkflowDataByEntityID(entityID WorkflowEntityID) (*WorkflowData, error)
+	HasWorkflowDataByEntityID(entityID WorkflowEntityID) (bool, error)
+	GetWorkflowDataPropertiesByEntityID(entityID WorkflowEntityID, getters ...WorkflowDataPropertyGetter) error
+	SetWorkflowDataPropertiesByEntityID(entityID WorkflowEntityID, setters ...WorkflowDataPropertySetter) error
 
 	// Workflow Execution
-	AddWorkflowExecution(exec *WorkflowExecution) (WorkflowExecutionID, error)
+	AddWorkflowExecution(entity WorkflowEntityID, exec *WorkflowExecution) (WorkflowExecutionID, error)
 	GetWorkflowExecution(id WorkflowExecutionID, opts ...WorkflowExecutionGetOption) (*WorkflowExecution, error)
 	GetWorkflowExecutions(entityID WorkflowEntityID) ([]*WorkflowExecution, error)
 	HasWorkflowExecution(id WorkflowExecutionID) (bool, error)
@@ -930,12 +933,15 @@ type Database interface {
 
 	// Workflow Execution Data
 	AddWorkflowExecutionData(executionID WorkflowExecutionID, data *WorkflowExecutionData) (WorkflowExecutionDataID, error)
+	GetWorkflowExecutionDataIDByEntityID(executionID WorkflowExecutionID) (WorkflowExecutionDataID, error)
 	GetWorkflowExecutionData(id WorkflowExecutionDataID) (*WorkflowExecutionData, error)
 	HasWorkflowExecutionData(id WorkflowExecutionDataID) (bool, error)
+	GetWorkflowExecutionDataProperties(id WorkflowExecutionDataID, getters ...WorkflowExecutionDataPropertyGetter) error
+	SetWorkflowExecutionDataProperties(id WorkflowExecutionDataID, setters ...WorkflowExecutionDataPropertySetter) error
 	GetWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (*WorkflowExecutionData, error)
 	HasWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (bool, error)
-	GetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error
-	SetWorkflowExecutionDataProperties(entityID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error
+	GetWorkflowExecutionDataPropertiesByExecutionID(entityID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error
+	SetWorkflowExecutionDataPropertiesByExecutionID(entityID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error
 
 	// ACTIVITY-RELATED OPERATIONS
 	// Activity Entity
@@ -951,10 +957,13 @@ type Database interface {
 	AddActivityData(entityID ActivityEntityID, data *ActivityData) (ActivityDataID, error)
 	GetActivityData(id ActivityDataID) (*ActivityData, error)
 	HasActivityData(id ActivityDataID) (bool, error)
-	GetActivityDataByEntityID(entityID ActivityEntityID) (*ActivityData, error)
+	GetActivityDataIDByEntityID(entityID ActivityEntityID) (ActivityDataID, error)
+	GetActivityDataProperties(id ActivityDataID, getters ...ActivityDataPropertyGetter) error
+	SetActivityDataProperties(id ActivityDataID, setters ...ActivityDataPropertySetter) error
 	HasActivityDataByEntityID(entityID ActivityEntityID) (bool, error)
-	GetActivityDataProperties(entityID ActivityEntityID, getters ...ActivityDataPropertyGetter) error
-	SetActivityDataProperties(entityID ActivityEntityID, setters ...ActivityDataPropertySetter) error
+	GetActivityDataByEntityID(entityID ActivityEntityID) (*ActivityData, error)
+	GetActivityDataPropertiesByEntityID(entityID ActivityEntityID, getters ...ActivityDataPropertyGetter) error
+	SetActivityDataPropertiesByEntityID(entityID ActivityEntityID, setters ...ActivityDataPropertySetter) error
 
 	// Activity Execution
 	AddActivityExecution(exec *ActivityExecution) (ActivityExecutionID, error)
@@ -969,10 +978,13 @@ type Database interface {
 	AddActivityExecutionData(executionID ActivityExecutionID, data *ActivityExecutionData) (ActivityExecutionDataID, error)
 	GetActivityExecutionData(id ActivityExecutionDataID) (*ActivityExecutionData, error)
 	HasActivityExecutionData(id ActivityExecutionDataID) (bool, error)
+	GetActivityExecutionDataIDByEntityID(executionID ActivityExecutionID) (ActivityExecutionDataID, error)
+	GetActivityExecutionDataProperties(id ActivityExecutionDataID, getters ...ActivityExecutionDataPropertyGetter) error
+	SetActivityExecutionDataProperties(id ActivityExecutionDataID, setters ...ActivityExecutionDataPropertySetter) error
 	GetActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (*ActivityExecutionData, error)
 	HasActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (bool, error)
-	GetActivityExecutionDataProperties(entityID ActivityExecutionID, getters ...ActivityExecutionDataPropertyGetter) error
-	SetActivityExecutionDataProperties(entityID ActivityExecutionID, setters ...ActivityExecutionDataPropertySetter) error
+	GetActivityExecutionDataPropertiesByExecutionID(executionID ActivityExecutionID, getters ...ActivityExecutionDataPropertyGetter) error
+	SetActivityExecutionDataPropertiesByExecutionID(executionID ActivityExecutionID, setters ...ActivityExecutionDataPropertySetter) error
 
 	// SAGA-RELATED OPERATIONS
 	// Saga Entity
@@ -988,10 +1000,13 @@ type Database interface {
 	AddSagaData(entityID SagaEntityID, data *SagaData) (SagaDataID, error)
 	GetSagaData(id SagaDataID) (*SagaData, error)
 	HasSagaData(id SagaDataID) (bool, error)
+	GetSagaDataIDByEntityID(entityID SagaEntityID) (SagaDataID, error)
+	GetSagaDataProperties(id SagaDataID, getters ...SagaDataPropertyGetter) error
+	SetSagaDataProperties(id SagaDataID, setters ...SagaDataPropertySetter) error
 	GetSagaDataByEntityID(entityID SagaEntityID) (*SagaData, error)
 	HasSagaDataByEntityID(entityID SagaEntityID) (bool, error)
-	GetSagaDataProperties(entityID SagaEntityID, getters ...SagaDataPropertyGetter) error
-	SetSagaDataProperties(entityID SagaEntityID, setters ...SagaDataPropertySetter) error
+	GetSagaDataPropertiesByEntityID(entityID SagaEntityID, getters ...SagaDataPropertyGetter) error
+	SetSagaDataPropertiesByEntityID(entityID SagaEntityID, setters ...SagaDataPropertySetter) error
 
 	// Saga Execution
 	AddSagaExecution(exec *SagaExecution) (SagaExecutionID, error)
@@ -1005,10 +1020,13 @@ type Database interface {
 	AddSagaExecutionData(executionID SagaExecutionID, data *SagaExecutionData) (SagaExecutionDataID, error)
 	GetSagaExecutionData(id SagaExecutionDataID) (*SagaExecutionData, error)
 	HasSagaExecutionData(id SagaExecutionDataID) (bool, error)
+	GetSagaExecutionDataProperties(id SagaExecutionDataID, getters ...SagaExecutionDataPropertyGetter) error
+	SetSagaExecutionDataProperties(id SagaExecutionDataID, setters ...SagaExecutionDataPropertySetter) error
+	GetSagaExecutionDataIDByEntityID(executionID SagaExecutionID) (SagaExecutionDataID, error)
 	GetSagaExecutionDataByExecutionID(executionID SagaExecutionID) (*SagaExecutionData, error)
 	HasSagaExecutionDataByExecutionID(executionID SagaExecutionID) (bool, error)
-	GetSagaExecutionDataProperties(entityID SagaExecutionID, getters ...SagaExecutionDataPropertyGetter) error
-	SetSagaExecutionDataProperties(entityID SagaExecutionID, setters ...SagaExecutionDataPropertySetter) error
+	GetSagaExecutionDataPropertiesByEntities(entityID SagaExecutionID, getters ...SagaExecutionDataPropertyGetter) error
+	SetSagaExecutionDataPropertiesByEntities(entityID SagaExecutionID, setters ...SagaExecutionDataPropertySetter) error
 
 	// Saga Context operations
 	SetSagaValue(executionID SagaExecutionID, key string, value []byte) (SagaValueID, error) // return the ID of the sagaValue
@@ -1029,10 +1047,13 @@ type Database interface {
 	AddSideEffectData(entityID SideEffectEntityID, data *SideEffectData) (SideEffectDataID, error)
 	GetSideEffectData(id SideEffectDataID) (*SideEffectData, error)
 	HasSideEffectData(id SideEffectDataID) (bool, error)
+	GetSideEffectDataProperties(id SideEffectDataID, getters ...SideEffectDataPropertyGetter) error
+	SetSideEffectDataProperties(id SideEffectDataID, setters ...SideEffectDataPropertySetter) error
+	GetSideEffectDataIDByEntityID(entityID SideEffectEntityID) (SideEffectDataID, error)
 	GetSideEffectDataByEntityID(entityID SideEffectEntityID) (*SideEffectData, error)
 	HasSideEffectDataByEntityID(entityID SideEffectEntityID) (bool, error)
-	GetSideEffectDataProperties(entityID SideEffectEntityID, getters ...SideEffectDataPropertyGetter) error
-	SetSideEffectDataProperties(entityID SideEffectEntityID, setters ...SideEffectDataPropertySetter) error
+	GetSideEffectDataPropertiesByEntityID(entityID SideEffectEntityID, getters ...SideEffectDataPropertyGetter) error
+	SetSideEffectDataPropertiesByEntityID(entityID SideEffectEntityID, setters ...SideEffectDataPropertySetter) error
 
 	// SideEffect Execution
 	AddSideEffectExecution(exec *SideEffectExecution) (SideEffectExecutionID, error)
@@ -1046,10 +1067,13 @@ type Database interface {
 	AddSideEffectExecutionData(executionID SideEffectExecutionID, data *SideEffectExecutionData) (SideEffectExecutionDataID, error)
 	GetSideEffectExecutionData(id SideEffectExecutionDataID) (*SideEffectExecutionData, error)
 	HasSideEffectExecutionData(id SideEffectExecutionDataID) (bool, error)
+	GetSideEffectExecutionDataIDByExecutionID(executionID SideEffectEntityID) (SideEffectDataID, error)
 	GetSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (*SideEffectExecutionData, error)
 	HasSideEffectExecutionDataByExecutionID(executionID SideEffectExecutionID) (bool, error)
 	GetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, getters ...SideEffectExecutionDataPropertyGetter) error
 	SetSideEffectExecutionDataProperties(id SideEffectExecutionDataID, setters ...SideEffectExecutionDataPropertySetter) error
+	GetSideEffectExecutionDataPropertiesByExecutionID(executionID SideEffectExecutionID, getters ...SideEffectExecutionDataPropertyGetter) error
+	SetSideEffectExecutionDataPropertiesByExecutionID(executionID SideEffectExecutionID, setters ...SideEffectExecutionDataPropertySetter) error
 
 	// RUN-RELATED OPERATIONS
 	AddRun(run *Run) (RunID, error)
@@ -1105,6 +1129,7 @@ type Database interface {
 	SetSignalEntityProperties(id SignalEntityID, setters ...SignalEntityPropertySetter) error
 
 	// Signal Data
+	// TODO: need to add the same patterns as the others
 	AddSignalData(entityID SignalEntityID, data *SignalData) (SignalDataID, error)
 	GetSignalData(id SignalDataID) (*SignalData, error)
 	HasSignalData(id SignalDataID) (bool, error)
@@ -1123,6 +1148,7 @@ type Database interface {
 	SetSignalExecutionProperties(id SignalExecutionID, setters ...SignalExecutionPropertySetter) error
 
 	// Signal Execution Data
+	// TODO: need to add the same patterns as the others
 	AddSignalExecutionData(executionID SignalExecutionID, data *SignalExecutionData) (SignalExecutionDataID, error)
 	GetSignalExecutionData(id SignalExecutionDataID) (*SignalExecutionData, error)
 	HasSignalExecutionData(id SignalExecutionDataID) (bool, error)
