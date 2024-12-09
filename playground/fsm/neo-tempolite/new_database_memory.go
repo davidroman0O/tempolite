@@ -1876,7 +1876,7 @@ func (db *MemoryDatabase) SetWorkflowDataPropertiesByEntityID(entityID WorkflowE
 	return nil
 }
 
-func (db *MemoryDatabase) GetWorkflowExecutionDataIDByEntityID(executionID WorkflowExecutionID) (WorkflowExecutionDataID, error) {
+func (db *MemoryDatabase) GetWorkflowExecutionDataIDByExecutionID(executionID WorkflowExecutionID) (WorkflowExecutionDataID, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -3244,7 +3244,7 @@ func (db *MemoryDatabase) HasActivityExecutionData(id ActivityExecutionDataID) (
 	return exists, nil
 }
 
-func (db *MemoryDatabase) GetActivityExecutionDataIDByEntityID(executionID ActivityExecutionID) (ActivityExecutionDataID, error) {
+func (db *MemoryDatabase) GetActivityExecutionDataIDByExecutionID(executionID ActivityExecutionID) (ActivityExecutionDataID, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -3810,10 +3810,60 @@ func (db *MemoryDatabase) HasSignalDataByEntityID(entityID SignalEntityID) (bool
 	return false, nil
 }
 
-func (db *MemoryDatabase) GetSignalDataProperties(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error {
-
+// Signal Data implementations
+func (db *MemoryDatabase) GetSignalDataIDByEntityID(entityID SignalEntityID) (SignalDataID, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	for _, data := range db.signalData {
+		if data.EntityID == entityID {
+			return data.ID, nil
+		}
+	}
+
+	return SignalDataID(0), fmt.Errorf("signal data not found")
+}
+
+func (db *MemoryDatabase) GetSignalDataProperties(id SignalDataID, getters ...SignalDataPropertyGetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	data, exists := db.signalData[id]
+	if !exists {
+		return fmt.Errorf("signal data not found")
+	}
+
+	for _, getter := range getters {
+		if _, err := getter(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalDataProperties(id SignalDataID, setters ...SignalDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	data, exists := db.signalData[id]
+	if !exists {
+		return fmt.Errorf("signal data not found")
+	}
+
+	for _, setter := range setters {
+		if _, err := setter(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) GetSignalDataPropertiesByEntityID(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	var data *SignalData
 	for _, d := range db.signalData {
 		if d.EntityID == entityID {
@@ -3835,10 +3885,10 @@ func (db *MemoryDatabase) GetSignalDataProperties(entityID SignalEntityID, gette
 	return nil
 }
 
-func (db *MemoryDatabase) SetSignalDataProperties(entityID SignalEntityID, setters ...SignalDataPropertySetter) error {
-
+func (db *MemoryDatabase) SetSignalDataPropertiesByEntityID(entityID SignalEntityID, setters ...SignalDataPropertySetter) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
 	var data *SignalData
 	for _, d := range db.signalData {
 		if d.EntityID == entityID {
@@ -3846,6 +3896,7 @@ func (db *MemoryDatabase) SetSignalDataProperties(entityID SignalEntityID, sette
 			break
 		}
 	}
+
 	if data == nil {
 		return fmt.Errorf("signal data not found")
 	}
@@ -3855,6 +3906,118 @@ func (db *MemoryDatabase) SetSignalDataProperties(entityID SignalEntityID, sette
 			return err
 		}
 	}
+
+	return nil
+}
+
+// Signal Execution Data implementations
+func (db *MemoryDatabase) GetSignalExecutionDataIDByExecutionID(executionID SignalExecutionID) (SignalExecutionDataID, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	dataID, exists := db.signalExecToDataMap[executionID]
+	if !exists {
+		return SignalExecutionDataID(0), fmt.Errorf("signal execution data not found")
+	}
+
+	return dataID, nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionDataProperties(id SignalExecutionDataID, getters ...SignalExecutionDataPropertyGetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	data, exists := db.signalExecutionData[id]
+	if !exists {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	for _, getter := range getters {
+		if _, err := getter(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalExecutionDataProperties(id SignalExecutionDataID, setters ...SignalExecutionDataPropertySetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	data, exists := db.signalExecutionData[id]
+	if !exists {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	for _, setter := range setters {
+		if _, err := setter(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) GetSignalExecutionDataPropertiesByExecutionID(executionID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	dataID, exists := db.signalExecToDataMap[executionID]
+	if !exists {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	data, exists := db.signalExecutionData[dataID]
+	if !exists {
+		return fmt.Errorf("signal execution data not found")
+	}
+
+	for _, getter := range getters {
+		if _, err := getter(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *MemoryDatabase) SetSignalExecutionDataPropertiesByExecutionID(executionID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error {
+	db.mu.Lock()
+
+	// First check if data exists
+	var data *SignalExecutionData
+	var dataID SignalExecutionDataID
+	var exists bool
+
+	dataID, exists = db.signalExecToDataMap[executionID]
+	if exists {
+		data = db.signalExecutionData[dataID]
+	}
+
+	// If no data exists, create new data structure directly
+	if data == nil {
+		db.signalExecutionDataCounter++
+		dataID = SignalExecutionDataID(db.signalExecutionDataCounter)
+
+		data = &SignalExecutionData{
+			ID:          dataID,
+			ExecutionID: executionID,
+		}
+
+		db.signalExecutionData[dataID] = data
+		db.signalExecToDataMap[executionID] = dataID
+	}
+
+	// Apply setters
+	for _, setter := range setters {
+		if _, err := setter(data); err != nil {
+			db.mu.Unlock()
+			return err
+		}
+	}
+
+	db.mu.Unlock()
 	return nil
 }
 
@@ -3907,54 +4070,6 @@ func (db *MemoryDatabase) HasSignalExecutionDataByExecutionID(executionID Signal
 		}
 	}
 	return false, nil
-}
-
-func (db *MemoryDatabase) GetSignalExecutionDataProperties(entityID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error {
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	var data *SignalExecutionData
-	for _, d := range db.signalExecutionData {
-		if d.ExecutionID == entityID {
-			data = d
-			break
-		}
-	}
-
-	if data == nil {
-		return fmt.Errorf("signal execution data not found")
-	}
-
-	for _, getter := range getters {
-		if _, err := getter(data); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (db *MemoryDatabase) SetSignalExecutionDataProperties(entityID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error {
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	var data *SignalExecutionData
-	for _, d := range db.signalExecutionData {
-		if d.ExecutionID == entityID {
-			data = d
-			break
-		}
-	}
-	if data == nil {
-		return fmt.Errorf("signal execution data not found")
-	}
-
-	for _, setter := range setters {
-		if _, err := setter(data); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // //////////////
@@ -4059,7 +4174,7 @@ func (db *MemoryDatabase) SetSagaDataPropertiesByEntityID(entityID SagaEntityID,
 }
 
 // Saga Execution Data related functions
-func (db *MemoryDatabase) GetSagaExecutionDataIDByEntityID(executionID SagaExecutionID) (SagaExecutionDataID, error) {
+func (db *MemoryDatabase) GetSagaExecutionDataIDByExecutionID(executionID SagaExecutionID) (SagaExecutionDataID, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

@@ -31,7 +31,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -4859,7 +4859,7 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		}
 
 		// Store value
-		if err := si.db.SetSignalExecutionDataProperties(
+		if err := si.db.SetSignalExecutionDataPropertiesByExecutionID(
 			si.executionID,
 			SetSignalExecutionDataValue(valueBytes[0])); err != nil {
 			err := fmt.Errorf("failed to store signal value: %w", err)

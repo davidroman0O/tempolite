@@ -627,3 +627,70 @@ func TestTempoliteRunDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTempoliteWorkflowsConcurrentScaling(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	defer db.SaveAsJSON("./json/tempolite_workflows_concurrent_scaling.json")
+
+	howMuch := 1000
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(1),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tp.Close()
+
+	workflowFunc := func(ctx WorkflowContext) (int, error) {
+		return 1, nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, howMuch)
+
+	// Launch workflows concurrently
+	for i := 0; i < howMuch; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			future, err := tp.ExecuteDefault(workflowFunc, nil)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to execute workflow %d: %v", index, err)
+				return
+			}
+
+			if err := future.Get(); err != nil {
+				errChan <- fmt.Errorf("workflow %d failed: %v", index, err)
+				return
+			}
+		}(i)
+	}
+
+	if err := tp.ScaleQueue("default", 100); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.ScaleQueue("default", 10); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for all workflows to complete
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors
+	for err := range errChan {
+		t.Error(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+}

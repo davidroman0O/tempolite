@@ -479,11 +479,14 @@ func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
 	instance.mu.Lock()
 	defer instance.mu.Unlock()
 
+	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "target", delta)
+
 	if delta > 0 {
 		// Add workers
 		for i := 0; i < delta; i++ {
 			worker := NewQueueWorker(instance)
 			instance.orchestrators.AddWorker(worker)
+			logger.Info(t.ctx, "Added worker to queue", "queueName", queueName)
 		}
 		instance.count += delta
 	} else if delta < 0 {
@@ -494,12 +497,16 @@ func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
 		}
 		workers := instance.orchestrators.ListWorkers()
 		for i := 0; i < count && i < len(workers); i++ {
+			logger.Info(t.ctx, "Removing worker from queue", "queueName", queueName)
 			if err := instance.orchestrators.RemoveWorker(workers[len(workers)-1-i].ID); err != nil {
 				return fmt.Errorf("failed to remove worker: %w", err)
 			}
+			logger.Info(t.ctx, "Removed worker from queue %s", queueName)
 		}
 		instance.count -= count
 	}
+
+	logger.Info(t.ctx, "Queue scaled", "queueName", queueName, "target", delta)
 
 	return nil
 }

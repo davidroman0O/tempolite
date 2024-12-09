@@ -935,15 +935,15 @@ type Database interface {
 
 	// Workflow Execution Data
 	AddWorkflowExecutionData(executionID WorkflowExecutionID, data *WorkflowExecutionData) (WorkflowExecutionDataID, error)
-	GetWorkflowExecutionDataIDByEntityID(executionID WorkflowExecutionID) (WorkflowExecutionDataID, error)
+	GetWorkflowExecutionDataIDByExecutionID(executionID WorkflowExecutionID) (WorkflowExecutionDataID, error)
 	GetWorkflowExecutionData(id WorkflowExecutionDataID) (*WorkflowExecutionData, error)
 	HasWorkflowExecutionData(id WorkflowExecutionDataID) (bool, error)
 	GetWorkflowExecutionDataProperties(id WorkflowExecutionDataID, getters ...WorkflowExecutionDataPropertyGetter) error
 	SetWorkflowExecutionDataProperties(id WorkflowExecutionDataID, setters ...WorkflowExecutionDataPropertySetter) error
 	GetWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (*WorkflowExecutionData, error)
 	HasWorkflowExecutionDataByExecutionID(executionID WorkflowExecutionID) (bool, error)
-	GetWorkflowExecutionDataPropertiesByExecutionID(entityID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error
-	SetWorkflowExecutionDataPropertiesByExecutionID(entityID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error
+	GetWorkflowExecutionDataPropertiesByExecutionID(executionID WorkflowExecutionID, getters ...WorkflowExecutionDataPropertyGetter) error
+	SetWorkflowExecutionDataPropertiesByExecutionID(executionID WorkflowExecutionID, setters ...WorkflowExecutionDataPropertySetter) error
 
 	// ACTIVITY-RELATED OPERATIONS
 	// Activity Entity
@@ -980,7 +980,7 @@ type Database interface {
 	AddActivityExecutionData(executionID ActivityExecutionID, data *ActivityExecutionData) (ActivityExecutionDataID, error)
 	GetActivityExecutionData(id ActivityExecutionDataID) (*ActivityExecutionData, error)
 	HasActivityExecutionData(id ActivityExecutionDataID) (bool, error)
-	GetActivityExecutionDataIDByEntityID(executionID ActivityExecutionID) (ActivityExecutionDataID, error)
+	GetActivityExecutionDataIDByExecutionID(executionID ActivityExecutionID) (ActivityExecutionDataID, error)
 	GetActivityExecutionDataProperties(id ActivityExecutionDataID, getters ...ActivityExecutionDataPropertyGetter) error
 	SetActivityExecutionDataProperties(id ActivityExecutionDataID, setters ...ActivityExecutionDataPropertySetter) error
 	GetActivityExecutionDataByExecutionID(executionID ActivityExecutionID) (*ActivityExecutionData, error)
@@ -1024,7 +1024,7 @@ type Database interface {
 	HasSagaExecutionData(id SagaExecutionDataID) (bool, error)
 	GetSagaExecutionDataProperties(id SagaExecutionDataID, getters ...SagaExecutionDataPropertyGetter) error
 	SetSagaExecutionDataProperties(id SagaExecutionDataID, setters ...SagaExecutionDataPropertySetter) error
-	GetSagaExecutionDataIDByEntityID(executionID SagaExecutionID) (SagaExecutionDataID, error)
+	GetSagaExecutionDataIDByExecutionID(executionID SagaExecutionID) (SagaExecutionDataID, error)
 	GetSagaExecutionDataByExecutionID(executionID SagaExecutionID) (*SagaExecutionData, error)
 	HasSagaExecutionDataByExecutionID(executionID SagaExecutionID) (bool, error)
 	GetSagaExecutionDataPropertiesByEntities(entityID SagaExecutionID, getters ...SagaExecutionDataPropertyGetter) error
@@ -1134,14 +1134,16 @@ type Database interface {
 	SetSignalEntityProperties(id SignalEntityID, setters ...SignalEntityPropertySetter) error
 
 	// Signal Data
-	// TODO: need to add the same patterns as the others
 	AddSignalData(entityID SignalEntityID, data *SignalData) (SignalDataID, error)
 	GetSignalData(id SignalDataID) (*SignalData, error)
 	HasSignalData(id SignalDataID) (bool, error)
+	GetSignalDataIDByEntityID(entityID SignalEntityID) (SignalDataID, error)
 	GetSignalDataByEntityID(entityID SignalEntityID) (*SignalData, error)
 	HasSignalDataByEntityID(entityID SignalEntityID) (bool, error)
-	GetSignalDataProperties(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error
-	SetSignalDataProperties(entityID SignalEntityID, setters ...SignalDataPropertySetter) error
+	GetSignalDataProperties(id SignalDataID, getters ...SignalDataPropertyGetter) error
+	SetSignalDataProperties(id SignalDataID, setters ...SignalDataPropertySetter) error
+	GetSignalDataPropertiesByEntityID(entityID SignalEntityID, getters ...SignalDataPropertyGetter) error
+	SetSignalDataPropertiesByEntityID(entityID SignalEntityID, setters ...SignalDataPropertySetter) error
 
 	// Signal Execution
 	AddSignalExecution(exec *SignalExecution) (SignalExecutionID, error)
@@ -1153,14 +1155,16 @@ type Database interface {
 	SetSignalExecutionProperties(id SignalExecutionID, setters ...SignalExecutionPropertySetter) error
 
 	// Signal Execution Data
-	// TODO: need to add the same patterns as the others
 	AddSignalExecutionData(executionID SignalExecutionID, data *SignalExecutionData) (SignalExecutionDataID, error)
 	GetSignalExecutionData(id SignalExecutionDataID) (*SignalExecutionData, error)
 	HasSignalExecutionData(id SignalExecutionDataID) (bool, error)
+	GetSignalExecutionDataIDByExecutionID(executionID SignalExecutionID) (SignalExecutionDataID, error)
 	GetSignalExecutionDataByExecutionID(executionID SignalExecutionID) (*SignalExecutionData, error)
 	HasSignalExecutionDataByExecutionID(executionID SignalExecutionID) (bool, error)
-	GetSignalExecutionDataProperties(entityID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error
-	SetSignalExecutionDataProperties(entityID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error
+	GetSignalExecutionDataProperties(id SignalExecutionDataID, getters ...SignalExecutionDataPropertyGetter) error
+	SetSignalExecutionDataProperties(id SignalExecutionDataID, setters ...SignalExecutionDataPropertySetter) error
+	GetSignalExecutionDataPropertiesByExecutionID(executionID SignalExecutionID, getters ...SignalExecutionDataPropertyGetter) error
+	SetSignalExecutionDataPropertiesByExecutionID(executionID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error
 }
 
 // RetryPolicy helper functions
