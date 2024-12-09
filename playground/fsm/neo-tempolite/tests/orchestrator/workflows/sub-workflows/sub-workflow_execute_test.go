@@ -76,19 +76,12 @@ func TestSubWorkflowExecute(t *testing.T) {
 		t.Fatalf("expected 1 executions, got %d", len(execs))
 	}
 
-	// let's search for the sub-workflow
-	// TODO: we should provide a function to get all sub-workflows in a workflow
-	// TODO: we should provive a function to get all the components of a workflow
-	hierarchies, err := database.GetHierarchiesByParentEntityAndStep(int(we.ID), "sub", tempolite.EntityWorkflow)
+	ids, err := database.GetWorkflowSubWorkflows(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(hierarchies) != 1 {
-		t.Fatalf("expected 1 hierarchy, got %d", len(hierarchies))
-	}
-
-	subwe, err := database.GetWorkflowEntity(tempolite.WorkflowEntityID(hierarchies[0].ChildEntityID))
+	subwe, err := database.GetWorkflowEntity(ids[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +128,8 @@ func TestSubWorkflowExecuteFailure(t *testing.T) {
 	}
 
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
-		if err := ctx.Workflow("sub", subworkflow, nil).Get(); err == nil {
+		if err := ctx.Workflow("sub", subworkflow, nil).Get(); err != nil { // i did the mistake once to put err == nil like an idiot, don't do that
+			fmt.Println("expected error", err)
 			return err
 		}
 		return nil
@@ -143,7 +137,7 @@ func TestSubWorkflowExecuteFailure(t *testing.T) {
 
 	future := orchestrator.Execute(workflowFunc, nil)
 
-	if err := future.Get(); err != nil {
+	if err := future.Get(); err == nil {
 		t.Fatal(err)
 	}
 
@@ -173,5 +167,124 @@ func TestSubWorkflowExecuteFailure(t *testing.T) {
 
 	if execs[0].Error == "" {
 		t.Fatal("expected error")
+	}
+
+	ids, err := database.GetWorkflowSubWorkflows(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subwe, err := database.GetWorkflowEntity(ids[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if subwe.Status != tempolite.StatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.StatusFailed, subwe.Status)
+	}
+
+	subexecs, err := database.GetWorkflowExecutions(subwe.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subexecs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(subexecs))
+	}
+
+	if subexecs[0].Status != tempolite.ExecutionStatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, subexecs[0].Status)
+	}
+
+	if subexecs[0].Error == "" {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSubWorkflowExecutePanic(t *testing.T) {
+	registry := tempolite.NewRegistry()
+	database := tempolite.NewMemoryDatabase()
+	ctx := context.Background()
+
+	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
+
+	subworkflow := func(ctx tempolite.WorkflowContext) error {
+		panic("on purpose")
+	}
+
+	workflowFunc := func(ctx tempolite.WorkflowContext) error {
+		if err := ctx.Workflow("sub", subworkflow, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future := orchestrator.Execute(workflowFunc, nil)
+
+	if err := future.Get(); err == nil {
+		t.Fatal("expected error")
+	}
+
+	database.SaveAsJSON("./jsons/workflows_subworkflow_execute_panic.json")
+
+	we, err := database.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if we.Status != tempolite.StatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.StatusFailed, we.Status)
+	}
+
+	execs, err := database.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(execs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(execs))
+	}
+
+	if execs[0].Status != tempolite.ExecutionStatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, execs[0].Status)
+	}
+
+	if execs[0].Error == "" {
+		t.Fatal("expected error")
+	}
+
+	ids, err := database.GetWorkflowSubWorkflows(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subwe, err := database.GetWorkflowEntity(ids[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if subwe.Status != tempolite.StatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.StatusFailed, subwe.Status)
+	}
+
+	subexecs, err := database.GetWorkflowExecutions(subwe.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subexecs) != 1 {
+		t.Fatalf("expected 1 execution, got %d", len(subexecs))
+	}
+
+	if subexecs[0].Status != tempolite.ExecutionStatusFailed {
+		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, subexecs[0].Status)
+	}
+
+	if subexecs[0].Error == "" {
+		t.Fatal("expected error")
+	}
+
+	if subexecs[0].StackTrace == nil {
+		t.Fatal("expected stack trace")
 	}
 }

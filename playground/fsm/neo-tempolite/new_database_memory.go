@@ -6059,3 +6059,192 @@ func paginateResults[T any](items []*T, page *Pagination) *Paginated[T] {
 		PageSize:   page.PageSize,
 	}
 }
+
+////////////////////////////////////////////////////
+
+// GetWorkflowSubWorkflows returns all sub-workflows of a given workflow entity.
+// It recursively traverses the hierarchy to find nested workflows.
+func (db *MemoryDatabase) GetWorkflowSubWorkflows(workflowID WorkflowEntityID) ([]*WorkflowEntity, error) {
+	type workflowNode struct {
+		id       WorkflowEntityID
+		children []WorkflowEntityID
+	}
+
+	// First gather all the data we need under a single lock
+	db.mu.Lock()
+
+	// Build a graph of workflow relationships
+	workflowGraph := make(map[WorkflowEntityID]*workflowNode)
+	allWorkflows := make(map[WorkflowEntityID]*WorkflowEntity)
+
+	// Start with the root workflow
+	queue := []WorkflowEntityID{workflowID}
+
+	// Process each workflow we discover
+	for len(queue) > 0 {
+		currentID := queue[0]
+		queue = queue[1:]
+
+		// Skip if we've already processed this workflow
+		if _, seen := workflowGraph[currentID]; seen {
+			continue
+		}
+
+		// Create new node
+		node := &workflowNode{
+			id:       currentID,
+			children: make([]WorkflowEntityID, 0),
+		}
+		workflowGraph[currentID] = node
+
+		// Get and store the workflow entity
+		if wf, exists := db.workflowEntities[currentID]; exists {
+			allWorkflows[currentID] = copyWorkflowEntity(wf)
+
+			// Find all child workflows
+			for _, h := range db.hierarchies {
+				if h.ParentEntityID == int(currentID) && h.ChildType == EntityWorkflow {
+					childID := WorkflowEntityID(h.ChildEntityID)
+					node.children = append(node.children, childID)
+					queue = append(queue, childID)
+				}
+			}
+		}
+	}
+
+	db.mu.Unlock()
+
+	// Now we can process the graph without holding the lock
+	result := make([]*WorkflowEntity, 0)
+	visited := make(map[WorkflowEntityID]bool)
+
+	var traverse func(id WorkflowEntityID)
+	traverse = func(id WorkflowEntityID) {
+		if visited[id] {
+			return
+		}
+		visited[id] = true
+
+		if wf, exists := allWorkflows[id]; exists && id != workflowID { // Don't include the root workflow
+			result = append(result, wf)
+		}
+
+		if node, exists := workflowGraph[id]; exists {
+			for _, childID := range node.children {
+				traverse(childID)
+			}
+		}
+	}
+
+	traverse(workflowID)
+	return result, nil
+}
+
+// GetWorkflowComponents returns a tree structure of all components in a workflow,
+// including sub-workflows and their components.
+func (db *MemoryDatabase) GetWorkflowComponents(workflowID WorkflowEntityID) (*WorkflowComponent, error) {
+	type entityInfo struct {
+		entityType EntityType
+		stepID     string
+		status     EntityStatus
+		children   []int
+	}
+
+	// Gather all data under a single lock
+	db.mu.Lock()
+
+	// First verify the workflow exists
+	if _, exists := db.workflowEntities[workflowID]; !exists {
+		db.mu.Unlock()
+		return nil, ErrWorkflowEntityNotFound
+	}
+
+	// Build a map of all entities and their relationships
+	entities := make(map[int]*entityInfo)
+
+	// Helper function to record entity info
+	recordEntity := func(id int, eType EntityType, stepID string, status EntityStatus) {
+		if _, exists := entities[id]; !exists {
+			entities[id] = &entityInfo{
+				entityType: eType,
+				stepID:     stepID,
+				status:     status,
+				children:   make([]int, 0),
+			}
+		}
+	}
+
+	// Record the root workflow
+	if wf, exists := db.workflowEntities[workflowID]; exists {
+		recordEntity(int(workflowID), EntityWorkflow, wf.StepID, wf.Status)
+	}
+
+	// Record all entity relationships
+	for _, h := range db.hierarchies {
+		// Record parent if it's not recorded yet
+		switch h.ParentType {
+		case EntityWorkflow:
+			if wf, exists := db.workflowEntities[WorkflowEntityID(h.ParentEntityID)]; exists {
+				recordEntity(h.ParentEntityID, EntityWorkflow, wf.StepID, wf.Status)
+			}
+		}
+
+		// Record child based on its type
+		switch h.ChildType {
+		case EntityWorkflow:
+			if wf, exists := db.workflowEntities[WorkflowEntityID(h.ChildEntityID)]; exists {
+				recordEntity(h.ChildEntityID, EntityWorkflow, wf.StepID, wf.Status)
+			}
+		case EntityActivity:
+			if act, exists := db.activityEntities[ActivityEntityID(h.ChildEntityID)]; exists {
+				recordEntity(h.ChildEntityID, EntityActivity, act.StepID, act.Status)
+			}
+		case EntitySaga:
+			if saga, exists := db.sagaEntities[SagaEntityID(h.ChildEntityID)]; exists {
+				recordEntity(h.ChildEntityID, EntitySaga, saga.StepID, saga.Status)
+			}
+		case EntitySideEffect:
+			if se, exists := db.sideEffectEntities[SideEffectEntityID(h.ChildEntityID)]; exists {
+				recordEntity(h.ChildEntityID, EntitySideEffect, se.StepID, se.Status)
+			}
+		case EntitySignal:
+			if sig, exists := db.signalEntities[SignalEntityID(h.ChildEntityID)]; exists {
+				recordEntity(h.ChildEntityID, EntitySignal, sig.StepID, sig.Status)
+			}
+		}
+
+		// Record parent-child relationship
+		if parent, exists := entities[h.ParentEntityID]; exists {
+			parent.children = append(parent.children, h.ChildEntityID)
+		}
+	}
+
+	db.mu.Unlock()
+
+	// Build the component tree without holding the lock
+	var buildTree func(entityID int) *WorkflowComponent
+	buildTree = func(entityID int) *WorkflowComponent {
+		info, exists := entities[entityID]
+		if !exists {
+			return nil
+		}
+
+		component := &WorkflowComponent{
+			Type:       info.entityType,
+			EntityID:   entityID,
+			StepID:     info.stepID,
+			Status:     info.status,
+			Components: make([]*WorkflowComponent, 0, len(info.children)),
+		}
+
+		for _, childID := range info.children {
+			if child := buildTree(childID); child != nil {
+				component.Components = append(component.Components, child)
+			}
+		}
+
+		return component
+	}
+
+	return buildTree(int(workflowID)), nil
+}

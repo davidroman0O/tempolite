@@ -32,7 +32,7 @@ import (
 
 /// TODO: might add future.setError everywhere we return within fsm
 
-var logger Logger = NewDefaultLogger(slog.LevelInfo, TextFormat)
+var logger Logger = NewDefaultLogger(slog.LevelDebug, TextFormat)
 
 func init() {
 	maxprocs.Set()
@@ -985,7 +985,8 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 	if f.err != nil {
 		logger.Debug(context.Background(), "future get error",
 			"future.workflow_id", logWorkflowID,
-			"future.workflow_execution_id", logExecutionID)
+			"future.workflow_execution_id", logExecutionID,
+			"error", f.err)
 		return f.err
 	}
 
@@ -2160,15 +2161,13 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 						return err
 					}
 				}
-				// wi.future.setParentWorkflowExecutionID(wi.parentExecutionID)
-				// wi.future.setParentWorkflowID(wi.parentEntityID)
+				wi.future.setParentWorkflowExecutionID(wi.parentExecutionID)
+				wi.future.setParentWorkflowID(wi.parentEntityID)
 			} else {
-				//// TODO: check normally we know it before
-				// wi.future.setParentWorkflowExecutionID(wi.executionID)
-				// wi.future.setParentWorkflowID(wi.workflowID)
+				//	we might be a sub-workflow, better safe than sorry
+				wi.future.setParentWorkflowExecutionID(wi.executionID)
+				wi.future.setParentWorkflowID(wi.workflowID)
 			}
-
-			// wi.future.resolve()
 
 			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
@@ -2383,6 +2382,8 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	}
 
 	errInterface := results[numOut-1].Interface()
+
+	fmt.Println("errInterface", errInterface)
 
 	// could be a fake error to trigger a continue as new
 	var continueAsNewErr *ContinueAsNewError
@@ -2653,11 +2654,9 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 		}
 	}
 
-	if wi.future != nil {
-		err := errors.Join(ErrWorkflowInstanceFailed, joinedErr)
-		logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
-		wi.future.setError(err)
-	}
+	err = errors.Join(ErrWorkflowInstanceFailed, joinedErr)
+	logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
+	wi.future.setError(err)
 
 	logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
 
@@ -4697,6 +4696,10 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		onSignalRemove:  ctx.onSignalRemove,
 	}
 
+	future.setEntityID(FutureEntityWithWorkflowID(workflowEntityID))
+	future.setParentWorkflowID(ctx.workflowID)
+	future.setParentWorkflowExecutionID(ctx.workflowExecutionID)
+
 	// Override options if provided
 	if options != nil {
 		workflowInstance.options = *options
@@ -4712,7 +4715,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	logger.Debug(ctx.ctx, "workflow instance start", "workflow_id", ctx.workflowID, "step_id", stepID)
 	ctx.tracker.addWorkflowInstance(workflowInstance)
-	workflowInstance.Start(inputs)
+	go workflowInstance.Start(inputs)
 
 	return future
 }

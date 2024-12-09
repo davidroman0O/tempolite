@@ -954,8 +954,19 @@ type Paginated[T any] struct {
 	PageSize   int  // Number of items per page
 }
 
+// WorkflowComponent represents a component (child) of a workflow with its metadata
+type WorkflowComponent struct {
+	Type       EntityType           // The type of the component (workflow, activity, saga, etc)
+	EntityID   int                  // The ID of the entity
+	StepID     string               // The step ID where this component was created
+	Status     EntityStatus         // The current status of the component
+	Components []*WorkflowComponent // Nested components (for sub-workflows)
+}
+
 // Database interface
 type Database interface {
+	GetWorkflowSubWorkflows(workflowID WorkflowEntityID) ([]*WorkflowEntity, error)
+	GetWorkflowComponents(workflowID WorkflowEntityID) (*WorkflowComponent, error)
 
 	// Listing operations
 	ListRuns(page *Pagination, filter *RunFilter) (*Paginated[Run], error)
