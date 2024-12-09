@@ -250,7 +250,8 @@ func TestTempoliteBasicSecondQueueSubWorkflow(t *testing.T) {
 		WithQueue(QueueConfig{
 			Name:        "second",
 			WorkerCount: 10,
-		}))
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

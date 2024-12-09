@@ -182,7 +182,7 @@ func (qi *QueueInstance) Wait() error {
 
 func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
 
-	workflowEntity, err := prepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
+	workflowEntity, err := PrepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
 	if err != nil {
 		log.Printf("failed to prepare workflow: %v", err)
 		return nil, nil, nil, err
@@ -820,6 +820,13 @@ func WithWorkflows(workflowFunc ...interface{}) TempoliteOption {
 				return err
 			}
 		}
+		return nil
+	}
+}
+
+func WithLog(log Logger) TempoliteOption {
+	return func(t *Tempolite) error {
+		logger = log
 		return nil
 	}
 }

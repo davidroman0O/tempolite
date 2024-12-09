@@ -1471,7 +1471,7 @@ type preparationOptions struct {
 }
 
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
-func prepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
+func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
 
 	logger.Debug(context.Background(), "preparing workflow", "workflow_func", getFunctionName(workflowFunc))
 
@@ -1663,7 +1663,7 @@ func (o *Orchestrator) Execute(workflowFunc interface{}, options *WorkflowOption
 	logger.Debug(o.ctx, "orchestrator execute", "workflow_func", getFunctionName(workflowFunc))
 
 	// Create entity and related records
-	if entity, err = prepareWorkflow(o.registry, o.db, workflowFunc, options, nil, args...); err != nil {
+	if entity, err = PrepareWorkflow(o.registry, o.db, workflowFunc, options, nil, args...); err != nil {
 		future := NewRuntimeFuture()
 		err := errors.Join(ErrOrchestratorExecution, err)
 		logger.Error(o.ctx, err.Error(), "workflow_func", getFunctionName(workflowFunc))
@@ -2508,7 +2508,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 		var workflowEntity *WorkflowEntity
 
-		if workflowEntity, err = prepareWorkflow(
+		if workflowEntity, err = PrepareWorkflow(
 			wi.registry,
 			wi.db,
 			handler.Handler,
@@ -4484,7 +4484,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 				return future
 			}
 
-			if workflowEntity, err = prepareWorkflow(
+			if workflowEntity, err = PrepareWorkflow(
 				ctx.registry,
 				ctx.db,
 				handler.Handler,

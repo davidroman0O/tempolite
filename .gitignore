@@ -4,3 +4,4 @@
 db/** 
 internal-doc/**
 
+playground/**/**.json 
