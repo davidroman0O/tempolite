@@ -3555,6 +3555,8 @@ func (db *MemoryDatabase) AddSignalExecution(exec *SignalExecution) (SignalExecu
 		exec.SignalExecutionData.ID = SignalExecutionDataID(db.signalExecutionDataCounter)
 		exec.SignalExecutionData.ExecutionID = exec.ID
 		db.signalExecutionData[exec.SignalExecutionData.ID] = copySignalExecutionData(exec.SignalExecutionData)
+
+		db.signalExecToDataMap[exec.ID] = exec.SignalExecutionData.ID
 	}
 
 	exec.CreatedAt = time.Now()
@@ -5581,6 +5583,8 @@ func copySignalExecution(exec *SignalExecution) *SignalExecution {
 	}
 	copy := SignalExecution{
 		BaseExecution: *copyBaseExecution(&exec.BaseExecution),
+		ID:            exec.ID,
+		EntityID:      exec.EntityID,
 	}
 
 	if exec.SignalExecutionData != nil {

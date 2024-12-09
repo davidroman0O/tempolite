@@ -304,8 +304,6 @@ func (tc *TransactionContext) Load(key string, value interface{}) error {
 		return err
 	}
 
-	fmt.Println("key", key, "executionID", tc.sagaExecutionID)
-
 	if data, err = tc.db.GetSagaValueByKey(tc.sagaEntityID, key); err != nil {
 		err := errors.Join(ErrSagaGetValue, err)
 		logger.Error(tc.ctx, err.Error(), "transaction_context.key", key, "error", err)
@@ -2573,10 +2571,8 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 	}
 
 	// Normal completion
-	// if wi.future != nil {
 	logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID)
 	wi.future.setResult(workflowOutput.Outputs)
-	// }
 
 	return nil
 }
@@ -4742,7 +4738,6 @@ func (ctx WorkflowContext) Signal(stepID string, output interface{}) error {
 	if err == nil && len(hierarchies) > 0 {
 		// Always take first entity - we reuse the same one for this stepID
 		signalEntityID = SignalEntityID(hierarchies[0].ChildEntityID)
-
 		// Check if it's completed to get value
 		var status EntityStatus
 		if err := ctx.db.GetSignalEntityProperties(signalEntityID, GetSignalEntityStatus(&status)); err == nil {
@@ -4976,6 +4971,7 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		logger.Debug(si.ctx, "select signal instance cancelled", "workflow_id", si.runID, "step_id", si.parentStepID)
 		si.done <- context.Canceled
 		if si.onRemoveSignal != nil {
+			logger.Debug(si.ctx, "signal instance cancelled, removing signal", "workflow_id", si.runID, "step_id", si.parentStepID)
 			if err := si.onRemoveSignal(si.parentEntityID, si.parentExecutionID, si.entityID, si.executionID, si.name); err != nil {
 				si.done <- err
 				si.fsm.Fire(TriggerFail, err)
@@ -4987,6 +4983,7 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 	case <-si.pauseCtx.Done():
 		logger.Debug(si.ctx, "select signal instance paused", "workflow_id", si.runID, "step_id", si.parentStepID)
 		if si.onRemoveSignal != nil {
+			logger.Debug(si.ctx, "signal instance paused, removing signal", "workflow_id", si.runID, "step_id", si.parentStepID)
 			if err := si.onRemoveSignal(si.parentEntityID, si.parentExecutionID, si.entityID, si.executionID, si.name); err != nil {
 				si.done <- err
 				si.fsm.Fire(TriggerFail, err)

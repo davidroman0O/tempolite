@@ -99,10 +99,12 @@ func TestQueueCrossBasic(t *testing.T) {
 		return nil
 	}
 
-	future, _, err := defaultQ.Submit(wrkfl, nil, nil)
+	future, _, q, err := defaultQ.Submit(wrkfl, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	<-q
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
@@ -418,7 +420,6 @@ func TestTempoliteSignal(t *testing.T) {
 	}
 }
 
-// TODO: finish it
 func TestTempoliteSignalPause(t *testing.T) {
 	ctx := context.Background()
 	db := NewMemoryDatabase()
@@ -479,6 +480,85 @@ func TestTempoliteSignalPause(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
+	fmt.Println("waiting for future again")
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTempoliteSignalOff(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	defer db.SaveAsJSON("./json/tempolite_signal_off.json")
+
+	workflowFunc := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		var life int
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("finished!!", life)
+		return nil
+	}
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(1),
+		WithWorkflows(
+			workflowFunc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(1 * time.Second)
+	fmt.Println("pausing")
+	if err := tp.Pause("default", future.WorkflowID()); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("waiting for future")
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrPaused) {
+			t.Fatal(err)
+		}
+	}
+
+	<-time.After(1 * time.Second)
+	fmt.Println("publishing")
+	if err := tp.PublishSignal(future.WorkflowID(), "life", 42); err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(time.Second / 2)
+	db.SaveAsJSON("./json/tempolite_signal_off.json")
+
+	<-time.After(1 * time.Second)
+	fmt.Println("resuming")
+
+	future, err = tp.Resume(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(time.Second / 2)
+	db.SaveAsJSON("./json/tempolite_signal_off.json")
 
 	fmt.Println("waiting for future again")
 	if err := future.Get(); err != nil {

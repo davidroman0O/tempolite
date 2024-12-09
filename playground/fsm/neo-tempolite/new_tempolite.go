@@ -126,6 +126,9 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	if cfg.onSignalNew != nil {
 		q.onSignalNew = cfg.onSignalNew
 	}
+	if cfg.onSignalRemove != nil {
+		q.onSignalRemove = cfg.onSignalRemove
+	}
 
 	_, err := db.AddQueue(&Queue{Name: name})
 	if err != nil {
@@ -177,16 +180,18 @@ func (qi *QueueInstance) Wait() error {
 	}, time.Second)
 }
 
-func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
+func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
 
 	workflowEntity, err := prepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
 	if err != nil {
 		log.Printf("failed to prepare workflow: %v", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	dbFuture := NewRuntimeFuture()
 	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+
+	queued := retrypool.NewQueuedNotification()
 
 	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
@@ -199,38 +204,40 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 		},
 	)
 
-	if err := qi.orchestrators.Submit(task); err != nil {
-		return nil, nil, err
+	if err := qi.orchestrators.Submit(task, retrypool.WithQueued[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+		return nil, nil, nil, err
 	}
 
-	return dbFuture, task, nil
+	return dbFuture, task, queued.Done(), nil
 }
 
-func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
+func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
 	}
 
 	// Verify the workflow is actually paused
 	var status EntityStatus
 	if err := qi.database.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
-		return nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
 	}
 	if status != StatusPaused {
-		return nil, nil, fmt.Errorf("workflow %d is not paused (current status: %s)", entityID, status)
+		return nil, nil, nil, fmt.Errorf("workflow %d is not paused (current status: %s)", entityID, status)
 	}
 
 	// Get handler info
 	handler, ok := qi.registry.GetWorkflow(workflowEntity.HandlerName)
 	if !ok {
-		return nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
+		return nil, nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
 	}
 
 	// Create future for tracking execution
 	dbFuture := NewRuntimeFuture()
 	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+
+	queued := retrypool.NewQueuedNotification()
 
 	// Create resume request
 	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
@@ -244,36 +251,12 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		},
 	)
 
-	if err := qi.orchestrators.Submit(task); err != nil {
-		return nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
+	if err := qi.orchestrators.Submit(task, retrypool.WithQueued[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
-	return dbFuture, task, nil
+	return dbFuture, task, queued.Done(), nil
 }
-
-// func (qi *QueueInstance) ResumeSubmit(id WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
-// 	workflowEntity, err := qi.database.GetWorkflowEntity(id)
-// 	if err != nil {
-// 		return nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
-// 	}
-
-// 	dbFuture := NewRuntimeFuture()
-// 	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
-
-// 	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
-// 		&WorkflowRequest{
-// 			workflowID:   workflowEntity.ID,
-// 			future:       dbFuture,
-// 			queueName:    qi.name,
-// 		},
-// 	)
-
-// 	if err := qi.orchestrators.Submit(task); err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	return dbFuture, task, nil
-// }
 
 type onStartFunc func(context.Context)
 type onEndFunc func(context.Context)
@@ -509,12 +492,98 @@ func (t *Tempolite) createSignalRemoveHandler() workflowRemoveSignalHandler {
 
 func (t *Tempolite) PublishSignal(workflowID WorkflowEntityID, signal string, value interface{}) error {
 	t.mu.RLock()
-	future, ok := t.signals[signal]
+	future, exists := t.signals[signal]
 	t.mu.RUnlock()
-	if !ok {
-		return fmt.Errorf("signal %s not found", signal)
+
+	// First try runtime signals
+	if exists {
+		future.setResult([]interface{}{value})
+		return nil
 	}
-	future.setResult([]interface{}{value})
+
+	// If no runtime signal found, check database for pending signals
+	logger.Debug(t.ctx, "checking database for pending signal",
+		"workflow_id", workflowID,
+		"signal_name", signal)
+
+	// Get hierarchies for this workflow+signal combination
+	hierarchies, err := t.database.GetHierarchiesByParentEntityAndStep(int(workflowID), signal, EntitySignal)
+	if err != nil {
+		if errors.Is(err, ErrHierarchyNotFound) {
+			// No signal exists for this workflow/signal combination
+			logger.Debug(t.ctx, "no signal found",
+				"workflow_id", workflowID,
+				"signal_name", signal)
+			return nil
+		}
+		return fmt.Errorf("failed to check for existing signals: %w", err)
+	}
+
+	if len(hierarchies) == 0 {
+		// No hierarchies found
+		// sorry it doesn't exists bro
+		return fmt.Errorf("no hierarchies found for workflow %d and signal %s", workflowID, signal)
+	}
+
+	// Get the signal entity
+	signalEntityID := SignalEntityID(hierarchies[0].ChildEntityID)
+
+	// Check signal status
+	var status EntityStatus
+	if err := t.database.GetSignalEntityProperties(signalEntityID, GetSignalEntityStatus(&status)); err != nil {
+		return fmt.Errorf("failed to get signal status: %w", err)
+	}
+
+	logger.Debug(t.ctx, "Found signal in database", "signal_entity_id", signalEntityID, "status", status)
+
+	// Only proceed if signal is pending or running
+	if status != StatusPending && status != StatusRunning {
+		logger.Debug(t.ctx, "signal not in valid state for publishing",
+			"workflow_id", workflowID,
+			"signal_name", signal,
+			"status", status)
+		return fmt.Errorf("signal not in valid state for publishing: %s", status)
+	}
+
+	// Get latest execution
+	latestExec, err := t.database.GetSignalExecutionLatestByEntityID(signalEntityID)
+	if err != nil {
+		return fmt.Errorf("failed to get latest signal execution: %w", err)
+	}
+
+	// Convert value to bytes
+	valueBytes, err := convertOutputsForSerialization([]interface{}{value})
+	if err != nil {
+		return fmt.Errorf("failed to serialize signal value: %w", err)
+	}
+
+	// Store the value
+	if err := t.database.SetSignalExecutionDataPropertiesByExecutionID(
+		latestExec.ID,
+		SetSignalExecutionDataValue(valueBytes[0])); err != nil {
+		return fmt.Errorf("failed to store signal value: %w", err)
+	}
+
+	// Update execution status
+	if err := t.database.SetSignalExecutionProperties(
+		latestExec.ID,
+		SetSignalExecutionStatus(ExecutionStatusCompleted)); err != nil {
+		return fmt.Errorf("failed to update signal execution status: %w", err)
+	}
+
+	// Update entity status
+	if err := t.database.SetSignalEntityProperties(
+		signalEntityID,
+		SetSignalEntityStatus(StatusCompleted)); err != nil {
+		return fmt.Errorf("failed to update signal entity status: %w", err)
+	}
+
+	logger.Debug(t.ctx, "published signal to database",
+		"workflow_id", workflowID,
+		"signal_name", signal,
+		"signal_entity_id", signalEntityID,
+		"signal_execution_id", latestExec.ID)
+
 	return nil
 }
 
@@ -588,10 +657,12 @@ func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options 
 		return nil, fmt.Errorf("queue %s not found", queueName)
 	}
 
-	future, _, err := queue.Submit(workflowFunc, options, nil, args...)
+	future, _, queued, err := queue.Submit(workflowFunc, options, nil, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to submit workflow to queue %s: %w", queueName, err)
 	}
+
+	<-queued
 
 	return future, nil
 }
@@ -639,10 +710,12 @@ func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
 	}
 
 	// Submit resume request to queue
-	future, _, err := queue.SubmitResume(id)
+	future, _, queued, err := queue.SubmitResume(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resume workflow: %w", err)
 	}
+
+	<-queued
 
 	return future, nil
 }

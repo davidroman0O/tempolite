@@ -2997,16 +2997,6 @@ func TestWorkflowSignalPauseResume(t *testing.T) {
 		value.(Future).setResult([]interface{}{42})
 	}()
 
-	go func() {
-		<-time.After(2 * time.Second)
-		fmt.Println("publishing signal")
-		value, ok := smap.Load("life")
-		if !ok {
-			t.Fatal("signal future not found")
-		}
-		value.(Future).setResult([]interface{}{42})
-	}()
-
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
@@ -3028,6 +3018,10 @@ func TestWorkflowSignalPauseResume(t *testing.T) {
 	if len(execs) != 2 {
 		t.Fatalf("expected 2 workflow executions, got %d", len(execs))
 	}
+
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
 
 	// Check first execution was properly paused
 	if execs[0].Status != ExecutionStatusPaused {
@@ -3065,8 +3059,8 @@ func TestWorkflowSignalPauseResume(t *testing.T) {
 	}
 
 	// Verify signal executions
-	if len(hierarchies) != 3 {
-		t.Fatalf("expected 3 signal executions, got %d", len(hierarchies))
+	if len(hierarchies) != 2 {
+		t.Fatalf("expected 2 signal executions, got %d", len(hierarchies))
 	}
 
 	// Sort hierarchies by execution ID to ensure chronological order
