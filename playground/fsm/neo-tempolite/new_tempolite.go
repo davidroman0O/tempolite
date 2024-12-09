@@ -12,6 +12,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+/// At the Tempolite level, if we want to benefit from pause/resume and other features, we need to pre-register all workflow functions, only the root workflows. Which is one constraint due to the runtime/registry/database isolation. We should be able to resume a workflow at any time, even publish a signal on a paused workflow, then later on resume it, and it should continue on the next operation.
+
 // WorkflowRequest represents a workflow execution request
 type WorkflowRequest struct {
 	workflowID   WorkflowEntityID
@@ -21,6 +23,7 @@ type WorkflowRequest struct {
 	future       Future           // Future for tracking execution
 	queueName    string           // Name of the queue this task belongs to
 	continued    bool
+	resume       bool
 }
 
 type WorkflowResponse struct {
@@ -42,18 +45,21 @@ type QueueInstance struct {
 
 	orchestrators *retrypool.Pool[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]
 
-	processingWorkers map[WorkflowEntityID]struct{}
+	processingWorkers map[WorkflowEntityID]*QueueWorker
 	freeWorkers       map[int]struct{}
+	workers           map[int]*QueueWorker
 
 	onCrossWorkflow crossQueueWorkflowHandler
 	onContinueAsNew crossQueueContinueAsNewHandler
-	onSignalNew     workflowSignalHandler
+	onSignalNew     workflowNewSignalHandler
+	onSignalRemove  workflowRemoveSignalHandler
 }
 
 type queueConfig struct {
 	onCrossWorkflow crossQueueWorkflowHandler
 	onContinueAsNew crossQueueContinueAsNewHandler
-	onSignalNew     workflowSignalHandler
+	onSignalNew     workflowNewSignalHandler
+	onSignalRemove  workflowRemoveSignalHandler
 }
 
 type queueOption func(*queueConfig)
@@ -70,10 +76,27 @@ func WithContinueAsNewHandler(handler crossQueueContinueAsNewHandler) queueOptio
 	}
 }
 
-func WithSignalNewHandler(handler workflowSignalHandler) queueOption {
+func WithSignalNewHandler(handler workflowNewSignalHandler) queueOption {
 	return func(c *queueConfig) {
 		c.onSignalNew = handler
 	}
+}
+
+func WithSignalRemoveHandler(handler workflowRemoveSignalHandler) queueOption {
+	return func(c *queueConfig) {
+		c.onSignalRemove = handler
+	}
+}
+
+func (q *QueueInstance) Pause(id WorkflowEntityID) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	worker, exists := q.processingWorkers[id]
+	if !exists {
+		return fmt.Errorf("entity %d not found", id)
+	}
+	worker.Pause()
+	return nil
 }
 
 func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, count int, opt ...queueOption) (*QueueInstance, error) {
@@ -83,8 +106,9 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		registry:          registry,
 		database:          db,
 		ctx:               ctx,
-		processingWorkers: make(map[WorkflowEntityID]struct{}),
+		processingWorkers: make(map[WorkflowEntityID]*QueueWorker),
 		freeWorkers:       make(map[int]struct{}),
+		workers:           make(map[int]*QueueWorker),
 	}
 
 	cfg := &queueConfig{}
@@ -118,7 +142,7 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	q.orchestrators = retrypool.New(
 		ctx,
 		workers,
-		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](3),
+		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](1),
 		retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
 		retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
 			func(task *retrypool.DeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], idx int) {
@@ -182,6 +206,75 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	return dbFuture, task, nil
 }
 
+func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
+	// Get workflow entity with queue info
+	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
+	}
+
+	// Verify the workflow is actually paused
+	var status EntityStatus
+	if err := qi.database.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
+		return nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
+	}
+	if status != StatusPaused {
+		return nil, nil, fmt.Errorf("workflow %d is not paused (current status: %s)", entityID, status)
+	}
+
+	// Get handler info
+	handler, ok := qi.registry.GetWorkflow(workflowEntity.HandlerName)
+	if !ok {
+		return nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
+	}
+
+	// Create future for tracking execution
+	dbFuture := NewRuntimeFuture()
+	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+
+	// Create resume request
+	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
+		&WorkflowRequest{
+			workflowID:   workflowEntity.ID,
+			workflowFunc: handler.Handler, // Use the actual handler function
+			queueName:    qi.name,
+			continued:    false, // Not a continuation
+			resume:       true,  // Mark this as a resume
+			future:       dbFuture,
+		},
+	)
+
+	if err := qi.orchestrators.Submit(task); err != nil {
+		return nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
+	}
+
+	return dbFuture, task, nil
+}
+
+// func (qi *QueueInstance) ResumeSubmit(id WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], error) {
+// 	workflowEntity, err := qi.database.GetWorkflowEntity(id)
+// 	if err != nil {
+// 		return nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
+// 	}
+
+// 	dbFuture := NewRuntimeFuture()
+// 	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+
+// 	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
+// 		&WorkflowRequest{
+// 			workflowID:   workflowEntity.ID,
+// 			future:       dbFuture,
+// 			queueName:    qi.name,
+// 		},
+// 	)
+
+// 	if err := qi.orchestrators.Submit(task); err != nil {
+// 		return nil, nil, err
+// 	}
+
+// 	return dbFuture, task, nil
+// }
+
 type onStartFunc func(context.Context)
 type onEndFunc func(context.Context)
 
@@ -195,10 +288,30 @@ type QueueWorker struct {
 	onEnd   onEndFunc
 }
 
+func (w *QueueWorker) Pause() {
+	w.orchestrator.Pause()
+}
+
 func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 	qw := &QueueWorker{
 		queueInstance: instance,
 	}
+
+	instance.mu.Lock()
+	instance.workers[qw.ID] = qw
+	instance.mu.Unlock()
+
+	onStart := func(ctx context.Context) {
+
+	}
+
+	onEnd := func(ctx context.Context) {
+
+	}
+
+	qw.onStart = onStart
+	qw.onEnd = onEnd
+
 	opts := []OrchestratorOption{}
 	if instance.onCrossWorkflow != nil {
 		opts = append(opts, WithCrossWorkflow(instance.onCrossWorkflow))
@@ -208,6 +321,9 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 	}
 	if instance.onSignalNew != nil {
 		opts = append(opts, WithSignalNew(instance.onSignalNew))
+	}
+	if instance.onSignalRemove != nil {
+		opts = append(opts, WithSignalRemove(instance.onSignalRemove))
 	}
 	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
 	return qw
@@ -227,7 +343,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		return fmt.Errorf("entity %d is already being processed", task.Request.workflowID)
 	}
-	w.queueInstance.processingWorkers[task.Request.workflowID] = struct{}{}
+	w.queueInstance.processingWorkers[task.Request.workflowID] = w
 	w.queueInstance.mu.Unlock()
 
 	// Clean up when done
@@ -242,13 +358,23 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 		task.CompleteWithError(err)
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
+	var future Future
+	var err error
 
 	// Execute the workflow using the orchestrator
-	future, err := w.orchestrator.ExecuteWithEntity(task.Request.workflowID)
+	if task.Request.resume {
+		// Use Resume for paused workflows
+		future = w.orchestrator.Resume(task.Request.workflowID)
+	} else {
+		// Use ExecuteWithEntity for normal workflows
+		future, err = w.orchestrator.ExecuteWithEntity(task.Request.workflowID)
+	}
+
 	if err != nil {
 		task.Request.future.setError(err)
 		task.CompleteWithError(err)
-		return fmt.Errorf("failed to execute workflow: %w", err)
+		// return fmt.Errorf("failed to execute workflow: %w", err)
+		return nil
 	}
 
 	var results []interface{}
@@ -256,7 +382,8 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	if results, err = future.GetResults(); err != nil {
 		task.Request.future.setError(err)
 		task.CompleteWithError(err)
-		return err
+		//	it's fine, we have an successful error
+		return nil
 	}
 
 	task.Request.future.setResult(results)
@@ -269,14 +396,19 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 
 // Tempolite is the main orchestration engine
 type Tempolite struct {
-	mu             deadlock.RWMutex
-	queueInstances map[string]*QueueInstance
-	registry       *Registry
-	database       Database
-	ctx            context.Context
-	cancel         context.CancelFunc
-	defaultQueue   string
+	ctx    context.Context
+	cancel context.CancelFunc
 
+	mu deadlock.RWMutex
+
+	registry *Registry
+	database Database
+
+	queueInstances map[string]*QueueInstance
+
+	defaultQueue string
+
+	// TODO: when pause/cancel/resume check that we re-add/delete those futures
 	signals map[string]Future
 }
 
@@ -355,16 +487,23 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 	}
 }
 
-func (t *Tempolite) createSignalNewHandler() workflowSignalHandler {
-	return func(workflowID WorkflowEntityID, signal string) Future {
+func (t *Tempolite) createSignalNewHandler() workflowNewSignalHandler {
+	return func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
 
 		t.mu.Lock()
-		future := NewRuntimeFuture()
-		future.setEntityID(FutureEntityWithWorkflowID(workflowID))
 		t.signals[signal] = future
 		t.mu.Unlock()
 
-		return future
+		return nil
+	}
+}
+
+func (t *Tempolite) createSignalRemoveHandler() workflowRemoveSignalHandler {
+	return func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string) error {
+		t.mu.Lock()
+		delete(t.signals, signal)
+		t.mu.Unlock()
+		return nil
 	}
 }
 
@@ -430,6 +569,7 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		WithCrossWorkflowHandler(t.createCrossWorkflowHandler()),
 		WithContinueAsNewHandler(t.createContinueAsNewHandler()),
 		WithSignalNewHandler(t.createSignalNewHandler()),
+		WithSignalRemoveHandler(t.createSignalRemoveHandler()),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create queue instance: %w", err)
@@ -465,6 +605,46 @@ func (t *Tempolite) CreateQueue(config QueueConfig) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.createQueueLocked(config)
+}
+
+func (t *Tempolite) Pause(queueName string, id WorkflowEntityID) error {
+	t.mu.RLock()
+	queue, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
+	if !exists {
+		return fmt.Errorf("queue %s not found", queueName)
+	}
+	return queue.Pause(id)
+}
+
+func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
+	// Get workflow entity with queue info
+	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workflow entity: %w", err)
+	}
+
+	// Determine target queue
+	queueName := workflowEntity.Edges.Queue.Name
+	if queueName == "" {
+		queueName = t.defaultQueue
+	}
+
+	// Get queue instance
+	t.mu.RLock()
+	queue, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
+	if !exists {
+		return nil, fmt.Errorf("queue %s not found", queueName)
+	}
+
+	// Submit resume request to queue
+	future, _, err := queue.SubmitResume(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resume workflow: %w", err)
+	}
+
+	return future, nil
 }
 
 func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
@@ -557,5 +737,16 @@ func WithDefaultQueueWorkers(count int) TempoliteOption {
 			Name:        "default",
 			WorkerCount: count,
 		})
+	}
+}
+
+func WithWorkflows(workflowFunc ...interface{}) TempoliteOption {
+	return func(t *Tempolite) error {
+		for _, wf := range workflowFunc {
+			if _, err := t.registry.RegisterWorkflow(wf); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }

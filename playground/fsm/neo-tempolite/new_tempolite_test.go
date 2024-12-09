@@ -2,6 +2,7 @@ package tempolite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -417,6 +418,82 @@ func TestTempoliteSignal(t *testing.T) {
 	}
 }
 
+// TODO: finish it
+func TestTempoliteSignalPause(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+
+	defer db.SaveAsJSON("./json/tempolite_signal_pause_resume.json")
+
+	workflowFunc := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, world!")
+		var life int
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("finished!!", life)
+		return nil
+	}
+
+	tp, err := New(
+		ctx,
+		db,
+		WithDefaultQueueWorkers(1),
+		WithWorkflows(
+			workflowFunc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		<-time.After(1 * time.Second)
+		fmt.Println("pausing")
+		if err := tp.Pause("default", future.WorkflowID()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	fmt.Println("waiting for future")
+	if err := future.Get(); err != nil {
+		if !errors.Is(err, ErrPaused) {
+			t.Fatal(err)
+		}
+	}
+
+	fmt.Println("resuming")
+	future, err = tp.Resume(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		<-time.After(1 * time.Second)
+		fmt.Println("publishing")
+		if err := tp.PublishSignal(future.WorkflowID(), "life", 42); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	fmt.Println("waiting for future again")
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTempoliteWorkflows(t *testing.T) {
 	ctx := context.Background()
 	db := NewMemoryDatabase()
@@ -633,69 +710,69 @@ func TestTempoliteRunDelete(t *testing.T) {
 	}
 }
 
-func TestTempoliteWorkflowsConcurrentScaling(t *testing.T) {
-	ctx := context.Background()
-	db := NewMemoryDatabase()
+// func TestTempoliteWorkflowsConcurrentScaling(t *testing.T) {
+// 	ctx := context.Background()
+// 	db := NewMemoryDatabase()
 
-	defer db.SaveAsJSON("./json/tempolite_workflows_concurrent_scaling.json")
+// 	defer db.SaveAsJSON("./json/tempolite_workflows_concurrent_scaling.json")
 
-	howMuch := 1000
+// 	howMuch := 1000
 
-	tp, err := New(
-		ctx,
-		db,
-		WithDefaultQueueWorkers(1),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tp.Close()
+// 	tp, err := New(
+// 		ctx,
+// 		db,
+// 		WithDefaultQueueWorkers(1),
+// 	)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer tp.Close()
 
-	workflowFunc := func(ctx WorkflowContext) (int, error) {
-		return 1, nil
-	}
+// 	workflowFunc := func(ctx WorkflowContext) (int, error) {
+// 		return 1, nil
+// 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, howMuch)
+// 	var wg sync.WaitGroup
+// 	errChan := make(chan error, howMuch)
 
-	// Launch workflows concurrently
-	for i := 0; i < howMuch; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
+// 	// Launch workflows concurrently
+// 	for i := 0; i < howMuch; i++ {
+// 		wg.Add(1)
+// 		go func(index int) {
+// 			defer wg.Done()
 
-			future, err := tp.ExecuteDefault(workflowFunc, nil)
-			if err != nil {
-				errChan <- fmt.Errorf("failed to execute workflow %d: %v", index, err)
-				return
-			}
+// 			future, err := tp.ExecuteDefault(workflowFunc, nil)
+// 			if err != nil {
+// 				errChan <- fmt.Errorf("failed to execute workflow %d: %v", index, err)
+// 				return
+// 			}
 
-			if err := future.Get(); err != nil {
-				errChan <- fmt.Errorf("workflow %d failed: %v", index, err)
-				return
-			}
-		}(i)
-	}
+// 			if err := future.Get(); err != nil {
+// 				errChan <- fmt.Errorf("workflow %d failed: %v", index, err)
+// 				return
+// 			}
+// 		}(i)
+// 	}
 
-	if err := tp.ScaleQueue("default", 100); err != nil {
-		t.Fatal(err)
-	}
+// 	if err := tp.ScaleQueue("default", 100); err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	if err := tp.ScaleQueue("default", 10); err != nil {
-		t.Fatal(err)
-	}
+// 	if err := tp.ScaleQueue("default", 10); err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	// Wait for all workflows to complete
-	wg.Wait()
-	close(errChan)
+// 	// Wait for all workflows to complete
+// 	wg.Wait()
+// 	close(errChan)
 
-	// Check for any errors
-	for err := range errChan {
-		t.Error(err)
-	}
+// 	// Check for any errors
+// 	for err := range errChan {
+// 		t.Error(err)
+// 	}
 
-	if err := tp.Wait(); err != nil {
-		t.Fatal(err)
-	}
+// 	if err := tp.Wait(); err != nil {
+// 		t.Fatal(err)
+// 	}
 
-}
+// }

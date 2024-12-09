@@ -3520,16 +3520,24 @@ func (db *MemoryDatabase) GetSignalEntity(id SignalEntityID, opts ...SignalEntit
 }
 
 func (db *MemoryDatabase) GetSignalEntities(workflowID WorkflowEntityID, opts ...SignalEntityGetOption) ([]*SignalEntity, error) {
-
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	var entities []*SignalEntity
+
+	// Use a map to collect unique entity IDs
+	uniqueEntities := make(map[SignalEntityID]*SignalEntity)
+
 	for _, h := range db.hierarchies {
 		if h.ParentEntityID == int(workflowID) && h.ChildType == EntitySignal {
 			if e, ex := db.signalEntities[SignalEntityID(h.ChildEntityID)]; ex {
-				entities = append(entities, copySignalEntity(e))
+				uniqueEntities[SignalEntityID(h.ChildEntityID)] = e
 			}
 		}
+	}
+
+	// Convert map to slice
+	entities := make([]*SignalEntity, 0, len(uniqueEntities))
+	for _, e := range uniqueEntities {
+		entities = append(entities, copySignalEntity(e))
 	}
 
 	return entities, nil

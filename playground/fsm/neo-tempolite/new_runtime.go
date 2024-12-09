@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/qmuntal/stateless"
@@ -133,6 +134,7 @@ type FutureEntity struct {
 	sideEffectID *SideEffectEntityID
 	sagaID       *SagaEntityID
 	activityID   *ActivityEntityID
+	signalID     *SignalEntityID
 }
 
 type futureEntityOption func(*FutureEntity)
@@ -161,11 +163,18 @@ func FutureEntityWithActivityID(id ActivityEntityID) futureEntityOption {
 	}
 }
 
+func FutureEntityWithSignalID(id SignalEntityID) futureEntityOption {
+	return func(f *FutureEntity) {
+		f.signalID = &id
+	}
+}
+
 type FutureExecution struct {
 	workflowExecutionID   *WorkflowExecutionID
 	sideEffectExecutionID *SideEffectExecutionID
 	sagaExecutionID       *SagaExecutionID
 	activityExecutionID   *ActivityExecutionID
+	signalExecutionID     *SignalExecutionID
 }
 
 type futureExecutionOption func(*FutureExecution)
@@ -194,6 +203,12 @@ func FutureExecutionWithActivityExecutionID(id ActivityExecutionID) futureExecut
 	}
 }
 
+func FutureExecutionWithSignalExecutionID(id SignalExecutionID) futureExecutionOption {
+	return func(f *FutureExecution) {
+		f.signalExecutionID = &id
+	}
+}
+
 type Future interface {
 	setEntityID(fn futureEntityOption) error
 	setExecutionID(fn futureExecutionOption) error
@@ -217,6 +232,7 @@ type Future interface {
 
 	Get(out ...interface{}) error
 	GetResults() ([]interface{}, error)
+	OnResults() <-chan struct{}
 
 	setError(err error)
 	setResult(results []interface{})
@@ -224,11 +240,17 @@ type Future interface {
 	IsPaused() bool
 }
 
+// CrossQueue is an external feature requesting an external intervention to trigger a workflow on another mechanism
 type crossQueueWorkflowHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
+// CrossQueue is an external feature requesting for external operations to continue a workflow
 type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
-type workflowSignalHandler func(workflowID WorkflowEntityID, signal string) Future
+// Signal is an external feature requesting to store a signal outside for a published event
+type workflowNewSignalHandler func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error
+
+// Signal is an external feature requesting to be removed from an external runtime storage when paused, cancelled, completed or failed
+type workflowRemoveSignalHandler func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string) error
 
 type TransactionContext struct {
 	ctx                 context.Context
@@ -527,6 +549,7 @@ type WorkflowContext struct {
 	db                  Database
 	registry            *Registry
 	ctx                 context.Context
+	pauseCtx            context.Context
 	state               StateTracker
 	tracker             InstanceTracker
 	debug               Debug
@@ -539,7 +562,8 @@ type WorkflowContext struct {
 
 	onCrossQueueWorkflow crossQueueWorkflowHandler
 	onContinueAsNew      crossQueueContinueAsNewHandler
-	onSignalNew          workflowSignalHandler
+	onSignalNew          workflowNewSignalHandler
+	onSignalRemove       workflowRemoveSignalHandler
 }
 
 // GetVersion retrieves or sets a version for a changeID.
@@ -643,6 +667,8 @@ func (ctx WorkflowContext) ContinueAsNew(options *WorkflowOptions, args ...inter
 // WorkflowInstance represents an instance of a workflow execution.
 type WorkflowInstance struct {
 	ctx      context.Context
+	pauseCtx context.Context
+
 	mu       deadlock.Mutex
 	db       Database
 	tracker  InstanceTracker
@@ -670,7 +696,8 @@ type WorkflowInstance struct {
 
 	onCrossWorkflow crossQueueWorkflowHandler
 	onContinueAsNew crossQueueContinueAsNewHandler
-	onSignalNew     workflowSignalHandler
+	onSignalNew     workflowNewSignalHandler
+	onSignalRemove  workflowRemoveSignalHandler
 }
 
 // Future implementation of direct calling
@@ -701,14 +728,14 @@ func (f *RuntimeFuture) HasEntity() bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.entity.workflowID != nil || f.entity.activityID != nil ||
-		f.entity.sagaID != nil || f.entity.sideEffectID != nil
+		f.entity.sagaID != nil || f.entity.sideEffectID != nil || f.entity.signalID != nil
 }
 
 func (f *RuntimeFuture) HasExecution() bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil ||
-		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil
+		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil || f.exec.signalExecutionID != nil
 }
 
 func (f *RuntimeFuture) setEntityID(fn futureEntityOption) error {
@@ -716,7 +743,7 @@ func (f *RuntimeFuture) setEntityID(fn futureEntityOption) error {
 	defer f.mu.Unlock()
 
 	if f.entity.workflowID != nil || f.entity.activityID != nil ||
-		f.entity.sagaID != nil || f.entity.sideEffectID != nil {
+		f.entity.sagaID != nil || f.entity.sideEffectID != nil || f.entity.signalID != nil {
 		return fmt.Errorf("entity already set")
 	}
 
@@ -731,7 +758,7 @@ func (f *RuntimeFuture) setExecutionID(fn futureExecutionOption) error {
 	defer f.mu.Unlock()
 
 	if f.exec.workflowExecutionID != nil || f.exec.activityExecutionID != nil ||
-		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil {
+		f.exec.sagaExecutionID != nil || f.exec.sideEffectExecutionID != nil || f.exec.signalExecutionID != nil {
 		return fmt.Errorf("execution already set")
 	}
 
@@ -757,6 +784,9 @@ func (f *RuntimeFuture) EntityID() interface{} {
 	if f.entity.sideEffectID != nil {
 		return *f.entity.sideEffectID
 	}
+	if f.entity.signalID != nil {
+		return *f.entity.signalID
+	}
 	return nil
 }
 
@@ -776,6 +806,9 @@ func (f *RuntimeFuture) ExecutionID() interface{} {
 	if f.exec.sideEffectExecutionID != nil {
 		return *f.exec.sideEffectExecutionID
 	}
+	if f.exec.signalExecutionID != nil {
+		return *f.exec.signalExecutionID
+	}
 	return nil
 }
 
@@ -794,6 +827,9 @@ func (f *RuntimeFuture) Type() EntityType {
 	}
 	if f.entity.sideEffectID != nil {
 		return EntitySideEffect
+	}
+	if f.entity.signalID != nil {
+		return EntitySignal
 	}
 	return "unknown"
 }
@@ -930,6 +966,10 @@ func (f *RuntimeFuture) GetResults() ([]interface{}, error) {
 	return results, nil
 }
 
+func (f *RuntimeFuture) OnResults() <-chan struct{} {
+	return f.doneCh
+}
+
 func (f *RuntimeFuture) Get(out ...interface{}) error {
 	// Wait for completion without holding lock
 	<-f.doneCh
@@ -999,6 +1039,9 @@ func (f *RuntimeFuture) Get(out ...interface{}) error {
 type StateTracker interface {
 	isPaused() bool
 	setUnpause()
+	isActive() bool
+	setActive()
+	setInactive()
 }
 
 type Debug interface {
@@ -1022,11 +1065,10 @@ type Orchestrator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu            deadlock.Mutex
-	instancesMu   deadlock.RWMutex
-	activitiesMu  deadlock.Mutex
-	sideEffectsMu deadlock.Mutex
-	sagasMu       deadlock.Mutex
+	ctxPause    context.Context
+	cancelPause context.CancelFunc
+
+	mu deadlock.Mutex
 
 	registry *Registry
 	db       Database
@@ -1042,22 +1084,25 @@ type Orchestrator struct {
 
 	err error
 
-	paused   bool
-	pausedMu deadlock.Mutex
+	paused bool
 
-	// active atomic.Bool
+	// we need to know if our runtime is currently busy doing operations or not
+	// the reasons we want to know that, is to delay execution of operations while something else is trying to finish
+	active atomic.Bool
 
 	displayStackTrace bool
 
 	onCrossWorkflow crossQueueWorkflowHandler
 	onContinueAsNew crossQueueContinueAsNewHandler
-	onSignalNew     workflowSignalHandler
+	onSignalNew     workflowNewSignalHandler
+	onSignalRemove  workflowRemoveSignalHandler
 }
 
 type orchestratorConfig struct {
 	onCrossWorkflow crossQueueWorkflowHandler
 	onContinueAsNew crossQueueContinueAsNewHandler
-	onSignalNew     workflowSignalHandler
+	onSignalNew     workflowNewSignalHandler
+	onSignalRemove  workflowRemoveSignalHandler
 }
 
 type OrchestratorOption func(*orchestratorConfig)
@@ -1074,20 +1119,31 @@ func WithContinueAsNew(fn crossQueueContinueAsNewHandler) OrchestratorOption {
 	}
 }
 
-func WithSignalNew(fn workflowSignalHandler) OrchestratorOption {
+func WithSignalNew(fn workflowNewSignalHandler) OrchestratorOption {
 	return func(c *orchestratorConfig) {
 		c.onSignalNew = fn
+	}
+}
+
+func WithSignalRemove(fn workflowRemoveSignalHandler) OrchestratorOption {
+	return func(c *orchestratorConfig) {
+		c.onSignalRemove = fn
 	}
 }
 
 func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt ...OrchestratorOption) *Orchestrator {
 
 	ctx, cancel := context.WithCancel(ctx)
+
+	pauseCtx, pauseCancel := context.WithCancel(context.Background())
+
 	o := &Orchestrator{
-		db:       db,
-		registry: registry,
-		ctx:      ctx,
-		cancel:   cancel,
+		db:          db,
+		registry:    registry,
+		ctx:         ctx,
+		cancel:      cancel,
+		ctxPause:    pauseCtx,
+		cancelPause: pauseCancel,
 
 		displayStackTrace: true,
 	}
@@ -1097,6 +1153,8 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 		o(cfg)
 	}
 
+	// TODO: i know it's ugly, i will refactor it later
+
 	if cfg.onCrossWorkflow != nil {
 		o.onCrossWorkflow = cfg.onCrossWorkflow
 	}
@@ -1105,6 +1163,9 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 	}
 	if cfg.onSignalNew != nil {
 		o.onSignalNew = cfg.onSignalNew
+	}
+	if cfg.onSignalRemove != nil {
+		o.onSignalRemove = cfg.onSignalRemove
 	}
 
 	return o
@@ -1140,14 +1201,32 @@ func (o *Orchestrator) reset() {
 	o.sagas = []*SagaInstance{}
 }
 
+func (o *Orchestrator) isActive() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.active.Load()
+}
+
+func (o *Orchestrator) setActive() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.active.Store(true)
+}
+
+func (o *Orchestrator) setInactive() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.active.Store(false)
+}
+
 // Request to pause the current orchestration
 // Pause != Cancel
 // Pause is controlled mechanism to stop the execution of the current orchestration by slowly stopping the execution of the current workflow.
 func (o *Orchestrator) Pause() {
-	o.pausedMu.Lock()
-	defer o.pausedMu.Unlock()
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.paused = true
-
+	o.cancelPause()
 }
 
 // Cancel the orchestrator will create a cascade of cancellation to all the instances.
@@ -1191,15 +1270,15 @@ func (o *Orchestrator) WaitFor(id WorkflowEntityID, status EntityStatus) error {
 
 func (o *Orchestrator) isPaused() bool {
 	logger.Debug(o.ctx, "is orchestrator paused?", "orchestrator.is_paused", o.paused)
-	o.pausedMu.Lock()
-	defer o.pausedMu.Unlock()
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	return o.paused
 }
 
 func (o *Orchestrator) setUnpause() {
 	logger.Debug(o.ctx, "orchestrator set unpause")
-	o.pausedMu.Lock()
-	defer o.pausedMu.Unlock()
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.paused = false
 }
 
@@ -1210,12 +1289,19 @@ func (o *Orchestrator) canStackTrace() bool {
 	return o.displayStackTrace
 }
 
+func (o *Orchestrator) resetContext() {
+	o.ctxPause, o.cancelPause = context.WithCancel(context.Background())
+}
+
 // TODO: check that we can't resume a non-root workflow
 func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	// TODO: add timeout
-	// for o.active.Load() { // it is still active, you have to wait
-	// 	<-time.After(100 * time.Millisecond)
-	// }
+	for o.isActive() { // it is still active, you have to wait
+		<-time.After(time.Millisecond)
+	}
+	o.resetContext()
+	o.setUnpause() // obviously
+	o.reset()
 
 	logger.Debug(o.ctx, "orchestrator resume", "orchestrator.resume.workflow_id", entityID)
 
@@ -1253,12 +1339,12 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 		return future
 	}
 
-	var latestExecution *WorkflowExecution
-	if latestExecution, err = o.db.GetWorkflowExecutionLatestByEntityID(entityID); err != nil {
-		future := NewRuntimeFuture()
-		future.setError(fmt.Errorf("failed to get latest execution: %w", err))
-		return future
-	}
+	// var latestExecution *WorkflowExecution
+	// if latestExecution, err = o.db.GetWorkflowExecutionLatestByEntityID(entityID); err != nil {
+	// 	future := NewRuntimeFuture()
+	// 	future.setError(fmt.Errorf("failed to get latest execution: %w", err))
+	// 	return future
+	// }
 
 	// Get parent execution if this is a sub-workflow
 	var parentExecID, parentEntityID int
@@ -1301,7 +1387,9 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 
 	instance := &WorkflowInstance{
 		ctx:      o.ctx, // share context with orchestrator
-		db:       o.db,  // share db
+		pauseCtx: o.ctxPause,
+
+		db:       o.db, // share db
 		tracker:  o,
 		state:    o,
 		registry: o.registry,
@@ -1309,12 +1397,12 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 
 		handler: handler,
 
-		runID:       workflowEntity.RunID,
-		workflowID:  entityID,
-		stepID:      workflowEntity.StepID,
-		executionID: latestExecution.ID,
-		dataID:      workflowEntity.WorkflowData.ID,
-		queueID:     workflowEntity.QueueID,
+		runID:      workflowEntity.RunID,
+		workflowID: entityID,
+		stepID:     workflowEntity.StepID,
+		// executionID: latestExecution.ID,
+		dataID:  workflowEntity.WorkflowData.ID,
+		queueID: workflowEntity.QueueID,
 
 		options: WorkflowOptions{
 			RetryPolicy: &RetryPolicy{
@@ -1331,21 +1419,19 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 		onCrossWorkflow: o.onCrossWorkflow,
 		onContinueAsNew: o.onContinueAsNew,
 		onSignalNew:     o.onSignalNew,
+		onSignalRemove:  o.onSignalRemove,
 	}
 
 	// Create Future and start instance
 	future := NewRuntimeFuture()
 	// future.setEntityID(workflowEntity.ID)
 	future.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
-	future.setExecutionID(FutureExecutionWithWorkflowExecutionID(latestExecution.ID))
+	// future.setExecutionID(FutureExecutionWithWorkflowExecutionID(latestExecution.ID))
 
 	instance.future = future
 
 	// Very important to notice the orchestrator of the real root workflow
 	o.rootWf = instance
-
-	o.setUnpause()
-	o.reset()
 
 	o.addWorkflowInstance(instance)
 
@@ -1619,6 +1705,9 @@ func (o *Orchestrator) ExecuteWithEntity(entityID WorkflowEntityID) (Future, err
 
 	logger.Debug(o.ctx, "orchestrator execute with entity", "entity_id", entityID)
 
+	o.setUnpause()
+	o.resetContext()
+
 	// Get the entity and verify it exists
 	var entity *WorkflowEntity
 	if entity, err = o.db.GetWorkflowEntity(
@@ -1670,7 +1759,8 @@ func (o *Orchestrator) ExecuteWithEntity(entityID WorkflowEntityID) (Future, err
 	// Create workflow instance
 	instance := &WorkflowInstance{
 		ctx:      o.ctx, // share context with orchestrator
-		db:       o.db,  // share db
+		pauseCtx: o.ctxPause,
+		db:       o.db, // share db
 		tracker:  o,
 		state:    o,
 		registry: o.registry,
@@ -1702,6 +1792,7 @@ func (o *Orchestrator) ExecuteWithEntity(entityID WorkflowEntityID) (Future, err
 		onCrossWorkflow: o.onCrossWorkflow,
 		onContinueAsNew: o.onContinueAsNew,
 		onSignalNew:     o.onSignalNew,
+		onSignalRemove:  o.onSignalRemove,
 	}
 
 	// If this is a sub-workflow
@@ -1768,27 +1859,27 @@ func (o *Orchestrator) ExecuteWithEntity(entityID WorkflowEntityID) (Future, err
 }
 
 func (o *Orchestrator) addWorkflowInstance(wi *WorkflowInstance) {
-	o.instancesMu.Lock()
+	o.mu.Lock()
 	o.instances = append(o.instances, wi)
-	o.instancesMu.Unlock()
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) addActivityInstance(wi *ActivityInstance) {
-	o.activitiesMu.Lock()
+	o.mu.Lock()
 	o.activities = append(o.activities, wi)
-	o.activitiesMu.Unlock()
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) addSideEffectInstance(wi *SideEffectInstance) {
-	o.sideEffectsMu.Lock()
+	o.mu.Lock()
 	o.sideEffects = append(o.sideEffects, wi)
-	o.sideEffectsMu.Unlock()
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) addSagaInstance(wi *SagaInstance) {
-	o.sagasMu.Lock()
+	o.mu.Lock()
 	o.sagas = append(o.sagas, wi)
-	o.sagasMu.Unlock()
+	o.mu.Unlock()
 }
 
 // onPause will check all the instances and pause them
@@ -1963,9 +2054,9 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 	if isRoot {
 		logger.Debug(wi.ctx, "workflow instance is root", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 		// // set to inactive
-		// if wi.state.isActive() {
-		// 	wi.state.setInactive()
-		// }
+		if wi.state.isActive() {
+			wi.state.setInactive()
+		}
 		// if was paused, then we know it is definietly paused
 		// we can remove the paused state
 		if wi.state.isPaused() {
@@ -2221,6 +2312,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 	ctxWorkflow := WorkflowContext{
 		db:                  wi.db,
 		ctx:                 wi.ctx,
+		pauseCtx:            wi.pauseCtx,
 		state:               wi.state,
 		tracker:             wi.tracker,
 		debug:               wi.debug,
@@ -2235,6 +2327,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 		onCrossQueueWorkflow: wi.onCrossWorkflow,
 		onContinueAsNew:      wi.onContinueAsNew,
 		onSignalNew:          wi.onSignalNew,
+		onSignalRemove:       wi.onSignalRemove,
 	}
 
 	var workflowInputs [][]byte
@@ -2586,6 +2679,14 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 	}
 
 	var err error
+	// First set the execution status to paused
+	if err = wi.db.SetWorkflowExecutionProperties(
+		wi.executionID,
+		SetWorkflowExecutionStatus(ExecutionStatusPaused)); err != nil {
+		err := errors.Join(ErrWorkflowInstancePaused, err)
+		logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID)
+		return err
+	}
 
 	// Tell the orchestrator to manage the case
 	if err = wi.tracker.onPause(); err != nil {
@@ -2761,12 +2862,13 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 	ctx.ctx, cancel = context.WithCancel(ctx.ctx)
 
 	activityInstance := &ActivityInstance{
-		ctx:     ctx.ctx,
-		cancel:  cancel,
-		db:      ctx.db,
-		tracker: ctx.tracker,
-		state:   ctx.state,
-		debug:   ctx.debug,
+		ctx:      ctx.ctx,
+		pauseCtx: ctx.pauseCtx,
+		cancel:   cancel,
+		db:       ctx.db,
+		tracker:  ctx.tracker,
+		state:    ctx.state,
+		debug:    ctx.debug,
 
 		parentExecutionID: ctx.workflowExecutionID,
 		parentEntityID:    ctx.workflowID,
@@ -2810,7 +2912,9 @@ type ActivityOptions struct {
 
 // ActivityInstance represents an instance of an activity execution.
 type ActivityInstance struct {
-	ctx     context.Context
+	ctx      context.Context
+	pauseCtx context.Context
+
 	cancel  context.CancelFunc
 	mu      deadlock.Mutex
 	db      Database
@@ -3412,11 +3516,12 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 	}
 
 	instance := &SideEffectInstance{
-		ctx:     ctx.ctx,
-		db:      ctx.db,
-		tracker: ctx.tracker,
-		state:   ctx.state,
-		debug:   ctx.debug,
+		ctx:      ctx.ctx,
+		pauseCtx: ctx.pauseCtx,
+		db:       ctx.db,
+		tracker:  ctx.tracker,
+		state:    ctx.state,
+		debug:    ctx.debug,
 
 		parentExecutionID: ctx.workflowExecutionID,
 		parentEntityID:    ctx.workflowID,
@@ -3442,7 +3547,9 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 }
 
 type SideEffectInstance struct {
-	ctx     context.Context
+	ctx      context.Context
+	pauseCtx context.Context
+
 	mu      deadlock.Mutex
 	db      Database
 	tracker InstanceTracker
@@ -3847,6 +3954,7 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	// Create saga instance without starting it
 	sagaInstance := &SagaInstance{
 		ctx:               ctx.ctx,
+		pauseCtx:          ctx.pauseCtx,
 		db:                ctx.db,
 		tracker:           ctx.tracker,
 		state:             ctx.state,
@@ -3932,7 +4040,9 @@ func (ctx WorkflowContext) CompensateSaga(stepID string) error {
 // Saga that panics during a compensation should have the status FAILED (that means it's very very critical)
 // Saga cannot be retried, Saga cannot be paused
 type SagaInstance struct {
-	ctx     context.Context
+	ctx      context.Context
+	pauseCtx context.Context
+
 	mu      deadlock.Mutex
 	db      Database
 	tracker InstanceTracker
@@ -4563,6 +4673,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 
 	workflowInstance := &WorkflowInstance{
 		ctx:      ctx.ctx,
+		pauseCtx: ctx.pauseCtx,
 		db:       ctx.db,
 		tracker:  ctx.tracker,
 		state:    ctx.state,
@@ -4587,6 +4698,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		onCrossWorkflow: ctx.onCrossQueueWorkflow,
 		onContinueAsNew: ctx.onContinueAsNew,
 		onSignalNew:     ctx.onSignalNew,
+		onSignalRemove:  ctx.onSignalRemove,
 	}
 
 	// Override options if provided
@@ -4612,83 +4724,81 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 // /////////////////////////////////////////////////// Signals
 
 // Signal allows workflow to receive named signals with type-safe output
-func (ctx WorkflowContext) Signal(name string, output interface{}) error {
-	logger.Debug(ctx.ctx, "signal context", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+func (ctx WorkflowContext) Signal(stepID string, output interface{}) error {
+	logger.Debug(ctx.ctx, "signal context", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", stepID)
 
 	// Validate output is a pointer
 	if reflect.TypeOf(output).Kind() != reflect.Ptr {
 		err := errors.Join(ErrSignalContext, ErrMustPointer, fmt.Errorf("output must be a pointer"))
-		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+		logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", stepID)
 		return err
 	}
 
 	outputType := reflect.TypeOf(output).Elem()
 
-	// First check existing hierarchies for completed signals
-	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), name, EntitySignal)
+	// Get any existing signal for this workflow+stepID
+	var signalEntityID SignalEntityID
+	hierarchies, err := ctx.db.GetHierarchiesByParentEntityAndStep(int(ctx.workflowID), stepID, EntitySignal)
 	if err == nil && len(hierarchies) > 0 {
-		for _, h := range hierarchies {
-			var status EntityStatus
-			if err := ctx.db.GetSignalEntityProperties(SignalEntityID(h.ChildEntityID),
-				GetSignalEntityStatus(&status)); err == nil && status == StatusCompleted {
-				// Get existing successful signal
-				if exec, err := ctx.db.GetSignalExecutionLatestByEntityID(SignalEntityID(h.ChildEntityID)); err == nil {
+		// Always take first entity - we reuse the same one for this stepID
+		signalEntityID = SignalEntityID(hierarchies[0].ChildEntityID)
+
+		// Check if it's completed to get value
+		var status EntityStatus
+		if err := ctx.db.GetSignalEntityProperties(signalEntityID, GetSignalEntityStatus(&status)); err == nil {
+			if status == StatusCompleted {
+				// Get the completed value and return
+				if exec, err := ctx.db.GetSignalExecutionLatestByEntityID(signalEntityID); err == nil {
 					if data, err := ctx.db.GetSignalExecutionDataByExecutionID(exec.ID); err == nil &&
 						data != nil && len(data.Value) > 0 {
-
-						// Convert stored value to requested type
 						result, err := convertSingleOutputFromSerialization(outputType, data.Value)
-						if err != nil {
-							err := errors.Join(ErrSignalContext, fmt.Errorf("failed to decode signal value: %w", err))
-							logger.Error(ctx.ctx, err.Error(), "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
-							return err
+						if err == nil {
+							reflect.ValueOf(output).Elem().Set(reflect.ValueOf(result))
+							return nil
 						}
-
-						logger.Debug(ctx.ctx, "signal context already completed", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
-
-						// Set output value
-						reflect.ValueOf(output).Elem().Set(reflect.ValueOf(result))
-						return nil
 					}
 				}
 			}
+
+			// If not completed, we'll reuse this same entity ID regardless of its state
 		}
 	}
 
-	// Create new signal instance
 	instance := &SignalInstance{
-		ctx:     ctx.ctx,
-		db:      ctx.db,
-		tracker: ctx.tracker,
-		state:   ctx.state,
-		debug:   ctx.debug,
-
+		ctx:               ctx.ctx,
+		pauseCtx:          ctx.pauseCtx,
+		db:                ctx.db,
+		tracker:           ctx.tracker,
+		state:             ctx.state,
+		debug:             ctx.debug,
+		name:              stepID,
+		done:              make(chan error, 1),
 		runID:             ctx.runID,
 		parentExecutionID: ctx.workflowExecutionID,
 		parentEntityID:    ctx.workflowID,
 		parentStepID:      ctx.stepID,
 		queueID:           ctx.queueID,
-
-		output:     output,
-		outputType: outputType,
-		name:       name,
-		onSignal:   ctx.onSignalNew,
-		done:       make(chan error, 1),
+		output:            output,
+		outputType:        outputType,
+		onSignal:          ctx.onSignalNew,
+		onRemoveSignal:    ctx.onSignalRemove,
+		entityID:          signalEntityID, // Either reuse existing or 0 for new
 	}
 
-	logger.Debug(ctx.ctx, "signal instance start", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", name)
+	logger.Debug(ctx.ctx, "signal instance start", "workflow_id", ctx.workflowID, "step_id", ctx.stepID, "signal_name", stepID)
 
 	return instance.Start()
 }
 
 type SignalInstance struct {
-	ctx     context.Context
-	db      Database
-	tracker InstanceTracker
-	state   StateTracker
-	debug   Debug
-	fsm     *stateless.StateMachine
-	mu      deadlock.Mutex
+	ctx      context.Context
+	pauseCtx context.Context
+	db       Database
+	tracker  InstanceTracker
+	state    StateTracker
+	debug    Debug
+	fsm      *stateless.StateMachine
+	mu       deadlock.Mutex
 
 	runID             RunID
 	entityID          SignalEntityID
@@ -4703,7 +4813,8 @@ type SignalInstance struct {
 	outputType reflect.Type
 	done       chan error
 
-	onSignal workflowSignalHandler
+	onSignal       workflowNewSignalHandler
+	onRemoveSignal workflowRemoveSignalHandler
 }
 
 func (si *SignalInstance) Start() error {
@@ -4768,31 +4879,35 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		}
 	}()
 
-	// Create entity
-	entityID, err := si.db.AddSignalEntity(&SignalEntity{
-		BaseEntity: BaseEntity{
-			RunID:       si.runID,
-			QueueID:     si.queueID,
-			Type:        EntitySignal,
-			HandlerName: si.name,
-			Status:      StatusPending,
-			RetryPolicy: retryPolicyInternal{MaxAttempts: 0},
-			RetryState:  RetryState{Attempts: 0},
-			StepID:      si.name,
-		},
-		SignalData: &SignalData{
-			Name: si.name,
-		},
-	}, si.parentEntityID)
+	// Create signal entity if needed (if entityID is 0)
+	if si.entityID == 0 {
+		entityID, err := si.db.AddSignalEntity(&SignalEntity{
+			BaseEntity: BaseEntity{
+				RunID:       si.runID,
+				QueueID:     si.queueID,
+				Type:        EntitySignal,
+				HandlerName: si.name,
+				Status:      StatusPending,
+				RetryPolicy: retryPolicyInternal{MaxAttempts: 0},
+				RetryState:  RetryState{Attempts: 0},
+				StepID:      si.name,
+			},
+			SignalData: &SignalData{
+				Name: si.name,
+			},
+		}, si.parentEntityID)
 
-	if err != nil {
-		err := errors.Join(ErrSignalInstanceExecute, err)
-		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
-		si.done <- err
-		si.fsm.Fire(TriggerFail, err)
-		return nil
+		if err != nil {
+			err := errors.Join(ErrSignalInstanceExecute, err)
+			logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+			si.done <- err
+			si.fsm.Fire(TriggerFail, err)
+			return nil
+		}
+		si.entityID = entityID
 	}
-	si.entityID = entityID
+
+	var err error
 
 	// Create execution
 	exec := &SignalExecution{
@@ -4838,7 +4953,55 @@ func (si *SignalInstance) executeSignal(_ context.Context, _ ...interface{}) err
 		return nil
 	}
 
-	future := si.onSignal(si.parentEntityID, si.name)
+	// We prepare a future, with all informations useful for the retrieval of the data
+	future := NewRuntimeFuture()
+	future.setEntityID(FutureEntityWithSignalID(si.entityID))
+	future.setExecutionID(FutureExecutionWithSignalExecutionID(si.executionID))
+	future.setParentWorkflowID(si.parentEntityID)
+	future.setParentWorkflowExecutionID(si.parentExecutionID)
+
+	// Ask for external intervention to store the future
+	addErr := si.onSignal(si.parentEntityID, si.parentExecutionID, si.entityID, si.executionID, si.name, future)
+	if addErr != nil {
+		err := errors.Join(ErrSignalInstanceExecute, addErr)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		si.done <- err
+		si.fsm.Fire(TriggerFail, err)
+		return nil
+	}
+
+	// We might cancel, we might pause, or we might have a result immediately
+	select {
+	case <-si.ctx.Done():
+		logger.Debug(si.ctx, "select signal instance cancelled", "workflow_id", si.runID, "step_id", si.parentStepID)
+		si.done <- context.Canceled
+		if si.onRemoveSignal != nil {
+			if err := si.onRemoveSignal(si.parentEntityID, si.parentExecutionID, si.entityID, si.executionID, si.name); err != nil {
+				si.done <- err
+				si.fsm.Fire(TriggerFail, err)
+				return nil
+			}
+		}
+		si.fsm.Fire(TriggerFail, context.Canceled)
+		return nil
+	case <-si.pauseCtx.Done():
+		logger.Debug(si.ctx, "select signal instance paused", "workflow_id", si.runID, "step_id", si.parentStepID)
+		if si.onRemoveSignal != nil {
+			if err := si.onRemoveSignal(si.parentEntityID, si.parentExecutionID, si.entityID, si.executionID, si.name); err != nil {
+				si.done <- err
+				si.fsm.Fire(TriggerFail, err)
+			}
+			si.fsm.Fire(TriggerPause)
+			return nil
+		}
+		si.done <- ErrPaused
+		si.fsm.Fire(TriggerPause)
+		return nil
+	case <-future.OnResults():
+		logger.Debug(si.ctx, "signal instance results", "workflow_id", si.runID, "step_id", si.parentStepID)
+		// we will continue below
+	}
+
 	res, err := future.GetResults()
 	if err != nil {
 		err := fmt.Errorf("unable to process signal: %w", err)
@@ -4964,7 +5127,18 @@ func (si *SignalInstance) onPaused(_ context.Context, _ ...interface{}) error {
 		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
 		return err
 	}
-	return nil
+
+	// If a signal is paused, it was externally removed
+	if err := si.db.SetSignalExecutionProperties(
+		si.executionID,
+		SetSignalExecutionStatus(ExecutionStatusPaused)); err != nil {
+		err := errors.Join(ErrSignalInstanceFailed, err)
+		logger.Error(si.ctx, err.Error(), "workflow_id", si.runID, "step_id", si.parentStepID)
+		return err
+	}
+
+	// but the entity should stay intact, we will re-create a new execution when it resumes
+	return ErrPaused
 }
 
 /////////

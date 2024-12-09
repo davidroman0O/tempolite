@@ -1240,6 +1240,35 @@ type Database interface {
 	SetSignalExecutionDataPropertiesByExecutionID(executionID SignalExecutionID, setters ...SignalExecutionDataPropertySetter) error
 }
 
+// Return the output of a workflow if it's completed
+func GetWorkflowEntityOutput(id WorkflowEntityID, registry *Registry, db Database) ([]interface{}, error) {
+	workflowEntity, err := db.GetWorkflowEntity(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if workflowEntity.Status != StatusCompleted {
+		return nil, fmt.Errorf("workflow not completed")
+	}
+
+	workflowExecution, err := db.GetWorkflowExecutionLatestByEntityID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	handler, ok := registry.GetWorkflow(workflowEntity.HandlerName)
+	if !ok {
+		return nil, fmt.Errorf("workflow handler not found")
+	}
+
+	data, err := db.GetWorkflowExecutionDataByExecutionID(workflowExecution.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertOutputsFromSerialization(handler, data.Outputs)
+}
+
 // RetryPolicy helper functions
 func DefaultRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{

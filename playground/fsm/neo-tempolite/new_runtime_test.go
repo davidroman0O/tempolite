@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -2876,13 +2877,12 @@ func TestWorkflowSignal(t *testing.T) {
 		ctx,
 		db,
 		registry,
-		WithSignalNew(func(workflowID WorkflowEntityID, signal string) Future {
+		WithSignalNew(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
 			fmt.Println("Signal received:", signal)
 			<-time.After(100 * time.Millisecond)
-			future := NewRuntimeFuture()
 			future.setResult([]interface{}{42})
 			fmt.Println("Signal processed")
-			return future
+			return nil
 		}))
 
 	wrfl := func(ctx WorkflowContext) error {
@@ -2935,6 +2935,196 @@ func TestWorkflowSignal(t *testing.T) {
 
 }
 
+func TestWorkflowSignalPauseResume(t *testing.T) {
+	ctx := context.Background()
+	db := NewMemoryDatabase()
+	registry := NewRegistry()
+
+	defer db.SaveAsJSON("./json/workflow_signal_pauseresume.json")
+
+	smap := sync.Map{}
+
+	o := NewOrchestrator(
+		ctx,
+		db,
+		registry,
+		WithSignalNew(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
+			fmt.Println("New signal received:", signal)
+			smap.Store(signal, future)
+			return nil
+		}),
+		WithSignalRemove(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string) error {
+			fmt.Println("Remove signal received:", signal)
+			smap.Delete(signal)
+			return nil
+		}),
+	)
+
+	wrfl := func(ctx WorkflowContext) error {
+		fmt.Println("Hello, World!")
+		var life int
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("Life, the universe, and everything:", life)
+		if err := ctx.Signal("life", &life); err != nil {
+			return err
+		}
+		fmt.Println("again:", life)
+		return nil
+	}
+
+	future := o.Execute(wrfl, nil)
+	if future == nil {
+		t.Fatal("future is nil")
+	}
+
+	<-time.After(time.Second)
+	fmt.Println("pausing")
+	o.Pause()
+
+	<-time.After(time.Second)
+	fmt.Println("resuming")
+	future = o.Resume(future.WorkflowID())
+
+	go func() {
+		<-time.After(time.Second)
+		fmt.Println("publishing signal")
+		value, ok := smap.Load("life")
+		if !ok {
+			t.Fatal("signal future not found")
+		}
+		value.(Future).setResult([]interface{}{42})
+	}()
+
+	go func() {
+		<-time.After(2 * time.Second)
+		fmt.Println("publishing signal")
+		value, ok := smap.Load("life")
+		if !ok {
+			t.Fatal("signal future not found")
+		}
+		value.(Future).setResult([]interface{}{42})
+	}()
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test workflow status
+	workflow, err := db.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workflow.Status != StatusCompleted {
+		t.Fatalf("expected workflow status %s, got %s", StatusCompleted, workflow.Status)
+	}
+
+	// Test workflow executions
+	execs, err := db.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(execs) != 2 {
+		t.Fatalf("expected 2 workflow executions, got %d", len(execs))
+	}
+
+	// Check first execution was properly paused
+	if execs[0].Status != ExecutionStatusPaused {
+		t.Fatalf("expected first workflow execution status %s, got %s", ExecutionStatusPaused, execs[0].Status)
+	}
+
+	// Check second execution completed
+	if execs[1].Status != ExecutionStatusCompleted {
+		t.Fatalf("expected second workflow execution status %s, got %s", ExecutionStatusCompleted, execs[1].Status)
+	}
+
+	// Check signal entities and executions
+	hierarchies, err := db.GetHierarchiesByParentEntityAndStep(int(future.WorkflowID()), "life", EntitySignal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify single signal entity
+	signalIDs := make(map[int]bool)
+	for _, h := range hierarchies {
+		signalIDs[h.ChildEntityID] = true
+	}
+	if len(signalIDs) != 1 {
+		t.Fatalf("expected exactly one signal entity, got %d", len(signalIDs))
+	}
+
+	// Verify signal entity status
+	signalEntityID := SignalEntityID(hierarchies[0].ChildEntityID)
+	signalEntity, err := db.GetSignalEntity(signalEntityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signalEntity.Status != StatusCompleted {
+		t.Fatalf("expected signal entity status %s, got %s", StatusCompleted, signalEntity.Status)
+	}
+
+	// Verify signal executions
+	if len(hierarchies) != 3 {
+		t.Fatalf("expected 3 signal executions, got %d", len(hierarchies))
+	}
+
+	// Sort hierarchies by execution ID to ensure chronological order
+	sort.Slice(hierarchies, func(i, j int) bool {
+		return hierarchies[i].ChildExecutionID < hierarchies[j].ChildExecutionID
+	})
+
+	// Check each execution's status
+	var expectedExecutionStates = []ExecutionStatus{
+		ExecutionStatusPaused,
+		ExecutionStatusCompleted,
+		ExecutionStatusCompleted,
+	}
+
+	for i, h := range hierarchies {
+		exec, err := db.GetSignalExecution(SignalExecutionID(h.ChildExecutionID))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if exec.Status != expectedExecutionStates[i] {
+			t.Fatalf("expected signal execution %d status %s, got %s",
+				h.ChildExecutionID, expectedExecutionStates[i], exec.Status)
+		}
+	}
+
+	// Verify signals in database
+	signals, err := db.GetSignalEntities(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("expected exactly one signal entity in database, got %d", len(signals))
+	}
+
+	// Verify signal data
+	for _, h := range hierarchies {
+		if h.ParentExecutionID != int(execs[0].ID) && h.ParentExecutionID != int(execs[1].ID) {
+			t.Fatalf("unexpected parent execution ID %d", h.ParentExecutionID)
+		}
+		if h.ParentEntityID != int(workflow.ID) {
+			t.Fatalf("unexpected parent entity ID %d", h.ParentEntityID)
+		}
+		if h.ParentStepID != "root" {
+			t.Fatalf("unexpected parent step ID %s", h.ParentStepID)
+		}
+		if h.ParentType != EntityWorkflow {
+			t.Fatalf("unexpected parent type %s", h.ParentType)
+		}
+		if h.ChildType != EntitySignal {
+			t.Fatalf("unexpected child type %s", h.ChildType)
+		}
+		if h.ChildStepID != "life" {
+			t.Fatalf("unexpected child step ID %s", h.ChildStepID)
+		}
+	}
+}
+
 func TestWorkflowSignalPanic(t *testing.T) {
 
 	ctx := context.Background()
@@ -2947,13 +3137,12 @@ func TestWorkflowSignalPanic(t *testing.T) {
 		ctx,
 		db,
 		registry,
-		WithSignalNew(func(workflowID WorkflowEntityID, signal string) Future {
+		WithSignalNew(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
 			fmt.Println("Signal received:", signal)
 			<-time.After(100 * time.Millisecond)
-			future := NewRuntimeFuture()
 			future.setResult([]interface{}{42})
 			fmt.Println("Signal processed")
-			return future
+			return nil
 		}))
 
 	wrfl := func(ctx WorkflowContext) error {
