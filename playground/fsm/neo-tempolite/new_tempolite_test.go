@@ -604,15 +604,20 @@ func TestTempoliteRunDelete(t *testing.T) {
 
 	defer db.SaveAsJSON("./json/tempolite_run_delete.json")
 
-	runs, err := db.GetRunsPaginated(1, 50, &RunFilter{
-		Status: RunStatusCompleted,
-	}, nil)
+	status := RunStatusCompleted
+
+	runs, err := db.ListRuns(&Pagination{
+		Page:     1,
+		PageSize: 50,
+	}, &RunFilter{
+		Status: &status,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(runs.Runs) != 50 {
-		t.Fatalf("expected 50 runs, got %d", len(runs.Runs))
+	if len(runs.Data) != 50 {
+		t.Fatalf("expected 50 runs, got %d", len(runs.Data))
 	}
 
 	if err := tp.Wait(); err != nil {

@@ -883,25 +883,99 @@ type SideEffectExecution struct {
 	SideEffectExecutionData *SideEffectExecutionData
 }
 
+type BaseEntityFilter struct {
+	RunID           *RunID
+	QueueID         *QueueID
+	HandlerName     *string
+	Type            *EntityType
+	Status          *EntityStatus
+	StepID          *string
+	AfterCreatedAt  *time.Time
+	BeforeCreatedAt *time.Time
+	AfterUpdatedAt  *time.Time
+	BeforeUpdatedAt *time.Time
+}
+
+type BaseExecutionFilter struct {
+	Status          *ExecutionStatus
+	Error           *bool
+	AfterStartedAt  *time.Time
+	BeforeStartedAt *time.Time
+	AfterCreatedAt  *time.Time
+	BeforeCreatedAt *time.Time
+	AfterUpdatedAt  *time.Time
+	BeforeUpdatedAt *time.Time
+}
+
 type RunFilter struct {
-	Status RunStatus // Optional filter by status
+	Status          *RunStatus
+	AfterCreatedAt  *time.Time
+	BeforeCreatedAt *time.Time
+	AfterUpdatedAt  *time.Time
+	BeforeUpdatedAt *time.Time
 }
 
-type RunSort struct {
-	Field string // Field to sort by (e.g., "id", "created_at", "status")
-	Desc  bool   // Sort in descending order if true
+type VersionFilter struct {
+	EntityID        *WorkflowEntityID
+	ChangeID        *string
+	Version         *int
+	AfterCreatedAt  *time.Time
+	BeforeCreatedAt *time.Time
 }
 
-type PaginatedRuns struct {
-	Runs       []*Run // List of runs for current page
-	TotalRuns  int    // Total number of runs matching filter
-	TotalPages int    // Total number of pages
-	Page       int    // Current page number
-	PageSize   int    // Number of items per page
+type HierarchyFilter struct {
+	RunID          *RunID
+	ParentEntityID *int
+	ChildEntityID  *int
+	ParentType     *EntityType
+	ChildType      *EntityType
+	ParentStepID   *string
+	ChildStepID    *string
+}
+
+type QueueFilter struct {
+	Name            *string
+	AfterCreatedAt  *time.Time
+	BeforeCreatedAt *time.Time
+	AfterUpdatedAt  *time.Time
+	BeforeUpdatedAt *time.Time
+}
+
+type Pagination struct {
+	Page     int
+	PageSize int
+}
+
+type Paginated[T any] struct {
+	Data       []*T // List of T for current page
+	Total      int  // Total number of T matching filter
+	TotalPages int  // Total number of pages
+	Page       int  // Current page number
+	PageSize   int  // Number of items per page
 }
 
 // Database interface
 type Database interface {
+
+	// Listing operations
+	ListRuns(page *Pagination, filter *RunFilter) (*Paginated[Run], error)
+	ListVersions(page *Pagination, filter *VersionFilter) (*Paginated[Version], error)
+	ListHierarchies(page *Pagination, filter *HierarchyFilter) (*Paginated[Hierarchy], error)
+	ListQueues(page *Pagination, filter *QueueFilter) (*Paginated[Queue], error)
+
+	// Entity listings
+	ListWorkflowEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[WorkflowEntity], error)
+	ListActivityEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[ActivityEntity], error)
+	ListSideEffectEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SideEffectEntity], error)
+	ListSagaEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SagaEntity], error)
+	ListSignalEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SignalEntity], error)
+
+	// Execution listings
+	ListWorkflowExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[WorkflowExecution], error)
+	ListActivityExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[ActivityExecution], error)
+	ListSideEffectExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SideEffectExecution], error)
+	ListSagaExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SagaExecution], error)
+	ListSignalExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SignalExecution], error)
 
 	// WORKFLOW-RELATED OPERATIONS
 	// Workflow Entity
@@ -1088,7 +1162,6 @@ type Database interface {
 	SetRunProperties(id RunID, setters ...RunPropertySetter) error
 	DeleteRunsByStatus(status RunStatus) error
 	DeleteRuns(ids ...RunID) error
-	GetRunsPaginated(page, pageSize int, filter *RunFilter, sort *RunSort) (*PaginatedRuns, error)
 
 	// VERSION-RELATED OPERATIONS
 	AddVersion(version *Version) (VersionID, error)

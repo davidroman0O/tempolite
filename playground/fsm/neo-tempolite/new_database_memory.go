@@ -1,14 +1,11 @@
 package tempolite
 
 import (
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/sasha-s/go-deadlock"
@@ -5054,93 +5051,6 @@ func (db *MemoryDatabase) deleteSignalEntity(entityID SignalEntityID) error {
 	return nil
 }
 
-func (db *MemoryDatabase) GetRunsPaginated(page, pageSize int, filter *RunFilter, sortCriteria *RunSort) (*PaginatedRuns, error) {
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	matchingRuns := make([]*Run, 0)
-	for _, run := range db.runs {
-		if filter != nil {
-			if run.Status != filter.Status {
-				continue
-			}
-		}
-		matchingRuns = append(matchingRuns, copyRun(run))
-	}
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 10
-	}
-
-	if sortCriteria != nil {
-		sortRuns(matchingRuns, sortCriteria)
-	}
-
-	totalRuns := len(matchingRuns)
-	totalPages := (totalRuns + pageSize - 1) / pageSize
-	if totalPages == 0 {
-		totalPages = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-	start := (page - 1) * pageSize
-	end := start + pageSize
-	if end > totalRuns {
-		end = totalRuns
-	}
-	var pageRuns []*Run
-	if start < totalRuns {
-		pageRuns = matchingRuns[start:end]
-	} else {
-		pageRuns = []*Run{}
-	}
-
-	return &PaginatedRuns{
-		Runs:       pageRuns,
-		TotalRuns:  totalRuns,
-		TotalPages: totalPages,
-		Page:       page,
-		PageSize:   pageSize,
-	}, nil
-}
-
-func sortRuns(runs []*Run, sort *RunSort) {
-	if sort == nil {
-		return
-	}
-
-	sort.Field = strings.ToLower(sort.Field)
-
-	sortFn := func(i, j *Run) int {
-		var comparison int
-
-		switch sort.Field {
-		case "id":
-			comparison = cmp.Compare(i.ID, j.ID)
-		case "created_at":
-			comparison = i.CreatedAt.Compare(j.CreatedAt)
-		case "updated_at":
-			comparison = i.UpdatedAt.Compare(j.UpdatedAt)
-		case "status":
-			comparison = strings.Compare(string(i.Status), string(j.Status))
-		default:
-			// Default sort by ID
-			comparison = cmp.Compare(i.ID, j.ID)
-		}
-
-		if sort.Desc {
-			return -comparison
-		}
-		return comparison
-	}
-
-	slices.SortFunc(runs, sortFn)
-}
-
 // Copy functions
 func copyRun(run *Run) *Run {
 	if run == nil {
@@ -5684,4 +5594,456 @@ func copySignalExecutionData(data *SignalExecutionData) *SignalExecutionData {
 	}
 
 	return &c
+}
+
+///////////////////////////////////////////////////////////////////////
+
+func (db *MemoryDatabase) ListRuns(page *Pagination, filter *RunFilter) (*Paginated[Run], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Run
+
+	for _, run := range db.runs {
+		if !matchesRunFilter(run, filter) {
+			continue
+		}
+		result = append(result, copyRun(run))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListVersions(page *Pagination, filter *VersionFilter) (*Paginated[Version], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Version
+
+	for _, version := range db.versions {
+		if !matchesVersionFilter(version, filter) {
+			continue
+		}
+		result = append(result, copyVersion(version))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListHierarchies(page *Pagination, filter *HierarchyFilter) (*Paginated[Hierarchy], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Hierarchy
+
+	for _, hierarchy := range db.hierarchies {
+		if !matchesHierarchyFilter(hierarchy, filter) {
+			continue
+		}
+		result = append(result, copyHierarchy(hierarchy))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListQueues(page *Pagination, filter *QueueFilter) (*Paginated[Queue], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*Queue
+
+	for _, queue := range db.queues {
+		if !matchesQueueFilter(queue, filter) {
+			continue
+		}
+		result = append(result, copyQueue(queue))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+// Filter matching helper functions
+func matchesRunFilter(run *Run, filter *RunFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.Status != nil && run.Status != *filter.Status {
+		return false
+	}
+	if filter.AfterCreatedAt != nil && !run.CreatedAt.After(*filter.AfterCreatedAt) {
+		return false
+	}
+	if filter.BeforeCreatedAt != nil && !run.CreatedAt.Before(*filter.BeforeCreatedAt) {
+		return false
+	}
+	if filter.AfterUpdatedAt != nil && !run.UpdatedAt.After(*filter.AfterUpdatedAt) {
+		return false
+	}
+	if filter.BeforeUpdatedAt != nil && !run.UpdatedAt.Before(*filter.BeforeUpdatedAt) {
+		return false
+	}
+
+	return true
+}
+
+func matchesVersionFilter(version *Version, filter *VersionFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.EntityID != nil && version.EntityID != *filter.EntityID {
+		return false
+	}
+	if filter.ChangeID != nil && version.ChangeID != *filter.ChangeID {
+		return false
+	}
+	if filter.Version != nil && version.Version != *filter.Version {
+		return false
+	}
+	if filter.AfterCreatedAt != nil && !version.CreatedAt.After(*filter.AfterCreatedAt) {
+		return false
+	}
+	if filter.BeforeCreatedAt != nil && !version.CreatedAt.Before(*filter.BeforeCreatedAt) {
+		return false
+	}
+
+	return true
+}
+
+func matchesHierarchyFilter(hierarchy *Hierarchy, filter *HierarchyFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.RunID != nil && hierarchy.RunID != *filter.RunID {
+		return false
+	}
+	if filter.ParentEntityID != nil && hierarchy.ParentEntityID != *filter.ParentEntityID {
+		return false
+	}
+	if filter.ChildEntityID != nil && hierarchy.ChildEntityID != *filter.ChildEntityID {
+		return false
+	}
+	if filter.ParentType != nil && hierarchy.ParentType != *filter.ParentType {
+		return false
+	}
+	if filter.ChildType != nil && hierarchy.ChildType != *filter.ChildType {
+		return false
+	}
+	if filter.ParentStepID != nil && hierarchy.ParentStepID != *filter.ParentStepID {
+		return false
+	}
+	if filter.ChildStepID != nil && hierarchy.ChildStepID != *filter.ChildStepID {
+		return false
+	}
+
+	return true
+}
+
+func matchesQueueFilter(queue *Queue, filter *QueueFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.Name != nil && queue.Name != *filter.Name {
+		return false
+	}
+	if filter.AfterCreatedAt != nil && !queue.CreatedAt.After(*filter.AfterCreatedAt) {
+		return false
+	}
+	if filter.BeforeCreatedAt != nil && !queue.CreatedAt.Before(*filter.BeforeCreatedAt) {
+		return false
+	}
+	if filter.AfterUpdatedAt != nil && !queue.UpdatedAt.After(*filter.AfterUpdatedAt) {
+		return false
+	}
+	if filter.BeforeUpdatedAt != nil && !queue.UpdatedAt.Before(*filter.BeforeUpdatedAt) {
+		return false
+	}
+
+	return true
+}
+
+func (db *MemoryDatabase) ListWorkflowEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[WorkflowEntity], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*WorkflowEntity
+
+	// First filter all entities
+	for _, entity := range db.workflowEntities {
+		if !matchesEntityFilter(entity.BaseEntity, filter) {
+			continue
+		}
+		result = append(result, copyWorkflowEntity(entity))
+	}
+
+	// Then paginate
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListActivityEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[ActivityEntity], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*ActivityEntity
+
+	for _, entity := range db.activityEntities {
+		if !matchesEntityFilter(entity.BaseEntity, filter) {
+			continue
+		}
+		result = append(result, copyActivityEntity(entity))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSideEffectEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SideEffectEntity], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SideEffectEntity
+
+	for _, entity := range db.sideEffectEntities {
+		if !matchesEntityFilter(entity.BaseEntity, filter) {
+			continue
+		}
+		result = append(result, copySideEffectEntity(entity))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSagaEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SagaEntity], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SagaEntity
+
+	for _, entity := range db.sagaEntities {
+		if !matchesEntityFilter(entity.BaseEntity, filter) {
+			continue
+		}
+		result = append(result, copySagaEntity(entity))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSignalEntities(page *Pagination, filter *BaseEntityFilter) (*Paginated[SignalEntity], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SignalEntity
+
+	for _, entity := range db.signalEntities {
+		if !matchesEntityFilter(entity.BaseEntity, filter) {
+			continue
+		}
+		result = append(result, copySignalEntity(entity))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListWorkflowExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[WorkflowExecution], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*WorkflowExecution
+
+	for _, exec := range db.workflowExecutions {
+		if !matchesExecutionFilter(exec.BaseExecution, filter) {
+			continue
+		}
+		result = append(result, copyWorkflowExecution(exec))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListActivityExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[ActivityExecution], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*ActivityExecution
+
+	for _, exec := range db.activityExecutions {
+		if !matchesExecutionFilter(exec.BaseExecution, filter) {
+			continue
+		}
+		result = append(result, copyActivityExecution(exec))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSideEffectExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SideEffectExecution], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SideEffectExecution
+
+	for _, exec := range db.sideEffectExecutions {
+		if !matchesExecutionFilter(exec.BaseExecution, filter) {
+			continue
+		}
+		result = append(result, copySideEffectExecution(exec))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSagaExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SagaExecution], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SagaExecution
+
+	for _, exec := range db.sagaExecutions {
+		if !matchesExecutionFilter(exec.BaseExecution, filter) {
+			continue
+		}
+		result = append(result, copySagaExecution(exec))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+func (db *MemoryDatabase) ListSignalExecutions(page *Pagination, filter *BaseExecutionFilter) (*Paginated[SignalExecution], error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	var result []*SignalExecution
+
+	for _, exec := range db.signalExecutions {
+		if !matchesExecutionFilter(exec.BaseExecution, filter) {
+			continue
+		}
+		result = append(result, copySignalExecution(exec))
+	}
+
+	return paginateResults(result, page), nil
+}
+
+// Helper function to check if an entity matches the filter
+func matchesEntityFilter(entity BaseEntity, filter *BaseEntityFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.RunID != nil && entity.RunID != *filter.RunID {
+		return false
+	}
+	if filter.QueueID != nil && entity.QueueID != *filter.QueueID {
+		return false
+	}
+	if filter.HandlerName != nil && entity.HandlerName != *filter.HandlerName {
+		return false
+	}
+	if filter.Type != nil && entity.Type != *filter.Type {
+		return false
+	}
+	if filter.Status != nil && entity.Status != *filter.Status {
+		return false
+	}
+	if filter.StepID != nil && entity.StepID != *filter.StepID {
+		return false
+	}
+	if filter.AfterCreatedAt != nil && !entity.CreatedAt.After(*filter.AfterCreatedAt) {
+		return false
+	}
+	if filter.BeforeCreatedAt != nil && !entity.CreatedAt.Before(*filter.BeforeCreatedAt) {
+		return false
+	}
+	if filter.AfterUpdatedAt != nil && !entity.UpdatedAt.After(*filter.AfterUpdatedAt) {
+		return false
+	}
+	if filter.BeforeUpdatedAt != nil && !entity.UpdatedAt.Before(*filter.BeforeUpdatedAt) {
+		return false
+	}
+
+	return true
+}
+
+// Helper function to check if an execution matches the filter
+func matchesExecutionFilter(exec BaseExecution, filter *BaseExecutionFilter) bool {
+	if filter == nil {
+		return true
+	}
+
+	if filter.Status != nil && exec.Status != *filter.Status {
+		return false
+	}
+	if filter.Error != nil {
+		hasError := exec.Error != ""
+		if *filter.Error != hasError {
+			return false
+		}
+	}
+	if filter.AfterStartedAt != nil && !exec.StartedAt.After(*filter.AfterStartedAt) {
+		return false
+	}
+	if filter.BeforeStartedAt != nil && !exec.StartedAt.Before(*filter.BeforeStartedAt) {
+		return false
+	}
+	if filter.AfterCreatedAt != nil && !exec.CreatedAt.After(*filter.AfterCreatedAt) {
+		return false
+	}
+	if filter.BeforeCreatedAt != nil && !exec.CreatedAt.Before(*filter.BeforeCreatedAt) {
+		return false
+	}
+	if filter.AfterUpdatedAt != nil && !exec.UpdatedAt.After(*filter.AfterUpdatedAt) {
+		return false
+	}
+	if filter.BeforeUpdatedAt != nil && !exec.UpdatedAt.Before(*filter.BeforeUpdatedAt) {
+		return false
+	}
+
+	return true
+}
+
+// Generic pagination helper
+func paginateResults[T any](items []*T, page *Pagination) *Paginated[T] {
+	total := len(items)
+
+	if page == nil || page.PageSize <= 0 {
+		return &Paginated[T]{
+			Data:       items,
+			Total:      total,
+			TotalPages: 1,
+			Page:       0,
+			PageSize:   total,
+		}
+	}
+
+	totalPages := (total + page.PageSize - 1) / page.PageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	start := page.Page * page.PageSize
+	if start >= total {
+		return &Paginated[T]{
+			Data:       []*T{},
+			Total:      total,
+			TotalPages: totalPages,
+			Page:       page.Page,
+			PageSize:   page.PageSize,
+		}
+	}
+
+	end := start + page.PageSize
+	if end > total {
+		end = total
+	}
+
+	return &Paginated[T]{
+		Data:       items[start:end],
+		Total:      total,
+		TotalPages: totalPages,
+		Page:       page.Page,
+		PageSize:   page.PageSize,
+	}
 }
