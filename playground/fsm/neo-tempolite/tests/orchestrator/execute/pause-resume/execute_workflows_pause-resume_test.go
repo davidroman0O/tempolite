@@ -30,6 +30,7 @@ func TestWorkflowExecutePauseResume(t *testing.T) {
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {
@@ -214,6 +215,7 @@ func TestWorkflowExecutePauseResumeFailure(t *testing.T) {
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {
@@ -415,6 +417,7 @@ func TestWorkflowExecutePauseResumePanic(t *testing.T) {
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {

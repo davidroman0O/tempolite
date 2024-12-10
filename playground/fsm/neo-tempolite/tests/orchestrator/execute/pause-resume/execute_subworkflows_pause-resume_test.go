@@ -25,6 +25,7 @@ func TestWorkflowExecutePauseResumeSubWorkflow(t *testing.T) {
 
 	subWorkflowFunc := func(ctx tempolite.WorkflowContext) error {
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {
@@ -35,6 +36,7 @@ func TestWorkflowExecutePauseResumeSubWorkflow(t *testing.T) {
 
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
+		<-time.After(time.Second / 4)
 		if err := ctx.Workflow("sub", subWorkflowFunc, nil).Get(); err != nil {
 			return err
 		}
@@ -77,6 +79,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 
 	subWorkflowFunc := func(ctx tempolite.WorkflowContext) error {
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {
@@ -87,6 +90,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
+		<-time.After(time.Second / 4)
 		if err := ctx.Workflow("sub", subWorkflowFunc, nil).Get(); err != nil {
 			return err
 		}
@@ -323,6 +327,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 
 	subWorkflowFunc := func(ctx tempolite.WorkflowContext) error {
 		var life int
+		<-time.After(time.Second / 4)
 		if err := ctx.SideEffect("something", func() int {
 			return 42
 		}).Get(&life); err != nil {
@@ -333,6 +338,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 
 	workflowFunc := func(ctx tempolite.WorkflowContext) error {
 		flagTriggered.Store(true)
+		<-time.After(time.Second / 4)
 		if err := ctx.Workflow("sub", subWorkflowFunc, nil).Get(); err != nil {
 			return err
 		}

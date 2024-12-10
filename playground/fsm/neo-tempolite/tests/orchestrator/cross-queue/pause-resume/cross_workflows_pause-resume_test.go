@@ -55,6 +55,7 @@ func TestWorkflowCrossQueuePauseResume(t *testing.T) {
 	}
 
 	workflowDefault := func(ctx tempolite.WorkflowContext) error {
+		<-time.After(time.Second / 2)
 		return ctx.Workflow("side", workflowSide, &tempolite.WorkflowOptions{
 			Queue: "side",
 		}).Get()
