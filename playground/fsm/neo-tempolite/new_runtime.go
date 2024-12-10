@@ -2453,7 +2453,7 @@ func (wi *WorkflowInstance) runWorkflow(inputs []interface{}) (outputs *Workflow
 			wi.mu.Lock()
 
 			// allow the caller to know about the panic
-			err = errors.Join(ErrWorkflowInstanceRun, ErrWorkflowPanicked)
+			err = errors.Join(ErrWorkflowInstanceRun, ErrWorkflowPanicked, fmt.Errorf("%v", r))
 			logger.Error(wi.ctx, err.Error(), "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 			// due to the `err` it will trigger the fail state
 			outputs = &WorkflowOutput{
@@ -3295,7 +3295,7 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 
 			ai.mu.Lock()
 			// allow the caller to know about the panic
-			err = errors.Join(ErrActivityInstanceRun, ErrActivityPanicked)
+			err = errors.Join(ErrActivityInstanceRun, ErrActivityPanicked, fmt.Errorf("%v", r))
 			logger.Error(ai.ctx, fmt.Sprintf("activity panicked: %v", r), "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
 			outputs = &ActivityOutput{
 				StrackTrace: &stackTrace,
@@ -3840,7 +3840,7 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 				fmt.Println(stackTrace)
 			}
 
-			err = errors.Join(ErrSideEffectRun, ErrSideEffectPanicked)
+			err = errors.Join(ErrSideEffectRun, ErrSideEffectPanicked, fmt.Errorf("%v", r))
 			logger.Error(si.ctx, fmt.Sprintf("side effect panicked: %v", r), "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		}
 	}()
