@@ -20,10 +20,10 @@ type WorkflowRequest struct {
 	workflowFunc interface{}      // The workflow function
 	options      *WorkflowOptions // Workflow options
 	args         []interface{}    // Arguments for the workflow
-	future       Future           // Future for tracking execution
 	queueName    string           // Name of the queue this task belongs to
 	continued    bool
 	resume       bool
+	chnFuture    chan Future
 }
 
 type WorkflowResponse struct {
@@ -188,8 +188,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 		return nil, nil, nil, err
 	}
 
-	dbFuture := NewRuntimeFuture()
-	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+	chnFuture := make(chan Future, 1)
 
 	queued := retrypool.NewQueuedNotification()
 
@@ -199,7 +198,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 			workflowFunc: workflowFunc,
 			options:      options,
 			args:         args,
-			future:       dbFuture,
+			chnFuture:    chnFuture,
 			queueName:    qi.name,
 		},
 	)
@@ -208,7 +207,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 		return nil, nil, nil, err
 	}
 
-	return dbFuture, task, queued.Done(), nil
+	return <-chnFuture, task, queued.Done(), nil
 }
 
 func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
@@ -233,9 +232,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		return nil, nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
 	}
 
-	// Create future for tracking execution
-	dbFuture := NewRuntimeFuture()
-	dbFuture.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+	chnFuture := make(chan Future, 1)
 
 	queued := retrypool.NewQueuedNotification()
 
@@ -247,7 +244,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 			queueName:    qi.name,
 			continued:    false, // Not a continuation
 			resume:       true,  // Mark this as a resume
-			future:       dbFuture,
+			chnFuture:    chnFuture,
 		},
 	)
 
@@ -255,7 +252,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
-	return dbFuture, task, queued.Done(), nil
+	return <-chnFuture, task, queued.Done(), nil
 }
 
 type onStartFunc func(context.Context)
@@ -322,7 +319,10 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	w.queueInstance.mu.Lock()
 	if _, exists := w.queueInstance.processingWorkers[task.Request.workflowID]; exists {
 		w.queueInstance.mu.Unlock()
-		task.Request.future.SetError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
+		future := NewRuntimeFuture()
+		future.SetError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
+		task.Request.chnFuture <- future
+		close(task.Request.chnFuture)
 		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		return fmt.Errorf("entity %d is already being processed", task.Request.workflowID)
 	}
@@ -337,7 +337,10 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	}()
 
 	if _, err := w.orchestrator.registry.RegisterWorkflow(task.Request.workflowFunc); err != nil {
-		task.Request.future.SetError(err)
+		future := NewRuntimeFuture()
+		future.SetError(err)
+		task.Request.chnFuture <- future
+		close(task.Request.chnFuture)
 		task.CompleteWithError(err)
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
@@ -353,8 +356,11 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 		future, err = w.orchestrator.ExecuteWithEntity(task.Request.workflowID)
 	}
 
+	task.Request.chnFuture <- future
+	close(task.Request.chnFuture)
+
 	if err != nil {
-		task.Request.future.SetError(err)
+		future.SetError(err)
 		task.CompleteWithError(err)
 		// return fmt.Errorf("failed to execute workflow: %w", err)
 		return nil
@@ -363,13 +369,13 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	var results []interface{}
 	// Get the results and update the DatabaseFuture
 	if results, err = future.GetResults(); err != nil {
-		task.Request.future.SetError(err)
+		future.SetError(err)
 		task.CompleteWithError(err)
 		//	it's fine, we have an successful error
 		return nil
 	}
 
-	task.Request.future.SetResult(results)
+	future.SetResult(results)
 	task.Complete(&WorkflowResponse{
 		ID: task.Request.workflowID,
 	})
@@ -416,7 +422,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 			return futureErr
 		}
 
-		future := NewRuntimeFuture()
+		chnFuture := make(chan Future, 1)
 
 		if err := queue.orchestrators.Submit(
 			retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
@@ -424,7 +430,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 				options:      options,
 				workflowID:   workflowID,
 				args:         args,
-				future:       future,
+				chnFuture:    chnFuture,
 				queueName:    queueName,
 				continued:    false,
 			})); err != nil {
@@ -433,7 +439,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 			return futureErr
 		}
 
-		return future
+		return <-chnFuture
 	}
 }
 
@@ -448,7 +454,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 			return futureErr
 		}
 
-		future := NewRuntimeFuture()
+		chnFuture := make(chan Future, 1)
 
 		// Handle version inheritance through ContinueAsNew
 		if err := queue.orchestrators.Submit(
@@ -457,7 +463,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 				workflowFunc: workflowFunc,
 				options:      options,
 				args:         args,
-				future:       future,
+				chnFuture:    chnFuture,
 				queueName:    queueName,
 				continued:    true, // Mark this as a continuation
 			})); err != nil {
@@ -466,7 +472,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 			return futureErr
 		}
 
-		return future
+		return <-chnFuture
 	}
 }
 

@@ -1240,6 +1240,8 @@ func (o *Orchestrator) hasSagaInstance(stepID string) bool {
 }
 
 func (o *Orchestrator) reset() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.rootWf = nil
 	o.instances = []*WorkflowInstance{}
 	o.activities = []*ActivityInstance{}
