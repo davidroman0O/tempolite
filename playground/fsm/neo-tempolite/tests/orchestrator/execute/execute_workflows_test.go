@@ -17,6 +17,7 @@ import (
 func TestWorkflowExecute(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_basic_execute.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -32,8 +33,6 @@ func TestWorkflowExecute(t *testing.T) {
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
-
-	database.SaveAsJSON("./jsons/workflows_basic_execute.json")
 
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
@@ -81,6 +80,7 @@ func TestWorkflowExecute(t *testing.T) {
 func TestWorkflowExecuteFailure(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_basic_execute_failure.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -94,8 +94,6 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
 	}
-
-	database.SaveAsJSON("./jsons/workflows_basic_execute_failure.json")
 
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
@@ -139,6 +137,7 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 func TestWorkflowExecutePanic(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_basic_execute_panic.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -152,8 +151,6 @@ func TestWorkflowExecutePanic(t *testing.T) {
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
 	}
-
-	database.SaveAsJSON("./jsons/workflows_basic_execute_panic.json")
 
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {

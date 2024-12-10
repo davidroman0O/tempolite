@@ -70,7 +70,6 @@ func TestWorkflowCrossQueuePauseResume(t *testing.T) {
 	time.Sleep(time.Second) // Allow completion
 
 	if err := future.Get(); err != nil {
-		database.SaveAsJSON("./jsons/workflows_activities_cross_queue_pause-resume-error-completed.json")
 		t.Fatal(err)
 	}
 
