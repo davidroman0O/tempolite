@@ -3986,6 +3986,7 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 
 //////////////////////////////////// SAGA
 
+// TODO: If we're returning NOTHING from the saga, why do we return a `Future` and not a `error`??
 func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 	var err error
 

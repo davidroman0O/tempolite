@@ -1448,3 +1448,14 @@ func convertSingleOutputFromSerialization(outputType reflect.Type, executionOutp
 
 	return reflect.ValueOf(decodedObj).Elem().Interface(), nil
 }
+
+func ConvertBack(data []byte, output interface{}) error {
+	buf := bytes.NewBuffer(data)
+	if reflect.TypeOf(output).Kind() != reflect.Ptr {
+		return errors.Join(ErrSerialization, ErrMustPointer)
+	}
+	if err := rtl.Decode(buf, output); err != nil {
+		return errors.Join(ErrSerialization, err)
+	}
+	return nil
+}
