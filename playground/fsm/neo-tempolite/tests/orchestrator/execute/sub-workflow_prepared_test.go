@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -86,6 +87,10 @@ func TestSubWorkflowPrepared(t *testing.T) {
 		t.Fatalf("expected 1 executions, got %d", len(execs))
 	}
 
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
+
 	if execs[0].Status != tempolite.ExecutionStatusCompleted {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusCompleted, execs[0].Status)
 	}
@@ -167,6 +172,10 @@ func TestSubWorkflowPreparedFailure(t *testing.T) {
 		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
 
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
+
 	if execs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, execs[0].Status)
 	}
@@ -205,6 +214,10 @@ func TestSubWorkflowPreparedFailure(t *testing.T) {
 	if len(subexecs) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(subexecs))
 	}
+
+	sort.Slice(subexecs, func(i, j int) bool {
+		return subexecs[i].ID < subexecs[j].ID
+	})
 
 	if subexecs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, subexecs[0].Status)
@@ -290,6 +303,10 @@ func TestSubWorkflowPreparedPanic(t *testing.T) {
 		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
 
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
+
 	if execs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, execs[0].Status)
 	}
@@ -324,6 +341,10 @@ func TestSubWorkflowPreparedPanic(t *testing.T) {
 	if len(subexecs) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(subexecs))
 	}
+
+	sort.Slice(subexecs, func(i, j int) bool {
+		return subexecs[i].ID < subexecs[j].ID
+	})
 
 	if subexecs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, subexecs[0].Status)

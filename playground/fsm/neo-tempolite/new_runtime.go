@@ -1083,7 +1083,8 @@ type Orchestrator struct {
 
 	err error
 
-	paused bool
+	stateMu deadlock.RWMutex // Separate mutex for state management
+	paused  bool
 
 	// we need to know if our runtime is currently busy doing operations or not
 	// the reasons we want to know that, is to delay execution of operations while something else is trying to finish
@@ -1216,29 +1217,31 @@ func (o *Orchestrator) reset() {
 }
 
 func (o *Orchestrator) isActive() bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.active.Load()
+	o.stateMu.Lock()
+	v := o.active.Load()
+	o.stateMu.Unlock()
+	return v
 }
 
 func (o *Orchestrator) setActive() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	o.stateMu.Lock()
 	o.active.Store(true)
+	o.stateMu.Unlock()
 }
 
 func (o *Orchestrator) setInactive() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	o.stateMu.Lock()
 	o.active.Store(false)
+	o.stateMu.Unlock()
 }
 
 // Request to pause the current orchestration
 // Pause != Cancel
 // Pause is controlled mechanism to stop the execution of the current orchestration by slowly stopping the execution of the current workflow.
 func (o *Orchestrator) Pause() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	o.stateMu.Lock()
+	defer o.stateMu.Unlock()
+	logger.Debug(o.ctx, "orchestrator set pause")
 	o.paused = true
 	o.cancelPause()
 }
@@ -1283,24 +1286,26 @@ func (o *Orchestrator) WaitFor(id WorkflowEntityID, status EntityStatus) error {
 }
 
 func (o *Orchestrator) isPaused() bool {
+	o.stateMu.RLock()
+	defer o.stateMu.RUnlock()
 	logger.Debug(o.ctx, "is orchestrator paused?", "orchestrator.is_paused", o.paused)
-	o.mu.Lock()
-	defer o.mu.Unlock()
 	return o.paused
 }
 
 func (o *Orchestrator) setUnpause() {
+	o.stateMu.Lock()
+	defer o.stateMu.Unlock()
 	logger.Debug(o.ctx, "orchestrator set unpause")
-	o.mu.Lock()
-	defer o.mu.Unlock()
 	o.paused = false
+
 }
 
 func (o *Orchestrator) canStackTrace() bool {
 	logger.Debug(o.ctx, "can orchestrator display the stack trace?", "orchestrator.can_stack_trace", o.displayStackTrace)
 	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.displayStackTrace
+	v := o.displayStackTrace
+	o.mu.Unlock()
+	return v
 }
 
 func (o *Orchestrator) resetContext() {
@@ -1325,6 +1330,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	var status EntityStatus
 	if err := o.db.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity properties: %w", err))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)
@@ -1333,6 +1339,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 
 	if status != StatusPaused {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, ErrPaused, ErrWorkflowPaused, fmt.Errorf("workflow is not paused: %s", status))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)
@@ -1347,6 +1354,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 			WorkflowEntityWithQueue(),
 		); err != nil {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get workflow entity: %w", err))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)
@@ -1367,6 +1375,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	// TODO; i will refactor the hierarchy model to support strict types
 	if hierarchies, err = o.db.GetHierarchiesByChildEntity(int(entityID)); err != nil {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, fmt.Errorf("failed to get hierarchies: %w", err))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)
@@ -1382,6 +1391,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	handler, ok := o.registry.GetWorkflow(workflowEntity.HandlerName)
 	if !ok {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, ErrRegistryHandlerNotFound, fmt.Errorf("handler %s not found", workflowEntity.HandlerName))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)
@@ -1391,6 +1401,7 @@ func (o *Orchestrator) Resume(entityID WorkflowEntityID) Future {
 	inputs, err := convertInputsFromSerialization(handler, workflowEntity.WorkflowData.Inputs)
 	if err != nil {
 		future := NewRuntimeFuture()
+		future.setEntityID(FutureEntityWithWorkflowID(entityID))
 		err := errors.Join(ErrOrchestrator, ErrSerialization, fmt.Errorf("failed to convert inputs: %w", err))
 		logger.Error(o.ctx, err.Error(), "orchestrator.resume.workflow_id", entityID)
 		future.SetError(err)

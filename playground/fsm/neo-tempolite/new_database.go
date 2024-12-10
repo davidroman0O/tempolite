@@ -715,19 +715,30 @@ type BaseEntity struct {
 
 // Entity Data structures
 type WorkflowData struct {
-	ID                     WorkflowDataID       `json:"id,omitempty"`
-	EntityID               WorkflowEntityID     `json:"entity_id,omitempty"`
-	Duration               string               `json:"duration,omitempty"`
-	Paused                 bool                 `json:"paused"`
-	Resumable              bool                 `json:"resumable"`
-	Inputs                 [][]byte             `json:"inputs,omitempty"`
-	IsRoot                 bool                 `json:"is_root"`
-	ContinuedFrom          *WorkflowEntityID    `json:"continued_from,omitempty"`
+	ID        WorkflowDataID   `json:"id,omitempty"`
+	EntityID  WorkflowEntityID `json:"entity_id,omitempty"`
+	Duration  string           `json:"duration,omitempty"`
+	Paused    bool             `json:"paused"`
+	Resumable bool             `json:"resumable"`
+	Inputs    [][]byte         `json:"inputs,omitempty"`
+	IsRoot    bool             `json:"is_root"`
+
+	// ContinueAsNew reference to the parent workflow we come from
+	ContinuedFrom *WorkflowEntityID `json:"continued_from,omitempty"`
+
+	// ContinueAsNew reference to the parent workflow execution we come from
 	ContinuedExecutionFrom *WorkflowExecutionID `json:"continued_execution_from,omitempty"`
-	WorkflowStepID         *string              `json:"workflow_step_id,omitempty"`
-	WorkflowFrom           *WorkflowEntityID    `json:"workflow_from,omitempty"`
-	WorkflowExecutionFrom  *WorkflowExecutionID `json:"workflow_execution_from,omitempty"`
-	Versions               map[string]int       // Tracks versions used in this workflow
+
+	// Cross-queue reference to the step id we used
+	WorkflowStepID *string `json:"workflow_step_id,omitempty"`
+
+	// Cross-queue reference to the workflow we used
+	WorkflowFrom *WorkflowEntityID `json:"workflow_from,omitempty"`
+
+	// Cross-queue reference to the workflow execution we used
+	WorkflowExecutionFrom *WorkflowExecutionID `json:"workflow_execution_from,omitempty"`
+
+	Versions map[string]int // Tracks versions used in this workflow
 }
 
 type ActivityData struct {

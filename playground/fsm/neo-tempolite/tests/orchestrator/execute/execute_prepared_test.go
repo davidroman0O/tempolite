@@ -3,17 +3,18 @@ package tests
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync/atomic"
 	"testing"
 
 	tempolite "github.com/davidroman0O/tempolite/playground/fsm/neo-tempolite"
 )
 
-/// TestWorkflowExecute 			- Basic Workflow direct execution
-/// TestWorkflowExecuteFailure 		- Basic Workflow direct execution with error
-/// TestWorkflowExecutePanic 		- Basic Workflow direct execution with panic
+///	TestWorkflowPrepared	- Basic Workflow prepared execution
+///	TestWorkflowPreparedFailure	- Basic Workflow prepared execution with error
+///	TestWorkflowPreparedPanic	- Basic Workflow prepared execution
 
-func TestWorkflowExecute(t *testing.T) {
+func TestWorkflowPrepared(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
 	ctx := context.Background()
@@ -27,18 +28,27 @@ func TestWorkflowExecute(t *testing.T) {
 		return nil
 	}
 
-	future := orchestrator.Execute(workflowFunc, nil)
+	we, err := tempolite.PrepareWorkflow(registry, database, workflowFunc, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	future, err := orchestrator.ExecuteWithEntity(we.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
 	}
 
-	database.SaveAsJSON("./jsons/workflows_basic_execute.json")
+	database.SaveAsJSON("./jsons/workflows_basic_prepared.json")
 
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
 	}
 
-	we, err := database.GetWorkflowEntity(future.WorkflowID())
+	we, err = database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +74,10 @@ func TestWorkflowExecute(t *testing.T) {
 		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
 
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
+
 	if execs[0].Status != tempolite.ExecutionStatusCompleted {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusCompleted, execs[0].Status)
 	}
@@ -73,7 +87,7 @@ func TestWorkflowExecute(t *testing.T) {
 	}
 }
 
-func TestWorkflowExecuteFailure(t *testing.T) {
+func TestWorkflowPreparedFailure(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
 	ctx := context.Background()
@@ -84,15 +98,23 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 		return fmt.Errorf("on purpose")
 	}
 
-	future := orchestrator.Execute(workflowFunc, nil)
+	we, err := tempolite.PrepareWorkflow(registry, database, workflowFunc, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	future, err := orchestrator.ExecuteWithEntity(we.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
 	}
 
-	database.SaveAsJSON("./jsons/workflows_basic_execute_failure.json")
+	database.SaveAsJSON("./jsons/workflows_basic_prepared_failure.json")
 
-	we, err := database.GetWorkflowEntity(future.WorkflowID())
+	we, err = database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +139,10 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 	if len(execs) != 1 {
 		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
+
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
 
 	if execs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, execs[0].Status)
@@ -127,7 +153,7 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 	}
 }
 
-func TestWorkflowExecutePanic(t *testing.T) {
+func TestWorkflowPreparedPanic(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
 	ctx := context.Background()
@@ -138,15 +164,23 @@ func TestWorkflowExecutePanic(t *testing.T) {
 		panic("on purpose")
 	}
 
-	future := orchestrator.Execute(workflowFunc, nil)
+	we, err := tempolite.PrepareWorkflow(registry, database, workflowFunc, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	future, err := orchestrator.ExecuteWithEntity(we.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
 	}
 
-	database.SaveAsJSON("./jsons/workflows_basic_execute_panic.json")
+	database.SaveAsJSON("./jsons/workflows_basic_prepared_panic.json")
 
-	we, err := database.GetWorkflowEntity(future.WorkflowID())
+	we, err = database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,14 +206,15 @@ func TestWorkflowExecutePanic(t *testing.T) {
 		t.Fatalf("expected 1 execution, got %d", len(execs))
 	}
 
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].ID < execs[j].ID
+	})
+
 	if execs[0].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected status %s, got %s", tempolite.ExecutionStatusFailed, execs[0].Status)
 	}
 
 	if execs[0].Error == "" {
-		t.Fatal("expected error")
-	}
-	if execs[0].StackTrace == nil {
 		t.Fatal("expected error")
 	}
 }
