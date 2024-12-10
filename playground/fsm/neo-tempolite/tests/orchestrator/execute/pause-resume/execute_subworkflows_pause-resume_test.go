@@ -60,11 +60,214 @@ func TestWorkflowExecutePauseResumeSubWorkflow(t *testing.T) {
 		t.Fatal("workflowFunc was not triggered")
 	}
 
-	// Verify workflow states
-	if err := orchestrator.WaitFor(future.WorkflowID(), tempolite.StatusCompleted); err != nil {
+	// Verify Run status
+	run, err := database.GetRun(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != tempolite.RunStatusCompleted {
+		t.Fatalf("expected run status %s, got %s",
+			tempolite.RunStatusCompleted, run.Status)
+	}
+
+	// Get root workflow executions
+	rootExecs, err := database.GetWorkflowExecutions(future.WorkflowID())
+	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Should have exactly 2 executions: paused and completed
+	if len(rootExecs) != 2 {
+		t.Fatalf("expected 2 root workflow executions, got %d", len(rootExecs))
+	}
+
+	// Sort executions by ID
+	sort.Slice(rootExecs, func(i, j int) bool {
+		return rootExecs[i].ID < rootExecs[j].ID
+	})
+
+	// First execution should be paused
+	if rootExecs[0].Status != tempolite.ExecutionStatusPaused {
+		t.Fatalf("expected first execution status %s, got %s",
+			tempolite.ExecutionStatusPaused, rootExecs[0].Status)
+	}
+
+	// Second execution should be completed
+	if rootExecs[1].Status != tempolite.ExecutionStatusCompleted {
+		t.Fatalf("expected second execution status %s, got %s",
+			tempolite.ExecutionStatusCompleted, rootExecs[1].Status)
+	}
+
+	// Get root workflow entity
+	rootWorkflow, err := database.GetWorkflowEntity(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootWorkflow.Status != tempolite.StatusCompleted {
+		t.Fatalf("expected root workflow status %s, got %s",
+			tempolite.StatusCompleted, rootWorkflow.Status)
+	}
+
+	// Get hierarchies to find sub-workflow
+	hierarchies, err := database.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy for root workflow, got %d", len(hierarchies))
+	}
+
+	// Sort hierarchies for consistent testing
+	sort.Slice(hierarchies, func(i, j int) bool {
+		return hierarchies[i].ID < hierarchies[j].ID
+	})
+
+	// Verify hierarchy relationship
+	h := hierarchies[0]
+	if h.ParentEntityID != int(future.WorkflowID()) {
+		t.Fatalf("expected parent entity ID %d, got %d",
+			future.WorkflowID(), h.ParentEntityID)
+	}
+	if h.ParentType != tempolite.EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s",
+			tempolite.EntityWorkflow, h.ParentType)
+	}
+	if h.ChildType != tempolite.EntityWorkflow {
+		t.Fatalf("expected child type %s, got %s",
+			tempolite.EntityWorkflow, h.ChildType)
+	}
+	if h.ParentStepID != "root" {
+		t.Fatalf("expected parent step ID 'root', got %s", h.ParentStepID)
+	}
+	if h.ChildStepID != "sub" {
+		t.Fatalf("expected child step ID 'sub', got %s", h.ChildStepID)
+	}
+
+	// Get the sub workflow from hierarchy
+	subWorkflowID := tempolite.WorkflowEntityID(h.ChildEntityID)
+	subWorkflow, err := database.GetWorkflowEntity(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify sub workflow status
+	if subWorkflow.Status != tempolite.StatusCompleted {
+		t.Fatalf("expected sub workflow status %s, got %s",
+			tempolite.StatusCompleted, subWorkflow.Status)
+	}
+
+	// Get sub workflow executions
+	subWorkflowExecs, err := database.GetWorkflowExecutions(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subWorkflowExecs) != 1 {
+		t.Fatalf("expected 1 sub workflow execution, got %d", len(subWorkflowExecs))
+	}
+
+	// Sort executions by ID
+	sort.Slice(subWorkflowExecs, func(i, j int) bool {
+		return subWorkflowExecs[i].ID < subWorkflowExecs[j].ID
+	})
+
+	// Verify sub workflow execution status
+	if subWorkflowExecs[0].Status != tempolite.ExecutionStatusCompleted {
+		t.Fatalf("expected sub workflow execution status %s, got %s",
+			tempolite.ExecutionStatusCompleted, subWorkflowExecs[0].Status)
+	}
+
+	// Get side effects from sub workflow
+	sideEffects, err := database.GetSideEffectEntities(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideEffects) != 1 {
+		t.Fatalf("expected 1 side effect, got %d", len(sideEffects))
+	}
+
+	// Sort side effects by ID
+	sort.Slice(sideEffects, func(i, j int) bool {
+		return sideEffects[i].ID < sideEffects[j].ID
+	})
+
+	sideEffect := sideEffects[0]
+	if sideEffect.Status != tempolite.StatusCompleted {
+		t.Fatalf("expected side effect status %s, got %s",
+			tempolite.StatusCompleted, sideEffect.Status)
+	}
+
+	// Verify side effect execution
+	sideEffectExecs, err := database.GetSideEffectExecutions(sideEffect.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideEffectExecs) != 1 {
+		t.Fatalf("expected 1 side effect execution, got %d", len(sideEffectExecs))
+	}
+
+	// Sort side effect executions by ID
+	sort.Slice(sideEffectExecs, func(i, j int) bool {
+		return sideEffectExecs[i].ID < sideEffectExecs[j].ID
+	})
+
+	sideEffectExec := sideEffectExecs[0]
+	if sideEffectExec.Status != tempolite.ExecutionStatusCompleted {
+		t.Fatalf("expected side effect execution status %s, got %s",
+			tempolite.ExecutionStatusCompleted, sideEffectExec.Status)
+	}
+
+	// Verify side effect hierarchy
+	sideEffectHierarchies, err := database.GetHierarchiesByParentEntity(int(subWorkflowID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideEffectHierarchies) != 1 {
+		t.Fatalf("expected 1 side effect hierarchy, got %d", len(sideEffectHierarchies))
+	}
+
+	// Sort side effect hierarchies by ID
+	sort.Slice(sideEffectHierarchies, func(i, j int) bool {
+		return sideEffectHierarchies[i].ID < sideEffectHierarchies[j].ID
+	})
+
+	sh := sideEffectHierarchies[0]
+	if sh.ParentEntityID != int(subWorkflowID) {
+		t.Fatalf("expected parent entity ID %d, got %d",
+			subWorkflowID, sh.ParentEntityID)
+	}
+	if sh.ChildEntityID != int(sideEffect.ID) {
+		t.Fatalf("expected child entity ID %d, got %d",
+			sideEffect.ID, sh.ChildEntityID)
+	}
+	if sh.ParentType != tempolite.EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s",
+			tempolite.EntityWorkflow, sh.ParentType)
+	}
+	if sh.ChildType != tempolite.EntitySideEffect {
+		t.Fatalf("expected child type %s, got %s",
+			tempolite.EntitySideEffect, sh.ChildType)
+	}
+	if sh.ParentStepID != "sub" {
+		t.Fatalf("expected parent step ID 'sub', got %s", sh.ParentStepID)
+	}
+	if sh.ChildStepID != "something" {
+		t.Fatalf("expected child step ID 'something', got %s", sh.ChildStepID)
+	}
+
+	// Verify side effect data
+	sideEffectData, err := database.GetSideEffectExecutionDataByExecutionID(sideEffectExec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sideEffectData.Outputs) != 1 {
+		t.Fatalf("expected 1 side effect output, got %d", len(sideEffectData.Outputs))
+	}
 }
 
 func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
@@ -116,21 +319,17 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected error to contain 'on purpose', got %v", err)
 	}
 
-	// Verify workflow failed state
-	if err := orchestrator.WaitFor(future.WorkflowID(), tempolite.StatusFailed); err != nil {
-		t.Fatal(err)
-	}
-
 	// Verify Run status
 	run, err := database.GetRun(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if run.Status != tempolite.RunStatusFailed {
-		t.Fatalf("expected run status %s, got %s", tempolite.RunStatusFailed, run.Status)
+		t.Fatalf("expected run status %s, got %s",
+			tempolite.RunStatusFailed, run.Status)
 	}
 
-	// Verify workflow executions
+	// Get root workflow executions
 	rootExecs, err := database.GetWorkflowExecutions(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
@@ -138,9 +337,10 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 
 	// Should have exactly 2 executions: paused and failed
 	if len(rootExecs) != 2 {
-		t.Fatalf("expected 2 workflow executions, got %d", len(rootExecs))
+		t.Fatalf("expected 2 root workflow executions, got %d", len(rootExecs))
 	}
 
+	// Sort executions by ID
 	sort.Slice(rootExecs, func(i, j int) bool {
 		return rootExecs[i].ID < rootExecs[j].ID
 	})
@@ -156,38 +356,102 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected second execution status %s, got %s",
 			tempolite.ExecutionStatusFailed, rootExecs[1].Status)
 	}
-	if !strings.Contains(rootExecs[1].Error, "fail workflow instance") {
-		t.Fatalf("expected execution error 'fail workflow instance', got %s", rootExecs[1].Error)
+	if !strings.Contains(rootExecs[1].Error, "on purpose") {
+		t.Fatalf("expected execution error to contain 'on purpose', got %s",
+			rootExecs[1].Error)
 	}
 
-	// Verify workflow entity state
-	entity, err := database.GetWorkflowEntity(future.WorkflowID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if entity.Status != tempolite.StatusFailed {
-		t.Fatalf("expected workflow status %s, got %s",
-			tempolite.StatusFailed, entity.Status)
-	}
-	if entity.RetryState.Attempts != 1 {
-		t.Fatalf("expected retry attempts 1, got %d", entity.RetryState.Attempts)
-	}
-
-	subWorkflows, err := database.GetWorkflowSubWorkflows(future.WorkflowID())
+	// Get root workflow entity
+	rootWorkflow, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(subWorkflows) != 1 {
-		t.Fatalf("expected 1 sub workflow, got %d", len(subWorkflows))
+	// Verify root workflow status and retry state
+	if rootWorkflow.Status != tempolite.StatusFailed {
+		t.Fatalf("expected root workflow status %s, got %s",
+			tempolite.StatusFailed, rootWorkflow.Status)
+	}
+	if rootWorkflow.RetryState.Attempts != 1 {
+		t.Fatalf("expected retry attempts 1, got %d", rootWorkflow.RetryState.Attempts)
 	}
 
-	sort.Slice(subWorkflows, func(i, j int) bool {
-		return subWorkflows[i].ID < subWorkflows[j].ID
+	// Get hierarchies to find sub-workflow
+	hierarchies, err := database.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy for root workflow, got %d", len(hierarchies))
+	}
+
+	// Sort hierarchies for consistent testing
+	sort.Slice(hierarchies, func(i, j int) bool {
+		return hierarchies[i].ID < hierarchies[j].ID
 	})
 
-	// Verify side effect completed successfully despite workflow failure
-	sideEffects, err := database.GetSideEffectEntities(subWorkflows[0].ID)
+	// Verify hierarchy relationship
+	h := hierarchies[0]
+	if h.ParentEntityID != int(future.WorkflowID()) {
+		t.Fatalf("expected parent entity ID %d, got %d",
+			future.WorkflowID(), h.ParentEntityID)
+	}
+	if h.ParentType != tempolite.EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s",
+			tempolite.EntityWorkflow, h.ParentType)
+	}
+	if h.ChildType != tempolite.EntityWorkflow {
+		t.Fatalf("expected child type %s, got %s",
+			tempolite.EntityWorkflow, h.ChildType)
+	}
+	if h.ParentStepID != "root" {
+		t.Fatalf("expected parent step ID 'root', got %s", h.ParentStepID)
+	}
+	if h.ChildStepID != "sub" {
+		t.Fatalf("expected child step ID 'sub', got %s", h.ChildStepID)
+	}
+
+	// Get the sub workflow from hierarchy
+	subWorkflowID := tempolite.WorkflowEntityID(h.ChildEntityID)
+	subWorkflow, err := database.GetWorkflowEntity(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify sub workflow status
+	if subWorkflow.Status != tempolite.StatusFailed {
+		t.Fatalf("expected sub workflow status %s, got %s",
+			tempolite.StatusFailed, subWorkflow.Status)
+	}
+
+	// Get sub workflow executions
+	subWorkflowExecs, err := database.GetWorkflowExecutions(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Sort executions by ID
+	sort.Slice(subWorkflowExecs, func(i, j int) bool {
+		return subWorkflowExecs[i].ID < subWorkflowExecs[j].ID
+	})
+
+	if len(subWorkflowExecs) != 1 {
+		t.Fatalf("expected 1 sub workflow execution, got %d", len(subWorkflowExecs))
+	}
+
+	// Verify sub workflow execution error
+	if subWorkflowExecs[0].Status != tempolite.ExecutionStatusFailed {
+		t.Fatalf("expected sub workflow execution status %s, got %s",
+			tempolite.ExecutionStatusFailed, subWorkflowExecs[0].Status)
+	}
+	if !strings.Contains(subWorkflowExecs[0].Error, "on purpose") {
+		t.Fatalf("expected sub workflow execution error to contain 'on purpose', got %s",
+			subWorkflowExecs[0].Error)
+	}
+
+	// Get side effects from sub workflow
+	sideEffects, err := database.GetSideEffectEntities(subWorkflowID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,17 +460,19 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected 1 side effect, got %d", len(sideEffects))
 	}
 
+	// Sort side effects by ID
 	sort.Slice(sideEffects, func(i, j int) bool {
 		return sideEffects[i].ID < sideEffects[j].ID
 	})
 
+	// Verify side effect completed despite workflow failure
 	sideEffect := sideEffects[0]
 	if sideEffect.Status != tempolite.StatusCompleted {
 		t.Fatalf("expected side effect status %s, got %s",
 			tempolite.StatusCompleted, sideEffect.Status)
 	}
 
-	// Verify side effect execution
+	// Get side effect executions
 	sideEffectExecs, err := database.GetSideEffectExecutions(sideEffect.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +482,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected 1 side effect execution, got %d", len(sideEffectExecs))
 	}
 
+	// Sort side effect executions by ID
 	sort.Slice(sideEffectExecs, func(i, j int) bool {
 		return sideEffectExecs[i].ID < sideEffectExecs[j].ID
 	})
@@ -235,83 +502,43 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected 1 side effect output, got %d", len(sideEffectData.Outputs))
 	}
 
-	// Verify hierarchies
-	hierarchies, err := database.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	// Verify side effect hierarchy
+	sideEffectHierarchies, err := database.GetHierarchiesByParentEntity(int(subWorkflowID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(hierarchies) != 1 {
-		t.Fatalf("expected 1 hierarchy for root workflow, got %d", len(hierarchies))
+	if len(sideEffectHierarchies) != 1 {
+		t.Fatalf("expected 1 side effect hierarchy, got %d", len(sideEffectHierarchies))
 	}
 
-	// Sort hierarchies
-	sort.Slice(hierarchies, func(i, j int) bool {
-		return hierarchies[i].ID < hierarchies[j].ID
+	// Sort side effect hierarchies by ID
+	sort.Slice(sideEffectHierarchies, func(i, j int) bool {
+		return sideEffectHierarchies[i].ID < sideEffectHierarchies[j].ID
 	})
 
-	// First hierarchy: Root workflow -> Sub workflow
-	h := hierarchies[0]
-	if h.ParentEntityID != int(future.WorkflowID()) {
+	sh := sideEffectHierarchies[0]
+	if sh.ParentEntityID != int(subWorkflowID) {
 		t.Fatalf("expected parent entity ID %d, got %d",
-			future.WorkflowID(), h.ParentEntityID)
+			subWorkflowID, sh.ParentEntityID)
 	}
-
-	// Get the sub workflow's ID from the hierarchy
-	subWorkflowID := tempolite.WorkflowEntityID(h.ChildEntityID)
-
-	// Verify sub workflow -> side effect hierarchy
-	subHierarchies, err := database.GetHierarchiesByParentEntity(int(subWorkflowID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(subHierarchies) != 1 {
-		t.Fatalf("expected 1 hierarchy for sub workflow, got %d", len(subHierarchies))
-	}
-
-	// Sort sub hierarchies
-	sort.Slice(subHierarchies, func(i, j int) bool {
-		return subHierarchies[i].ID < subHierarchies[j].ID
-	})
-
-	// Second hierarchy: Sub workflow -> Side effect
-	subH := subHierarchies[0]
-	if subH.ParentEntityID != int(subWorkflowID) {
-		t.Fatalf("expected parent entity ID %d, got %d",
-			subWorkflowID, subH.ParentEntityID)
-	}
-	if subH.ChildEntityID != int(sideEffect.ID) {
+	if sh.ChildEntityID != int(sideEffect.ID) {
 		t.Fatalf("expected child entity ID %d, got %d",
-			sideEffect.ID, subH.ChildEntityID)
+			sideEffect.ID, sh.ChildEntityID)
 	}
-
-	// Verify execution IDs
-	if subH.ParentExecutionID != 3 { // Sub workflow execution ID
-		t.Fatalf("expected parent execution ID %d, got %d",
-			3, subH.ParentExecutionID)
-	}
-	if subH.ChildExecutionID != int(sideEffectExec.ID) {
-		t.Fatalf("expected child execution ID %d, got %d",
-			sideEffectExec.ID, subH.ChildExecutionID)
-	}
-
-	// Verify entity types
-	if subH.ParentType != tempolite.EntityWorkflow {
+	if sh.ParentType != tempolite.EntityWorkflow {
 		t.Fatalf("expected parent type %s, got %s",
-			tempolite.EntityWorkflow, subH.ParentType)
+			tempolite.EntityWorkflow, sh.ParentType)
 	}
-	if subH.ChildType != tempolite.EntitySideEffect {
+	if sh.ChildType != tempolite.EntitySideEffect {
 		t.Fatalf("expected child type %s, got %s",
-			tempolite.EntitySideEffect, subH.ChildType)
+			tempolite.EntitySideEffect, sh.ChildType)
 	}
-
-	// Verify step IDs
-	if subH.ParentStepID != "sub" {
-		t.Fatalf("expected parent step ID 'sub', got %s", subH.ParentStepID)
+	if sh.ParentStepID != "sub" {
+		t.Fatalf("expected parent step ID 'sub', got %s", sh.ParentStepID)
 	}
-	if subH.ChildStepID != "something" {
-		t.Fatalf("expected child step ID 'something', got %s", subH.ChildStepID)
+	if sh.ChildStepID != "something" {
+		t.Fatalf("expected child step ID 'something', got %s", sh.ChildStepID)
 	}
 }
 
@@ -361,12 +588,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 		t.Fatalf("expected error to be ErrWorkflowFailed, got %v", err)
 	}
 	if !errors.Is(err, tempolite.ErrWorkflowPanicked) {
-		t.Fatalf("expected error to contain ErrWorkflowPanicked, got %v", err)
-	}
-
-	// Verify workflow failed state
-	if err := orchestrator.WaitFor(future.WorkflowID(), tempolite.StatusFailed); err != nil {
-		t.Fatal(err)
+		t.Fatalf("expected error to be ErrWorkflowPanicked, got %v", err)
 	}
 
 	// Verify Run status
@@ -375,26 +597,11 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if run.Status != tempolite.RunStatusFailed {
-		t.Fatalf("expected run status %s, got %s", tempolite.RunStatusFailed, run.Status)
+		t.Fatalf("expected run status %s, got %s",
+			tempolite.RunStatusFailed, run.Status)
 	}
 
-	// Get sub workflows first
-	subWorkflows, err := database.GetWorkflowSubWorkflows(future.WorkflowID())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(subWorkflows) != 1 {
-		t.Fatalf("expected 1 sub workflow, got %d", len(subWorkflows))
-	}
-
-	sort.Slice(subWorkflows, func(i, j int) bool {
-		return subWorkflows[i].ID < subWorkflows[j].ID
-	})
-
-	subWorkflow := subWorkflows[0]
-
-	// Verify workflow executions
+	// Get root workflow executions
 	rootExecs, err := database.GetWorkflowExecutions(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
@@ -402,9 +609,10 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 
 	// Should have exactly 2 executions: paused and failed
 	if len(rootExecs) != 2 {
-		t.Fatalf("expected 2 workflow executions, got %d", len(rootExecs))
+		t.Fatalf("expected 2 root workflow executions, got %d", len(rootExecs))
 	}
 
+	// Sort executions by ID
 	sort.Slice(rootExecs, func(i, j int) bool {
 		return rootExecs[i].ID < rootExecs[j].ID
 	})
@@ -415,49 +623,115 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 			tempolite.ExecutionStatusPaused, rootExecs[0].Status)
 	}
 
-	// Second execution should be failed with error message
+	// Second execution should be failed with panic error
 	if rootExecs[1].Status != tempolite.ExecutionStatusFailed {
 		t.Fatalf("expected second execution status %s, got %s",
 			tempolite.ExecutionStatusFailed, rootExecs[1].Status)
 	}
 	if !strings.Contains(rootExecs[1].Error, "workflow panicked") {
-		t.Fatalf("expected execution error to contain 'workflow panicked', got %s", rootExecs[1].Error)
+		t.Fatalf("expected root execution error to contain 'workflow panicked', got %s",
+			rootExecs[1].Error)
 	}
 
-	// Get sub workflow executions to check stack trace
-	subExecs, err := database.GetWorkflowExecutions(subWorkflow.ID)
+	// Get root workflow entity
+	rootWorkflow, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sort.Slice(subExecs, func(i, j int) bool {
-		return subExecs[i].ID < subExecs[j].ID
+	// Verify root workflow status and retry state
+	if rootWorkflow.Status != tempolite.StatusFailed {
+		t.Fatalf("expected root workflow status %s, got %s",
+			tempolite.StatusFailed, rootWorkflow.Status)
+	}
+	if rootWorkflow.RetryState.Attempts != 1 {
+		t.Fatalf("expected retry attempts 1, got %d", rootWorkflow.RetryState.Attempts)
+	}
+
+	// Get hierarchies to find sub-workflow
+	hierarchies, err := database.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(hierarchies) != 1 {
+		t.Fatalf("expected 1 hierarchy for root workflow, got %d", len(hierarchies))
+	}
+
+	// Sort hierarchies for consistent testing
+	sort.Slice(hierarchies, func(i, j int) bool {
+		return hierarchies[i].ID < hierarchies[j].ID
 	})
 
-	if len(subExecs) != 1 {
-		t.Fatalf("expected 1 sub workflow execution, got %d", len(subExecs))
+	// Verify hierarchy relationship
+	h := hierarchies[0]
+	if h.ParentEntityID != int(future.WorkflowID()) {
+		t.Fatalf("expected parent entity ID %d, got %d",
+			future.WorkflowID(), h.ParentEntityID)
+	}
+	if h.ParentType != tempolite.EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s",
+			tempolite.EntityWorkflow, h.ParentType)
+	}
+	if h.ChildType != tempolite.EntityWorkflow {
+		t.Fatalf("expected child type %s, got %s",
+			tempolite.EntityWorkflow, h.ChildType)
+	}
+	if h.ParentStepID != "root" {
+		t.Fatalf("expected parent step ID 'root', got %s", h.ParentStepID)
+	}
+	if h.ChildStepID != "sub" {
+		t.Fatalf("expected child step ID 'sub', got %s", h.ChildStepID)
 	}
 
-	// Stack trace should be on the sub workflow execution
-	if subExecs[0].StackTrace == nil {
-		t.Fatal("expected stack trace to be present on sub workflow execution")
-	}
-
-	// Verify workflow entity state
-	entity, err := database.GetWorkflowEntity(future.WorkflowID())
+	// Get the sub workflow from hierarchy
+	subWorkflowID := tempolite.WorkflowEntityID(h.ChildEntityID)
+	subWorkflow, err := database.GetWorkflowEntity(subWorkflowID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entity.Status != tempolite.StatusFailed {
-		t.Fatalf("expected workflow status %s, got %s",
-			tempolite.StatusFailed, entity.Status)
-	}
-	if entity.RetryState.Attempts != 1 {
-		t.Fatalf("expected retry attempts 1, got %d", entity.RetryState.Attempts)
+
+	// Verify sub workflow status
+	if subWorkflow.Status != tempolite.StatusFailed {
+		t.Fatalf("expected sub workflow status %s, got %s",
+			tempolite.StatusFailed, subWorkflow.Status)
 	}
 
-	// Verify side effect completed successfully despite workflow panic
-	sideEffects, err := database.GetSideEffectEntities(subWorkflow.ID)
+	// Get sub workflow executions
+	subWorkflowExecs, err := database.GetWorkflowExecutions(subWorkflowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(subWorkflowExecs) != 1 {
+		t.Fatalf("expected 1 sub workflow execution, got %d", len(subWorkflowExecs))
+	}
+
+	// Sort executions by ID
+	sort.Slice(subWorkflowExecs, func(i, j int) bool {
+		return subWorkflowExecs[i].ID < subWorkflowExecs[j].ID
+	})
+
+	// Verify sub workflow execution panic details
+	subExec := subWorkflowExecs[0]
+	if subExec.Status != tempolite.ExecutionStatusFailed {
+		t.Fatalf("expected sub workflow execution status %s, got %s",
+			tempolite.ExecutionStatusFailed, subExec.Status)
+	}
+	if !strings.Contains(subExec.Error, "on purpose") {
+		t.Fatalf("expected sub workflow error to contain 'on purpose', got %s",
+			subExec.Error)
+	}
+	if subExec.StackTrace == nil {
+		t.Fatal("expected stack trace to be present on sub workflow execution")
+	}
+	if !strings.Contains(*subExec.StackTrace, "panic") {
+		t.Fatalf("expected stack trace to contain 'panic', got %s",
+			*subExec.StackTrace)
+	}
+
+	// Get side effects from sub workflow
+	sideEffects, err := database.GetSideEffectEntities(subWorkflowID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,17 +740,19 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 		t.Fatalf("expected 1 side effect, got %d", len(sideEffects))
 	}
 
+	// Sort side effects by ID
 	sort.Slice(sideEffects, func(i, j int) bool {
 		return sideEffects[i].ID < sideEffects[j].ID
 	})
 
+	// Verify side effect completed despite workflow panic
 	sideEffect := sideEffects[0]
 	if sideEffect.Status != tempolite.StatusCompleted {
 		t.Fatalf("expected side effect status %s, got %s",
 			tempolite.StatusCompleted, sideEffect.Status)
 	}
 
-	// Verify side effect execution
+	// Get side effect executions
 	sideEffectExecs, err := database.GetSideEffectExecutions(sideEffect.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -486,6 +762,7 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 		t.Fatalf("expected 1 side effect execution, got %d", len(sideEffectExecs))
 	}
 
+	// Sort side effect executions by ID
 	sort.Slice(sideEffectExecs, func(i, j int) bool {
 		return sideEffectExecs[i].ID < sideEffectExecs[j].ID
 	})
@@ -496,58 +773,42 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 			tempolite.ExecutionStatusCompleted, sideEffectExec.Status)
 	}
 
-	// Verify hierarchy
-	hierarchies, err := database.GetHierarchiesByParentEntity(int(future.WorkflowID()))
+	// Verify side effect hierarchy
+	sideEffectHierarchies, err := database.GetHierarchiesByParentEntity(int(subWorkflowID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(hierarchies) != 1 {
-		t.Fatalf("expected 1 hierarchy for root workflow, got %d", len(hierarchies))
+	if len(sideEffectHierarchies) != 1 {
+		t.Fatalf("expected 1 side effect hierarchy, got %d", len(sideEffectHierarchies))
 	}
 
-	sort.Slice(hierarchies, func(i, j int) bool {
-		return hierarchies[i].ID < hierarchies[j].ID
+	// Sort side effect hierarchies by ID
+	sort.Slice(sideEffectHierarchies, func(i, j int) bool {
+		return sideEffectHierarchies[i].ID < sideEffectHierarchies[j].ID
 	})
 
-	// First hierarchy: Root workflow -> Sub workflow
-	h := hierarchies[0]
-
-	// Get the sub workflow's ID from the hierarchy
-	subWorkflowID := tempolite.WorkflowEntityID(h.ChildEntityID)
-
-	// Verify sub workflow -> side effect hierarchy
-	subHierarchies, err := database.GetHierarchiesByParentEntity(int(subWorkflowID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(subHierarchies) != 1 {
-		t.Fatalf("expected 1 hierarchy for sub workflow, got %d", len(subHierarchies))
-	}
-
-	// Sort sub hierarchies
-	sort.Slice(subHierarchies, func(i, j int) bool {
-		return subHierarchies[i].ID < subHierarchies[j].ID
-	})
-
-	// Second hierarchy: Sub workflow -> Side effect
-	subH := subHierarchies[0]
-
-	if subH.ParentEntityID != int(subWorkflowID) {
+	sh := sideEffectHierarchies[0]
+	if sh.ParentEntityID != int(subWorkflowID) {
 		t.Fatalf("expected parent entity ID %d, got %d",
-			subWorkflowID, subH.ParentEntityID)
+			subWorkflowID, sh.ParentEntityID)
 	}
-	if subH.ChildEntityID != int(sideEffect.ID) {
+	if sh.ChildEntityID != int(sideEffect.ID) {
 		t.Fatalf("expected child entity ID %d, got %d",
-			sideEffect.ID, subH.ChildEntityID)
+			sideEffect.ID, sh.ChildEntityID)
 	}
-	if subH.ParentExecutionID != 3 {
-		t.Fatalf("expected parent execution ID %d, got %d",
-			3, subH.ParentExecutionID)
+	if sh.ParentType != tempolite.EntityWorkflow {
+		t.Fatalf("expected parent type %s, got %s",
+			tempolite.EntityWorkflow, sh.ParentType)
 	}
-	if subH.ChildExecutionID != int(sideEffectExec.ID) {
-		t.Fatalf("expected child execution ID %d, got %d",
-			sideEffectExec.ID, subH.ChildExecutionID)
+	if sh.ChildType != tempolite.EntitySideEffect {
+		t.Fatalf("expected child type %s, got %s",
+			tempolite.EntitySideEffect, sh.ChildType)
+	}
+	if sh.ParentStepID != "sub" {
+		t.Fatalf("expected parent step ID 'sub', got %s", sh.ParentStepID)
+	}
+	if sh.ChildStepID != "something" {
+		t.Fatalf("expected child step ID 'something', got %s", sh.ChildStepID)
 	}
 }
