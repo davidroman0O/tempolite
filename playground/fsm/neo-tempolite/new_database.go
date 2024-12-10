@@ -61,7 +61,8 @@ var DefaultVersion int = 0
 var DefaultQueue string = "default"
 
 type WorkflowOutput struct {
-	Outputs              []interface{}
+	Outputs []interface{}
+
 	ContinueAsNewOptions *WorkflowOptions
 	ContinueAsNewArgs    []interface{}
 	Paused               bool
@@ -723,6 +724,9 @@ type WorkflowData struct {
 	IsRoot                 bool                 `json:"is_root"`
 	ContinuedFrom          *WorkflowEntityID    `json:"continued_from,omitempty"`
 	ContinuedExecutionFrom *WorkflowExecutionID `json:"continued_execution_from,omitempty"`
+	WorkflowStepID         *string              `json:"workflow_step_id,omitempty"`
+	WorkflowFrom           *WorkflowEntityID    `json:"workflow_from,omitempty"`
+	WorkflowExecutionFrom  *WorkflowExecutionID `json:"workflow_execution_from,omitempty"`
 	Versions               map[string]int       // Tracks versions used in this workflow
 }
 

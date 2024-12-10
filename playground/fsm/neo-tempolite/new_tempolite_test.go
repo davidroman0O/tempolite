@@ -26,7 +26,7 @@ func TestQueueCrossBasic(t *testing.T) {
 		queue, err := db.GetQueueByName(queueName)
 		if err != nil {
 			future := NewRuntimeFuture()
-			future.setError(err)
+			future.SetError(err)
 			return future
 		}
 
@@ -43,7 +43,7 @@ func TestQueueCrossBasic(t *testing.T) {
 					queueName:    queueName,
 					continued:    true,
 				})); err != nil {
-				future.setError(err)
+				future.SetError(err)
 			}
 		} else if queue.Name == "second" {
 			if err := secondQ.orchestrators.Submit(
@@ -56,14 +56,14 @@ func TestQueueCrossBasic(t *testing.T) {
 					queueName:    queueName,
 					continued:    true,
 				})); err != nil {
-				future.setError(err)
+				future.SetError(err)
 			}
 		} else {
 			future := NewRuntimeFuture()
-			future.setError(fmt.Errorf("queue %s does not exist", queueName))
+			future.SetError(fmt.Errorf("queue %s does not exist", queueName))
 		}
 		if err != nil {
-			future.setError(err)
+			future.SetError(err)
 		}
 
 		return future

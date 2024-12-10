@@ -10,7 +10,7 @@ import (
 )
 
 /// TestWorkflowExecute 			- Basic Workflow direct execution
-/// TestWorkflowExecuteFailure 	- Basic Workflow direct execution with error
+/// TestWorkflowExecuteFailure 		- Basic Workflow direct execution with error
 /// TestWorkflowExecutePanic 		- Basic Workflow direct execution with panic
 
 func TestWorkflowExecute(t *testing.T) {

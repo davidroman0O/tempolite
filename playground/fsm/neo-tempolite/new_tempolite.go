@@ -322,7 +322,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	w.queueInstance.mu.Lock()
 	if _, exists := w.queueInstance.processingWorkers[task.Request.workflowID]; exists {
 		w.queueInstance.mu.Unlock()
-		task.Request.future.setError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
+		task.Request.future.SetError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		return fmt.Errorf("entity %d is already being processed", task.Request.workflowID)
 	}
@@ -337,7 +337,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	}()
 
 	if _, err := w.orchestrator.registry.RegisterWorkflow(task.Request.workflowFunc); err != nil {
-		task.Request.future.setError(err)
+		task.Request.future.SetError(err)
 		task.CompleteWithError(err)
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
@@ -354,7 +354,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	}
 
 	if err != nil {
-		task.Request.future.setError(err)
+		task.Request.future.SetError(err)
 		task.CompleteWithError(err)
 		// return fmt.Errorf("failed to execute workflow: %w", err)
 		return nil
@@ -363,7 +363,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 	var results []interface{}
 	// Get the results and update the DatabaseFuture
 	if results, err = future.GetResults(); err != nil {
-		task.Request.future.setError(err)
+		task.Request.future.SetError(err)
 		task.CompleteWithError(err)
 		//	it's fine, we have an successful error
 		return nil
@@ -412,7 +412,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 		t.mu.RUnlock()
 		if !ok {
 			futureErr := NewRuntimeFuture()
-			futureErr.setError(fmt.Errorf("queue %s not found", queueName))
+			futureErr.SetError(fmt.Errorf("queue %s not found", queueName))
 			return futureErr
 		}
 
@@ -429,7 +429,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 				continued:    false,
 			})); err != nil {
 			futureErr := NewRuntimeFuture()
-			futureErr.setError(err)
+			futureErr.SetError(err)
 			return futureErr
 		}
 
@@ -444,7 +444,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 		t.mu.Unlock()
 		if !ok {
 			futureErr := NewRuntimeFuture()
-			futureErr.setError(fmt.Errorf("queue %s not found", queueName))
+			futureErr.SetError(fmt.Errorf("queue %s not found", queueName))
 			return futureErr
 		}
 
@@ -462,7 +462,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 				continued:    true, // Mark this as a continuation
 			})); err != nil {
 			futureErr := NewRuntimeFuture()
-			futureErr.setError(err)
+			futureErr.SetError(err)
 			return futureErr
 		}
 

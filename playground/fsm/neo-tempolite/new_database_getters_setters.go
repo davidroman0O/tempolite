@@ -280,6 +280,45 @@ func GetWorkflowDataContinuedFrom(continuedFrom *WorkflowEntityID) WorkflowDataP
 	}
 }
 
+func GetWorkflowDataWorkflowFrom(workflowFrom *WorkflowEntityID) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		if d.WorkflowFrom == nil {
+			return nil, nil
+		}
+		*workflowFrom = *d.WorkflowFrom
+		return nil, nil
+	}
+}
+
+func GetWorkflowDataWorkflowStepID(stepID *string) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		if d.WorkflowStepID == nil {
+			return nil, nil
+		}
+		*stepID = *d.WorkflowStepID
+		return nil, nil
+	}
+}
+
+func GetWorkflowDataWorkflowExecutionFrom(workflowExecutionFrom *WorkflowExecutionID) WorkflowDataPropertyGetter {
+	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		if d.WorkflowExecutionFrom == nil {
+			return nil, nil
+		}
+		*workflowExecutionFrom = *d.WorkflowExecutionFrom
+		return nil, nil
+	}
+}
+
 func GetWorkflowDataContinuedExecutionFrom(continuedExecutionFrom *WorkflowExecutionID) WorkflowDataPropertyGetter {
 	return func(d *WorkflowData) (WorkflowDataPropertyGetterOption, error) {
 		if d == nil {
@@ -377,6 +416,36 @@ func SetWorkflowDataContinuedFrom(continuedFrom *WorkflowEntityID) WorkflowDataP
 			return nil, errors.New("workflow data is nil")
 		}
 		d.ContinuedFrom = continuedFrom
+		return nil, nil
+	}
+}
+
+func SetWorkflowDataWorkflowStepID(stepid *string) WorkflowDataPropertySetter {
+	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		d.WorkflowStepID = stepid
+		return nil, nil
+	}
+}
+
+func SetWorkflowDataWorkflowFrom(workflowFrom *WorkflowEntityID) WorkflowDataPropertySetter {
+	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		d.WorkflowFrom = workflowFrom
+		return nil, nil
+	}
+}
+
+func SetWorkflowDataWorkflowExecutionFrom(workflowExecutionFrom *WorkflowExecutionID) WorkflowDataPropertySetter {
+	return func(d *WorkflowData) (WorkflowDataPropertySetterOption, error) {
+		if d == nil {
+			return nil, errors.New("workflow data is nil")
+		}
+		d.WorkflowExecutionFrom = workflowExecutionFrom
 		return nil, nil
 	}
 }
