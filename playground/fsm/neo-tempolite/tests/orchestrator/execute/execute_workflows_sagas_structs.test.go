@@ -11,10 +11,50 @@ import (
 	tempolite "github.com/davidroman0O/tempolite/playground/fsm/neo-tempolite"
 )
 
-func TestWorkflowExecuteSaga(t *testing.T) {
+type testSaga struct {
+	onTrx    func() error
+	trxPanic bool
+	onCmp    func() error
+	cmpPanic bool
+}
+
+func NewTestSaga(onTrx func() error, onCmp func() error, trxPanic bool, cmpPanic bool) testSaga {
+	return testSaga{
+		onTrx:    onTrx,
+		onCmp:    onCmp,
+		trxPanic: trxPanic,
+		cmpPanic: cmpPanic,
+	}
+}
+
+func (s testSaga) Transaction(ctx tempolite.TransactionContext) error {
+	if s.onTrx != nil {
+		if err := s.onTrx(); err != nil {
+			return err
+		}
+	}
+	if s.trxPanic {
+		panic("on purpose")
+	}
+	return nil
+}
+
+func (s testSaga) Compensation(ctx tempolite.CompensationContext) error {
+	if s.onCmp != nil {
+		if err := s.onCmp(); err != nil {
+			return err
+		}
+	}
+	if s.cmpPanic {
+		panic("on purpose")
+	}
+	return nil
+}
+
+func TestWorkflowExecuteSagasStructs(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
-	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute.json")
+	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute_structs.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -28,35 +68,47 @@ func TestWorkflowExecuteSaga(t *testing.T) {
 	var compensation3Triggered atomic.Bool
 
 	saga := tempolite.NewSaga().
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction1Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation1Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction1Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation1Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction2Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation2Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction2Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation2Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction3Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation3Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction3Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation3Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		)
 
 	def, err := saga.Build()
@@ -177,10 +229,10 @@ func TestWorkflowExecuteSaga(t *testing.T) {
 	}
 }
 
-func TestWorkflowExecuteSagaFailure(t *testing.T) {
+func TestWorkflowExecuteSagasStructsFailure(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
-	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute_failure.json")
+	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute_structs_failure.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -194,35 +246,48 @@ func TestWorkflowExecuteSagaFailure(t *testing.T) {
 	var compensation3Triggered atomic.Bool
 
 	saga := tempolite.NewSaga().
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction1Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation1Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction1Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation1Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction2Triggered.Store(true)
-				return fmt.Errorf("on purpose")
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation2Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+
+					transaction2Triggered.Store(true)
+					return fmt.Errorf("on purpose")
+				},
+				func() error {
+					compensation2Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction3Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation3Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction3Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation3Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		)
 
 	def, err := saga.Build()
@@ -366,10 +431,10 @@ func TestWorkflowExecuteSagaFailure(t *testing.T) {
 	}
 }
 
-func TestWorkflowExecuteSagaPanic(t *testing.T) {
+func TestWorkflowExecuteSagasStructsPanic(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
-	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute_panic.json")
+	defer database.SaveAsJSON("./jsons/workflows_basic_saga_execute_structs_panic.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -383,35 +448,47 @@ func TestWorkflowExecuteSagaPanic(t *testing.T) {
 	var compensation3Triggered atomic.Bool
 
 	saga := tempolite.NewSaga().
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction1Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation1Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction1Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation1Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction2Triggered.Store(true)
-				panic("on purpose")
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation2Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction2Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation2Triggered.Store(true)
+					return nil
+				},
+				true,
+				false,
+			),
 		).
-		Add(
-			func(ctx tempolite.TransactionContext) error {
-				transaction3Triggered.Store(true)
-				return nil
-			},
-			func(ctx tempolite.CompensationContext) error {
-				compensation3Triggered.Store(true)
-				return nil
-			},
+		AddStep(
+			NewTestSaga(
+				func() error {
+					transaction3Triggered.Store(true)
+					return nil
+				},
+				func() error {
+					compensation3Triggered.Store(true)
+					return nil
+				},
+				false,
+				false,
+			),
 		)
 
 	def, err := saga.Build()

@@ -178,7 +178,9 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 		t.Fatalf("expected 1 sub workflow, got %d", len(subWorkflows))
 	}
 
-	fmt.Println(subWorkflows[0].ID)
+	sort.Slice(subWorkflows, func(i, j int) bool {
+		return subWorkflows[i].ID < subWorkflows[j].ID
+	})
 
 	// Verify side effect completed successfully despite workflow failure
 	sideEffects, err := database.GetSideEffectEntities(subWorkflows[0].ID)
