@@ -82,6 +82,14 @@ func TestWorkflowExecuteSagas(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	// Verify workflow entity
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
@@ -254,6 +262,14 @@ func TestWorkflowExecuteSagasFailure(t *testing.T) {
 	future := orchestrator.Execute(workflowFunc, nil)
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	// Verify workflow entity
@@ -451,6 +467,14 @@ func TestWorkflowExecuteSagasPanic(t *testing.T) {
 	future := orchestrator.Execute(workflowFunc, nil)
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	// Verify workflow entity

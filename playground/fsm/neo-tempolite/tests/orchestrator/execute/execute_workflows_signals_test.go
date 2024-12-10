@@ -78,6 +78,14 @@ func TestWorkflowExecuteSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
 	}

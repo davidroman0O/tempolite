@@ -17,6 +17,7 @@ import (
 func TestSubWorkflowPrepared(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_subworkflow_prepared.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -51,7 +52,13 @@ func TestSubWorkflowPrepared(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_prepared.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 
 	if !flagTriggered {
 		t.Fatal("workflowFunc was not triggered")
@@ -104,6 +111,7 @@ func TestSubWorkflowPreparedFailure(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
 
+	database.SaveAsJSON("./jsons/workflows_subworkflow_prepared_failure.json")
 	orchestrator := tempolite.NewOrchestrator(context.Background(), database, registry)
 
 	var flagTriggered bool
@@ -136,7 +144,13 @@ func TestSubWorkflowPreparedFailure(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_prepared_failure.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 
 	if !flagTriggered {
 		t.Fatal("workflowFunc was not triggered")
@@ -232,6 +246,7 @@ func TestSubWorkflowPreparedFailure(t *testing.T) {
 func TestSubWorkflowPreparedPanic(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_subworkflow_prepared_panic.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -267,7 +282,13 @@ func TestSubWorkflowPreparedPanic(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_prepared_panic.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 
 	if !flagTriggered {
 		t.Fatal("workflowFunc was not triggered")

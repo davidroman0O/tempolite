@@ -238,6 +238,8 @@ type Future interface {
 	SetResult(results []interface{})
 
 	IsPaused() bool
+
+	WaitForIDs(ctx context.Context) error
 }
 
 // CrossQueue is an external feature requesting an external intervention to trigger a workflow on another mechanism
@@ -719,6 +721,35 @@ type RuntimeFuture struct {
 func NewRuntimeFuture() Future {
 	return &RuntimeFuture{
 		doneCh: make(chan struct{}),
+	}
+}
+
+func (f *RuntimeFuture) WaitForIDs(ctx context.Context) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-f.doneCh:
+			// If Future completed/errored, return any error
+			f.mu.RLock()
+			err := f.err
+			f.mu.RUnlock()
+			return err
+
+		case <-ticker.C:
+			f.mu.RLock()
+			hasWorkflowID := (f.entity.workflowID != nil) || (f.parentWorkflowID != 0)
+			hasExecutionID := (f.exec.workflowExecutionID != nil) || (f.parentWorkflowExecutionID != 0)
+			f.mu.RUnlock()
+
+			if hasWorkflowID && hasExecutionID {
+				return nil
+			}
+		}
 	}
 }
 

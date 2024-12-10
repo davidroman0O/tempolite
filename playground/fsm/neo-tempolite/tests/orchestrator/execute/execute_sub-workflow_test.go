@@ -17,6 +17,7 @@ import (
 func TestSubWorkflowExecute(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_subworkflow_execute.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -43,7 +44,13 @@ func TestSubWorkflowExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_execute.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
@@ -130,6 +137,7 @@ func TestSubWorkflowExecute(t *testing.T) {
 func TestSubWorkflowExecuteFailure(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_subworkflow_execute_failure.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -152,7 +160,13 @@ func TestSubWorkflowExecuteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_execute_failure.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
@@ -223,6 +237,7 @@ func TestSubWorkflowExecuteFailure(t *testing.T) {
 func TestSubWorkflowExecutePanic(t *testing.T) {
 	registry := tempolite.NewRegistry()
 	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/workflows_subworkflow_execute_panic.json")
 	ctx := context.Background()
 
 	orchestrator := tempolite.NewOrchestrator(ctx, database, registry)
@@ -244,8 +259,13 @@ func TestSubWorkflowExecutePanic(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	database.SaveAsJSON("./jsons/workflows_subworkflow_execute_panic.json")
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
 
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)

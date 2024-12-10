@@ -32,6 +32,14 @@ func TestWorkflowExecuteResults(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if result != 42 {
 		t.Fatalf("expected result %d, got %d", 42, result)
 	}
@@ -99,6 +107,14 @@ func TestWorkflowExecuteResultsFailures(t *testing.T) {
 	var msg string
 	if err := future.Get(&result, &msg); err == nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if result != 0 {
@@ -169,6 +185,14 @@ func TestWorkflowExecuteResultsMany(t *testing.T) {
 	var pi float32
 	if err := future.Get(&life, &msg, &pi); err != nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if life != 42 {
@@ -253,6 +277,14 @@ func TestWorkflowExecuteResultsSideEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if life != 42 {
 		t.Fatalf("expected life %d, got %d", 42, life)
 	}
@@ -329,6 +361,14 @@ func TestWorkflowExecuteResultsSubWorkflow(t *testing.T) {
 	var life int
 	if err := future.Get(&life); err != nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if life != 42 {
@@ -419,6 +459,14 @@ func TestWorkflowExecuteResultsSubWorkflowSubActivity(t *testing.T) {
 	var life int
 	if err := future.Get(&life); err != nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if life != 42 {
@@ -527,6 +575,14 @@ func TestWorkflowExecuteResultsSagaContext(t *testing.T) {
 	var result int
 	if err := future.Get(&result); err != nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if result != 42 {
@@ -669,6 +725,14 @@ func TestWorkflowExecuteResultsSignals(t *testing.T) {
 	var result int
 	if err := future.Get(&result); err != nil {
 		t.Fatal(err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if result != 42 {

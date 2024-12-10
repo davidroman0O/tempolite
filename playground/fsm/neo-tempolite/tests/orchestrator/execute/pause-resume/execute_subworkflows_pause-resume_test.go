@@ -55,6 +55,14 @@ func TestWorkflowExecutePauseResumeSubWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	// Verify flag was triggered
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
@@ -317,6 +325,14 @@ func TestWorkflowExecutePauseResumeSubWorkflowFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "on purpose") {
 		t.Fatalf("expected error to contain 'on purpose', got %v", err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	// Verify Run status
@@ -589,6 +605,14 @@ func TestWorkflowExecutePauseResumeSubWorkflowPanic(t *testing.T) {
 	}
 	if !errors.Is(err, tempolite.ErrWorkflowPanicked) {
 		t.Fatalf("expected error to be ErrWorkflowPanicked, got %v", err)
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	// Verify Run status

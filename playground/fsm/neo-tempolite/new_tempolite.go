@@ -664,6 +664,10 @@ func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options 
 
 	<-queued
 
+	if err := future.WaitForIDs(t.ctx); err != nil {
+		return nil, fmt.Errorf("failed to wait for workflow IDs: %w", err)
+	}
+
 	return future, nil
 }
 

@@ -34,6 +34,14 @@ func TestWorkflowExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
 	}
@@ -95,6 +103,14 @@ func TestWorkflowExecuteFailure(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	we, err := database.GetWorkflowEntity(future.WorkflowID())
 	if err != nil {
 		t.Fatal(err)
@@ -150,6 +166,14 @@ func TestWorkflowExecutePanic(t *testing.T) {
 
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	we, err := database.GetWorkflowEntity(future.WorkflowID())

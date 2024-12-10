@@ -74,6 +74,14 @@ func TestWorkflowCrossQueuePauseResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	// Check root workflow completion
 	if err := orchestratorDefault.WaitFor(future.WorkflowID(), tempolite.StatusCompleted); err != nil {
 		t.Fatalf("workflow %d: expected status %s, got error: %v", future.WorkflowID(), tempolite.StatusCompleted, err)

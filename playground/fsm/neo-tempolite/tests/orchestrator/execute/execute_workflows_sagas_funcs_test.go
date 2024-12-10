@@ -74,6 +74,14 @@ func TestWorkflowExecuteSagaFuncs(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	// Verify flags
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")
@@ -239,6 +247,14 @@ func TestWorkflowExecuteSagaFuncsFailure(t *testing.T) {
 	future := orchestrator.Execute(workflowFunc, nil)
 	if err := future.Get(); err == nil {
 		t.Fatal("expected error")
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	// Verify flags
@@ -431,6 +447,13 @@ func TestWorkflowExecuteSagaFuncsPanic(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
 	// Verify flags
 	if !flagTriggered.Load() {
 		t.Fatal("workflowFunc was not triggered")

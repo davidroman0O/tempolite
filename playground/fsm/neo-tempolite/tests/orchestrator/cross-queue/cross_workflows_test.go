@@ -90,6 +90,14 @@ func TestWorkflowCrossWorkflowsQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if err := orchestratorDefault.WaitFor(future.WorkflowID(), tempolite.StatusCompleted); err != nil {
 		t.Fatal(err)
 	}
@@ -241,6 +249,14 @@ func TestWorkflowCrossWorkflowsQueueFailure(t *testing.T) {
 		}
 	}
 
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
+	}
+
 	if err := orchestratorDefault.WaitFor(future.WorkflowID(), tempolite.StatusFailed); err != nil {
 		t.Fatal(err)
 	}
@@ -390,6 +406,14 @@ func TestWorkflowCrossWorkflowsQueuePanic(t *testing.T) {
 		if !errors.Is(err, tempolite.ErrWorkflowFailed) {
 			t.Fatal(err)
 		}
+	}
+
+	if future.WorkflowID() == 0 {
+		t.Fatal("workflow ID should not be 0")
+	}
+
+	if future.WorkflowExecutionID() == 0 {
+		t.Fatal("workflow execution ID should not be 0")
 	}
 
 	if err := orchestratorDefault.WaitFor(future.WorkflowID(), tempolite.StatusFailed); err != nil {
