@@ -2880,7 +2880,7 @@ func TestWorkflowSignal(t *testing.T) {
 		WithSignalNew(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
 			fmt.Println("Signal received:", signal)
 			<-time.After(100 * time.Millisecond)
-			future.setResult([]interface{}{42})
+			future.SetResult([]interface{}{42})
 			fmt.Println("Signal processed")
 			return nil
 		}))
@@ -2994,7 +2994,7 @@ func TestWorkflowSignalPauseResume(t *testing.T) {
 		if !ok {
 			t.Fatal("signal future not found")
 		}
-		value.(Future).setResult([]interface{}{42})
+		value.(Future).SetResult([]interface{}{42})
 	}()
 
 	if err := future.Get(); err != nil {
@@ -3134,7 +3134,7 @@ func TestWorkflowSignalPanic(t *testing.T) {
 		WithSignalNew(func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error {
 			fmt.Println("Signal received:", signal)
 			<-time.After(100 * time.Millisecond)
-			future.setResult([]interface{}{42})
+			future.SetResult([]interface{}{42})
 			fmt.Println("Signal processed")
 			return nil
 		}))

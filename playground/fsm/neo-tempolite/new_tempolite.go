@@ -369,7 +369,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*
 		return nil
 	}
 
-	task.Request.future.setResult(results)
+	task.Request.future.SetResult(results)
 	task.Complete(&WorkflowResponse{
 		ID: task.Request.workflowID,
 	})
@@ -497,7 +497,7 @@ func (t *Tempolite) PublishSignal(workflowID WorkflowEntityID, signal string, va
 
 	// First try runtime signals
 	if exists {
-		future.setResult([]interface{}{value})
+		future.SetResult([]interface{}{value})
 		return nil
 	}
 

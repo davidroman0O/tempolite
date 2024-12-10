@@ -235,7 +235,7 @@ type Future interface {
 	OnResults() <-chan struct{}
 
 	SetError(err error)
-	setResult(results []interface{})
+	SetResult(results []interface{})
 
 	IsPaused() bool
 }
@@ -902,7 +902,7 @@ func (f *RuntimeFuture) complete() {
 	}
 }
 
-func (f *RuntimeFuture) setResult(results []interface{}) {
+func (f *RuntimeFuture) SetResult(results []interface{}) {
 	f.mu.Lock()
 	logWorkflowID := f.parentWorkflowID
 	logExecutionID := f.parentWorkflowExecutionID
@@ -2676,7 +2676,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 	// Normal completion
 	logger.Debug(wi.ctx, "workflow instance completed", "workflow_id", wi.workflowID)
-	wi.future.setResult(workflowOutput.Outputs)
+	wi.future.SetResult(workflowOutput.Outputs)
 
 	return nil
 }
@@ -2899,7 +2899,7 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 			}
 
 			logger.Debug(ctx.ctx, "activity context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
-			future.setResult(outputs)
+			future.SetResult(outputs)
 			return future
 		}
 	} else {
@@ -3410,7 +3410,7 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) 
 	if ai.future != nil {
 		activtyOutput := args[0].(*ActivityOutput)
 		logger.Debug(ai.ctx, "activity instance completed", "workflow_id", ai.workflowID, "activity_entity_id", ai.entityID, "activity_execution_id", ai.executionID, "step_id", ai.stepID)
-		ai.future.setResult(activtyOutput.Outputs)
+		ai.future.SetResult(activtyOutput.Outputs)
 	}
 
 	if err := ai.db.SetActivityEntityProperties(ai.entityID, SetActivityEntityStatus(StatusCompleted)); err != nil {
@@ -3571,7 +3571,7 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 					logger.Debug(ctx.ctx, "side effect context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 					future.setEntityID(FutureEntityWithSideEffectID(sideEffectEntityID))
 					future.setExecutionID(FutureExecutionWithSideEffectExecutionID(exec.ID))
-					future.setResult(outputs)
+					future.SetResult(outputs)
 					return future
 				}
 			}
@@ -3783,7 +3783,7 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 
 		logger.Debug(si.ctx, "side effect instance execute completed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 		if si.future != nil {
-			si.future.setResult(output.Outputs)
+			si.future.SetResult(output.Outputs)
 		}
 		si.fsm.Fire(TriggerComplete, output)
 		return nil
@@ -3908,7 +3908,7 @@ func (si *SideEffectInstance) onCompleted(_ context.Context, args ...interface{}
 
 	logger.Debug(si.ctx, "side effect instance completed", "workflow_id", si.workflowID, "sideeffect_id", si.entityID, "step_id", si.stepID)
 	if si.future != nil {
-		si.future.setResult(sideEffectOutput.Outputs)
+		si.future.SetResult(sideEffectOutput.Outputs)
 	}
 
 	return nil
@@ -4515,7 +4515,7 @@ func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) erro
 			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			si.future.SetError(err)
 		} else {
-			si.future.setResult(nil)
+			si.future.SetResult(nil)
 		}
 	}
 	logger.Debug(si.ctx, "saga instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
@@ -4697,7 +4697,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			logger.Debug(ctx.ctx, "workflow context completed", "workflow_id", ctx.workflowID, "step_id", stepID)
 
 			future.setEntityID(FutureEntityWithWorkflowID(workflowEntityID))
-			future.setResult(outputs)
+			future.SetResult(outputs)
 			return future
 		}
 	} else {
