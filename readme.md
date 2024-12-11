@@ -12,7 +12,6 @@ Tempolite is a lightweight, workflow engine for Go that provides deterministic e
 - Version management for handling code changes
 - Pause/Resume capabilities
 - ContinueAsNew for long-running workflows
-~~- Replay and retry mechanisms for debugging and recovery~~
 - Automatic state persistence
 
 ### 🛠 Activities
@@ -37,10 +36,11 @@ Tempolite is a lightweight, workflow engine for Go that provides deterministic e
 - Step-by-step transaction execution
 - Built-in error handling and recovery
 
-### 📦 Database Management
-~~- Automatic database rotation based on size or page count~~
-~~- Built-in pool management for high availability~~
-~~- SQLite-based for simplicity and reliability~~
+<!-- ### 📦 Database Management -->
+
+### TODO:
+- Replay and retry mechanisms for debugging and recovery
+- SQLite database implementation
 
 ## Getting Started
 
