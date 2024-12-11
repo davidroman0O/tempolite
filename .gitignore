@@ -4,4 +4,4 @@
 db/** 
 internal-doc/**
 
-playground/**/**.json 
+**.json 
