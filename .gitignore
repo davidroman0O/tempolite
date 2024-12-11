@@ -4,4 +4,6 @@
 db/** 
 internal-doc/**
 
+**/json
+**/jsons
 **.json 
