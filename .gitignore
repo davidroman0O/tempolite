@@ -2,3 +2,8 @@
 **.db-**
 .DS_Store
 db/** 
+internal-doc/**
+
+**/json
+**/jsons
+**.json 
