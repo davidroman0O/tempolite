@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/davidroman0O/retrypool"
@@ -41,10 +42,11 @@ type QueueInstance struct {
 	database Database
 
 	name  string
-	count int
+	count int32
 
 	orchestrators *retrypool.Pool[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]
 
+	workerMu          deadlock.RWMutex
 	processingWorkers map[WorkflowEntityID]*QueueWorker
 	freeWorkers       map[int]struct{}
 	workers           map[int]*QueueWorker
@@ -102,7 +104,7 @@ func (q *QueueInstance) Pause(id WorkflowEntityID) error {
 func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, count int, opt ...queueOption) (*QueueInstance, error) {
 	q := &QueueInstance{
 		name:              name,
-		count:             count,
+		count:             int32(count),
 		registry:          registry,
 		database:          db,
 		ctx:               ctx,
@@ -147,19 +149,39 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		workers,
 		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](1),
 		retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
-		retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-			func(task *retrypool.DeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], idx int) {
-				errs := errors.New("failed to process request")
-				for _, e := range task.Errors {
-					errs = errors.Join(errs, e)
-				}
-				task.Data.CompleteWithError(errs)
-				_, err := q.orchestrators.PullDeadTask(idx)
-				if err != nil {
-					// too bad
-					log.Printf("failed to pull dead task: %v", err)
-				}
-			}),
+		retrypool.WithOnDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+			func(deadTaskIndex int) {
+				// deadTask, err := q.orchestrators.GetDeadTask(deadTaskIndex)
+				// if err != nil {
+				// 	// too bad
+				// 	log.Printf("failed to get dead task: %v", err)
+				// 	return
+				// }
+				// errs := errors.New("failed to process request")
+				// for _, e := range deadTask.Errors {
+				// 	errs = errors.Join(errs, e)
+				// }
+				// deadTask.Data.CompleteWithError(errs)
+				// _, err = q.orchestrators.PullDeadTask(deadTaskIndex)
+				// if err != nil {
+				// 	// too bad
+				// 	log.Printf("failed to pull dead task: %v", err)
+				// }
+			},
+		),
+		// retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+		// 	func(task *retrypool.DeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], idx int) {
+		// 		errs := errors.New("failed to process request")
+		// 		for _, e := range task.Errors {
+		// 			errs = errors.Join(errs, e)
+		// 		}
+		// 		task.Data.CompleteWithError(errs)
+		// 		_, err := q.orchestrators.PullDeadTask(idx)
+		// 		if err != nil {
+		// 			// too bad
+		// 			log.Printf("failed to pull dead task: %v", err)
+		// 		}
+		// 	}),
 	)
 
 	return q, nil
@@ -176,6 +198,22 @@ func (qi *QueueInstance) Close() error {
 
 func (qi *QueueInstance) Wait() error {
 	return qi.orchestrators.WaitWithCallback(qi.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
+		workersIDS, err := qi.orchestrators.Workers()
+		if err != nil {
+			logger.Error(qi.ctx, "failed to get workers", "error", err)
+			return false
+		}
+		// qi.orchestrators.task
+		// // workersIDS := qi.orchestrators.ListWorkers()
+		// qi.orchestrators.RangeTasks(func(data *retrypool.TaskWrapper[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], workerID int, status retrypool.TaskStatus) bool {
+		// 	logger.Debug(qi.ctx, "task status", "workerID", workerID, "status", status, "task", data.Data().Request.workflowID)
+		// 	return true
+		// })
+		// qi.orchestrators.RangeWorkers(func(workerID int, worker retrypool.Worker[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]) bool {
+		// 	logger.Debug(qi.ctx, "worker status", "workerID", workerID)
+		// 	return true
+		// })
+		logger.Debug(qi.ctx, "waiting for queue to finish", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount, "workers", len(workersIDS))
 		return queueSize > 0 || processingCount > 0
 	}, time.Second)
 }
@@ -203,7 +241,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 		},
 	)
 
-	if err := qi.orchestrators.Submit(task, retrypool.WithQueued[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -248,7 +286,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		},
 	)
 
-	if err := qi.orchestrators.Submit(task, retrypool.WithQueued[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
@@ -277,21 +315,7 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 		queueInstance: instance,
 	}
 
-	instance.mu.Lock()
-	instance.workers[qw.ID] = qw
-	instance.mu.Unlock()
-
-	onStart := func(ctx context.Context) {
-
-	}
-
-	onEnd := func(ctx context.Context) {
-
-	}
-
-	qw.onStart = onStart
-	qw.onEnd = onEnd
-
+	// Create orchestrator first
 	opts := []OrchestratorOption{}
 	if instance.onCrossWorkflow != nil {
 		opts = append(opts, WithCrossWorkflow(instance.onCrossWorkflow))
@@ -306,34 +330,55 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 		opts = append(opts, WithSignalRemove(instance.onSignalRemove))
 	}
 	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
+
+	// Add worker to maps under a separate lock
+	instance.workerMu.Lock()
+	qw.ID = len(instance.workers) + 1
+	instance.workers[qw.ID] = qw
+	instance.workerMu.Unlock()
+
+	qw.onStart = func(ctx context.Context) {}
+	qw.onEnd = func(ctx context.Context) {}
+
 	return qw
 }
 
 func (w *QueueWorker) OnStart(ctx context.Context) {
+	logger.Info(ctx, "Queue worker started", "queue", w.queueInstance.name)
+	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
+}
+
+func (w *QueueWorker) OnStop(ctx context.Context) {
+	logger.Info(ctx, "Queue worker stopped", "queue", w.queueInstance.name)
+	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
+}
+
+func (w *QueueWorker) OnRemove(ctx context.Context) {
+	logger.Info(ctx, "Queue worker removed", "queue", w.queueInstance.name)
 	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
 }
 
 func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]) error {
 
 	// Mark entity as processing
-	w.queueInstance.mu.Lock()
+	w.queueInstance.workerMu.Lock()
 	if _, exists := w.queueInstance.processingWorkers[task.Request.workflowID]; exists {
-		w.queueInstance.mu.Unlock()
+		w.queueInstance.workerMu.Unlock()
 		future := NewRuntimeFuture()
 		future.SetError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
 		task.Request.chnFuture <- future
 		close(task.Request.chnFuture)
 		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
-		return fmt.Errorf("entity %d is already being processed", task.Request.workflowID)
+		return nil
 	}
 	w.queueInstance.processingWorkers[task.Request.workflowID] = w
-	w.queueInstance.mu.Unlock()
+	w.queueInstance.workerMu.Unlock()
 
 	// Clean up when done
 	defer func() {
-		w.queueInstance.mu.Lock()
+		w.queueInstance.workerMu.Lock()
 		delete(w.queueInstance.processingWorkers, task.Request.workflowID)
-		w.queueInstance.mu.Unlock()
+		w.queueInstance.workerMu.Unlock()
 	}()
 
 	if _, err := w.orchestrator.registry.RegisterWorkflow(task.Request.workflowFunc); err != nil {
@@ -730,46 +775,74 @@ func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
 	return future, nil
 }
 
-func (t *Tempolite) ScaleQueue(queueName string, delta int) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
+func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {
+	t.mu.RLock()
 	instance, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
+
 	if !exists {
 		return fmt.Errorf("queue %s not found", queueName)
 	}
 
-	instance.mu.Lock()
-	defer instance.mu.Unlock()
+	currentCount := atomic.LoadInt32(&instance.count)
+	delta := int32(targetCount) - currentCount
 
-	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "target", delta)
+	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "current", currentCount, "target", targetCount, "delta", delta)
 
 	if delta > 0 {
 		// Add workers
-		for i := 0; i < delta; i++ {
+		for i := int32(0); i < delta; i++ {
 			worker := NewQueueWorker(instance)
-			instance.orchestrators.AddWorker(worker)
+			instance.orchestrators.Add(worker, instance.orchestrators.NewTaskQueue(retrypool.TaskQueueTypeSlice))
+			atomic.AddInt32(&instance.count, 1)
 			logger.Info(t.ctx, "Added worker to queue", "queueName", queueName)
 		}
-		instance.count += delta
 	} else if delta < 0 {
 		// Remove workers
-		count := -delta
-		if count > instance.count {
-			return fmt.Errorf("cannot remove %d workers, only %d available", count, instance.count)
+		absCount := -delta
+		if absCount > currentCount {
+			return fmt.Errorf("cannot remove %d workers, only %d available", absCount, currentCount)
 		}
-		workers := instance.orchestrators.ListWorkers()
-		for i := 0; i < count && i < len(workers); i++ {
+
+		instance.workerMu.RLock()
+		workers, err := instance.orchestrators.Workers()
+		instance.workerMu.RUnlock()
+		if err != nil {
+			return fmt.Errorf("failed to get workers: %w", err)
+		}
+
+		for i := int32(0); i < absCount && i < int32(len(workers)); i++ {
 			logger.Info(t.ctx, "Removing worker from queue", "queueName", queueName)
-			if err := instance.orchestrators.RemoveWorker(workers[len(workers)-1-i].ID); err != nil {
+			worker := workers[len(workers)-1-int(i)]
+			if err := instance.orchestrators.Remove(worker); err != nil {
 				return fmt.Errorf("failed to remove worker: %w", err)
 			}
-			logger.Info(t.ctx, "Removed worker from queue %s", queueName)
+
+			// Clean up worker references
+			instance.workerMu.Lock()
+			delete(instance.workers, worker)
+			instance.workerMu.Unlock()
+
+			atomic.AddInt32(&instance.count, -1)
+			logger.Info(t.ctx, "Removed worker from queue", "queueName", queueName)
 		}
-		instance.count -= count
 	}
 
-	logger.Info(t.ctx, "Queue scaled", "queueName", queueName, "target", delta)
+	workers, err := instance.orchestrators.Workers()
+	if err != nil {
+		return fmt.Errorf("failed to get workers: %w", err)
+	}
+
+	if len(workers) == 0 {
+		logger.Debug(t.ctx, "no workers in queue", "queueName", queueName)
+	} else {
+		logger.Debug(t.ctx, "workers in queue", "queueName", queueName, "count", len(workers))
+	}
+
+	instance.orchestrators.RangeWorkerQueues(func(workerID int, queueSize int64) bool {
+		logger.Debug(t.ctx, "worker queue size", "workerID", workerID, "queueSize", queueSize)
+		return true
+	})
 
 	return nil
 }

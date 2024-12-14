@@ -2231,7 +2231,7 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 		return err
 	}
 
-	logger.Debug(wi.ctx, "workflow instance execute workflow retries", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
+	logger.Debug(wi.ctx, "workflow instance execute workflow with retries capabilities", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 	if err := retry.Do(
 		wi.ctx,
 		retry.
