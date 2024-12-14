@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -144,13 +145,31 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		workers = append(workers, NewQueueWorker(q))
 	}
 
+	logger := retrypool.NewLogger(slog.LevelDebug)
+	logger.Enable()
+
 	q.orchestrators = retrypool.New(
 		ctx,
 		workers,
+		retrypool.WithLogger[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+			logger,
+		),
 		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](1),
-		retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
+		retrypool.WithOnPanic[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+			func(recovery interface{}, stackTrace string) {
+				fmt.Println("PANIC", recovery, stackTrace)
+			},
+		),
+		retrypool.WithRoundRobinDistribution[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](),
+		retrypool.WithOnWorkerPanic[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
+			func(workerID int, recovery interface{}, stackTrace string) {
+				fmt.Println("WORKER PANIC", workerID, recovery, stackTrace)
+			},
+		),
+		// retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
 		retrypool.WithOnDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
 			func(deadTaskIndex int) {
+				fmt.Println("DEADTASK", deadTaskIndex)
 				// deadTask, err := q.orchestrators.GetDeadTask(deadTaskIndex)
 				// if err != nil {
 				// 	// too bad
@@ -242,6 +261,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	)
 
 	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, err
 	}
 
@@ -287,6 +307,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 	)
 
 	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
@@ -479,6 +500,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 				queueName:    queueName,
 				continued:    false,
 			})); err != nil {
+			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
 			futureErr.SetError(err)
 			return futureErr
@@ -512,6 +534,7 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 				queueName:    queueName,
 				continued:    true, // Mark this as a continuation
 			})); err != nil {
+			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
 			futureErr.SetError(err)
 			return futureErr
@@ -710,6 +733,7 @@ func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options 
 
 	future, _, queued, err := queue.Submit(workflowFunc, options, nil, args...)
 	if err != nil {
+		fmt.Println("failed to submit task", err)
 		return nil, fmt.Errorf("failed to submit workflow to queue %s: %w", queueName, err)
 	}
 
