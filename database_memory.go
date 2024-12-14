@@ -4535,36 +4535,8 @@ func (db *MemoryDatabase) DeleteRuns(ids ...RunID) error {
 			}
 		}
 
-		// Clean up SideEffects by RunID
-		for sideEffectID, sideEffect := range db.sideEffectEntities {
-			if sideEffect.RunID == runID {
-				// Clean up all side effect executions
-				for execID, exec := range db.sideEffectExecutions {
-					if exec.SideEffectEntityID == sideEffectID {
-						// Delete side effect execution data
-						if dataID, exists := db.sideEffectExecToDataMap[execID]; exists {
-							delete(db.sideEffectExecutionData, dataID)
-							delete(db.sideEffectExecToDataMap, execID)
-						}
-						delete(db.sideEffectExecutions, execID)
-					}
-				}
-
-				// Clean up side effect data
-				for dataID, data := range db.sideEffectData {
-					if data.EntityID == sideEffectID {
-						delete(db.sideEffectData, dataID)
-					}
-				}
-
-				// Clean up side effect execution data
-				for dataID := range db.sideEffectExecutionData {
-					delete(db.sideEffectExecutionData, dataID)
-				}
-
-				delete(db.sideEffectEntities, sideEffectID)
-			}
-		}
+		// Clean up all saga-related data
+		db.cleanupSagaDataForRun(runID)
 
 		// Clean up Signals by RunID
 		for signalID, signal := range db.signalEntities {
@@ -4714,34 +4686,8 @@ func (db *MemoryDatabase) DeleteRunsByStatus(status RunStatus) error {
 			}
 		}
 
-		// Clean up Sagas by RunID
-		for sagaID, saga := range db.sagaEntities {
-			if saga.RunID == runID {
-				// Clean up all saga executions
-				for execID, exec := range db.sagaExecutions {
-					if exec.SagaEntityID == sagaID {
-						// Delete saga execution data
-						if dataID, exists := db.sagaExecToDataMap[execID]; exists {
-							delete(db.sagaExecutionData, dataID)
-							delete(db.sagaExecToDataMap, execID)
-						}
-						delete(db.sagaExecutions, execID)
-					}
-				}
-
-				// Clean up all saga values and relationships
-				db.cleanupSagaValuesForEntity(sagaID)
-
-				// Clean up all saga data
-				for dataID, data := range db.sagaData {
-					if data.EntityID == sagaID {
-						delete(db.sagaData, dataID)
-					}
-				}
-
-				delete(db.sagaEntities, sagaID)
-			}
-		}
+		// Clean up all saga-related data
+		db.cleanupSagaDataForRun(runID)
 
 		// Clean up SideEffects by RunID
 		for sideEffectID, sideEffect := range db.sideEffectEntities {
@@ -5132,6 +5078,68 @@ func (db *MemoryDatabase) cleanupSagaValuesForEntity(sagaEntityID SagaEntityID) 
 
 	// Clean up key-value mappings
 	delete(db.sagaEntityKeyToValue, sagaEntityID)
+}
+
+// Helper function to fully clean up saga-related data for a run
+func (db *MemoryDatabase) cleanupSagaDataForRun(runID RunID) {
+	// First, collect all saga entities for this run
+	sagaEntitiesForRun := make(map[SagaEntityID]bool)
+	for sagaID, saga := range db.sagaEntities {
+		if saga.RunID == runID {
+			sagaEntitiesForRun[sagaID] = true
+		}
+	}
+
+	// Clean up executions and their data
+	for execID, exec := range db.sagaExecutions {
+		if sagaEntitiesForRun[exec.SagaEntityID] {
+			// Clean up execution data
+			if dataID, exists := db.sagaExecToDataMap[execID]; exists {
+				delete(db.sagaExecutionData, dataID)
+				delete(db.sagaExecToDataMap, execID)
+			}
+
+			// Also directly clean up execution data by scanning
+			for dataID, data := range db.sagaExecutionData {
+				if data.ExecutionID == execID {
+					delete(db.sagaExecutionData, dataID)
+				}
+			}
+
+			// Clean up execution values
+			if valueIDs, exists := db.sagaExecutionToValues[execID]; exists {
+				for _, valueID := range valueIDs {
+					delete(db.sagaValues, valueID)
+				}
+				delete(db.sagaExecutionToValues, execID)
+			}
+
+			delete(db.sagaExecutions, execID)
+		}
+	}
+
+	// Clean up saga entities and their data
+	for sagaID := range sagaEntitiesForRun {
+		// Clean up saga values and relationships
+		if valueIDs, exists := db.sagaEntityToValues[sagaID]; exists {
+			for _, valueID := range valueIDs {
+				delete(db.sagaValues, valueID)
+			}
+			delete(db.sagaEntityToValues, sagaID)
+		}
+
+		// Clean up entity key-value mappings
+		delete(db.sagaEntityKeyToValue, sagaID)
+
+		// Clean up saga data
+		for dataID, data := range db.sagaData {
+			if data.EntityID == sagaID {
+				delete(db.sagaData, dataID)
+			}
+		}
+
+		delete(db.sagaEntities, sagaID)
+	}
 }
 
 // func copyVersion(version *Version) *Version {
