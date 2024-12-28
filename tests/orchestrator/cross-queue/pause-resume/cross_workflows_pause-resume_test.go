@@ -30,8 +30,13 @@ func TestWorkflowCrossQueuePauseResume(t *testing.T) {
 	// Create default orchestrator with cross-queue handling
 	orchestratorDefault := tempolite.NewOrchestrator(
 		ctx, database, registry,
-		tempolite.WithCrossWorkflow(func(queueName string, workflowID tempolite.WorkflowEntityID,
-			workflowFunc interface{}, options *tempolite.WorkflowOptions, args ...interface{}) tempolite.Future {
+		tempolite.WithCrossWorkflow(func(
+			queueName string,
+			workflowID tempolite.WorkflowEntityID,
+			runID tempolite.RunID,
+			workflowFunc interface{},
+			options *tempolite.WorkflowOptions,
+			args ...interface{}) tempolite.Future {
 
 			if queueName == "side" {
 				future, err := orchestratorSide.ExecuteWithEntity(workflowID)
