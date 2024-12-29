@@ -1011,6 +1011,9 @@ type Database interface {
 	UpdateWorkflowEntity(entity *WorkflowEntity) error
 	GetWorkflowEntityProperties(id WorkflowEntityID, getters ...WorkflowEntityPropertyGetter) error
 	SetWorkflowEntityProperties(id WorkflowEntityID, setters ...WorkflowEntityPropertySetter) error
+	// specific
+	CountWorkflowEntityByQueue(queueID QueueID) (int, error)
+	CountWorkflowEntityByQueueByStatus(queueID QueueID, status EntityStatus) (int, error)
 
 	// Workflow Data
 	AddWorkflowData(entityID WorkflowEntityID, data *WorkflowData) (WorkflowDataID, error)
@@ -1032,6 +1035,9 @@ type Database interface {
 	GetWorkflowExecutionLatestByEntityID(entityID WorkflowEntityID) (*WorkflowExecution, error)
 	GetWorkflowExecutionProperties(id WorkflowExecutionID, getters ...WorkflowExecutionPropertyGetter) error
 	SetWorkflowExecutionProperties(id WorkflowExecutionID, setters ...WorkflowExecutionPropertySetter) error
+	// specific
+	CountWorkflowExecutionByQueue(queueID QueueID) (int, error)
+	CountWorkflowExecutionByQueueByStatus(queueID QueueID, status ExecutionStatus) (int, error)
 
 	// Workflow Execution Data
 	AddWorkflowExecutionData(executionID WorkflowExecutionID, data *WorkflowExecutionData) (WorkflowExecutionDataID, error)

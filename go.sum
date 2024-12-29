@@ -1,8 +1,8 @@
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/davidroman0O/retrypool v0.0.0-20241228214942-849e0ee393a6 h1:V0ruRteXLyp/I8BDoiuikArJpkJNWCtFPT06hUH3tDM=
-github.com/davidroman0O/retrypool v0.0.0-20241228214942-849e0ee393a6/go.mod h1:Bs5wRV2c1mk6DXCd3Hc3mDWjX/BOt0LgbaxQYNSy3co=
+github.com/davidroman0O/retrypool v0.0.0-20241229061510-f24ce71d3c9c h1:yMJdJ2Tl+2Wfp3ajakV2tsz3+vA5O1qaV35GB4Th1dM=
+github.com/davidroman0O/retrypool v0.0.0-20241229061510-f24ce71d3c9c/go.mod h1:Bs5wRV2c1mk6DXCd3Hc3mDWjX/BOt0LgbaxQYNSy3co=
 github.com/k0kubun/pp/v3 v3.3.0 h1:/Unrck5tDGUSjsUJsmx9GUL64pNKOY5UEdoP1F7FBq8=
 github.com/k0kubun/pp/v3 v3.3.0/go.mod h1:wJadGBvcY6JKaiUkB89VzUACKDmTX1r4aQTPERpZc6w=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=

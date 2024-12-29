@@ -248,15 +248,17 @@ func (qi *QueueInstance) Wait() error {
 	}, time.Second)
 }
 
-func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], error) {
+func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
 
 	workflowEntity, err := PrepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
 	if err != nil {
 		log.Printf("failed to prepare workflow: %v", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	chnFuture := make(chan Future, 1)
+
+	// queuenotification := retrypool.NewQueuedNotification()
 
 	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
@@ -274,38 +276,40 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	if err := qi.orchestrators.
 		Submit(
 			task,
+			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return <-chnFuture, task, nil
+	return <-chnFuture, task, nil, nil
 }
 
-func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], error) {
+func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
 	}
 
 	// Verify the workflow is actually paused
 	var status EntityStatus
 	if err := qi.database.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
-		return nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
 	}
 	if status != StatusPaused {
-		return nil, nil, fmt.Errorf("workflow %d is not paused (current status: %s)", entityID, status)
+		return nil, nil, nil, fmt.Errorf("workflow %d is not paused (current status: %s)", entityID, status)
 	}
 
 	// Get handler info
 	handler, ok := qi.registry.GetWorkflow(workflowEntity.HandlerName)
 	if !ok {
-		return nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
+		return nil, nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
 	}
 
 	chnFuture := make(chan Future, 1)
 
+	// queuenotification := retrypool.NewQueuedNotification()
 	// Create resume request
 	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
@@ -320,12 +324,16 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		workflowEntity.ID,
 	)
 
-	if err := qi.orchestrators.Submit(task); err != nil {
+	if err := qi.orchestrators.
+		Submit(
+			task,
+			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+		); err != nil {
 		fmt.Println("failed to submit task", err)
-		return nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
-	return <-chnFuture, task, nil
+	return <-chnFuture, task, nil, nil
 }
 
 type onStartFunc func(context.Context)
@@ -753,13 +761,13 @@ func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options 
 		return nil, fmt.Errorf("queue %s not found", queueName)
 	}
 
-	future, _, err := queue.Submit(workflowFunc, options, nil, args...)
+	future, _, _, err := queue.Submit(workflowFunc, options, nil, args...)
 	if err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, fmt.Errorf("failed to submit workflow to queue %s: %w", queueName, err)
 	}
 
-	// <-queued
+	// <-queued.Done()
 
 	if err := future.WaitForIDs(t.ctx); err != nil {
 		return nil, fmt.Errorf("failed to wait for workflow IDs: %w", err)
@@ -811,14 +819,35 @@ func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
 	}
 
 	// Submit resume request to queue
-	future, _, err := queue.SubmitResume(id)
+	future, _, queued, err := queue.SubmitResume(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resume workflow: %w", err)
 	}
 
-	// <-queued
+	<-queued.Done()
 
 	return future, nil
+}
+
+func (t *Tempolite) CountQueue(queueName string, status EntityStatus) (int, error) {
+	q, err := t.database.GetQueueByName(queueName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get queue: %w", err)
+	}
+	return t.database.CountWorkflowEntityByQueueByStatus(q.ID, status)
+}
+
+func (t *Tempolite) Scale(queueName string, targetCount int) error {
+	t.mu.RLock()
+	instance, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
+	if !exists {
+		return fmt.Errorf("queue %s not found", queueName)
+	}
+
+	instance.orchestrators.SetActivePools(targetCount)
+
+	return nil
 }
 
 // func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {

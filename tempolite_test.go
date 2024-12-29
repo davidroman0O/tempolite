@@ -101,12 +101,12 @@ func TestQueueCrossBasic(t *testing.T) {
 		return nil
 	}
 
-	future, _, err := defaultQ.Submit(wrkfl, nil, nil)
+	future, _, q, err := defaultQ.Submit(wrkfl, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// <-q
+	<-q.Done()
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)

@@ -735,6 +735,71 @@ func (db *MemoryDatabase) GetWorkflowEntity(id WorkflowEntityID, opts ...Workflo
 	return entityCopy, nil
 }
 
+func (db *MemoryDatabase) CountWorkflowEntityByQueue(queueID QueueID) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// First verify queue exists
+	if _, exists := db.queues[queueID]; !exists {
+		return 0, ErrQueueNotFound
+	}
+
+	// Get all workflows in this queue
+	workflowIDs := db.queueToWorkflows[queueID]
+
+	// Return the count of workflows
+	return len(workflowIDs), nil
+}
+
+func (db *MemoryDatabase) CountWorkflowEntityByQueueByStatus(queueID QueueID, status EntityStatus) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// First verify queue exists
+	if _, exists := db.queues[queueID]; !exists {
+		return 0, ErrQueueNotFound
+	}
+
+	count := 0
+	// Get all workflows in this queue
+	workflowIDs := db.queueToWorkflows[queueID]
+
+	// Count workflows with matching status
+	for _, workflowID := range workflowIDs {
+		if workflow, exists := db.workflowEntities[workflowID]; exists && workflow.Status == status {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func (db *MemoryDatabase) CountWorkflowExecutionByQueueByStatus(queueID QueueID, status ExecutionStatus) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// First verify queue exists
+	if _, exists := db.queues[queueID]; !exists {
+		return 0, ErrQueueNotFound
+	}
+
+	count := 0
+	// Get all workflows in this queue
+	workflowIDs := db.queueToWorkflows[queueID]
+
+	// For each workflow in the queue
+	for _, workflowID := range workflowIDs {
+		// Count executions for this workflow with matching status
+		for _, execution := range db.workflowExecutions {
+			if execution.WorkflowEntityID == workflowID && execution.Status == status {
+				count++
+			}
+		}
+	}
+
+	return count, nil
+}
+
 func (db *MemoryDatabase) GetWorkflowEntityProperties(id WorkflowEntityID, getters ...WorkflowEntityPropertyGetter) error {
 
 	db.mu.Lock()
@@ -1549,6 +1614,33 @@ func (db *MemoryDatabase) GetWorkflowExecution(id WorkflowExecutionID, opts ...W
 	}
 
 	return execCopy, nil
+}
+
+func (db *MemoryDatabase) CountWorkflowExecutionByQueue(queueID QueueID) (int, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// First verify queue exists
+	if _, exists := db.queues[queueID]; !exists {
+		return 0, ErrQueueNotFound
+	}
+
+	count := 0
+
+	// Get all workflows in this queue
+	workflowIDs := db.queueToWorkflows[queueID]
+
+	// For each workflow in the queue
+	for _, workflowID := range workflowIDs {
+		// Count executions for this workflow
+		for _, execution := range db.workflowExecutions {
+			if execution.WorkflowEntityID == workflowID {
+				count++
+			}
+		}
+	}
+
+	return count, nil
 }
 
 func (db *MemoryDatabase) GetWorkflowExecutions(entityID WorkflowEntityID) ([]*WorkflowExecution, error) {
