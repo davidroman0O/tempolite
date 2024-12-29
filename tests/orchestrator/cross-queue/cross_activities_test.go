@@ -42,6 +42,7 @@ func TestWorkflowCrossWorkflowsActivitiesQueue(t *testing.T) {
 			func(
 				queueName string,
 				workflowID tempolite.WorkflowEntityID,
+				runID tempolite.RunID,
 				workflowFunc interface{},
 				options *tempolite.WorkflowOptions,
 				args ...interface{},

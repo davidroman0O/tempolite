@@ -243,10 +243,10 @@ type Future interface {
 }
 
 // CrossQueue is an external feature requesting an external intervention to trigger a workflow on another mechanism
-type crossQueueWorkflowHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueWorkflowHandler func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
 // CrossQueue is an external feature requesting for external operations to continue a workflow
-type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
 // Signal is an external feature requesting to store a signal outside for a published event
 type workflowNewSignalHandler func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error
@@ -2675,6 +2675,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 			_ = wi.onContinueAsNew( // Just start it running
 				queue,
 				workflowEntity.ID,
+				workflowEntity.RunID,
 				handler.Handler,
 				workflowOutput.ContinueAsNewOptions,
 				workflowOutput.ContinueAsNewArgs...,
@@ -4649,7 +4650,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			}
 
 			// then you're in charge on how you want the rest to happen
-			return ctx.onCrossQueueWorkflow(options.Queue, workflowEntity.ID, workflowFunc, options, args...)
+			return ctx.onCrossQueueWorkflow(options.Queue, workflowEntity.ID, workflowEntity.RunID, workflowFunc, options, args...)
 		}
 		// If no handler is set, return an error
 		future := NewRuntimeFuture()

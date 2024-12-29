@@ -1,5 +1,4 @@
 [ ] - Add a `sort.Slice(execs, func(i, j int) bool ` on all list result in the database memory implementation
-[ ] - Scale is faulty
 [ ] - Check close
 [ ] - Configure logs
 [ ] - More tests

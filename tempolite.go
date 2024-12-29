@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"sync/atomic"
 	"time"
 
 	"github.com/davidroman0O/retrypool"
@@ -45,7 +44,8 @@ type QueueInstance struct {
 	name  string
 	count int32
 
-	orchestrators *retrypool.Pool[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]
+	// We use a blocking pool because the orchestrator will lock workers of the pool, we will have one Run as group per pool
+	orchestrators *retrypool.BlockingPool[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID]
 
 	workerMu          deadlock.RWMutex
 	processingWorkers map[WorkflowEntityID]*QueueWorker
@@ -140,7 +140,7 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		}
 	}
 
-	workers := []retrypool.Worker[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]{}
+	workers := []retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]]{}
 	for i := 0; i < count; i++ {
 		workers = append(workers, NewQueueWorker(q))
 	}
@@ -148,60 +148,71 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	logger := retrypool.NewLogger(slog.LevelDebug)
 	logger.Enable()
 
-	q.orchestrators = retrypool.New(
+	q.orchestrators, err = retrypool.NewBlockingPool[
+		*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID](
 		ctx,
-		workers,
-		retrypool.WithLogger[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-			logger,
-		),
-		retrypool.WithAttempts[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](1),
-		retrypool.WithOnPanic[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-			func(recovery interface{}, stackTrace string) {
-				fmt.Println("PANIC", recovery, stackTrace)
-			},
-		),
-		retrypool.WithRoundRobinDistribution[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](),
-		retrypool.WithOnWorkerPanic[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-			func(workerID int, recovery interface{}, stackTrace string) {
-				fmt.Println("WORKER PANIC", workerID, recovery, stackTrace)
-			},
-		),
-		// retrypool.WithDelay[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](time.Second/2),
-		retrypool.WithOnDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-			func(deadTaskIndex int) {
-				fmt.Println("DEADTASK", deadTaskIndex)
-				// deadTask, err := q.orchestrators.GetDeadTask(deadTaskIndex)
-				// if err != nil {
-				// 	// too bad
-				// 	log.Printf("failed to get dead task: %v", err)
-				// 	return
-				// }
-				// errs := errors.New("failed to process request")
-				// for _, e := range deadTask.Errors {
-				// 	errs = errors.Join(errs, e)
-				// }
-				// deadTask.Data.CompleteWithError(errs)
-				// _, err = q.orchestrators.PullDeadTask(deadTaskIndex)
-				// if err != nil {
-				// 	// too bad
-				// 	log.Printf("failed to pull dead task: %v", err)
-				// }
-			},
-		),
-		// retrypool.WithOnNewDeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](
-		// 	func(task *retrypool.DeadTask[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], idx int) {
-		// 		errs := errors.New("failed to process request")
-		// 		for _, e := range task.Errors {
-		// 			errs = errors.Join(errs, e)
-		// 		}
-		// 		task.Data.CompleteWithError(errs)
-		// 		_, err := q.orchestrators.PullDeadTask(idx)
-		// 		if err != nil {
-		// 			// too bad
-		// 			log.Printf("failed to pull dead task: %v", err)
-		// 		}
-		// 	}),
+		retrypool.WithBlockingWorkerFactory(func() retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]] {
+			return NewQueueWorker(q)
+		}),
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create orchestrator: %w", err)
+	}
+
+	// q.orchestrators = retrypool.New(
+	// 	ctx,
+	// 	workers,
+	// 	retrypool.WithLogger[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+	// 		logger,
+	// 	),
+	// 	retrypool.WithAttempts[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](1),
+	// 	retrypool.WithOnPanic[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+	// 		func(recovery interface{}, stackTrace string) {
+	// 			fmt.Println("PANIC", recovery, stackTrace)
+	// 		},
+	// 	),
+	// 	retrypool.WithRoundRobinDistribution[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](),
+	// 	retrypool.WithOnWorkerPanic[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+	// 		func(workerID int, recovery interface{}, stackTrace string) {
+	// 			fmt.Println("WORKER PANIC", workerID, recovery, stackTrace)
+	// 		},
+	// 	),
+	// 	// retrypool.WithDelay[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](time.Second/2),
+	// 	retrypool.WithOnDeadTask[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+	// 		func(deadTaskIndex int) {
+	// 			fmt.Println("DEADTASK", deadTaskIndex)
+	// 			// deadTask, err := q.orchestrators.GetDeadTask(deadTaskIndex)
+	// 			// if err != nil {
+	// 			// 	// too bad
+	// 			// 	log.Printf("failed to get dead task: %v", err)
+	// 			// 	return
+	// 			// }
+	// 			// errs := errors.New("failed to process request")
+	// 			// for _, e := range deadTask.Errors {
+	// 			// 	errs = errors.Join(errs, e)
+	// 			// }
+	// 			// deadTask.Data.CompleteWithError(errs)
+	// 			// _, err = q.orchestrators.PullDeadTask(deadTaskIndex)
+	// 			// if err != nil {
+	// 			// 	// too bad
+	// 			// 	log.Printf("failed to pull dead task: %v", err)
+	// 			// }
+	// 		},
+	// 	),
+	// 	// retrypool.WithOnNewDeadTask[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+	// 	// 	func(task *retrypool.DeadTask[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]], idx int) {
+	// 	// 		errs := errors.New("failed to process request")
+	// 	// 		for _, e := range task.Errors {
+	// 	// 			errs = errors.Join(errs, e)
+	// 	// 		}
+	// 	// 		task.Data.CompleteWithError(errs)
+	// 	// 		_, err := q.orchestrators.PullDeadTask(idx)
+	// 	// 		if err != nil {
+	// 	// 			// too bad
+	// 	// 			log.Printf("failed to pull dead task: %v", err)
+	// 	// 		}
+	// 	// 	}),
+	// )
 
 	return q, nil
 }
@@ -217,27 +228,27 @@ func (qi *QueueInstance) Close() error {
 
 func (qi *QueueInstance) Wait() error {
 	return qi.orchestrators.WaitWithCallback(qi.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-		workersIDS, err := qi.orchestrators.Workers()
-		if err != nil {
-			logger.Error(qi.ctx, "failed to get workers", "error", err)
-			return false
-		}
+		// workersIDS, err := qi.orchestrators.Workers()
+		// if err != nil {
+		// 	logger.Error(qi.ctx, "failed to get workers", "error", err)
+		// 	return false
+		// }
 		// qi.orchestrators.task
 		// // workersIDS := qi.orchestrators.ListWorkers()
-		// qi.orchestrators.RangeTasks(func(data *retrypool.TaskWrapper[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]], workerID int, status retrypool.TaskStatus) bool {
+		// qi.orchestrators.RangeTasks(func(data *retrypool.TaskWrapper[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]], workerID int, status retrypool.TaskStatus) bool {
 		// 	logger.Debug(qi.ctx, "task status", "workerID", workerID, "status", status, "task", data.Data().Request.workflowID)
 		// 	return true
 		// })
-		// qi.orchestrators.RangeWorkers(func(workerID int, worker retrypool.Worker[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]]) bool {
+		// qi.orchestrators.RangeWorkers(func(workerID int, worker retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]]) bool {
 		// 	logger.Debug(qi.ctx, "worker status", "workerID", workerID)
 		// 	return true
 		// })
-		logger.Debug(qi.ctx, "waiting for queue to finish", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount, "workers", len(workersIDS))
-		return queueSize > 0 || processingCount > 0
+		logger.Debug(qi.ctx, "waiting for queue to finish", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
 	}, time.Second)
 }
 
-func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
+func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
 
 	workflowEntity, err := PrepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
 	if err != nil {
@@ -247,9 +258,9 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 
 	chnFuture := make(chan Future, 1)
 
-	queued := retrypool.NewQueuedNotification()
+	// queuenotification := retrypool.NewQueuedNotification()
 
-	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
+	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
 			workflowID:   workflowEntity.ID,
 			workflowFunc: workflowFunc,
@@ -258,17 +269,23 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 			chnFuture:    chnFuture,
 			queueName:    qi.name,
 		},
+		workflowEntity.RunID,
+		workflowEntity.ID,
 	)
 
-	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+	if err := qi.orchestrators.
+		Submit(
+			task,
+			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, err
 	}
 
-	return <-chnFuture, task, queued.Done(), nil
+	return <-chnFuture, task, nil, nil
 }
 
-func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse], <-chan struct{}, error) {
+func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
 	if err != nil {
@@ -292,10 +309,9 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 
 	chnFuture := make(chan Future, 1)
 
-	queued := retrypool.NewQueuedNotification()
-
+	// queuenotification := retrypool.NewQueuedNotification()
 	// Create resume request
-	task := retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](
+	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
 			workflowID:   workflowEntity.ID,
 			workflowFunc: handler.Handler, // Use the actual handler function
@@ -304,14 +320,20 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 			resume:       true,  // Mark this as a resume
 			chnFuture:    chnFuture,
 		},
+		workflowEntity.RunID,
+		workflowEntity.ID,
 	)
 
-	if err := qi.orchestrators.Submit(task, retrypool.WithQueuedNotification[*retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]](queued)); err != nil {
+	if err := qi.orchestrators.
+		Submit(
+			task,
+			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
-	return <-chnFuture, task, queued.Done(), nil
+	return <-chnFuture, task, nil, nil
 }
 
 type onStartFunc func(context.Context)
@@ -379,7 +401,7 @@ func (w *QueueWorker) OnRemove(ctx context.Context) {
 	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
 }
 
-func (w *QueueWorker) Run(ctx context.Context, task *retrypool.RequestResponse[*WorkflowRequest, *WorkflowResponse]) error {
+func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]) error {
 
 	// Mark entity as processing
 	w.queueInstance.workerMu.Lock()
@@ -478,7 +500,7 @@ type TempoliteOption func(*Tempolite) error
 
 // createCrossWorkflowHandler creates the handler function for cross-queue workflow communication
 func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
-	return func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	return func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.RLock()
 		queue, ok := t.queueInstances[queueName]
 		t.mu.RUnlock()
@@ -491,15 +513,19 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 		chnFuture := make(chan Future, 1)
 
 		if err := queue.orchestrators.Submit(
-			retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
-				workflowFunc: workflowFunc,
-				options:      options,
-				workflowID:   workflowID,
-				args:         args,
-				chnFuture:    chnFuture,
-				queueName:    queueName,
-				continued:    false,
-			})); err != nil {
+			retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
+				&WorkflowRequest{
+					workflowFunc: workflowFunc,
+					options:      options,
+					workflowID:   workflowID,
+					args:         args,
+					chnFuture:    chnFuture,
+					queueName:    queueName,
+					continued:    false,
+				},
+				runID,
+				workflowID,
+			)); err != nil {
 			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
 			futureErr.SetError(err)
@@ -511,7 +537,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 }
 
 func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler {
-	return func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	return func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.Lock()
 		queue, ok := t.queueInstances[queueName]
 		t.mu.Unlock()
@@ -525,15 +551,19 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 
 		// Handle version inheritance through ContinueAsNew
 		if err := queue.orchestrators.Submit(
-			retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
-				workflowID:   workflowID,
-				workflowFunc: workflowFunc,
-				options:      options,
-				args:         args,
-				chnFuture:    chnFuture,
-				queueName:    queueName,
-				continued:    true, // Mark this as a continuation
-			})); err != nil {
+			retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
+				&WorkflowRequest{
+					workflowID:   workflowID,
+					workflowFunc: workflowFunc,
+					options:      options,
+					args:         args,
+					chnFuture:    chnFuture,
+					queueName:    queueName,
+					continued:    true, // Mark this as a continuation
+				},
+				runID,
+				workflowID,
+			)); err != nil {
 			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
 			futureErr.SetError(err)
@@ -731,13 +761,13 @@ func (t *Tempolite) Execute(queueName string, workflowFunc interface{}, options 
 		return nil, fmt.Errorf("queue %s not found", queueName)
 	}
 
-	future, _, queued, err := queue.Submit(workflowFunc, options, nil, args...)
+	future, _, _, err := queue.Submit(workflowFunc, options, nil, args...)
 	if err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, fmt.Errorf("failed to submit workflow to queue %s: %w", queueName, err)
 	}
 
-	<-queued
+	// <-queued.Done()
 
 	if err := future.WaitForIDs(t.ctx); err != nil {
 		return nil, fmt.Errorf("failed to wait for workflow IDs: %w", err)
@@ -794,82 +824,103 @@ func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
 		return nil, fmt.Errorf("failed to resume workflow: %w", err)
 	}
 
-	<-queued
+	<-queued.Done()
 
 	return future, nil
 }
 
-func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {
+func (t *Tempolite) CountQueue(queueName string, status EntityStatus) (int, error) {
+	q, err := t.database.GetQueueByName(queueName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get queue: %w", err)
+	}
+	return t.database.CountWorkflowEntityByQueueByStatus(q.ID, status)
+}
+
+func (t *Tempolite) Scale(queueName string, targetCount int) error {
 	t.mu.RLock()
 	instance, exists := t.queueInstances[queueName]
 	t.mu.RUnlock()
-
 	if !exists {
 		return fmt.Errorf("queue %s not found", queueName)
 	}
 
-	currentCount := atomic.LoadInt32(&instance.count)
-	delta := int32(targetCount) - currentCount
-
-	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "current", currentCount, "target", targetCount, "delta", delta)
-
-	if delta > 0 {
-		// Add workers
-		for i := int32(0); i < delta; i++ {
-			worker := NewQueueWorker(instance)
-			instance.orchestrators.Add(worker, instance.orchestrators.NewTaskQueue(retrypool.TaskQueueTypeSlice))
-			atomic.AddInt32(&instance.count, 1)
-			logger.Info(t.ctx, "Added worker to queue", "queueName", queueName)
-		}
-	} else if delta < 0 {
-		// Remove workers
-		absCount := -delta
-		if absCount > currentCount {
-			return fmt.Errorf("cannot remove %d workers, only %d available", absCount, currentCount)
-		}
-
-		instance.workerMu.RLock()
-		workers, err := instance.orchestrators.Workers()
-		instance.workerMu.RUnlock()
-		if err != nil {
-			return fmt.Errorf("failed to get workers: %w", err)
-		}
-
-		for i := int32(0); i < absCount && i < int32(len(workers)); i++ {
-			logger.Info(t.ctx, "Removing worker from queue", "queueName", queueName)
-			worker := workers[len(workers)-1-int(i)]
-			if err := instance.orchestrators.Remove(worker); err != nil {
-				return fmt.Errorf("failed to remove worker: %w", err)
-			}
-
-			// Clean up worker references
-			instance.workerMu.Lock()
-			delete(instance.workers, worker)
-			instance.workerMu.Unlock()
-
-			atomic.AddInt32(&instance.count, -1)
-			logger.Info(t.ctx, "Removed worker from queue", "queueName", queueName)
-		}
-	}
-
-	workers, err := instance.orchestrators.Workers()
-	if err != nil {
-		return fmt.Errorf("failed to get workers: %w", err)
-	}
-
-	if len(workers) == 0 {
-		logger.Debug(t.ctx, "no workers in queue", "queueName", queueName)
-	} else {
-		logger.Debug(t.ctx, "workers in queue", "queueName", queueName, "count", len(workers))
-	}
-
-	instance.orchestrators.RangeWorkerQueues(func(workerID int, queueSize int64) bool {
-		logger.Debug(t.ctx, "worker queue size", "workerID", workerID, "queueSize", queueSize)
-		return true
-	})
+	instance.orchestrators.SetActivePools(targetCount)
 
 	return nil
 }
+
+// func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {
+// 	t.mu.RLock()
+// 	instance, exists := t.queueInstances[queueName]
+// 	t.mu.RUnlock()
+
+// 	if !exists {
+// 		return fmt.Errorf("queue %s not found", queueName)
+// 	}
+
+// 	currentCount := atomic.LoadInt32(&instance.count)
+// 	delta := int32(targetCount) - currentCount
+
+// 	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "current", currentCount, "target", targetCount, "delta", delta)
+
+// 	if delta > 0 {
+// 		// Add workers
+// 		for i := int32(0); i < delta; i++ {
+// 			worker := NewQueueWorker(instance)
+// 			instance.orchestrators.Add(worker, instance.orchestrators.NewTaskQueue(retrypool.TaskQueueTypeSlice))
+// 			atomic.AddInt32(&instance.count, 1)
+// 			logger.Info(t.ctx, "Added worker to queue", "queueName", queueName)
+// 		}
+// 	} else if delta < 0 {
+// 		// Remove workers
+// 		absCount := -delta
+// 		if absCount > currentCount {
+// 			return fmt.Errorf("cannot remove %d workers, only %d available", absCount, currentCount)
+// 		}
+
+// 		instance.workerMu.RLock()
+// 		workers, err := instance.orchestrators.Workers()
+// 		instance.workerMu.RUnlock()
+// 		if err != nil {
+// 			return fmt.Errorf("failed to get workers: %w", err)
+// 		}
+
+// 		for i := int32(0); i < absCount && i < int32(len(workers)); i++ {
+// 			logger.Info(t.ctx, "Removing worker from queue", "queueName", queueName)
+// 			worker := workers[len(workers)-1-int(i)]
+// 			if err := instance.orchestrators.Remove(worker); err != nil {
+// 				return fmt.Errorf("failed to remove worker: %w", err)
+// 			}
+
+// 			// Clean up worker references
+// 			instance.workerMu.Lock()
+// 			delete(instance.workers, worker)
+// 			instance.workerMu.Unlock()
+
+// 			atomic.AddInt32(&instance.count, -1)
+// 			logger.Info(t.ctx, "Removed worker from queue", "queueName", queueName)
+// 		}
+// 	}
+
+// 	workers, err := instance.orchestrators.Workers()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to get workers: %w", err)
+// 	}
+
+// 	if len(workers) == 0 {
+// 		logger.Debug(t.ctx, "no workers in queue", "queueName", queueName)
+// 	} else {
+// 		logger.Debug(t.ctx, "workers in queue", "queueName", queueName, "count", len(workers))
+// 	}
+
+// 	instance.orchestrators.RangeWorkerQueues(func(workerID int, queueSize int64) bool {
+// 		logger.Debug(t.ctx, "worker queue size", "workerID", workerID, "queueSize", queueSize)
+// 		return true
+// 	})
+
+// 	return nil
+// }
 
 func (t *Tempolite) Close() error {
 	t.cancel()

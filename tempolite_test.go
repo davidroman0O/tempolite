@@ -21,7 +21,7 @@ func TestQueueCrossBasic(t *testing.T) {
 	var defaultQ *QueueInstance
 	var secondQ *QueueInstance
 
-	var onCross crossQueueWorkflowHandler = func(queueName string, workflowID WorkflowEntityID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var onCross crossQueueWorkflowHandler = func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 
 		queue, err := db.GetQueueByName(queueName)
 		if err != nil {
@@ -34,7 +34,7 @@ func TestQueueCrossBasic(t *testing.T) {
 
 		if queue.Name == "default" {
 			if err := defaultQ.orchestrators.Submit(
-				retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+				retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
@@ -42,14 +42,14 @@ func TestQueueCrossBasic(t *testing.T) {
 					chnFuture:    chnFuture,
 					queueName:    queueName,
 					continued:    true,
-				})); err != nil {
+				}, runID, workflowID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future
 			}
 		} else if queue.Name == "second" {
 			if err := secondQ.orchestrators.Submit(
-				retrypool.NewRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+				retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
@@ -57,7 +57,7 @@ func TestQueueCrossBasic(t *testing.T) {
 					chnFuture:    chnFuture,
 					queueName:    queueName,
 					continued:    true,
-				})); err != nil {
+				}, runID, workflowID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future
@@ -106,7 +106,7 @@ func TestQueueCrossBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-q
+	<-q.Done()
 
 	if err := future.Get(); err != nil {
 		t.Fatal(err)
@@ -181,10 +181,13 @@ func TestTempoliteBasicCross(t *testing.T) {
 	}
 }
 
+// We're stuck there
 func TestTempoliteBasicSubWorkflow(t *testing.T) {
 
 	ctx := context.Background()
 	db := NewMemoryDatabase()
+
+	defer db.SaveAsJSON("./json/tempolite_subworkflow.json")
 
 	tp, err := New(
 		ctx,
@@ -198,7 +201,9 @@ func TestTempoliteBasicSubWorkflow(t *testing.T) {
 
 	var subWork func(ctx WorkflowContext) error
 
+	// To make the continue as new feature working or others, we need the retrypool round-robin
 	subWork = func(ctx WorkflowContext) error {
+		db.SaveAsJSON("./json/tempolite_subworkflow.json")
 		fmt.Println("Hello, second world!")
 		<-time.After(1 * time.Second)
 		if counter.Load() < 5 {
@@ -264,7 +269,8 @@ func TestTempoliteBasicSecondQueueSubWorkflow(t *testing.T) {
 
 	subWork = func(ctx WorkflowContext) error {
 		fmt.Println("Hello, second world!")
-		<-time.After(1 * time.Second)
+		// Adding a delay makes it not working?1
+		// <-time.After(1 * time.Second)
 		if counter.Load() < 5 {
 			counter.Store(counter.Load() + 1)
 			fmt.Println("second ", counter.Load())
