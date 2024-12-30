@@ -566,6 +566,10 @@ type WorkflowContext struct {
 	onSignalRemove       workflowRemoveSignalHandler
 }
 
+func (ctx WorkflowContext) Context() context.Context {
+	return ctx.ctx
+}
+
 // GetVersion retrieves or sets a version for a changeID.
 func (ctx WorkflowContext) GetVersion(changeID string, minSupported, maxSupported int) (int, error) {
 	// First check version overrides
