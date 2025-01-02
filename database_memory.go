@@ -195,26 +195,58 @@ func NewMemoryDatabase() *MemoryDatabase {
 }
 
 func (db *MemoryDatabase) SaveAsJSON(path string) error {
-
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
 	// We need to lock all relevant structures for a consistent snapshot.
 	// We'll lock everything in alphabetical order to avoid deadlocks.
 
 	data := struct {
-		Runs                    map[RunID]*Run
-		Versions                map[VersionID]*Version
-		Hierarchies             map[HierarchyID]*Hierarchy
-		Queues                  map[QueueID]*Queue
-		QueueNames              map[string]QueueID
-		WorkflowEntities        map[WorkflowEntityID]*WorkflowEntity
-		ActivityEntities        map[ActivityEntityID]*ActivityEntity
-		SagaEntities            map[SagaEntityID]*SagaEntity
-		SideEffectEntities      map[SideEffectEntityID]*SideEffectEntity
-		WorkflowData            map[WorkflowDataID]*WorkflowData
-		ActivityData            map[ActivityDataID]*ActivityData
-		SagaData                map[SagaDataID]*SagaData
-		SideEffectData          map[SideEffectDataID]*SideEffectData
+		// Counters
+		RunCounter                     int
+		VersionCounter                 int
+		HierarchyCounter               int
+		QueueCounter                   int
+		WorkflowEntityCounter          int
+		ActivityEntityCounter          int
+		SagaEntityCounter              int
+		SideEffectEntityCounter        int
+		WorkflowDataCounter            int
+		ActivityDataCounter            int
+		SagaDataCounter                int
+		SideEffectDataCounter          int
+		WorkflowExecutionCounter       int
+		ActivityExecutionCounter       int
+		SagaExecutionCounter           int
+		SideEffectExecutionCounter     int
+		WorkflowExecutionDataCounter   int
+		ActivityExecutionDataCounter   int
+		SagaExecutionDataCounter       int
+		SideEffectExecutionDataCounter int
+		SignalEntityCounter            int
+		SignalExecutionCounter         int
+		SignalDataCounter              int
+		SignalExecutionDataCounter     int
+		SagaValueCounter               int
+
+		// Core maps
+		Runs        map[RunID]*Run
+		Versions    map[VersionID]*Version
+		Hierarchies map[HierarchyID]*Hierarchy
+		Queues      map[QueueID]*Queue
+		QueueNames  map[string]QueueID
+
+		// Entity maps
+		WorkflowEntities   map[WorkflowEntityID]*WorkflowEntity
+		ActivityEntities   map[ActivityEntityID]*ActivityEntity
+		SagaEntities       map[SagaEntityID]*SagaEntity
+		SideEffectEntities map[SideEffectEntityID]*SideEffectEntity
+		WorkflowData       map[WorkflowDataID]*WorkflowData
+		ActivityData       map[ActivityDataID]*ActivityData
+		SagaData           map[SagaDataID]*SagaData
+		SideEffectData     map[SideEffectDataID]*SideEffectData
+
+		// Execution maps
 		WorkflowExecutions      map[WorkflowExecutionID]*WorkflowExecution
 		ActivityExecutions      map[ActivityExecutionID]*ActivityExecution
 		SagaExecutions          map[SagaExecutionID]*SagaExecution
@@ -223,23 +255,28 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		ActivityExecutionData   map[ActivityExecutionDataID]*ActivityExecutionData
 		SagaExecutionData       map[SagaExecutionDataID]*SagaExecutionData
 		SideEffectExecutionData map[SideEffectExecutionDataID]*SideEffectExecutionData
-		EntityToWorkflow        map[int]WorkflowEntityID
-		WorkflowToChildren      map[WorkflowEntityID]map[EntityType][]int
-		WorkflowToVersion       map[WorkflowEntityID][]VersionID
-		WorkflowToQueue         map[WorkflowEntityID]QueueID
-		QueueToWorkflows        map[QueueID][]WorkflowEntityID
-		RunToWorkflows          map[RunID][]WorkflowEntityID
 
+		// Relationship maps
+		EntityToWorkflow   map[int]WorkflowEntityID
+		WorkflowToChildren map[WorkflowEntityID]map[EntityType][]int
+		WorkflowToVersion  map[WorkflowEntityID][]VersionID
+		WorkflowToQueue    map[WorkflowEntityID]QueueID
+		QueueToWorkflows   map[QueueID][]WorkflowEntityID
+		RunToWorkflows     map[RunID][]WorkflowEntityID
+
+		// Saga specific
 		SagaValues            map[SagaValueID]*SagaValue
 		SagaEntityToValues    map[SagaEntityID][]SagaValueID
 		SagaExecutionToValues map[SagaExecutionID][]SagaValueID
 		SagaEntityKeyToValue  map[SagaEntityID]map[string]SagaValueID
 
+		// Signal maps
 		SignalEntities      map[SignalEntityID]*SignalEntity
 		SignalExecutions    map[SignalExecutionID]*SignalExecution
 		SignalData          map[SignalDataID]*SignalData
 		SignalExecutionData map[SignalExecutionDataID]*SignalExecutionData
-		// Relationship
+
+		// Additional relationship maps
 		WorkflowVersions        map[WorkflowEntityID][]VersionID
 		WorkflowExecToDataMap   map[WorkflowExecutionID]WorkflowExecutionDataID
 		ActivityExecToDataMap   map[ActivityExecutionID]ActivityExecutionDataID
@@ -247,19 +284,51 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		SideEffectExecToDataMap map[SideEffectExecutionID]SideEffectExecutionDataID
 		SignalExecToDataMap     map[SignalExecutionID]SignalExecutionDataID
 	}{
-		Runs:                    db.runs,
-		Versions:                db.versions,
-		Hierarchies:             db.hierarchies,
-		Queues:                  db.queues,
-		QueueNames:              db.queueNames,
-		WorkflowEntities:        db.workflowEntities,
-		ActivityEntities:        db.activityEntities,
-		SagaEntities:            db.sagaEntities,
-		SideEffectEntities:      db.sideEffectEntities,
-		WorkflowData:            db.workflowData,
-		ActivityData:            db.activityData,
-		SagaData:                db.sagaData,
-		SideEffectData:          db.sideEffectData,
+		// Counters
+		RunCounter:                     db.runCounter,
+		VersionCounter:                 db.versionCounter,
+		HierarchyCounter:               db.hierarchyCounter,
+		QueueCounter:                   db.queueCounter,
+		WorkflowEntityCounter:          db.workflowEntityCounter,
+		ActivityEntityCounter:          db.activityEntityCounter,
+		SagaEntityCounter:              db.sagaEntityCounter,
+		SideEffectEntityCounter:        db.sideEffectEntityCounter,
+		WorkflowDataCounter:            db.workflowDataCounter,
+		ActivityDataCounter:            db.activityDataCounter,
+		SagaDataCounter:                db.sagaDataCounter,
+		SideEffectDataCounter:          db.sideEffectDataCounter,
+		WorkflowExecutionCounter:       db.workflowExecutionCounter,
+		ActivityExecutionCounter:       db.activityExecutionCounter,
+		SagaExecutionCounter:           db.sagaExecutionCounter,
+		SideEffectExecutionCounter:     db.sideEffectExecutionCounter,
+		WorkflowExecutionDataCounter:   db.workflowExecutionDataCounter,
+		ActivityExecutionDataCounter:   db.activityExecutionDataCounter,
+		SagaExecutionDataCounter:       db.sagaExecutionDataCounter,
+		SideEffectExecutionDataCounter: db.sideEffectExecutionDataCounter,
+		SignalEntityCounter:            db.signalEntityCounter,
+		SignalExecutionCounter:         db.signalExecutionCounter,
+		SignalDataCounter:              db.signalDataCounter,
+		SignalExecutionDataCounter:     db.signalExecutionDataCounter,
+		SagaValueCounter:               db.sagaValueCounter,
+
+		// Core maps
+		Runs:        db.runs,
+		Versions:    db.versions,
+		Hierarchies: db.hierarchies,
+		Queues:      db.queues,
+		QueueNames:  db.queueNames,
+
+		// Entity maps
+		WorkflowEntities:   db.workflowEntities,
+		ActivityEntities:   db.activityEntities,
+		SagaEntities:       db.sagaEntities,
+		SideEffectEntities: db.sideEffectEntities,
+		WorkflowData:       db.workflowData,
+		ActivityData:       db.activityData,
+		SagaData:           db.sagaData,
+		SideEffectData:     db.sideEffectData,
+
+		// Execution maps
 		WorkflowExecutions:      db.workflowExecutions,
 		ActivityExecutions:      db.activityExecutions,
 		SagaExecutions:          db.sagaExecutions,
@@ -268,22 +337,28 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 		ActivityExecutionData:   db.activityExecutionData,
 		SagaExecutionData:       db.sagaExecutionData,
 		SideEffectExecutionData: db.sideEffectExecutionData,
-		EntityToWorkflow:        db.entityToWorkflow,
-		WorkflowToChildren:      db.workflowToChildren,
-		WorkflowToVersion:       db.workflowToVersion,
-		WorkflowToQueue:         db.workflowToQueue,
-		QueueToWorkflows:        db.queueToWorkflows,
-		RunToWorkflows:          db.runToWorkflows,
-		SagaValues:              db.sagaValues,
-		SagaEntityToValues:      db.sagaEntityToValues,
-		SagaExecutionToValues:   db.sagaExecutionToValues,
-		SagaEntityKeyToValue:    db.sagaEntityKeyToValue,
 
+		// Relationship maps
+		EntityToWorkflow:   db.entityToWorkflow,
+		WorkflowToChildren: db.workflowToChildren,
+		WorkflowToVersion:  db.workflowToVersion,
+		WorkflowToQueue:    db.workflowToQueue,
+		QueueToWorkflows:   db.queueToWorkflows,
+		RunToWorkflows:     db.runToWorkflows,
+
+		// Saga specific
+		SagaValues:            db.sagaValues,
+		SagaEntityToValues:    db.sagaEntityToValues,
+		SagaExecutionToValues: db.sagaExecutionToValues,
+		SagaEntityKeyToValue:  db.sagaEntityKeyToValue,
+
+		// Signal maps
 		SignalEntities:      db.signalEntities,
 		SignalExecutions:    db.signalExecutions,
 		SignalData:          db.signalData,
 		SignalExecutionData: db.signalExecutionData,
-		// Relationship
+
+		// Additional relationship maps
 		WorkflowVersions:        db.workflowVersions,
 		WorkflowExecToDataMap:   db.workflowExecToDataMap,
 		ActivityExecToDataMap:   db.activityExecToDataMap,
@@ -303,6 +378,321 @@ func (db *MemoryDatabase) SaveAsJSON(path string) error {
 	}
 
 	return os.WriteFile(path, jsonData, 0644)
+}
+
+func (db *MemoryDatabase) LoadFromJSON(path string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Read the JSON file
+	jsonData, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Define the data structure that matches our save structure
+	data := struct {
+		// Counters
+		RunCounter                     int
+		VersionCounter                 int
+		HierarchyCounter               int
+		QueueCounter                   int
+		WorkflowEntityCounter          int
+		ActivityEntityCounter          int
+		SagaEntityCounter              int
+		SideEffectEntityCounter        int
+		WorkflowDataCounter            int
+		ActivityDataCounter            int
+		SagaDataCounter                int
+		SideEffectDataCounter          int
+		WorkflowExecutionCounter       int
+		ActivityExecutionCounter       int
+		SagaExecutionCounter           int
+		SideEffectExecutionCounter     int
+		WorkflowExecutionDataCounter   int
+		ActivityExecutionDataCounter   int
+		SagaExecutionDataCounter       int
+		SideEffectExecutionDataCounter int
+		SignalEntityCounter            int
+		SignalExecutionCounter         int
+		SignalDataCounter              int
+		SignalExecutionDataCounter     int
+		SagaValueCounter               int
+
+		// Core maps
+		Runs        map[RunID]*Run
+		Versions    map[VersionID]*Version
+		Hierarchies map[HierarchyID]*Hierarchy
+		Queues      map[QueueID]*Queue
+		QueueNames  map[string]QueueID
+
+		// Entity maps
+		WorkflowEntities   map[WorkflowEntityID]*WorkflowEntity
+		ActivityEntities   map[ActivityEntityID]*ActivityEntity
+		SagaEntities       map[SagaEntityID]*SagaEntity
+		SideEffectEntities map[SideEffectEntityID]*SideEffectEntity
+		WorkflowData       map[WorkflowDataID]*WorkflowData
+		ActivityData       map[ActivityDataID]*ActivityData
+		SagaData           map[SagaDataID]*SagaData
+		SideEffectData     map[SideEffectDataID]*SideEffectData
+
+		// Execution maps
+		WorkflowExecutions      map[WorkflowExecutionID]*WorkflowExecution
+		ActivityExecutions      map[ActivityExecutionID]*ActivityExecution
+		SagaExecutions          map[SagaExecutionID]*SagaExecution
+		SideEffectExecutions    map[SideEffectExecutionID]*SideEffectExecution
+		WorkflowExecutionData   map[WorkflowExecutionDataID]*WorkflowExecutionData
+		ActivityExecutionData   map[ActivityExecutionDataID]*ActivityExecutionData
+		SagaExecutionData       map[SagaExecutionDataID]*SagaExecutionData
+		SideEffectExecutionData map[SideEffectExecutionDataID]*SideEffectExecutionData
+
+		// Relationship maps
+		EntityToWorkflow   map[int]WorkflowEntityID
+		WorkflowToChildren map[WorkflowEntityID]map[EntityType][]int
+		WorkflowToVersion  map[WorkflowEntityID][]VersionID
+		WorkflowToQueue    map[WorkflowEntityID]QueueID
+		QueueToWorkflows   map[QueueID][]WorkflowEntityID
+		RunToWorkflows     map[RunID][]WorkflowEntityID
+
+		// Saga specific
+		SagaValues            map[SagaValueID]*SagaValue
+		SagaEntityToValues    map[SagaEntityID][]SagaValueID
+		SagaExecutionToValues map[SagaExecutionID][]SagaValueID
+		SagaEntityKeyToValue  map[SagaEntityID]map[string]SagaValueID
+
+		// Signal maps
+		SignalEntities      map[SignalEntityID]*SignalEntity
+		SignalExecutions    map[SignalExecutionID]*SignalExecution
+		SignalData          map[SignalDataID]*SignalData
+		SignalExecutionData map[SignalExecutionDataID]*SignalExecutionData
+
+		// Additional relationship maps
+		WorkflowVersions        map[WorkflowEntityID][]VersionID
+		WorkflowExecToDataMap   map[WorkflowExecutionID]WorkflowExecutionDataID
+		ActivityExecToDataMap   map[ActivityExecutionID]ActivityExecutionDataID
+		SagaExecToDataMap       map[SagaExecutionID]SagaExecutionDataID
+		SideEffectExecToDataMap map[SideEffectExecutionID]SideEffectExecutionDataID
+		SignalExecToDataMap     map[SignalExecutionID]SignalExecutionDataID
+	}{}
+
+	// Unmarshal the JSON data
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		return fmt.Errorf("error unmarshaling JSON: %w", err)
+	}
+
+	// Reset all counters first
+	db.runCounter = data.RunCounter
+	db.versionCounter = data.VersionCounter
+	db.hierarchyCounter = data.HierarchyCounter
+	db.queueCounter = data.QueueCounter
+	db.workflowEntityCounter = data.WorkflowEntityCounter
+	db.activityEntityCounter = data.ActivityEntityCounter
+	db.sagaEntityCounter = data.SagaEntityCounter
+	db.sideEffectEntityCounter = data.SideEffectEntityCounter
+	db.workflowDataCounter = data.WorkflowDataCounter
+	db.activityDataCounter = data.ActivityDataCounter
+	db.sagaDataCounter = data.SagaDataCounter
+	db.sideEffectDataCounter = data.SideEffectDataCounter
+	db.workflowExecutionCounter = data.WorkflowExecutionCounter
+	db.activityExecutionCounter = data.ActivityExecutionCounter
+	db.sagaExecutionCounter = data.SagaExecutionCounter
+	db.sideEffectExecutionCounter = data.SideEffectExecutionCounter
+	db.workflowExecutionDataCounter = data.WorkflowExecutionDataCounter
+	db.activityExecutionDataCounter = data.ActivityExecutionDataCounter
+	db.sagaExecutionDataCounter = data.SagaExecutionDataCounter
+	db.sideEffectExecutionDataCounter = data.SideEffectExecutionDataCounter
+	db.signalEntityCounter = data.SignalEntityCounter
+	db.signalExecutionCounter = data.SignalExecutionCounter
+	db.signalDataCounter = data.SignalDataCounter
+	db.signalExecutionDataCounter = data.SignalExecutionDataCounter
+	db.sagaValueCounter = data.SagaValueCounter
+
+	// Reset and restore core maps
+	db.runs = make(map[RunID]*Run)
+	db.versions = make(map[VersionID]*Version)
+	db.hierarchies = make(map[HierarchyID]*Hierarchy)
+	db.queues = make(map[QueueID]*Queue)
+	db.queueNames = make(map[string]QueueID)
+
+	for k, v := range data.Runs {
+		db.runs[k] = v
+	}
+	for k, v := range data.Versions {
+		db.versions[k] = v
+	}
+	for k, v := range data.Hierarchies {
+		db.hierarchies[k] = v
+	}
+	for k, v := range data.Queues {
+		db.queues[k] = v
+	}
+	for k, v := range data.QueueNames {
+		db.queueNames[k] = v
+	}
+
+	// Reset and restore entity maps
+	db.workflowEntities = make(map[WorkflowEntityID]*WorkflowEntity)
+	db.activityEntities = make(map[ActivityEntityID]*ActivityEntity)
+	db.sagaEntities = make(map[SagaEntityID]*SagaEntity)
+	db.sideEffectEntities = make(map[SideEffectEntityID]*SideEffectEntity)
+	db.workflowData = make(map[WorkflowDataID]*WorkflowData)
+	db.activityData = make(map[ActivityDataID]*ActivityData)
+	db.sagaData = make(map[SagaDataID]*SagaData)
+	db.sideEffectData = make(map[SideEffectDataID]*SideEffectData)
+
+	for k, v := range data.WorkflowEntities {
+		db.workflowEntities[k] = v
+	}
+	for k, v := range data.ActivityEntities {
+		db.activityEntities[k] = v
+	}
+	for k, v := range data.SagaEntities {
+		db.sagaEntities[k] = v
+	}
+	for k, v := range data.SideEffectEntities {
+		db.sideEffectEntities[k] = v
+	}
+	for k, v := range data.WorkflowData {
+		db.workflowData[k] = v
+	}
+	for k, v := range data.ActivityData {
+		db.activityData[k] = v
+	}
+	for k, v := range data.SagaData {
+		db.sagaData[k] = v
+	}
+	for k, v := range data.SideEffectData {
+		db.sideEffectData[k] = v
+	}
+
+	// Reset and restore execution maps
+	db.workflowExecutions = make(map[WorkflowExecutionID]*WorkflowExecution)
+	db.activityExecutions = make(map[ActivityExecutionID]*ActivityExecution)
+	db.sagaExecutions = make(map[SagaExecutionID]*SagaExecution)
+	db.sideEffectExecutions = make(map[SideEffectExecutionID]*SideEffectExecution)
+	db.workflowExecutionData = make(map[WorkflowExecutionDataID]*WorkflowExecutionData)
+	db.activityExecutionData = make(map[ActivityExecutionDataID]*ActivityExecutionData)
+	db.sagaExecutionData = make(map[SagaExecutionDataID]*SagaExecutionData)
+	db.sideEffectExecutionData = make(map[SideEffectExecutionDataID]*SideEffectExecutionData)
+
+	for k, v := range data.WorkflowExecutions {
+		db.workflowExecutions[k] = v
+	}
+	for k, v := range data.ActivityExecutions {
+		db.activityExecutions[k] = v
+	}
+	for k, v := range data.SagaExecutions {
+		db.sagaExecutions[k] = v
+	}
+	for k, v := range data.SideEffectExecutions {
+		db.sideEffectExecutions[k] = v
+	}
+	for k, v := range data.WorkflowExecutionData {
+		db.workflowExecutionData[k] = v
+	}
+	for k, v := range data.ActivityExecutionData {
+		db.activityExecutionData[k] = v
+	}
+	for k, v := range data.SagaExecutionData {
+		db.sagaExecutionData[k] = v
+	}
+	for k, v := range data.SideEffectExecutionData {
+		db.sideEffectExecutionData[k] = v
+	}
+
+	// Reset and restore relationship maps
+	db.entityToWorkflow = make(map[int]WorkflowEntityID)
+	db.workflowToChildren = make(map[WorkflowEntityID]map[EntityType][]int)
+	db.workflowToVersion = make(map[WorkflowEntityID][]VersionID)
+	db.workflowToQueue = make(map[WorkflowEntityID]QueueID)
+	db.queueToWorkflows = make(map[QueueID][]WorkflowEntityID)
+	db.runToWorkflows = make(map[RunID][]WorkflowEntityID)
+
+	for k, v := range data.EntityToWorkflow {
+		db.entityToWorkflow[k] = v
+	}
+	for k, v := range data.WorkflowToChildren {
+		db.workflowToChildren[k] = v
+	}
+	for k, v := range data.WorkflowToVersion {
+		db.workflowToVersion[k] = v
+	}
+	for k, v := range data.WorkflowToQueue {
+		db.workflowToQueue[k] = v
+	}
+	for k, v := range data.QueueToWorkflows {
+		db.queueToWorkflows[k] = v
+	}
+	for k, v := range data.RunToWorkflows {
+		db.runToWorkflows[k] = v
+	}
+
+	// Reset and restore saga specific maps
+	db.sagaValues = make(map[SagaValueID]*SagaValue)
+	db.sagaEntityToValues = make(map[SagaEntityID][]SagaValueID)
+	db.sagaExecutionToValues = make(map[SagaExecutionID][]SagaValueID)
+	db.sagaEntityKeyToValue = make(map[SagaEntityID]map[string]SagaValueID)
+
+	for k, v := range data.SagaValues {
+		db.sagaValues[k] = v
+	}
+	for k, v := range data.SagaEntityToValues {
+		db.sagaEntityToValues[k] = v
+	}
+	for k, v := range data.SagaExecutionToValues {
+		db.sagaExecutionToValues[k] = v
+	}
+	for k, v := range data.SagaEntityKeyToValue {
+		db.sagaEntityKeyToValue[k] = v
+	}
+
+	// Reset and restore signal maps
+	db.signalEntities = make(map[SignalEntityID]*SignalEntity)
+	db.signalExecutions = make(map[SignalExecutionID]*SignalExecution)
+	db.signalData = make(map[SignalDataID]*SignalData)
+	db.signalExecutionData = make(map[SignalExecutionDataID]*SignalExecutionData)
+
+	for k, v := range data.SignalEntities {
+		db.signalEntities[k] = v
+	}
+	for k, v := range data.SignalExecutions {
+		db.signalExecutions[k] = v
+	}
+	for k, v := range data.SignalData {
+		db.signalData[k] = v
+	}
+	for k, v := range data.SignalExecutionData {
+		db.signalExecutionData[k] = v
+	}
+
+	// Reset and restore additional relationship maps
+	db.workflowVersions = make(map[WorkflowEntityID][]VersionID)
+	db.workflowExecToDataMap = make(map[WorkflowExecutionID]WorkflowExecutionDataID)
+	db.activityExecToDataMap = make(map[ActivityExecutionID]ActivityExecutionDataID)
+	db.sagaExecToDataMap = make(map[SagaExecutionID]SagaExecutionDataID)
+	db.sideEffectExecToDataMap = make(map[SideEffectExecutionID]SideEffectExecutionDataID)
+	db.signalExecToDataMap = make(map[SignalExecutionID]SignalExecutionDataID)
+
+	for k, v := range data.WorkflowVersions {
+		db.workflowVersions[k] = v
+	}
+	for k, v := range data.WorkflowExecToDataMap {
+		db.workflowExecToDataMap[k] = v
+	}
+	for k, v := range data.ActivityExecToDataMap {
+		db.activityExecToDataMap[k] = v
+	}
+	for k, v := range data.SagaExecToDataMap {
+		db.sagaExecToDataMap[k] = v
+	}
+	for k, v := range data.SideEffectExecToDataMap {
+		db.sideEffectExecToDataMap[k] = v
+	}
+	for k, v := range data.SignalExecToDataMap {
+		db.signalExecToDataMap[k] = v
+	}
+
+	return nil
 }
 
 // From here on, we replace all uses of db.mu with fine-grained locks targeting the structures involved.

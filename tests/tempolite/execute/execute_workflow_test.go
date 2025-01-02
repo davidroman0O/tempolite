@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	tempolite "github.com/davidroman0O/tempolite"
 )
@@ -153,4 +154,80 @@ func TestTempoliteWorkflowsExecute(t *testing.T) {
 	}
 
 	tp.Close()
+}
+
+func TestTempoliteWorkflowsExecuteSaveLoad(t *testing.T) {
+
+	database := tempolite.NewMemoryDatabase()
+
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		database,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	someActivity := func(ctx tempolite.ActivityContext) error {
+		<-time.After(1 * time.Second)
+		return nil
+	}
+
+	var flagTriggered atomic.Bool
+	workflowFunc := func(ctx tempolite.WorkflowContext) error {
+		flagTriggered.Store(true)
+		<-time.After(1 * time.Second)
+		if err := ctx.Activity("someActivity", someActivity, nil).Get(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(time.Second / 2)
+
+	if err := tp.Pause("default", future.WorkflowID()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	tp.Close()
+
+	database.SaveAsJSON("./jsons/tempolite_workflows_execute_save.json")
+
+	database = tempolite.NewMemoryDatabase()
+	if err := database.LoadFromJSON("./jsons/tempolite_workflows_execute_save.json"); err != nil {
+		t.Fatal(err)
+	}
+
+	tp, err = tempolite.New(
+		ctx,
+		database,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tp.RegisterWorkflow(workflowFunc)
+
+	future, err = tp.Resume(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	database.SaveAsJSON("./jsons/tempolite_workflows_execute_load.json")
+
 }

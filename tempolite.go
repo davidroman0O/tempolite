@@ -309,7 +309,8 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 
 	chnFuture := make(chan Future, 1)
 
-	// queuenotification := retrypool.NewQueuedNotification()
+	queuenotification := retrypool.NewQueuedNotification()
+
 	// Create resume request
 	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
@@ -327,13 +328,13 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 	if err := qi.orchestrators.
 		Submit(
 			task,
-			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+			retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
 
-	return <-chnFuture, task, nil, nil
+	return <-chnFuture, task, queuenotification, nil
 }
 
 type onStartFunc func(context.Context)
@@ -726,6 +727,11 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 	t.mu.Unlock()
 
 	return t, nil
+}
+
+func (t *Tempolite) RegisterWorkflow(handler interface{}) error {
+	_, err := t.registry.RegisterWorkflow(handler)
+	return err
 }
 
 func (t *Tempolite) createQueueLocked(config QueueConfig) error {
