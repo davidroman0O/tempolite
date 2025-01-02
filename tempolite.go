@@ -91,6 +91,12 @@ func WithSignalRemoveHandler(handler workflowRemoveSignalHandler) queueOption {
 	}
 }
 
+func (q *QueueInstance) Metrics() retrypool.MetricsSnapshot {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.orchestrators.GetMetricsSnapshot()
+}
+
 func (q *QueueInstance) Pause(id WorkflowEntityID) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
