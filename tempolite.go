@@ -799,6 +799,16 @@ func (t *Tempolite) CreateQueue(config QueueConfig) error {
 	return t.createQueueLocked(config)
 }
 
+func (t *Tempolite) Metrics() map[string]retrypool.MetricsSnapshot {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	metrics := make(map[string]retrypool.MetricsSnapshot)
+	for name, queue := range t.queueInstances {
+		metrics[name] = queue.Metrics()
+	}
+	return metrics
+}
+
 func (t *Tempolite) Pause(queueName string, id WorkflowEntityID) error {
 	t.mu.RLock()
 	queue, exists := t.queueInstances[queueName]
