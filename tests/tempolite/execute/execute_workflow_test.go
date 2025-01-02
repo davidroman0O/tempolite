@@ -229,5 +229,56 @@ func TestTempoliteWorkflowsExecuteSaveLoad(t *testing.T) {
 	}
 
 	database.SaveAsJSON("./jsons/tempolite_workflows_execute_load.json")
+}
+
+func TestTempoliteWorkflowsExecuteGet(t *testing.T) {
+
+	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/tempolite_workflows_execute_get.json")
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		database,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var flagTriggered atomic.Bool
+	workflowFunc := func(ctx tempolite.WorkflowContext) (int, float64, error) {
+		flagTriggered.Store(true)
+		return 42, 3.14, nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	newFuture, err := tp.Get(future.WorkflowID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resultInt int
+	var resultFloat float64
+	if err := newFuture.Get(&resultInt, &resultFloat); err != nil {
+		t.Fatal(err)
+	}
+
+	if resultInt != 42 {
+		t.Errorf("expected result int 42, got %d", resultInt)
+	}
+
+	if resultFloat != 3.14 {
+		t.Errorf("expected result float 3.14, got %f", resultFloat)
+	}
+
+	t.Logf("result int: %d, result float: %f", resultInt, resultFloat)
 
 }

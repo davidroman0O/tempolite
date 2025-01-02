@@ -856,6 +856,40 @@ func (t *Tempolite) Scale(queueName string, targetCount int) error {
 	return nil
 }
 
+func (t *Tempolite) Get(id WorkflowEntityID) (Future, error) {
+	// Get workflow entity with queue info
+	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workflow entity: %w", err)
+	}
+	var handler HandlerInfo
+	var ok bool
+	if handler, ok = t.registry.GetWorkflow(workflowEntity.HandlerName); !ok {
+		return nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
+	}
+	var future Future = NewRuntimeFuture()
+	future.setEntityID(FutureEntityWithWorkflowID(workflowEntity.ID))
+
+	exec, err := t.database.GetWorkflowExecutionLatestByEntityID(workflowEntity.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest execution: %w", err)
+	}
+
+	data, err := t.database.GetWorkflowExecutionDataByExecutionID(exec.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get execution data: %w", err)
+	}
+
+	results, err := convertOutputsFromSerialization(handler, data.Outputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert outputs: %w", err)
+	}
+
+	future.SetResult(results)
+
+	return future, nil
+}
+
 // func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {
 // 	t.mu.RLock()
 // 	instance, exists := t.queueInstances[queueName]

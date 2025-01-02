@@ -1,3 +1,6 @@
+
+[ ] - Add `ResumeAll` - it is an anti-pattern to wait for a loop of workflows in a workflow
+[ ] - with pause-resume, do we pause-resume sub-workflows too?
 [ ] - when macbook goes sleep, it stops the workflows
 [ ] - Add a `sort.Slice(execs, func(i, j int) bool ` on all list result in the database memory implementation
 [ ] - Check close
