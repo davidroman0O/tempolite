@@ -4865,9 +4865,14 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 		return future
 	}
 
-	logger.Debug(ctx.ctx, "workflow instance start", "workflow_id", ctx.workflowID, "step_id", stepID)
-	ctx.tracker.addWorkflowInstance(workflowInstance)
-	go workflowInstance.Start(inputs)
+	if !options.DeferExecution {
+		logger.Debug(ctx.ctx, "workflow instance start", "workflow_id", ctx.workflowID, "step_id", stepID)
+		ctx.tracker.addWorkflowInstance(workflowInstance)
+		go workflowInstance.Start(inputs)
+	} else {
+		logger.Debug(ctx.ctx, "workflow instance deferred", "workflow_id", ctx.workflowID, "step_id", stepID)
+		ctx.tracker.addWorkflowInstance(workflowInstance)
+	}
 
 	return future
 }

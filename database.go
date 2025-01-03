@@ -608,6 +608,7 @@ type WorkflowOptions struct {
 	Queue            string
 	RetryPolicy      *RetryPolicy
 	VersionOverrides map[string]int
+	DeferExecution   bool // If true, only creates entity without starting execution
 }
 
 type ContinueAsNewError struct {

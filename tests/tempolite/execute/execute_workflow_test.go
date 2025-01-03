@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -280,5 +281,94 @@ func TestTempoliteWorkflowsExecuteGet(t *testing.T) {
 	}
 
 	t.Logf("result int: %d, result float: %f", resultInt, resultFloat)
+
+}
+
+// TODO: When a workflow created many subworkflows and only return their IDS, even if we pause them all, we might need also to remove the task from the task queue of the pool!
+// otherwise we might end up a taskqueue that will still process the workflow
+// Also, we might stop while a workflow is still Running, we might need to wait for it to reach a pause state or completed state
+func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueue(t *testing.T) {
+	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/tempolite_workflows_execute_subworkflows_taskqueue.json")
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		database,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subWorkflowFunc := func(ctx tempolite.WorkflowContext) (int, float64, error) {
+		// no way to pause here since we have the workflow directly
+		// we have some kind of situation here
+		<-time.After(1 * time.Second)
+		return 42, 3.14, nil
+	}
+
+	var flagTriggered atomic.Bool
+	workflowFunc := func(ctx tempolite.WorkflowContext) ([]tempolite.WorkflowEntityID, error) {
+		flagTriggered.Store(true)
+		wids := []tempolite.WorkflowEntityID{}
+		for i := 0; i < 100; i++ {
+			// that workflow will be executed on a goroutine
+			future := ctx.Workflow(fmt.Sprintf("sub%d", i), subWorkflowFunc, &tempolite.WorkflowOptions{
+				DeferExecution: true,
+			})
+			wids = append(wids, future.WorkflowID())
+		}
+		return wids, nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	metrics := tp.Metrics()
+	for q, m := range metrics {
+		fmt.Println(
+			"== metrics ==",
+			q,
+			"==",
+			"TasksSubmitted", m.TasksSubmitted,
+			"TasksProcessed", m.TasksProcessed,
+			"TasksSucceeded", m.TasksSucceeded,
+			"TasksFailed", m.TasksFailed,
+			"DeadTasks", m.DeadTasks,
+			"Queues", m.Queues,
+		)
+	}
+
+	var wids []tempolite.WorkflowEntityID
+	if err := future.Get(&wids); err != nil {
+		t.Fatal(err)
+	}
+
+	metrics = tp.Metrics()
+	for q, m := range metrics {
+		fmt.Println(
+			"== metrics ==",
+			q,
+			"==",
+			"TasksSubmitted", m.TasksSubmitted,
+			"TasksProcessed", m.TasksProcessed,
+			"TasksSucceeded", m.TasksSucceeded,
+			"TasksFailed", m.TasksFailed,
+			"DeadTasks", m.DeadTasks,
+			"Queues", m.Queues,
+		)
+	}
+
+	// We manually enqueue the defered workflow
+	future, err = tp.Enqueue(wids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := future.Get(); err != nil {
+		t.Fatal(err)
+	}
 
 }

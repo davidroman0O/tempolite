@@ -24,6 +24,7 @@ type WorkflowRequest struct {
 	queueName    string           // Name of the queue this task belongs to
 	continued    bool
 	resume       bool
+	enqueue      bool
 	chnFuture    chan Future
 }
 
@@ -102,7 +103,48 @@ func (q *QueueInstance) Pause(id WorkflowEntityID) error {
 	defer q.mu.Unlock()
 	worker, exists := q.processingWorkers[id]
 	if !exists {
-		return fmt.Errorf("entity %d not found", id)
+
+		// // TODO: We have a problem, when we want to pause a newly created workflow, its not yet running so there might not be an execution for it
+		// // TODO: the  "WorkflowExecutions" got "Running" and since it is not running yet it shouldn't be there, the main workflow is already locking the worker
+
+		// _, err := q.database.GetWorkflowEntity(id)
+		// if err != nil {
+		// 	err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to get workflow entity: %w", err))
+		// 	logger.Error(q.ctx, err.Error(), "workflow_id", id)
+		// 	return err
+		// }
+
+		// snap := q.orchestrators.GetMetricsSnapshot()
+		// fmt.Println("snap", snap.Queues)
+
+		// if err := q.database.
+		// 	SetWorkflowEntityProperties(
+		// 		id,
+		// 		SetWorkflowEntityStatus(StatusPaused),
+		// 	); err != nil {
+		// 	err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to set workflow entity status: %w", err))
+		// 	logger.Error(q.ctx, err.Error(), "workflow_id", id)
+		// 	return err
+		// }
+
+		// exec, err := q.database.GetWorkflowExecutionLatestByEntityID(id)
+		// if err != nil {
+		// 	err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to get workflow execution: %w", err))
+		// 	logger.Error(q.ctx, err.Error(), "workflow_id", id)
+		// 	return err
+		// }
+
+		// if err := q.database.
+		// 	SetWorkflowExecutionProperties(
+		// 		exec.ID,
+		// 		SetWorkflowExecutionStatus(ExecutionStatusPaused),
+		// 	); err != nil {
+		// 	err := errors.Join(ErrWorkflowInstance, fmt.Errorf("failed to set workflow execution status: %w", err))
+		// 	logger.Error(q.ctx, err.Error(), "workflow_id", id, "execution_id", exec.ID)
+		// 	return err
+		// }
+
+		return fmt.Errorf("workflow %d is not being processed", id)
 	}
 	worker.Pause()
 	return nil
@@ -325,6 +367,61 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 			queueName:    qi.name,
 			continued:    false, // Not a continuation
 			resume:       true,  // Mark this as a resume
+			chnFuture:    chnFuture,
+		},
+		workflowEntity.RunID,
+		workflowEntity.ID,
+	)
+
+	if err := qi.orchestrators.
+		Submit(
+			task,
+			retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+		); err != nil {
+		fmt.Println("failed to submit task", err)
+		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
+	}
+
+	return <-chnFuture, task, queuenotification, nil
+
+}
+
+// Defered Workflows aren't paused but in pending state, you have to manually enqueue them
+func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
+	// Get workflow entity with queue info
+	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
+	}
+
+	// Verify the workflow is actually paused
+	var status EntityStatus
+	if err := qi.database.GetWorkflowEntityProperties(entityID, GetWorkflowEntityStatus(&status)); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get workflow status: %w", err)
+	}
+	if status != StatusPending {
+		return nil, nil, nil, fmt.Errorf("workflow %d is not pending (current status: %s)", entityID, status)
+	}
+
+	// Get handler info
+	handler, ok := qi.registry.GetWorkflow(workflowEntity.HandlerName)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("workflow handler %s not found", workflowEntity.HandlerName)
+	}
+
+	chnFuture := make(chan Future, 1)
+
+	queuenotification := retrypool.NewQueuedNotification()
+
+	// Create resume request
+	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
+		&WorkflowRequest{
+			workflowID:   workflowEntity.ID,
+			workflowFunc: handler.Handler, // Use the actual handler function
+			queueName:    qi.name,
+			continued:    false, // Not a continuation
+			resume:       false, // Mark this as a resume
+			enqueue:      true,  // Mark this as an enqueue
 			chnFuture:    chnFuture,
 		},
 		workflowEntity.RunID,
@@ -723,7 +820,7 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 	if _, exists := t.queueInstances[t.defaultQueue]; !exists {
 		if err := t.createQueueLocked(QueueConfig{
 			Name:        t.defaultQueue,
-			WorkerCount: 1,
+			WorkerCount: 2,
 		}); err != nil {
 			t.mu.Unlock()
 			cancel()
@@ -807,6 +904,43 @@ func (t *Tempolite) Metrics() map[string]retrypool.MetricsSnapshot {
 		metrics[name] = queue.Metrics()
 	}
 	return metrics
+}
+
+// Deferred workflows require a manual call to Enqueue
+func (t *Tempolite) Enqueue(id WorkflowEntityID) (Future, error) {
+	// Get workflow entity with queue info
+	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workflow entity: %w", err)
+	}
+
+	if workflowEntity.Status != StatusPending {
+		return nil, fmt.Errorf("workflow %d is not in pending state", id)
+	}
+
+	// Determine target queue
+	queueName := workflowEntity.Edges.Queue.Name
+	if queueName == "" {
+		queueName = t.defaultQueue
+	}
+
+	// Get queue instance
+	t.mu.RLock()
+	queue, exists := t.queueInstances[queueName]
+	t.mu.RUnlock()
+	if !exists {
+		return nil, fmt.Errorf("queue %s not found", queueName)
+	}
+
+	// Submit enqueue request to queue
+	future, _, queued, err := queue.SubmitEnqueue(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enqueue workflow: %w", err)
+	}
+
+	<-queued.Done()
+
+	return future, nil
 }
 
 func (t *Tempolite) Pause(queueName string, id WorkflowEntityID) error {
