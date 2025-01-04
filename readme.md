@@ -4,6 +4,9 @@ Tempolite is a lightweight, workflow engine for Go that provides deterministic e
 
 > Work In Progress: Not ready for prime time but good enough for playing with it and small applications.
 
+<!-- TODO: make a section that explain the different patterns, explain what you should or should not do -->
+<!-- TODO: explain the whole idea of "it's not temporal but a specialized local pocket workflow engine", we're staking tasks to do in a convinient way -->
+
 ## Features
 
 ### 🔄 Workflows

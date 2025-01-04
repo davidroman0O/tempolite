@@ -906,7 +906,9 @@ func (t *Tempolite) Metrics() map[string]retrypool.MetricsSnapshot {
 	return metrics
 }
 
-// Deferred workflows require a manual call to Enqueue
+// To respect the deterministic principles of the Workflow you need to avoid dynamically creating sub-workflows that you cannot control.
+// For example, creating a for-loop that creates many many workflows and wait for them all within a workflow is not recommended.
+// You should instead defer the execution of those workflows and store their IDs as a result of the parent workflow and then Enqueue manually the sub-workflows.
 func (t *Tempolite) Enqueue(id WorkflowEntityID) (Future, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
@@ -943,6 +945,7 @@ func (t *Tempolite) Enqueue(id WorkflowEntityID) (Future, error) {
 	return future, nil
 }
 
+// Pause a running workflow at the next context call
 func (t *Tempolite) Pause(queueName string, id WorkflowEntityID) error {
 	t.mu.RLock()
 	queue, exists := t.queueInstances[queueName]
@@ -953,6 +956,7 @@ func (t *Tempolite) Pause(queueName string, id WorkflowEntityID) error {
 	return queue.Pause(id)
 }
 
+// Resume a paused workflow
 func (t *Tempolite) Resume(id WorkflowEntityID) (Future, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
@@ -1006,6 +1010,17 @@ func (t *Tempolite) Scale(queueName string, targetCount int) error {
 	return nil
 }
 
+func (t *Tempolite) GetWorkflow(id WorkflowEntityID) (*WorkflowEntity, error) {
+	return t.database.GetWorkflowEntity(
+		id,
+		// TODO: should we expose the options?!
+		WorkflowEntityWithData(),
+		WorkflowEntityWithVersion(),
+		WorkflowEntityWithQueue(),
+		WorkflowEntityWithRun(),
+	)
+}
+
 func (t *Tempolite) Get(id WorkflowEntityID) (Future, error) {
 	// Get workflow entity with queue info
 	workflowEntity, err := t.database.GetWorkflowEntity(id, WorkflowEntityWithQueue())
@@ -1039,78 +1054,6 @@ func (t *Tempolite) Get(id WorkflowEntityID) (Future, error) {
 
 	return future, nil
 }
-
-// func (t *Tempolite) ScaleQueue(queueName string, targetCount int) error {
-// 	t.mu.RLock()
-// 	instance, exists := t.queueInstances[queueName]
-// 	t.mu.RUnlock()
-
-// 	if !exists {
-// 		return fmt.Errorf("queue %s not found", queueName)
-// 	}
-
-// 	currentCount := atomic.LoadInt32(&instance.count)
-// 	delta := int32(targetCount) - currentCount
-
-// 	logger.Info(t.ctx, "Scaling queue", "queueName", queueName, "current", currentCount, "target", targetCount, "delta", delta)
-
-// 	if delta > 0 {
-// 		// Add workers
-// 		for i := int32(0); i < delta; i++ {
-// 			worker := NewQueueWorker(instance)
-// 			instance.orchestrators.Add(worker, instance.orchestrators.NewTaskQueue(retrypool.TaskQueueTypeSlice))
-// 			atomic.AddInt32(&instance.count, 1)
-// 			logger.Info(t.ctx, "Added worker to queue", "queueName", queueName)
-// 		}
-// 	} else if delta < 0 {
-// 		// Remove workers
-// 		absCount := -delta
-// 		if absCount > currentCount {
-// 			return fmt.Errorf("cannot remove %d workers, only %d available", absCount, currentCount)
-// 		}
-
-// 		instance.workerMu.RLock()
-// 		workers, err := instance.orchestrators.Workers()
-// 		instance.workerMu.RUnlock()
-// 		if err != nil {
-// 			return fmt.Errorf("failed to get workers: %w", err)
-// 		}
-
-// 		for i := int32(0); i < absCount && i < int32(len(workers)); i++ {
-// 			logger.Info(t.ctx, "Removing worker from queue", "queueName", queueName)
-// 			worker := workers[len(workers)-1-int(i)]
-// 			if err := instance.orchestrators.Remove(worker); err != nil {
-// 				return fmt.Errorf("failed to remove worker: %w", err)
-// 			}
-
-// 			// Clean up worker references
-// 			instance.workerMu.Lock()
-// 			delete(instance.workers, worker)
-// 			instance.workerMu.Unlock()
-
-// 			atomic.AddInt32(&instance.count, -1)
-// 			logger.Info(t.ctx, "Removed worker from queue", "queueName", queueName)
-// 		}
-// 	}
-
-// 	workers, err := instance.orchestrators.Workers()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to get workers: %w", err)
-// 	}
-
-// 	if len(workers) == 0 {
-// 		logger.Debug(t.ctx, "no workers in queue", "queueName", queueName)
-// 	} else {
-// 		logger.Debug(t.ctx, "workers in queue", "queueName", queueName, "count", len(workers))
-// 	}
-
-// 	instance.orchestrators.RangeWorkerQueues(func(workerID int, queueSize int64) bool {
-// 		logger.Debug(t.ctx, "worker queue size", "workerID", workerID, "queueSize", queueSize)
-// 		return true
-// 	})
-
-// 	return nil
-// }
 
 func (t *Tempolite) Close() error {
 	t.cancel()

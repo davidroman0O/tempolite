@@ -371,4 +371,10 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	wrkf, err := tp.GetWorkflow(wids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(wrkf)
 }

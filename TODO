@@ -1,11 +1,11 @@
 
-[ ] - Add `ResumeAll` - it is an anti-pattern to wait for a loop of workflows in a workflow
-[ ] - with pause-resume, do we pause-resume sub-workflows too?
-[ ] - when macbook goes sleep, it stops the workflows
-[ ] - Add a `sort.Slice(execs, func(i, j int) bool ` on all list result in the database memory implementation
-[ ] - Check close
+[ ] - add that https://github.com/uber-go/goleak because we never know and we need quality runtime
+[ ] - with pause-resume, do we pause-resume sub-workflows too? - we're not testing it... (apparently we do but we need more test and more documentation) we should by default, if parent is pause then children too, even newly created ones - status of the parent determine the behaviour of the children
+[ ] - when macbook goes sleep, it stops the workflows - probably not related but investigate
+[ ] - Add a `sort.Slice(execs, func(i, j int) bool ` on all list result in the database memory implementation - quality of life
+[ ] - Check close - seems okay?
 [ ] - Configure logs
 [ ] - More tests
-[ ] - Optional automatic db cleaning 
-[ ] - main?
-[ ] - `ent` sqlite
+[ ] - Optional automatic db cleaning - since we track Runs, we need to have it Run-based
+[ ] - `ent` sqlite or raw sqlite?
+
