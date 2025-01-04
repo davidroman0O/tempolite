@@ -599,6 +599,27 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 			return futureErr
 		}
 
+		// since we work with a cross-workflow, we are resposible for some options
+		// we simply get the information we need, set it to the future and return it
+		if options.DeferExecution {
+			future := NewRuntimeFuture()
+			wrk, err := t.database.GetWorkflowEntity(workflowID, WorkflowEntityWithData())
+			if err != nil {
+				future.SetError(fmt.Errorf("failed to get workflow entity: %w", err))
+				return future
+			}
+			exec, err := t.database.GetWorkflowExecutionLatestByEntityID(workflowID)
+			if err != nil {
+				future.SetError(fmt.Errorf("failed to get latest execution: %w", err))
+				return future
+			}
+			future.setEntityID(FutureEntityWithWorkflowID(workflowID))
+			future.setExecutionID(FutureExecutionWithWorkflowExecutionID(exec.ID))
+			future.setParentWorkflowID(*wrk.WorkflowData.WorkflowFrom)
+			future.setParentWorkflowExecutionID(*wrk.WorkflowData.WorkflowExecutionFrom)
+			return future
+		}
+
 		chnFuture := make(chan Future, 1)
 
 		if err := queue.orchestrators.Submit(
