@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	tempolite "github.com/davidroman0O/tempolite"
+	"github.com/k0kubun/pp/v3"
 )
 
 func TestTempoliteWorkflowsExecute(t *testing.T) {
@@ -327,19 +330,7 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueue(t *testing.T) {
 	}
 
 	metrics := tp.Metrics()
-	for q, m := range metrics {
-		fmt.Println(
-			"== metrics ==",
-			q,
-			"==",
-			"TasksSubmitted", m.TasksSubmitted,
-			"TasksProcessed", m.TasksProcessed,
-			"TasksSucceeded", m.TasksSucceeded,
-			"TasksFailed", m.TasksFailed,
-			"DeadTasks", m.DeadTasks,
-			"Queues", m.Queues,
-		)
-	}
+	pp.Println("before list", metrics)
 
 	var wids []tempolite.WorkflowEntityID
 	if err := future.Get(&wids); err != nil {
@@ -347,19 +338,7 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueue(t *testing.T) {
 	}
 
 	metrics = tp.Metrics()
-	for q, m := range metrics {
-		fmt.Println(
-			"== metrics ==",
-			q,
-			"==",
-			"TasksSubmitted", m.TasksSubmitted,
-			"TasksProcessed", m.TasksProcessed,
-			"TasksSucceeded", m.TasksSucceeded,
-			"TasksFailed", m.TasksFailed,
-			"DeadTasks", m.DeadTasks,
-			"Queues", m.Queues,
-		)
-	}
+	pp.Println("before enqueue", metrics)
 
 	// We manually enqueue the defered workflow
 	future, err = tp.Enqueue(wids[0])
@@ -377,4 +356,94 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueue(t *testing.T) {
 	}
 
 	fmt.Println(wrkf)
+}
+
+func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
+	database := tempolite.NewMemoryDatabase()
+	defer database.SaveAsJSON("./jsons/tempolite_workflows_execute_subworkflows_taskqueue_wait.json")
+	ctx := context.Background()
+
+	tp, err := tempolite.New(
+		ctx,
+		database,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subWorkflowFunc := func(ctx tempolite.WorkflowContext) (int, float64, error) {
+		// no way to pause here since we have the workflow directly
+		// we have some kind of situation here
+		seconds := time.Duration(rand.Intn(5) + 1)
+		fmt.Println("sleeping for", seconds)
+		<-time.After(seconds * time.Second)
+		return 42, 3.14, nil
+	}
+
+	var flagTriggered atomic.Bool
+	workflowFunc := func(ctx tempolite.WorkflowContext) ([]tempolite.WorkflowEntityID, error) {
+		flagTriggered.Store(true)
+		wids := []tempolite.WorkflowEntityID{}
+		for i := 0; i < 10; i++ {
+			// that workflow will be executed on a goroutine
+			future := ctx.Workflow(
+				fmt.Sprintf("sub%d", i),
+				subWorkflowFunc,
+				&tempolite.WorkflowOptions{
+					DeferExecution: true,
+				},
+			)
+			wids = append(wids, future.WorkflowID())
+		}
+		return wids, nil
+	}
+
+	future, err := tp.ExecuteDefault(workflowFunc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	metrics := tp.Metrics()
+	pp.Println("before list", metrics)
+
+	var list []tempolite.WorkflowEntityID
+	if err := future.Get(&list); err != nil {
+		t.Fatal(err)
+	}
+
+	metrics = tp.Metrics()
+	pp.Println("before enqueue", metrics)
+
+	if len(list) > 0 {
+		for _, id := range list {
+			wrk, err := tp.GetWorkflow(id)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if wrk.Status == tempolite.StatusPaused {
+				if _, err := tp.Resume(id); err != nil {
+					panic(err)
+				}
+			} else if wrk.Status == tempolite.StatusPending {
+				if _, err := tp.Enqueue(id); err != nil {
+					panic(err)
+				}
+			} else {
+				fmt.Printf("Workflow %d is %s\n", id, wrk.Status)
+			}
+		}
+	} else {
+		t.Fatal("no workflows to wait for")
+	}
+
+	metrics = tp.Metrics()
+	pp.Println("before wait", metrics) // it's empty but we see that we enqueued workflows wtf
+
+	if err := tp.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("====== done ======")
+
 }

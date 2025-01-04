@@ -92,9 +92,7 @@ func WithSignalRemoveHandler(handler workflowRemoveSignalHandler) queueOption {
 	}
 }
 
-func (q *QueueInstance) Metrics() retrypool.MetricsSnapshot {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (q *QueueInstance) metrics() retrypool.BlockingMetricsSnapshot[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID] {
 	return q.orchestrators.GetMetricsSnapshot()
 }
 
@@ -896,12 +894,12 @@ func (t *Tempolite) CreateQueue(config QueueConfig) error {
 	return t.createQueueLocked(config)
 }
 
-func (t *Tempolite) Metrics() map[string]retrypool.MetricsSnapshot {
+func (t *Tempolite) Metrics() map[string]retrypool.BlockingMetricsSnapshot[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID] {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	metrics := make(map[string]retrypool.MetricsSnapshot)
+	metrics := make(map[string]retrypool.BlockingMetricsSnapshot[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID])
 	for name, queue := range t.queueInstances {
-		metrics[name] = queue.Metrics()
+		metrics[name] = queue.metrics()
 	}
 	return metrics
 }
@@ -1077,18 +1075,26 @@ func (t *Tempolite) Wait() error {
 	shutdown := errgroup.Group{}
 
 	shutdown.Go(func() error {
-		timer := time.NewTimer(1 * time.Second)
+		timer := time.NewTicker(1 * time.Second)
+		defer timer.Stop()
 		for {
 			select {
 			case <-timer.C:
 				hasStillTasks := false
 				t.mu.RLock()
 				for _, instance := range t.queueInstances {
-					metrics := instance.Metrics()
+					metrics := instance.metrics()
 					// task queues
-					for _, v := range metrics.Queues {
-						if v > 0 {
-							hasStillTasks = true
+					for _, poolMetric := range metrics.Metrics {
+						for _, worker := range poolMetric.Workers {
+							if worker.HasTask {
+								hasStillTasks = true
+							}
+						}
+						for _, v := range poolMetric.TaskQueues {
+							if v > 0 {
+								hasStillTasks = true
+							}
 						}
 					}
 				}
