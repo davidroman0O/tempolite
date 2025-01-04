@@ -276,22 +276,7 @@ func (qi *QueueInstance) Close() error {
 
 func (qi *QueueInstance) Wait() error {
 	return qi.orchestrators.WaitWithCallback(qi.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-		// workersIDS, err := qi.orchestrators.Workers()
-		// if err != nil {
-		// 	logger.Error(qi.ctx, "failed to get workers", "error", err)
-		// 	return false
-		// }
-		// qi.orchestrators.task
-		// // workersIDS := qi.orchestrators.ListWorkers()
-		// qi.orchestrators.RangeTasks(func(data *retrypool.TaskWrapper[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]], workerID int, status retrypool.TaskStatus) bool {
-		// 	logger.Debug(qi.ctx, "task status", "workerID", workerID, "status", status, "task", data.Data().Request.workflowID)
-		// 	return true
-		// })
-		// qi.orchestrators.RangeWorkers(func(workerID int, worker retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]]) bool {
-		// 	logger.Debug(qi.ctx, "worker status", "workerID", workerID)
-		// 	return true
-		// })
-		logger.Debug(qi.ctx, "waiting for queue to finish", "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
+		logger.Debug(qi.ctx, "waiting for queue to finish", "queue", qi.name, "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
 		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
 	}, time.Second)
 }
@@ -1076,14 +1061,32 @@ func (t *Tempolite) Close() error {
 func (t *Tempolite) Wait() error {
 	shutdown := errgroup.Group{}
 
-	t.mu.RLock()
-	for _, instance := range t.queueInstances {
-		instance := instance
-		shutdown.Go(func() error {
-			return instance.Wait()
-		})
-	}
-	t.mu.RUnlock()
+	shutdown.Go(func() error {
+		timer := time.NewTimer(1 * time.Second)
+		for {
+			select {
+			case <-timer.C:
+				hasStillTasks := false
+				t.mu.RLock()
+				for _, instance := range t.queueInstances {
+					metrics := instance.Metrics()
+					// task queues
+					for _, v := range metrics.Queues {
+						if v > 0 {
+							hasStillTasks = true
+						}
+					}
+				}
+				t.mu.RUnlock()
+				if !hasStillTasks {
+					return nil
+				}
+				continue
+			case <-t.ctx.Done():
+				return nil
+			}
+		}
+	})
 
 	return shutdown.Wait()
 }
