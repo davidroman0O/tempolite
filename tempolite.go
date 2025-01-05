@@ -209,6 +209,12 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		options = append(options, retrypool.WithBlockingMaxWorkersPerPool[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](maxWorkflows))
 	}
 
+	options = append(options, retrypool.WithBlockingGetData[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+		func(brr *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]) interface{} {
+			return brr.Request
+		},
+	))
+
 	q.orchestrators, err = retrypool.NewBlockingPool[
 		*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID](
 		ctx,
@@ -565,9 +571,11 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestRe
 	}
 
 	future.SetResult(results)
+	w.queueInstance.workerMu.Lock()
 	task.Complete(&WorkflowResponse{
 		ID: task.Request.workflowID,
 	})
+	w.queueInstance.workerMu.Unlock()
 
 	return nil
 }
