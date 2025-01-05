@@ -42,8 +42,9 @@ type QueueInstance struct {
 	registry *Registry
 	database Database
 
-	name  string
-	count int32
+	name         string
+	maxRuns      int32
+	maxWorkflows int32
 
 	// We use a blocking pool because the orchestrator will lock workers of the pool, we will have one Run as group per pool
 	orchestrators *retrypool.BlockingPool[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID]
@@ -148,10 +149,11 @@ func (q *QueueInstance) Pause(id WorkflowEntityID) error {
 	return nil
 }
 
-func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, count int, opt ...queueOption) (*QueueInstance, error) {
+func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name string, maxRuns int, maxWorkflows int, opt ...queueOption) (*QueueInstance, error) {
 	q := &QueueInstance{
 		name:              name,
-		count:             int32(count),
+		maxRuns:           int32(maxRuns),
+		maxWorkflows:      int32(maxWorkflows),
 		registry:          registry,
 		database:          db,
 		ctx:               ctx,
@@ -187,19 +189,30 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	}
 
 	workers := []retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]]{}
-	for i := 0; i < count; i++ {
+	for i := 0; i < maxRuns; i++ {
 		workers = append(workers, NewQueueWorker(q))
 	}
 
 	logger := retrypool.NewLogger(slog.LevelDebug)
 	logger.Enable()
 
-	q.orchestrators, err = retrypool.NewBlockingPool[
-		*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID](
-		ctx,
+	options := []retrypool.BlockingPoolOption[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]]{
+
 		retrypool.WithBlockingWorkerFactory(func() retrypool.Worker[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]] {
 			return NewQueueWorker(q)
 		}),
+		// TODO: make a OnNewSession or OnRemoveSession to increase or decrease that number
+		retrypool.WithBlockingMaxActivePools[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](maxRuns),
+	}
+
+	if maxWorkflows > 0 {
+		options = append(options, retrypool.WithBlockingMaxWorkersPerPool[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](maxWorkflows))
+	}
+
+	q.orchestrators, err = retrypool.NewBlockingPool[
+		*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID, WorkflowEntityID](
+		ctx,
+		options...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create orchestrator: %w", err)
@@ -578,8 +591,9 @@ type Tempolite struct {
 
 // QueueConfig holds configuration for a queue
 type QueueConfig struct {
-	Name        string
-	WorkerCount int
+	Name         string
+	MaxRuns      int
+	MaxWorkflows int
 }
 
 // TempoliteOption is a function type for configuring Tempolite
@@ -817,8 +831,8 @@ func New(ctx context.Context, db Database, options ...TempoliteOption) (*Tempoli
 	t.mu.Lock()
 	if _, exists := t.queueInstances[t.defaultQueue]; !exists {
 		if err := t.createQueueLocked(QueueConfig{
-			Name:        t.defaultQueue,
-			WorkerCount: 2,
+			Name:    t.defaultQueue,
+			MaxRuns: 2,
 		}); err != nil {
 			t.mu.Unlock()
 			cancel()
@@ -836,7 +850,7 @@ func (t *Tempolite) RegisterWorkflow(handler interface{}) error {
 }
 
 func (t *Tempolite) createQueueLocked(config QueueConfig) error {
-	if config.WorkerCount <= 0 {
+	if config.MaxRuns <= 0 {
 		return fmt.Errorf("worker count must be greater than 0")
 	}
 
@@ -845,7 +859,8 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		t.database,
 		t.registry,
 		config.Name,
-		config.WorkerCount,
+		config.MaxRuns,
+		config.MaxWorkflows,
 		WithCrossWorkflowHandler(t.createCrossWorkflowHandler()),
 		WithContinueAsNewHandler(t.createContinueAsNewHandler()),
 		WithSignalNewHandler(t.createSignalNewHandler()),
@@ -1003,7 +1018,8 @@ func (t *Tempolite) Scale(queueName string, targetCount int) error {
 		return fmt.Errorf("queue %s not found", queueName)
 	}
 
-	instance.orchestrators.SetActivePools(targetCount)
+	instance.orchestrators.SetConcurrentPools(targetCount)
+	// TODO: also need to be able to scale concurrent workers per pool
 
 	return nil
 }
@@ -1119,11 +1135,12 @@ func WithQueue(config QueueConfig) TempoliteOption {
 	}
 }
 
-func WithDefaultQueueWorkers(count int) TempoliteOption {
+func WithDefaultQueueWorkers(maxConcurrentRuns int, maxConcurrentWorkflows int) TempoliteOption {
 	return func(t *Tempolite) error {
 		return t.createQueueLocked(QueueConfig{
-			Name:        "default",
-			WorkerCount: count,
+			Name:         "default",
+			MaxRuns:      maxConcurrentRuns,      // pools
+			MaxWorkflows: maxConcurrentWorkflows, // workers per pool, -1 unlimieted
 		})
 	}
 }

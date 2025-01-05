@@ -73,12 +73,12 @@ func TestQueueCrossBasic(t *testing.T) {
 
 	var err error
 
-	defaultQ, err = NewQueueInstance(ctx, db, registry, "default", 1, WithCrossWorkflowHandler(onCross))
+	defaultQ, err = NewQueueInstance(ctx, db, registry, "default", 1, -1, WithCrossWorkflowHandler(onCross))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	secondQ, err = NewQueueInstance(ctx, db, registry, "second", 1, WithCrossWorkflowHandler(onCross))
+	secondQ, err = NewQueueInstance(ctx, db, registry, "second", 1, -1, WithCrossWorkflowHandler(onCross))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,10 +123,10 @@ func TestTempoliteBasicCross(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(10, -1),
 		WithQueue(QueueConfig{
-			Name:        "second",
-			WorkerCount: 10,
+			Name:    "second",
+			MaxRuns: 10,
 		}))
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +192,7 @@ func TestTempoliteBasicSubWorkflow(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10))
+		WithDefaultQueueWorkers(10, -1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,10 +253,10 @@ func TestTempoliteBasicSecondQueueSubWorkflow(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(10, -1),
 		WithQueue(QueueConfig{
-			Name:        "second",
-			WorkerCount: 10,
+			Name:    "second",
+			MaxRuns: 10,
 		}),
 	)
 	if err != nil {
@@ -324,10 +324,10 @@ func TestFreeFlow(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(10, -1),
 		WithQueue(QueueConfig{
-			Name:        "second",
-			WorkerCount: 10,
+			Name:    "second",
+			MaxRuns: 10,
 		}),
 	)
 	if err != nil {
@@ -390,7 +390,7 @@ func TestTempoliteSignal(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(1),
+		WithDefaultQueueWorkers(1, -1),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -448,7 +448,7 @@ func TestTempoliteSignalPause(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(1),
+		WithDefaultQueueWorkers(1, -1),
 		WithWorkflows(
 			workflowFunc),
 	)
@@ -523,7 +523,7 @@ func TestTempoliteSignalOff(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(1),
+		WithDefaultQueueWorkers(1, -1),
 		WithWorkflows(
 			workflowFunc),
 	)
@@ -590,7 +590,7 @@ func TestTempoliteWorkflows(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(10, -1),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -630,7 +630,7 @@ func TestTempoliteWorkflowsConcurrent(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(100),
+		WithDefaultQueueWorkers(100, -1),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -684,7 +684,7 @@ func TestTempoliteRunDelete(t *testing.T) {
 	tp, err := New(
 		ctx,
 		db,
-		WithDefaultQueueWorkers(10),
+		WithDefaultQueueWorkers(10, -1),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -810,7 +810,7 @@ func TestTempoliteRunDelete(t *testing.T) {
 // 	tp, err := New(
 // 		ctx,
 // 		db,
-// 		WithDefaultQueueWorkers(1),
+// 		WithDefaultQueueWorkers(1, -1),
 // 	)
 // 	if err != nil {
 // 		t.Fatal(err)

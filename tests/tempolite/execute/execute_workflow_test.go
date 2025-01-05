@@ -366,6 +366,7 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
 	tp, err := tempolite.New(
 		ctx,
 		database,
+		tempolite.WithDefaultQueueWorkers(1, 5),
 	)
 	if err != nil {
 		t.Fatal(err)

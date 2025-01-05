@@ -18,8 +18,8 @@ func TestTempoliteCrossWorkflowsExecute(t *testing.T) {
 		ctx,
 		database,
 		tempolite.WithQueue(tempolite.QueueConfig{
-			Name:        "side",
-			WorkerCount: 1,
+			Name:    "side",
+			MaxRuns: 1,
 		}),
 	)
 	if err != nil {
