@@ -432,6 +432,7 @@ func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retr
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
 	}
+	// pp.Println(qi.orchestrators.GetMetricsSnapshot())
 
 	return <-chnFuture, task, queuenotification, nil
 }
@@ -1093,9 +1094,11 @@ func (t *Tempolite) Wait() error {
 	shutdown.Go(func() error {
 		timer := time.NewTicker(1 * time.Second)
 		defer timer.Stop()
+		// defer fmt.Println("shutting down")
 		for {
 			select {
 			case <-timer.C:
+				// pp.Println(t.Metrics())
 				hasStillTasks := false
 				t.mu.RLock()
 				for _, instance := range t.queueInstances {
@@ -1116,8 +1119,10 @@ func (t *Tempolite) Wait() error {
 				}
 				t.mu.RUnlock()
 				if !hasStillTasks {
+					// fmt.Println("no more tasks")
 					return nil
 				}
+				// fmt.Println("still tasks")
 				continue
 			case <-t.ctx.Done():
 				return nil

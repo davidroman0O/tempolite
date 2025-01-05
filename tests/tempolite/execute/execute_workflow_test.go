@@ -372,11 +372,12 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	subWorkflowFunc := func(ctx tempolite.WorkflowContext) (int, float64, error) {
+	subWorkflowFunc := func(ctx tempolite.WorkflowContext, id int) (int, float64, error) {
 		// no way to pause here since we have the workflow directly
 		// we have some kind of situation here
 		seconds := time.Duration(rand.Intn(5) + 1)
-		fmt.Println("sleeping for", seconds)
+		fmt.Println(id, "sleeping for", seconds)
+		defer fmt.Println(id, "done sleeping")
 		<-time.After(seconds * time.Second)
 		return 42, 3.14, nil
 	}
@@ -393,6 +394,7 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
 				&tempolite.WorkflowOptions{
 					DeferExecution: true,
 				},
+				i,
 			)
 			wids = append(wids, future.WorkflowID())
 		}
@@ -415,6 +417,20 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
 	metrics = tp.Metrics()
 	pp.Println("before enqueue", metrics)
 
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				metrics := tp.Metrics()
+				pp.Println("metrics", metrics)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	if len(list) > 0 {
 		for _, id := range list {
 			wrk, err := tp.GetWorkflow(id)
@@ -427,6 +443,7 @@ func TestTempoliteWorkflowsExecuteSubWorkflowsTaskQueueWait(t *testing.T) {
 					panic(err)
 				}
 			} else if wrk.Status == tempolite.StatusPending {
+				fmt.Println("\tenqueuing", id)
 				if _, err := tp.Enqueue(id); err != nil {
 					panic(err)
 				}
