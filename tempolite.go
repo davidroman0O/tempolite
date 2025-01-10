@@ -26,6 +26,7 @@ type WorkflowRequest struct {
 	resume       bool
 	enqueue      bool
 	chnFuture    chan Future
+	data         interface{}
 }
 
 type WorkflowResponse struct {
