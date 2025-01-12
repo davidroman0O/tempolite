@@ -536,6 +536,10 @@ type ActivityContext struct {
 	ctx context.Context
 }
 
+func (ac ActivityContext) Context() context.Context {
+	return ac.ctx
+}
+
 func (ac ActivityContext) Done() <-chan struct{} {
 	return ac.ctx.Done()
 }
