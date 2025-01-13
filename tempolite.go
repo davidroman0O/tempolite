@@ -106,7 +106,7 @@ func WithSignalRemoveHandler(handler workflowRemoveSignalHandler) queueOption {
 }
 
 func (q *QueueInstance) metrics() retrypool.BlockingMetricsSnapshot[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], RunID] {
-	return q.orchestrators.GetMetricsSnapshot()
+	return q.orchestrators.GetSnapshot()
 }
 
 func (q *QueueInstance) Pause(id WorkflowEntityID) error {
