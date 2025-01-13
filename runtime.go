@@ -1084,6 +1084,7 @@ type StateTracker interface {
 	setInactive()
 
 	addStateEntry(entry stateEntry)
+	cleanState()
 }
 
 type Debug interface {
@@ -1264,6 +1265,13 @@ func (o *Orchestrator) addStateEntry(entry stateEntry) {
 	if o.onChange != nil {
 		o.onChange()
 	}
+}
+
+func (o *Orchestrator) cleanState() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.stateLog = []stateEntry{}
 }
 
 func (o *Orchestrator) State() []stateEntry {
@@ -2304,6 +2312,8 @@ func (wi *WorkflowInstance) Start(inputs []interface{}) error {
 		if wi.state.isPaused() {
 			wi.state.setUnpause()
 		}
+
+		wi.state.cleanState()
 	}
 
 	return nil
