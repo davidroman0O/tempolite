@@ -17,7 +17,7 @@ require (
 )
 
 require (
-	github.com/davidroman0O/retrypool v0.0.0-20250105231147-dd9a359fff26
+	github.com/davidroman0O/retrypool v0.0.0-20250112212509-5a7f98461288
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect
 	github.com/sasha-s/go-deadlock v0.3.5
 	go.uber.org/automaxprocs v1.6.0

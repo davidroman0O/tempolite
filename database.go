@@ -101,6 +101,7 @@ var (
 type EntityStatus string
 
 const (
+	StatusNone        EntityStatus = "None"
 	StatusPending     EntityStatus = "Pending"
 	StatusQueued      EntityStatus = "Queued"
 	StatusRunning     EntityStatus = "Running"
@@ -115,6 +116,7 @@ const (
 type ExecutionStatus string
 
 const (
+	ExecutionStatusNone        ExecutionStatus = "None"
 	ExecutionStatusPending     ExecutionStatus = "Pending"
 	ExecutionStatusQueued      ExecutionStatus = "Queued"
 	ExecutionStatusRunning     ExecutionStatus = "Running"

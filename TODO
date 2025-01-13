@@ -1,4 +1,6 @@
 
+[ ] - state entries to be able to debug what's going on, just like an event log
+
 [ ] - add that https://github.com/uber-go/goleak because we never know and we need quality runtime
 [ ] - with pause-resume, do we pause-resume sub-workflows too? - we're not testing it... (apparently we do but we need more test and more documentation) we should by default, if parent is pause then children too, even newly created ones - status of the parent determine the behaviour of the children
 [ ] - when macbook goes sleep, it stops the workflows - probably not related but investigate

@@ -254,6 +254,8 @@ type workflowNewSignalHandler func(workflowID WorkflowEntityID, workflowExecutio
 // Signal is an external feature requesting to be removed from an external runtime storage when paused, cancelled, completed or failed
 type workflowRemoveSignalHandler func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string) error
 
+type onOrchestratorChange func()
+
 type TransactionContext struct {
 	ctx                 context.Context
 	db                  Database
@@ -1080,6 +1082,8 @@ type StateTracker interface {
 	isActive() bool
 	setActive()
 	setInactive()
+
+	addStateEntry(entry stateEntry)
 }
 
 type Debug interface {
@@ -1115,6 +1119,8 @@ type Orchestrator struct {
 
 	rootWf *WorkflowInstance // root workflow instance
 
+	stateLog []stateEntry
+
 	instances   []*WorkflowInstance
 	activities  []*ActivityInstance
 	sideEffects []*SideEffectInstance
@@ -1138,6 +1144,22 @@ type Orchestrator struct {
 
 	// on which queue that orchestrator is assigned to
 	queueName string
+
+	onChange onOrchestratorChange
+}
+
+type stateEntry struct {
+	Timestamp           time.Time
+	WorkflowID          WorkflowEntityID
+	WorkflowExecutionID WorkflowExecutionID
+	QueueID             QueueID
+	RunID               RunID
+	StepID              string
+	EntityID            int
+	ExecutionID         int
+	EntityType          EntityType
+	EntityStatus        EntityStatus
+	ExecutionStatus     ExecutionStatus
 }
 
 type orchestratorConfig struct {
@@ -1146,9 +1168,16 @@ type orchestratorConfig struct {
 	onSignalNew     workflowNewSignalHandler
 	onSignalRemove  workflowRemoveSignalHandler
 	queueName       string
+	onChange        onOrchestratorChange
 }
 
 type OrchestratorOption func(*orchestratorConfig)
+
+func WithChange(fn onOrchestratorChange) OrchestratorOption {
+	return func(c *orchestratorConfig) {
+		c.onChange = fn
+	}
+}
 
 func WithCrossWorkflow(fn crossQueueWorkflowHandler) OrchestratorOption {
 	return func(c *orchestratorConfig) {
@@ -1195,6 +1224,8 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 		cancelPause: pauseCancel,
 
 		displayStackTrace: true,
+
+		stateLog: []stateEntry{},
 	}
 
 	cfg := &orchestratorConfig{}
@@ -1216,6 +1247,9 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 	if cfg.onSignalRemove != nil {
 		o.onSignalRemove = cfg.onSignalRemove
 	}
+	if cfg.onChange != nil {
+		o.onChange = cfg.onChange
+	}
 	if cfg.queueName != "" {
 		o.queueName = cfg.queueName
 	} else {
@@ -1223,6 +1257,27 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 	}
 
 	return o
+}
+
+func (o *Orchestrator) addStateEntry(entry stateEntry) {
+	o.stateLog = append(o.stateLog, entry)
+	if o.onChange != nil {
+		o.onChange()
+	}
+}
+
+func (o *Orchestrator) State() []stateEntry {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	return o.stateLog
+}
+
+func (o *Orchestrator) SetChange(fn func()) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.onChange = fn
 }
 
 func (o *Orchestrator) findSagaInstance(stepID string) (*SagaInstance, error) {
@@ -2001,24 +2056,72 @@ func (o *Orchestrator) addWorkflowInstance(wi *WorkflowInstance) {
 	o.mu.Lock()
 	o.instances = append(o.instances, wi)
 	o.mu.Unlock()
+	o.addStateEntry(stateEntry{
+		Timestamp:    time.Now(),
+		WorkflowID:   wi.workflowID,
+		StepID:       wi.stepID,
+		QueueID:      wi.queueID,
+		RunID:        wi.runID,
+		EntityID:     int(wi.workflowID),
+		EntityType:   EntityWorkflow,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 }
 
 func (o *Orchestrator) addActivityInstance(wi *ActivityInstance) {
 	o.mu.Lock()
 	o.activities = append(o.activities, wi)
 	o.mu.Unlock()
+	o.addStateEntry(stateEntry{
+		Timestamp:    time.Now(),
+		WorkflowID:   wi.workflowID,
+		StepID:       wi.stepID,
+		QueueID:      wi.queueID,
+		RunID:        wi.runID,
+		EntityID:     int(wi.entityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 }
 
 func (o *Orchestrator) addSideEffectInstance(wi *SideEffectInstance) {
 	o.mu.Lock()
 	o.sideEffects = append(o.sideEffects, wi)
 	o.mu.Unlock()
+	o.addStateEntry(stateEntry{
+		Timestamp:    time.Now(),
+		WorkflowID:   wi.workflowID,
+		StepID:       wi.stepID,
+		QueueID:      wi.queueID,
+		RunID:        wi.runID,
+		EntityID:     int(wi.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 }
 
 func (o *Orchestrator) addSagaInstance(wi *SagaInstance) {
 	o.mu.Lock()
 	o.sagas = append(o.sagas, wi)
 	o.mu.Unlock()
+	o.addStateEntry(stateEntry{
+		Timestamp:    time.Now(),
+		WorkflowID:   wi.workflowID,
+		StepID:       wi.stepID,
+		QueueID:      wi.queueID,
+		RunID:        wi.runID,
+		EntityID:     int(wi.entityID),
+		EntityType:   EntitySaga,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 }
 
 // onPause will check all the instances and pause them
@@ -2309,6 +2412,21 @@ func (wi *WorkflowInstance) executeWorkflow(_ context.Context, args ...interface
 				wi.future.setParentWorkflowExecutionID(wi.executionID)
 				wi.future.setParentWorkflowID(wi.workflowID)
 			}
+
+			wi.state.addStateEntry(stateEntry{
+				Timestamp:    time.Now(),
+				WorkflowID:   wi.workflowID,
+				StepID:       wi.stepID,
+				QueueID:      wi.queueID,
+				RunID:        wi.runID,
+				EntityID:     int(wi.workflowID),
+				EntityType:   EntityWorkflow,
+				EntityStatus: StatusRunning,
+
+				WorkflowExecutionID: wi.executionID,
+				ExecutionID:         int(wi.executionID),
+				ExecutionStatus:     ExecutionStatusPending,
+			})
 
 			logger.Debug(wi.ctx, "workflow instance attempt run workflow", "workflow_id", wi.workflowID, "execution_id", wi.executionID)
 
@@ -2636,6 +2754,22 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 		return err
 	}
 
+	wi.state.addStateEntry(stateEntry{
+		Timestamp:  time.Now(),
+		WorkflowID: wi.workflowID,
+		StepID:     wi.stepID,
+		QueueID:    wi.queueID,
+		RunID:      wi.runID,
+
+		EntityID:     int(wi.workflowID),
+		EntityType:   EntityWorkflow,
+		EntityStatus: StatusCompleted,
+
+		ExecutionID:         int(wi.executionID),
+		WorkflowExecutionID: wi.executionID,
+		ExecutionStatus:     ExecutionStatusCompleted,
+	})
+
 	// Handle ContinueAsNew
 	// We re-create a new workflow entity to that related to that workflow
 	// It will run on another worker on it's own, we are use preparing it
@@ -2803,6 +2937,22 @@ func (wi *WorkflowInstance) onFailed(_ context.Context, args ...interface{}) err
 	logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
 	wi.future.SetError(err)
 
+	wi.state.addStateEntry(stateEntry{
+		Timestamp:  time.Now(),
+		WorkflowID: wi.workflowID,
+		StepID:     wi.stepID,
+		QueueID:    wi.queueID,
+		RunID:      wi.runID,
+
+		EntityID:     int(wi.workflowID),
+		EntityType:   EntityWorkflow,
+		EntityStatus: StatusFailed,
+
+		ExecutionID:         int(wi.executionID),
+		WorkflowExecutionID: wi.executionID,
+		ExecutionStatus:     ExecutionStatusFailed,
+	})
+
 	logger.Debug(wi.ctx, "workflow instance failed", "workflow_id", wi.workflowID, "error", err)
 
 	return nil
@@ -2837,6 +2987,30 @@ func (wi *WorkflowInstance) onPaused(_ context.Context, _ ...interface{}) error 
 		}
 		return err
 	}
+
+	// we need to check for the parent/root workflow
+	var entityStatus EntityStatus
+	if wi.parentEntityID != 0 {
+		entityStatus = StatusRunning
+	} else {
+		entityStatus = StatusPaused
+	}
+
+	wi.state.addStateEntry(stateEntry{
+		Timestamp:  time.Now(),
+		WorkflowID: wi.workflowID,
+		StepID:     wi.stepID,
+		QueueID:    wi.queueID,
+		RunID:      wi.runID,
+
+		EntityID:     int(wi.workflowID),
+		EntityType:   EntityWorkflow,
+		EntityStatus: entityStatus,
+
+		ExecutionID:         int(wi.executionID),
+		WorkflowExecutionID: wi.executionID,
+		ExecutionStatus:     ExecutionStatusPaused,
+	})
 
 	logger.Debug(wi.ctx, "workflow instance paused", "workflow_id", wi.workflowID)
 
@@ -3039,6 +3213,21 @@ func (ctx WorkflowContext) Activity(stepID string, activityFunc interface{}, opt
 		return future
 	}
 
+	ctx.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ctx.workflowID,
+		WorkflowExecutionID: ctx.workflowExecutionID,
+		StepID:              ctx.stepID,
+		QueueID:             ctx.queueID,
+		RunID:               ctx.runID,
+
+		EntityID:     int(activityEntityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusRunning,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
+
 	ctx.tracker.addActivityInstance(activityInstance)
 	logger.Debug(ctx.ctx, "activity context start activity", "workflow_id", ctx.workflowID, "step_id", stepID)
 	activityInstance.Start(inputs) // synchronous because we want to know when it's done for real, the future will sent back the data anyway
@@ -3188,6 +3377,22 @@ func (ai *ActivityInstance) executeActivity(_ context.Context, args ...interface
 				logger.Error(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 				return err
 			}
+
+			ai.state.addStateEntry(stateEntry{
+				Timestamp:           time.Now(),
+				WorkflowID:          ai.parentEntityID,
+				WorkflowExecutionID: ai.parentExecutionID,
+				StepID:              ai.stepID,
+				QueueID:             ai.queueID,
+				RunID:               ai.runID,
+
+				EntityID:     int(ai.entityID),
+				EntityType:   EntityActivity,
+				EntityStatus: StatusRunning,
+
+				ExecutionID:     int(ai.executionID),
+				ExecutionStatus: ExecutionStatusPending,
+			})
 
 			// run the real activity
 			activityOutput, activityErr := ai.runActivity(inputs)
@@ -3367,6 +3572,22 @@ func (ai *ActivityInstance) runActivity(inputs []interface{}) (outputs *Activity
 	default:
 	}
 
+	ai.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ai.parentEntityID,
+		WorkflowExecutionID: ai.parentExecutionID,
+		StepID:              ai.stepID,
+		QueueID:             ai.queueID,
+		RunID:               ai.runID,
+
+		EntityID:     int(ai.entityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusRunning,
+
+		ExecutionID:     int(ai.executionID),
+		ExecutionStatus: ExecutionStatusRunning,
+	})
+
 	results := reflect.ValueOf(activityFunc).Call(argsValues)
 	numOut := len(results)
 	if numOut == 0 {
@@ -3461,6 +3682,22 @@ func (ai *ActivityInstance) onCompleted(_ context.Context, args ...interface{}) 
 		return err
 	}
 
+	ai.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ai.parentEntityID,
+		WorkflowExecutionID: ai.parentExecutionID,
+		StepID:              ai.stepID,
+		QueueID:             ai.queueID,
+		RunID:               ai.runID,
+
+		EntityID:     int(ai.entityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusCompleted,
+
+		ExecutionID:     int(ai.executionID),
+		ExecutionStatus: ExecutionStatusCompleted,
+	})
+
 	return nil
 }
 
@@ -3506,6 +3743,22 @@ func (ai *ActivityInstance) onFailed(_ context.Context, args ...interface{}) err
 		return err
 	}
 
+	ai.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ai.parentEntityID,
+		WorkflowExecutionID: ai.parentExecutionID,
+		StepID:              ai.stepID,
+		QueueID:             ai.queueID,
+		RunID:               ai.runID,
+
+		EntityID:     int(ai.entityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusFailed,
+
+		ExecutionID:     int(ai.executionID),
+		ExecutionStatus: ExecutionStatusFailed,
+	})
+
 	return nil
 }
 
@@ -3518,6 +3771,22 @@ func (ai *ActivityInstance) onPaused(_ context.Context, _ ...interface{}) error 
 		logger.Debug(ai.ctx, err.Error(), "workflow_id", ai.workflowID, "step_id", ai.stepID)
 		ai.future.SetError(err)
 	}
+
+	ai.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ai.parentEntityID,
+		WorkflowExecutionID: ai.parentExecutionID,
+		StepID:              ai.stepID,
+		QueueID:             ai.queueID,
+		RunID:               ai.runID,
+
+		EntityID:     int(ai.entityID),
+		EntityType:   EntityActivity,
+		EntityStatus: StatusPaused,
+
+		ExecutionID:     int(ai.executionID),
+		ExecutionStatus: ExecutionStatusPaused,
+	})
 	return nil
 }
 
@@ -3664,6 +3933,8 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		state:    ctx.state,
 		debug:    ctx.debug,
 
+		queueID: ctx.queueID,
+
 		parentExecutionID: ctx.workflowExecutionID,
 		parentEntityID:    ctx.workflowID,
 		parentStepID:      ctx.stepID,
@@ -3678,6 +3949,21 @@ func (ctx WorkflowContext) SideEffect(stepID string, sideEffectFunc interface{})
 		dataID:      data.ID,
 		runID:       ctx.runID,
 	}
+
+	ctx.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ctx.workflowID,
+		WorkflowExecutionID: ctx.workflowExecutionID,
+		StepID:              ctx.stepID,
+		QueueID:             ctx.queueID,
+		RunID:               ctx.runID,
+
+		EntityID:     int(instance.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 
 	ctx.tracker.addSideEffectInstance(instance)
 
@@ -3703,6 +3989,7 @@ type SideEffectInstance struct {
 
 	stepID          string
 	runID           RunID
+	queueID         QueueID
 	workflowID      WorkflowEntityID
 	entityID        SideEffectEntityID
 	dataID          SideEffectDataID
@@ -3805,6 +4092,22 @@ func (si *SideEffectInstance) executeSideEffect(_ context.Context, args ...inter
 		return err
 	}
 
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusRunning,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusPending,
+	})
+
 	// Run side effect just once
 	output, execErr := si.runSideEffect()
 
@@ -3894,6 +4197,22 @@ func (si *SideEffectInstance) runSideEffect() (output *SideEffectOutput, err err
 		return nil, err
 	default:
 	}
+
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusRunning,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusRunning,
+	})
 
 	results := reflect.ValueOf(si.handler.Handler).Call(nil) // call side effect function
 
@@ -4001,6 +4320,22 @@ func (si *SideEffectInstance) onFailed(_ context.Context, args ...interface{}) e
 		return err
 	}
 
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusFailed,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusFailed,
+	})
+
 	return nil
 }
 
@@ -4022,6 +4357,22 @@ func (si *SideEffectInstance) onPaused(_ context.Context, _ ...interface{}) erro
 		}
 		return err
 	}
+
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySideEffect,
+		EntityStatus: StatusPaused,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusPaused,
+	})
 
 	return nil
 }
@@ -4128,6 +4479,21 @@ func (ctx WorkflowContext) Saga(stepID string, saga *SagaDefinition) Future {
 		future.SetError(err)
 		return future
 	}
+
+	ctx.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          ctx.workflowID,
+		WorkflowExecutionID: ctx.workflowExecutionID,
+		StepID:              ctx.stepID,
+		QueueID:             ctx.queueID,
+		RunID:               ctx.runID,
+
+		EntityID:     int(entityID),
+		EntityType:   EntitySaga,
+		EntityStatus: StatusPending,
+
+		ExecutionStatus: ExecutionStatusNone,
+	})
 
 	if status == StatusPending {
 		logger.Debug(ctx.ctx, "saga context start", "workflow_id", ctx.workflowID, "step_id", stepID)
@@ -4327,6 +4693,22 @@ func (si *SagaInstance) executeTransactions(_ context.Context, _ ...interface{})
 			stepIndex: stepIdx,
 		}
 
+		si.state.addStateEntry(stateEntry{
+			Timestamp:           time.Now(),
+			WorkflowID:          si.parentEntityID,
+			WorkflowExecutionID: si.parentExecutionID,
+			StepID:              si.stepID,
+			QueueID:             si.queueID,
+			RunID:               si.runID,
+
+			EntityID:     int(si.entityID),
+			EntityType:   EntitySaga,
+			EntityStatus: StatusRunning,
+
+			ExecutionID:     int(si.executionID),
+			ExecutionStatus: ExecutionStatusPending,
+		})
+
 		err = step.Transaction(txContext)
 		if err != nil {
 			if updateErr := si.db.SetSagaExecutionProperties(
@@ -4478,6 +4860,22 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 			stepIndex:           stepIdx,
 		}
 
+		si.state.addStateEntry(stateEntry{
+			Timestamp:           time.Now(),
+			WorkflowID:          si.parentEntityID,
+			WorkflowExecutionID: si.parentExecutionID,
+			StepID:              si.stepID,
+			QueueID:             si.queueID,
+			RunID:               si.runID,
+
+			EntityID:     int(si.entityID),
+			EntityType:   EntitySaga,
+			EntityStatus: StatusCompleted,
+
+			ExecutionID:     int(si.executionID),
+			ExecutionStatus: ExecutionStatusPending,
+		})
+
 		err = step.Compensation(compContext)
 		if err != nil {
 			compensationFailed = true
@@ -4516,6 +4914,22 @@ func (si *SagaInstance) executeCompensations(_ context.Context, args ...interfac
 		si.fsm.Fire(TriggerFail, err)
 		return nil
 	}
+
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySaga,
+		EntityStatus: StatusCompleted,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusCompensated,
+	})
 
 	// All compensations completed successfully
 	if err := si.db.SetSagaEntityProperties(
@@ -4557,10 +4971,27 @@ func (si *SagaInstance) onCompleted(_ context.Context, args ...interface{}) erro
 			err := errors.Join(ErrSagaInstanceCompleted, ErrSagaCompensated, transactionErr)
 			logger.Error(si.ctx, err.Error(), "workflow_id", si.workflowID, "step_id", si.stepID)
 			si.future.SetError(err)
+			// compensated already recorded
 		} else {
 			si.future.SetResult(nil)
+			si.state.addStateEntry(stateEntry{
+				Timestamp:           time.Now(),
+				WorkflowID:          si.parentEntityID,
+				WorkflowExecutionID: si.parentExecutionID,
+				StepID:              si.stepID,
+				QueueID:             si.queueID,
+				RunID:               si.runID,
+
+				EntityID:     int(si.entityID),
+				EntityType:   EntitySaga,
+				EntityStatus: StatusCompleted,
+
+				ExecutionID:     int(si.executionID),
+				ExecutionStatus: ExecutionStatusCompleted,
+			})
 		}
 	}
+
 	logger.Debug(si.ctx, "saga instance completed", "workflow_id", si.workflowID, "step_id", si.stepID)
 	return nil
 }
@@ -4587,6 +5018,23 @@ func (si *SagaInstance) onFailed(_ context.Context, args ...interface{}) error {
 	if si.future != nil {
 		si.future.SetError(errors.Join(ErrSagaFailed, err))
 	}
+
+	si.state.addStateEntry(stateEntry{
+		Timestamp:           time.Now(),
+		WorkflowID:          si.parentEntityID,
+		WorkflowExecutionID: si.parentExecutionID,
+		StepID:              si.stepID,
+		QueueID:             si.queueID,
+		RunID:               si.runID,
+
+		EntityID:     int(si.entityID),
+		EntityType:   EntitySaga,
+		EntityStatus: StatusFailed,
+
+		ExecutionID:     int(si.executionID),
+		ExecutionStatus: ExecutionStatusFailed,
+	})
+
 	return nil
 }
 

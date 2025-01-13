@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/davidroman0O/retrypool"
+	"github.com/k0kubun/pp/v3"
 	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 )
@@ -59,6 +60,8 @@ type QueueInstance struct {
 	onContinueAsNew crossQueueContinueAsNewHandler
 	onSignalNew     workflowNewSignalHandler
 	onSignalRemove  workflowRemoveSignalHandler
+
+	onChange func(int)
 }
 
 type queueConfig struct {
@@ -66,9 +69,17 @@ type queueConfig struct {
 	onContinueAsNew crossQueueContinueAsNewHandler
 	onSignalNew     workflowNewSignalHandler
 	onSignalRemove  workflowRemoveSignalHandler
+
+	onChange func(int)
 }
 
 type queueOption func(*queueConfig)
+
+func WithQueueChangeHandler(handler func(int)) queueOption {
+	return func(c *queueConfig) {
+		c.onChange = handler
+	}
+}
 
 func WithCrossWorkflowHandler(handler crossQueueWorkflowHandler) queueOption {
 	return func(c *queueConfig) {
@@ -182,6 +193,10 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		q.onSignalRemove = cfg.onSignalRemove
 	}
 
+	if cfg.onChange != nil {
+		q.onChange = cfg.onChange
+	}
+
 	_, err := db.AddQueue(&Queue{Name: name})
 	if err != nil {
 		if !errors.Is(err, ErrQueueExists) {
@@ -212,7 +227,12 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 
 	options = append(options, retrypool.WithBlockingGetData[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
 		func(brr *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]) interface{} {
-			return brr.Request
+			var data interface{}
+			brr.ConsultRequest(func(wr *WorkflowRequest) error {
+				data = wr.data
+				return nil
+			})
+			return data
 		},
 	))
 
@@ -453,8 +473,9 @@ type QueueWorker struct {
 	queueInstance *QueueInstance
 	orchestrator  *Orchestrator
 
-	onStart onStartFunc
-	onEnd   onEndFunc
+	onStart  onStartFunc
+	onEnd    onEndFunc
+	onChange func(int)
 }
 
 func (w *QueueWorker) Pause() {
@@ -482,6 +503,9 @@ func NewQueueWorker(instance *QueueInstance) *QueueWorker {
 	}
 	qw.orchestrator = NewOrchestrator(instance.ctx, instance.database, instance.registry, opts...)
 
+	if instance.onChange != nil {
+		qw.onChange = instance.onChange
+	}
 	// Add worker to maps under a separate lock
 	instance.workerMu.Lock()
 	qw.ID = len(instance.workers) + 1
@@ -511,49 +535,63 @@ func (w *QueueWorker) OnRemove(ctx context.Context) {
 
 func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]) error {
 
+	var req *WorkflowRequest
+	task.ConsultRequest(func(r *WorkflowRequest) error {
+		req = r
+		return nil
+	})
+
 	// Mark entity as processing
 	w.queueInstance.workerMu.Lock()
-	if _, exists := w.queueInstance.processingWorkers[task.Request.workflowID]; exists {
+	if _, exists := w.queueInstance.processingWorkers[req.workflowID]; exists {
 		w.queueInstance.workerMu.Unlock()
 		future := NewRuntimeFuture()
-		future.SetError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
-		task.Request.chnFuture <- future
-		close(task.Request.chnFuture)
-		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", task.Request.workflowID))
+		future.SetError(fmt.Errorf("entity %d is already being processed", req.workflowID))
+		req.chnFuture <- future
+		close(req.chnFuture)
+		task.CompleteWithError(fmt.Errorf("entity %d is already being processed", req.workflowID))
 		return nil
 	}
-	w.queueInstance.processingWorkers[task.Request.workflowID] = w
+	w.queueInstance.processingWorkers[req.workflowID] = w
 	w.queueInstance.workerMu.Unlock()
 
 	// Clean up when done
 	defer func() {
 		w.queueInstance.workerMu.Lock()
-		delete(w.queueInstance.processingWorkers, task.Request.workflowID)
+		delete(w.queueInstance.processingWorkers, req.workflowID)
 		w.queueInstance.workerMu.Unlock()
 	}()
 
-	if _, err := w.orchestrator.registry.RegisterWorkflow(task.Request.workflowFunc); err != nil {
+	if _, err := w.orchestrator.registry.RegisterWorkflow(req.workflowFunc); err != nil {
 		future := NewRuntimeFuture()
 		future.SetError(err)
-		task.Request.chnFuture <- future
-		close(task.Request.chnFuture)
+		req.chnFuture <- future
+		close(req.chnFuture)
 		task.CompleteWithError(err)
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
 	var future Future
 	var err error
 
+	w.orchestrator.SetChange(func() {
+		state := w.orchestrator.State()
+		req.data = state
+		if w.onChange != nil {
+			w.onChange(w.ID)
+		}
+	})
+
 	// Execute the workflow using the orchestrator
-	if task.Request.resume {
+	if req.resume {
 		// Use Resume for paused workflows
-		future = w.orchestrator.Resume(task.Request.workflowID)
+		future = w.orchestrator.Resume(req.workflowID)
 	} else {
 		// Use ExecuteWithEntity for normal workflows
-		future, err = w.orchestrator.ExecuteWithEntity(task.Request.workflowID)
+		future, err = w.orchestrator.ExecuteWithEntity(req.workflowID)
 	}
 
-	task.Request.chnFuture <- future
-	close(task.Request.chnFuture)
+	req.chnFuture <- future
+	close(req.chnFuture)
 
 	if err != nil {
 		future.SetError(err)
@@ -574,7 +612,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestRe
 	future.SetResult(results)
 	w.queueInstance.workerMu.Lock()
 	task.Complete(&WorkflowResponse{
-		ID: task.Request.workflowID,
+		ID: req.workflowID,
 	})
 	w.queueInstance.workerMu.Unlock()
 
@@ -597,6 +635,8 @@ type Tempolite struct {
 
 	// TODO: when pause/cancel/resume check that we re-add/delete those futures
 	signals map[string]Future
+
+	onChange func()
 }
 
 // QueueConfig holds configuration for a queue
@@ -604,10 +644,18 @@ type QueueConfig struct {
 	Name         string
 	MaxRuns      int
 	MaxWorkflows int
+	Debug        bool
 }
 
 // TempoliteOption is a function type for configuring Tempolite
 type TempoliteOption func(*Tempolite) error
+
+func WithChangeHandler(handler func()) TempoliteOption {
+	return func(t *Tempolite) error {
+		t.onChange = handler
+		return nil
+	}
+}
 
 // createCrossWorkflowHandler creates the handler function for cross-queue workflow communication
 func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
@@ -875,6 +923,11 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		WithContinueAsNewHandler(t.createContinueAsNewHandler()),
 		WithSignalNewHandler(t.createSignalNewHandler()),
 		WithSignalRemoveHandler(t.createSignalRemoveHandler()),
+		WithQueueChangeHandler(func(i int) {
+			if config.Debug {
+				pp.Println("queue change", config.Name, "worker", i, "::", t.Metrics())
+			}
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create queue instance: %w", err)
