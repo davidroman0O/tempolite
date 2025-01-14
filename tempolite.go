@@ -576,6 +576,7 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestRe
 	w.orchestrator.SetChange(func() {
 		state := w.orchestrator.State()
 		req.data = state
+		pp.Println(state)
 		if w.onChange != nil {
 			w.onChange(w.ID)
 		}
@@ -615,6 +616,9 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.BlockingRequestRe
 		ID: req.workflowID,
 	})
 	w.queueInstance.workerMu.Unlock()
+
+	// TODO: It is still not cleaning properly sometimes, we need to check that
+	w.orchestrator.cleanState() // that will clean the orchestrator for next use
 
 	return nil
 }
@@ -924,8 +928,8 @@ func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 		WithSignalNewHandler(t.createSignalNewHandler()),
 		WithSignalRemoveHandler(t.createSignalRemoveHandler()),
 		WithQueueChangeHandler(func(i int) {
-			if config.Debug {
-				pp.Println("queue change", config.Name, "worker", i, "::", t.Metrics())
+			if t.onChange != nil {
+				t.onChange()
 			}
 		}),
 	)
