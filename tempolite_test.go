@@ -34,7 +34,7 @@ func TestQueueCrossBasic(t *testing.T) {
 
 		if queue.Name == "default" {
 			if err := defaultQ.orchestrators.Submit(
-				retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
@@ -42,14 +42,14 @@ func TestQueueCrossBasic(t *testing.T) {
 					chnFuture:    chnFuture,
 					queueName:    queueName,
 					continued:    true,
-				}, runID, workflowID)); err != nil {
+				}, runID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future
 			}
 		} else if queue.Name == "second" {
 			if err := secondQ.orchestrators.Submit(
-				retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](&WorkflowRequest{
+				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
@@ -57,7 +57,7 @@ func TestQueueCrossBasic(t *testing.T) {
 					chnFuture:    chnFuture,
 					queueName:    queueName,
 					continued:    true,
-				}, runID, workflowID)); err != nil {
+				}, runID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future
