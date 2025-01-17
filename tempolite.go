@@ -329,7 +329,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 
 	chnFuture := make(chan Future, 1)
 
-	// queuenotification := retrypool.NewQueuedNotification()
+	queuenotification := retrypool.NewQueuedNotification()
 
 	task := retrypool.NewBlockingRequestResponse[*WorkflowRequest, *WorkflowResponse](
 		&WorkflowRequest{
@@ -347,13 +347,29 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	if err := qi.orchestrators.
 		Submit(
 			task,
+
+			retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+			retrypool.
+				WithBlockingMetadata[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+				map[string]any{
+					"workflow": map[string]any{
+						"created_at":  workflowEntity.CreatedAt,
+						"updated_at":  workflowEntity.UpdatedAt,
+						"run_id":      workflowEntity.RunID,
+						"workflow_id": workflowEntity.ID,
+						"status":      workflowEntity.Status,
+					},
+					"queue": map[string]any{
+						"name": qi.name,
+					},
+				}),
 			// retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, err
 	}
 
-	return <-chnFuture, task, nil, nil
+	return <-chnFuture, task, queuenotification, nil
 }
 
 func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID], *retrypool.QueuedNotification, error) {
@@ -400,6 +416,20 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 		Submit(
 			task,
 			retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+			retrypool.
+				WithBlockingMetadata[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+				map[string]any{
+					"workflow": map[string]any{
+						"created_at":  workflowEntity.CreatedAt,
+						"updated_at":  workflowEntity.UpdatedAt,
+						"run_id":      workflowEntity.RunID,
+						"workflow_id": workflowEntity.ID,
+						"status":      workflowEntity.Status,
+					},
+					"queue": map[string]any{
+						"name": qi.name,
+					},
+				}),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
@@ -455,6 +485,20 @@ func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retr
 		Submit(
 			task,
 			retrypool.WithBlockingQueueNotification[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](queuenotification),
+			retrypool.
+				WithBlockingMetadata[*retrypool.BlockingRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID, WorkflowEntityID]](
+				map[string]any{
+					"workflow": map[string]any{
+						"created_at":  workflowEntity.CreatedAt,
+						"updated_at":  workflowEntity.UpdatedAt,
+						"run_id":      workflowEntity.RunID,
+						"workflow_id": workflowEntity.ID,
+						"status":      workflowEntity.Status,
+					},
+					"queue": map[string]any{
+						"name": qi.name,
+					},
+				}),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
 		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
