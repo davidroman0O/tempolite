@@ -32,6 +32,7 @@ func TestWorkflowCrossQueuePauseResume(t *testing.T) {
 		ctx, database, registry,
 		tempolite.WithCrossWorkflow(func(
 			queueName string,
+			queueID tempolite.QueueID,
 			workflowID tempolite.WorkflowEntityID,
 			runID tempolite.RunID,
 			workflowFunc interface{},

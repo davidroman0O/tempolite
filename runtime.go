@@ -243,10 +243,10 @@ type Future interface {
 }
 
 // CrossQueue is an external feature requesting an external intervention to trigger a workflow on another mechanism
-type crossQueueWorkflowHandler func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueWorkflowHandler func(queueName string, queueID QueueID, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
 // CrossQueue is an external feature requesting for external operations to continue a workflow
-type crossQueueContinueAsNewHandler func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
+type crossQueueContinueAsNewHandler func(queueName string, queueID QueueID, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future
 
 // Signal is an external feature requesting to store a signal outside for a published event
 type workflowNewSignalHandler func(workflowID WorkflowEntityID, workflowExecutionID WorkflowExecutionID, signalEntityID SignalEntityID, signalExecutionID SignalExecutionID, signal string, future Future) error
@@ -1120,7 +1120,9 @@ type Orchestrator struct {
 
 	rootWf *WorkflowInstance // root workflow instance
 
-	stateLog []stateEntry
+	stateLogMu  deadlock.RWMutex
+	stateLog    []stateEntry
+	snapshotLog []stateEntry
 
 	instances   []*WorkflowInstance
 	activities  []*ActivityInstance
@@ -1161,6 +1163,10 @@ type stateEntry struct {
 	EntityType          EntityType
 	EntityStatus        EntityStatus
 	ExecutionStatus     ExecutionStatus
+}
+
+func (s *stateEntry) Clone() stateEntry {
+	return *s
 }
 
 type orchestratorConfig struct {
@@ -1226,7 +1232,8 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 
 		displayStackTrace: true,
 
-		stateLog: []stateEntry{},
+		stateLog:    []stateEntry{},
+		snapshotLog: []stateEntry{},
 	}
 
 	cfg := &orchestratorConfig{}
@@ -1261,30 +1268,36 @@ func NewOrchestrator(ctx context.Context, db Database, registry *Registry, opt .
 }
 
 func (o *Orchestrator) addStateEntry(entry stateEntry) {
+	o.stateLogMu.Lock()
 	o.stateLog = append(o.stateLog, entry)
+	o.stateLogMu.Unlock()
+	o.mu.Lock()
+	o.snapshotLog = append(o.snapshotLog, entry.Clone())
+	o.mu.Unlock()
 	if o.onChange != nil {
 		o.onChange()
 	}
 }
 
 func (o *Orchestrator) cleanState() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
+	o.stateLogMu.Lock()
 	o.stateLog = []stateEntry{}
+	o.stateLogMu.Unlock()
+
+	o.mu.Lock()
+	o.snapshotLog = []stateEntry{}
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) State() []stateEntry {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
-	return o.stateLog
+	return o.snapshotLog
 }
 
 func (o *Orchestrator) SetChange(fn func()) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
 	o.onChange = fn
 }
 
@@ -1604,7 +1617,7 @@ type preparationOptions struct {
 }
 
 // Preparing the creation of a new root workflow instance so it can exists in the database, we might decide depending of which systems of used if we want to pull the workflows or execute it directly.
-func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
+func PrepareWorkflow(registry *Registry, database Database, workflowFunc interface{}, workflowOptions *WorkflowOptions, opts *preparationOptions, args ...interface{}) (*WorkflowEntity, error) {
 
 	logger.Debug(context.Background(), "preparing workflow", "workflow_func", getFunctionName(workflowFunc))
 
@@ -1677,7 +1690,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	if opttionsPreparation.parentRunID == 0 {
 		logger.Debug(context.Background(), "preparing workflow got no parentRunID", "workflow_func", getFunctionName(workflowFunc))
 		// Create or get Run
-		if runID, err = db.AddRun(&Run{
+		if runID, err = database.AddRun(&Run{
 			Status: RunStatusPending,
 		}); err != nil {
 			err := errors.Join(ErrPreparation, fmt.Errorf("failed to create run: %w", err))
@@ -1711,7 +1724,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	}
 
 	var queue *Queue
-	if queue, err = db.GetQueueByName(queueName); err != nil {
+	if queue, err = database.GetQueueByName(queueName); err != nil {
 		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get queue %s: %w", queueName, err))
 		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
 		return nil, err
@@ -1728,7 +1741,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 		logger.Debug(context.Background(), "preparing workflow continued from", "workflow_func", getFunctionName(workflowFunc), "continued_id", continuedID)
 		data.ContinuedFrom = &continuedID
 		// If this is a continued workflow, we should inherit versions from the parent
-		parentVersions, err := db.GetVersionsByWorkflowID(continuedID)
+		parentVersions, err := database.GetVersionsByWorkflowID(continuedID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get parent versions: %w", err)
 		}
@@ -1747,7 +1760,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 					newVersion.Version = override
 				}
 			}
-			if err := db.SetVersion(newVersion); err != nil {
+			if err := database.SetVersion(newVersion); err != nil {
 				return nil, fmt.Errorf("failed to set inherited version: %w", err)
 			}
 		}
@@ -1776,7 +1789,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 
 	var workflowID WorkflowEntityID
 	// We're not even storing the HandlerInfo since it is a runtime thing
-	if workflowID, err = db.
+	if workflowID, err = database.
 		AddWorkflowEntity(
 			&WorkflowEntity{
 				BaseEntity: BaseEntity{
@@ -1799,7 +1812,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	// Handle new version overrides only for new workflows
 	if workflowOptions != nil && workflowOptions.VersionOverrides != nil && continuedID == 0 {
 		for changeID, version := range workflowOptions.VersionOverrides {
-			if err := db.SetVersion(&Version{
+			if err := database.SetVersion(&Version{
 				EntityID:  workflowID,
 				ChangeID:  changeID,
 				Version:   version,
@@ -1814,7 +1827,7 @@ func PrepareWorkflow(registry *Registry, db Database, workflowFunc interface{}, 
 	logger.Debug(context.Background(), "workflow added", "workflow_func", getFunctionName(workflowFunc), "workflow_id", workflowID, "run_id", runID, "queue_id", queue.ID)
 
 	var entity *WorkflowEntity
-	if entity, err = db.GetWorkflowEntity(workflowID); err != nil {
+	if entity, err = database.GetWorkflowEntity(workflowID, WorkflowEntityWithData()); err != nil {
 		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get workflow entity: %w", err))
 		logger.Error(context.Background(), err.Error(), "workflow_func", getFunctionName(workflowFunc), "queue_name", queueName)
 		return nil, err
@@ -2826,6 +2839,7 @@ func (wi *WorkflowInstance) onCompleted(_ context.Context, args ...interface{}) 
 
 			_ = wi.onContinueAsNew( // Just start it running
 				queue,
+				workflowEntity.QueueID,
 				workflowEntity.ID,
 				workflowEntity.RunID,
 				handler.Handler,
@@ -5116,7 +5130,7 @@ func (ctx WorkflowContext) Workflow(stepID string, workflowFunc interface{}, opt
 			}
 
 			// then you're in charge on how you want the rest to happen
-			return ctx.onCrossQueueWorkflow(options.Queue, workflowEntity.ID, workflowEntity.RunID, workflowFunc, options, args...)
+			return ctx.onCrossQueueWorkflow(options.Queue, workflowEntity.QueueID, workflowEntity.ID, workflowEntity.RunID, workflowFunc, options, args...)
 		}
 		// If no handler is set, return an error
 		future := NewRuntimeFuture()

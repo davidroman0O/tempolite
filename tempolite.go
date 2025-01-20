@@ -16,6 +16,15 @@ import (
 
 /// At the Tempolite level, if we want to benefit from pause/resume and other features, we need to pre-register all workflow functions, only the root workflows. Which is one constraint due to the runtime/registry/database isolation. We should be able to resume a workflow at any time, even publish a signal on a paused workflow, then later on resume it, and it should continue on the next operation.
 
+type WorkflowRequestType int
+
+const (
+	WorkflowRequestTypeExecute WorkflowRequestType = iota
+	WorkflowRequestTypeResume
+	WorkflowRequestTypeEnqueue
+	WorkflowRequestTypeContinue
+)
+
 // WorkflowRequest represents a workflow execution request
 type WorkflowRequest struct {
 	workflowID   WorkflowEntityID
@@ -23,11 +32,12 @@ type WorkflowRequest struct {
 	options      *WorkflowOptions // Workflow options
 	args         []interface{}    // Arguments for the workflow
 	queueName    string           // Name of the queue this task belongs to
-	continued    bool
-	resume       bool
-	enqueue      bool
-	chnFuture    chan Future
-	data         interface{}
+	// continued    bool
+	// resume       bool
+	// enqueue      bool
+	requestType WorkflowRequestType
+	chnFuture   chan Future
+	data        interface{}
 }
 
 type WorkflowResponse struct {
@@ -49,7 +59,8 @@ type QueueInstance struct {
 	maxWorkflows int32
 
 	// We use a blocking pool because the orchestrator will lock workers of the pool, we will have one Run as group per pool
-	orchestrators *retrypool.GroupPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID]
+	// We cannot predict when a workflow will be REALLY done, but we can control queues and workers, therefore we reserve a pool per queue and add a constraint on the amount of workers per pool.
+	orchestrators *retrypool.GroupPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID]
 
 	workerMu          deadlock.RWMutex
 	processingWorkers map[WorkflowEntityID]*QueueWorker
@@ -105,7 +116,7 @@ func WithSignalRemoveHandler(handler workflowRemoveSignalHandler) queueOption {
 	}
 }
 
-func (q *QueueInstance) metrics() retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID] {
+func (q *QueueInstance) metrics() retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID] {
 	return q.orchestrators.GetSnapshot()
 }
 
@@ -204,26 +215,27 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 		}
 	}
 
-	workers := []retrypool.Worker[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID]]{}
-	for i := 0; i < maxRuns; i++ {
-		workers = append(workers, NewQueueWorker(q))
-	}
+	// workers := []retrypool.Worker[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID]]{}
+	// for i := 0; i < maxRuns; i++ {
+	// 	workers = append(workers, NewQueueWorker(q))
+	// }
 
 	logger := retrypool.NewLogger(slog.LevelDebug)
 	logger.Enable()
 
-	options := []retrypool.GroupPoolOption[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID]{
-		retrypool.WithGroupPoolWorkerFactory[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](
-			func() retrypool.Worker[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID]] {
+	options := []retrypool.GroupPoolOption[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID]{
+		retrypool.WithGroupPoolWorkerFactory[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](
+			func() retrypool.Worker[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID]] {
 				return NewQueueWorker(q)
 			},
 		),
 		// // TODO: make a OnNewSession or OnRemoveSession to increase or decrease that number
-		retrypool.WithGroupPoolMaxActivePools[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](maxRuns),
-	}
-
-	if maxWorkflows > 0 {
-		options = append(options, retrypool.WithGroupPoolMaxWorkersPerPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](maxWorkflows))
+		retrypool.WithGroupPoolMaxActivePools[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](maxRuns),
+		retrypool.WithGroupPoolMaxWorkersPerPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](maxWorkflows),
+		retrypool.WithGroupPoolUseFreeWorkerOnly[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](),
+		retrypool.WithGroupPoolOnTaskExecuted[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](func(gid QueueID, poolID uint, data *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], metadata map[string]any, err error) {
+			fmt.Println("task executed", gid, poolID, metadata, err)
+		}),
 	}
 
 	// options = append(options, retrypool.WithGroupGetData[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID]](
@@ -237,8 +249,7 @@ func NewQueueInstance(ctx context.Context, db Database, registry *Registry, name
 	// 	},
 	// ))
 
-	q.orchestrators, err = retrypool.NewGroupPool[
-		*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](
+	q.orchestrators, err = retrypool.NewGroupPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](
 		ctx,
 		options...,
 	)
@@ -314,13 +325,10 @@ func (qi *QueueInstance) Close() error {
 }
 
 func (qi *QueueInstance) Wait() error {
-	return qi.orchestrators.WaitWithCallback(qi.ctx, func(queueSize, processingCount, deadTaskCount int) bool {
-		logger.Debug(qi.ctx, "waiting for queue to finish", "queue", qi.name, "queueSize", queueSize, "processingCount", processingCount, "deadTaskCount", deadTaskCount)
-		return queueSize > 0 || processingCount > 0 || deadTaskCount > 0
-	}, time.Second)
+	return qi.orchestrators.WaitAll(qi.ctx)
 }
 
-func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], *retrypool.QueuedNotification, error) {
+func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptions, opts *preparationOptions, args ...interface{}) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], *retrypool.QueuedNotification, error) {
 
 	workflowEntity, err := PrepareWorkflow(qi.registry, qi.database, workflowFunc, options, opts, args...)
 	if err != nil {
@@ -332,7 +340,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 
 	queuenotification := retrypool.NewQueuedNotification()
 
-	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](
+	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](
 		&WorkflowRequest{
 			workflowID:   workflowEntity.ID,
 			workflowFunc: workflowFunc,
@@ -341,15 +349,16 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 			chnFuture:    chnFuture,
 			queueName:    qi.name,
 		},
-		workflowEntity.RunID,
+		workflowEntity.QueueID,
 	)
 
 	if err := qi.orchestrators.
 		Submit(
+			workflowEntity.QueueID,
 			task,
-			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](queuenotification),
+			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](queuenotification),
 			retrypool.
-				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](
+				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](
 				map[string]any{
 					"workflow": map[string]any{
 						"created_at":  workflowEntity.CreatedAt,
@@ -357,6 +366,7 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 						"run_id":      workflowEntity.RunID,
 						"workflow_id": workflowEntity.ID,
 						"status":      workflowEntity.Status,
+						"is_root":     workflowEntity.WorkflowData.IsRoot,
 					},
 					"queue": map[string]any{
 						"name": qi.name,
@@ -371,9 +381,9 @@ func (qi *QueueInstance) Submit(workflowFunc interface{}, options *WorkflowOptio
 	return <-chnFuture, task, queuenotification, nil
 }
 
-func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], *retrypool.QueuedNotification, error) {
+func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], *retrypool.QueuedNotification, error) {
 	// Get workflow entity with queue info
-	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
+	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue(), WorkflowEntityWithData())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
 	}
@@ -398,24 +408,26 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 	queuenotification := retrypool.NewQueuedNotification()
 
 	// Create resume request
-	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](
+	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](
 		&WorkflowRequest{
 			workflowID:   workflowEntity.ID,
 			workflowFunc: handler.Handler, // Use the actual handler function
 			queueName:    qi.name,
-			continued:    false, // Not a continuation
-			resume:       true,  // Mark this as a resume
-			chnFuture:    chnFuture,
+			// continued:    false, // Not a continuation
+			// resume:       true,  // Mark this as a resume
+			requestType: WorkflowRequestTypeResume,
+			chnFuture:   chnFuture,
 		},
-		workflowEntity.RunID,
+		workflowEntity.QueueID,
 	)
 
 	if err := qi.orchestrators.
 		Submit(
+			workflowEntity.QueueID,
 			task,
-			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](queuenotification),
+			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](queuenotification),
 			retrypool.
-				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](
+				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](
 				map[string]any{
 					"workflow": map[string]any{
 						"created_at":  workflowEntity.CreatedAt,
@@ -423,6 +435,7 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 						"run_id":      workflowEntity.RunID,
 						"workflow_id": workflowEntity.ID,
 						"status":      workflowEntity.Status,
+						"is_root":     workflowEntity.WorkflowData.IsRoot,
 					},
 					"queue": map[string]any{
 						"name": qi.name,
@@ -438,9 +451,9 @@ func (qi *QueueInstance) SubmitResume(entityID WorkflowEntityID) (Future, *retry
 }
 
 // Defered Workflows aren't paused but in pending state, you have to manually enqueue them
-func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], *retrypool.QueuedNotification, error) {
+func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], *retrypool.QueuedNotification, error) {
 	// Get workflow entity with queue info
-	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue())
+	workflowEntity, err := qi.database.GetWorkflowEntity(entityID, WorkflowEntityWithQueue(), WorkflowEntityWithData())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get workflow entity: %w", err)
 	}
@@ -465,25 +478,27 @@ func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retr
 	queuenotification := retrypool.NewQueuedNotification()
 
 	// Create resume request
-	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](
+	task := retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](
 		&WorkflowRequest{
 			workflowID:   workflowEntity.ID,
 			workflowFunc: handler.Handler, // Use the actual handler function
 			queueName:    qi.name,
-			continued:    false, // Not a continuation
-			resume:       false, // Mark this as a resume
-			enqueue:      true,  // Mark this as an enqueue
-			chnFuture:    chnFuture,
+			// continued:    false, // Not a continuation
+			// resume:       false, // Mark this as a resume
+			// enqueue:      true,  // Mark this as an enqueue
+			requestType: WorkflowRequestTypeEnqueue,
+			chnFuture:   chnFuture,
 		},
-		workflowEntity.RunID,
+		workflowEntity.QueueID,
 	)
 
 	if err := qi.orchestrators.
 		Submit(
+			workflowEntity.QueueID,
 			task,
-			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](queuenotification),
+			retrypool.WithTaskGroupQueueNotification[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](queuenotification),
 			retrypool.
-				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID](
+				WithTaskGroupMetadata[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID](
 				map[string]any{
 					"workflow": map[string]any{
 						"created_at":  workflowEntity.CreatedAt,
@@ -491,6 +506,7 @@ func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retr
 						"run_id":      workflowEntity.RunID,
 						"workflow_id": workflowEntity.ID,
 						"status":      workflowEntity.Status,
+						"is_root":     workflowEntity.WorkflowData.IsRoot,
 					},
 					"queue": map[string]any{
 						"name": qi.name,
@@ -498,7 +514,7 @@ func (qi *QueueInstance) SubmitEnqueue(entityID WorkflowEntityID) (Future, *retr
 				}),
 		); err != nil {
 		fmt.Println("failed to submit task", err)
-		return nil, nil, nil, fmt.Errorf("failed to submit resume task: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to submit enqueue task: %w", err)
 	}
 	// pp.Println(qi.orchestrators.GetMetricsSnapshot())
 
@@ -574,7 +590,7 @@ func (w *QueueWorker) OnRemove(ctx context.Context) {
 	// log.Printf("Queue worker started for queue %s", w.queueInstance.name)
 }
 
-func (w *QueueWorker) Run(ctx context.Context, task *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID]) error {
+func (w *QueueWorker) Run(ctx context.Context, task *retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID]) error {
 
 	var req *WorkflowRequest
 	task.ConsultRequest(func(r *WorkflowRequest) error {
@@ -616,15 +632,19 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.GroupRequestRespo
 
 	w.orchestrator.SetChange(func() {
 		state := w.orchestrator.State()
-		req.data = state
-		pp.Println(state)
+		retrypool.SetTaskMetadata(
+			ctx,
+			map[string]any{
+				"state": state,
+			})
 		if w.onChange != nil {
 			w.onChange(w.ID)
 		}
 	})
 
 	// Execute the workflow using the orchestrator
-	if req.resume {
+	// if req.resume {
+	if req.requestType == WorkflowRequestTypeResume {
 		// Use Resume for paused workflows
 		future = w.orchestrator.Resume(req.workflowID)
 	} else {
@@ -704,7 +724,7 @@ func WithChangeHandler(handler func()) TempoliteOption {
 
 // createCrossWorkflowHandler creates the handler function for cross-queue workflow communication
 func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
-	return func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	return func(queueName string, queueID QueueID, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.RLock()
 		queue, ok := t.queueInstances[queueName]
 		t.mu.RUnlock()
@@ -732,7 +752,8 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 		chnFuture := make(chan Future, 1)
 
 		if err := queue.orchestrators.Submit(
-			retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](
+			queueID,
+			retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](
 				&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
@@ -740,9 +761,10 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 					args:         args,
 					chnFuture:    chnFuture,
 					queueName:    queueName,
-					continued:    false,
+					// continued:    false,
+					requestType: WorkflowRequestTypeExecute,
 				},
-				runID,
+				queueID,
 			)); err != nil {
 			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
@@ -755,7 +777,7 @@ func (t *Tempolite) createCrossWorkflowHandler() crossQueueWorkflowHandler {
 }
 
 func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler {
-	return func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	return func(queueName string, queueID QueueID, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 		t.mu.Lock()
 		queue, ok := t.queueInstances[queueName]
 		t.mu.Unlock()
@@ -769,7 +791,8 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 
 		// Handle version inheritance through ContinueAsNew
 		if err := queue.orchestrators.Submit(
-			retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](
+			queueID,
+			retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](
 				&WorkflowRequest{
 					workflowID:   workflowID,
 					workflowFunc: workflowFunc,
@@ -777,9 +800,10 @@ func (t *Tempolite) createContinueAsNewHandler() crossQueueContinueAsNewHandler 
 					args:         args,
 					chnFuture:    chnFuture,
 					queueName:    queueName,
-					continued:    true, // Mark this as a continuation
+					// continued:    true, // Mark this as a continuation
+					requestType: WorkflowRequestTypeContinue,
 				},
-				runID,
+				queueID,
 			)); err != nil {
 			fmt.Println("failed to submit task", err)
 			futureErr := NewRuntimeFuture()
@@ -952,7 +976,10 @@ func (t *Tempolite) RegisterWorkflow(handler interface{}) error {
 
 func (t *Tempolite) createQueueLocked(config QueueConfig) error {
 	if config.MaxRuns <= 0 {
-		return fmt.Errorf("worker count must be greater than 0")
+		config.MaxRuns = -1
+	}
+	if config.MaxWorkflows <= 0 {
+		config.MaxWorkflows = -1
 	}
 
 	queueInstance, err := NewQueueInstance(
@@ -1015,10 +1042,10 @@ func (t *Tempolite) CreateQueue(config QueueConfig) error {
 	return t.createQueueLocked(config)
 }
 
-func (t *Tempolite) Metrics() map[string]retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID] {
+func (t *Tempolite) Metrics() map[string]retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID] {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	metrics := make(map[string]retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID])
+	metrics := make(map[string]retrypool.GroupMetricsSnapshot[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID])
 	for name, queue := range t.queueInstances {
 		metrics[name] = queue.metrics()
 	}
@@ -1124,7 +1151,7 @@ func (t *Tempolite) Scale(queueName string, targetCount int) error {
 		return fmt.Errorf("queue %s not found", queueName)
 	}
 
-	instance.orchestrators.SetConcurrentPools(targetCount)
+	instance.orchestrators.SetMaxActivePools(targetCount)
 	// TODO: also need to be able to scale concurrent workers per pool
 
 	return nil
@@ -1199,35 +1226,64 @@ func (t *Tempolite) Wait() error {
 	shutdown.Go(func() error {
 		timer := time.NewTicker(1 * time.Second)
 		defer timer.Stop()
-		// defer fmt.Println("shutting down")
+		defer fmt.Println("shutting down")
 		for {
 			select {
 			case <-timer.C:
-				// pp.Println(t.Metrics())
+				pp.Println(t.Metrics())
 				hasStillTasks := false
 				t.mu.RLock()
 				for _, instance := range t.queueInstances {
 					metrics := instance.metrics()
-					// task queues
-					for _, poolMetric := range metrics.Metrics {
-						for _, worker := range poolMetric.Workers {
-							if worker.HasTask {
-								hasStillTasks = true
-							}
-						}
-						for _, v := range poolMetric.TaskQueues {
-							if v > 0 {
-								hasStillTasks = true
-							}
-						}
+
+					// if len(metrics.PendingTasks) > 0 {
+
+					// }
+					if !hasStillTasks {
+						hasStillTasks = len(metrics.PendingTasks) > 0
 					}
+					// // task queues
+					// for _, poolMetric := range metrics.Metrics {
+					// 	// for _, worker := range poolMetric.Workers {
+					// 	// 	if worker.HasTask {
+					// 	// 		hasStillTasks = true
+					// 	// 	}
+					// 	// }
+					// 	// for _, v := range poolMetric.TaskQueues {
+					// 	// 	if v > 0 {
+					// 	// 		hasStillTasks = true
+					// 	// 	}
+					// 	// }
+					// 	if !hasStillTasks {
+					// 		// hasStillTasks = poolMetric.
+					// 		// // Check if any active groups
+					// 		// if len(gp.activeGroups) > 0 {
+					// 		// 	return true
+					// 		// }
+
+					// 		// // Check if any pending groups
+					// 		// if len(gp.pendingGroups) > 0 {
+					// 		// 	// Check if any pending groups are ended
+					// 		// 	ended := true
+					// 		// 	for _, pg := range gp.pendingGroups {
+					// 		// 		if !pg.isEnded {
+					// 		// 			ended = false
+					// 		// 			break
+					// 		// 		}
+					// 		// 	}
+					// 		// 	if !ended {
+					// 		// 		return true
+					// 		// 	}
+					// 		// }
+					// 	}
+					// }
 				}
 				t.mu.RUnlock()
 				if !hasStillTasks {
-					// fmt.Println("no more tasks")
+					fmt.Println("no more tasks")
 					return nil
 				}
-				// fmt.Println("still tasks")
+				fmt.Println("still tasks")
 				continue
 			case <-t.ctx.Done():
 				return nil

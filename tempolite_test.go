@@ -21,7 +21,7 @@ func TestQueueCrossBasic(t *testing.T) {
 	var defaultQ *QueueInstance
 	var secondQ *QueueInstance
 
-	var onCross crossQueueWorkflowHandler = func(queueName string, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
+	var onCross crossQueueWorkflowHandler = func(queueName string, queueID QueueID, workflowID WorkflowEntityID, runID RunID, workflowFunc interface{}, options *WorkflowOptions, args ...interface{}) Future {
 
 		queue, err := db.GetQueueByName(queueName)
 		if err != nil {
@@ -34,30 +34,34 @@ func TestQueueCrossBasic(t *testing.T) {
 
 		if queue.Name == "default" {
 			if err := defaultQ.orchestrators.Submit(
-				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](&WorkflowRequest{
+				queueID,
+				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
 					args:         args,
 					chnFuture:    chnFuture,
 					queueName:    queueName,
-					continued:    true,
-				}, runID)); err != nil {
+					// continued:    true,
+					requestType: WorkflowRequestTypeContinue,
+				}, queueID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future
 			}
 		} else if queue.Name == "second" {
 			if err := secondQ.orchestrators.Submit(
-				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID](&WorkflowRequest{
+				queueID,
+				retrypool.NewGroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID](&WorkflowRequest{
 					workflowFunc: workflowFunc,
 					options:      options,
 					workflowID:   workflowID,
 					args:         args,
 					chnFuture:    chnFuture,
 					queueName:    queueName,
-					continued:    true,
-				}, runID)); err != nil {
+					// continued:    true,
+					requestType: WorkflowRequestTypeContinue,
+				}, queueID)); err != nil {
 				future := NewRuntimeFuture()
 				future.SetError(err)
 				return future

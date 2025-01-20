@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"math/rand"
+	"github.com/k0kubun/pp/v3"
 
 	"github.com/davidroman0O/tempolite"
 )
@@ -61,7 +61,8 @@ func Discovery(ctx tempolite.ActivityContext, a tempolite.WorkflowEntityID) erro
 func Download(ctx tempolite.ActivityContext, a int) error {
 
 	// wait random between 10 to 55 seconds
-	<-time.After(time.Duration(rand.Intn(45)+10) * time.Second)
+	// <-time.After(time.Duration(rand.Intn(5)+2) * time.Millisecond)
+	<-time.After(time.Millisecond * 100)
 
 	return nil
 }
@@ -69,7 +70,8 @@ func Download(ctx tempolite.ActivityContext, a int) error {
 func Encode(ctx tempolite.ActivityContext, a int) error {
 
 	// wait random between 10 to 55 seconds
-	<-time.After(time.Duration(rand.Intn(45)+10) * time.Second)
+	// <-time.After(time.Duration(rand.Intn(3)+2) * time.Millisecond)
+	<-time.After(time.Millisecond * 100)
 
 	return nil
 }
@@ -77,7 +79,8 @@ func Encode(ctx tempolite.ActivityContext, a int) error {
 func Metadata(ctx tempolite.ActivityContext, a int) error {
 
 	// wait random between 10 to 35 seconds
-	<-time.After(time.Duration(rand.Intn(25)+10) * time.Second)
+	// <-time.After(time.Duration(rand.Intn(2)+2) * time.Millisecond)
+	<-time.After(time.Millisecond * 100)
 
 	return nil
 }
@@ -85,17 +88,23 @@ func Metadata(ctx tempolite.ActivityContext, a int) error {
 func main() {
 
 	ctx := context.Background()
+	var tp *tempolite.Tempolite
 
-	tp, err := tempolite.New(
+	var err error
+
+	tp, err = tempolite.New(
 		ctx,
 		tempolite.NewMemoryDatabase(),
 		tempolite.WithQueue(tempolite.QueueConfig{
 			Name:         "track-queue",
-			MaxRuns:      1,
+			MaxRuns:      5,
 			MaxWorkflows: 5,
 			Debug:        true,
 		}),
-		tempolite.WithDefaultQueueWorkers(1, 5),
+		tempolite.WithDefaultQueueWorkers(5, 5),
+		tempolite.WithChangeHandler(func() {
+			// pp.Println("change::", tp.Metrics())
+		}),
 	)
 	if err != nil {
 		panic(err)
@@ -114,6 +123,13 @@ func main() {
 	if err := future.Get(&list); err != nil {
 		panic(err)
 	}
+
+	go func() {
+		for {
+			<-time.After(time.Second / 4)
+			pp.Println("Metrics::", tp.Metrics())
+		}
+	}()
 
 	for _, id := range list {
 		if _, err := tp.Enqueue(id); err != nil {
