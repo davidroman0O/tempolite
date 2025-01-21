@@ -684,6 +684,13 @@ func (w *QueueWorker) Run(ctx context.Context, task *retrypool.GroupRequestRespo
 	return nil
 }
 
+type QueuePool struct {
+	// developer submit future workflows to run to the pool
+	// workers of that pool will then enqueue into the `queues` map????
+	pool   *retrypool.GroupPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, RunID], RunID] // by run ID
+	queues map[QueueID]*retrypool.GroupPool[*retrypool.GroupRequestResponse[*WorkflowRequest, *WorkflowResponse, QueueID], QueueID]
+}
+
 // Tempolite is the main orchestration engine
 type Tempolite struct {
 	ctx    context.Context
@@ -695,6 +702,12 @@ type Tempolite struct {
 	database Database
 
 	queueInstances map[string]*QueueInstance
+
+	// One queue is a group with a name
+	// TODO: integrate new way to manage the queues
+	// TODO: how should queue workflows? run by run? because we might have collisions that one worklow is blocking another to have a sub-workflow to allow its completion
+	// i need to think about that one, we might have to do run by run
+	queues *QueuePool
 
 	defaultQueue string
 
