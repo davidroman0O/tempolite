@@ -59,11 +59,25 @@ RunID (Execution Tree)
 │   │   └── WorkflowExecution #2 (Retry)
 ```
 
+Behaviours:
+
 | **Scenario**                | **WorkflowEntityID** | **RunID**       | **Execution Tree**  |
 |-----------------------------|----------------------|-----------------|---------------------|
 | **ContinueAsNew**           | ✅ Same              | ✅ Same         | 🟢 Same tree        |
-| **StartChildWorkflow**      | 🔄 New              | ✅ Same         | 🔄 New sub-tree     |
-| **StartWorkflow (New ID)**  | 🔄 New              | 🔄 New         | 🆕 New tree        |
+| **Sub-Workflow**      | 🔄 New              | ✅ Same         | 🔄 New sub-tree     |
+| **Cross-Queue Workflow**      | 🔄 New              | ✅ Same         | 🔄 New sub-tree     |
+| **NewWorkflow (New ID)**  | 🔄 New              | 🔄 New         | 🆕 New tree        |
+
+Usecases:
+
+| **Workflow Type**            | **Execution Context**                      | **RunID**    | **Parent Waits?** | **Use Cases** |
+|-----------------------------|------------------------------------------|-------------|-----------------|--------------|
+| **ContinueAsNew**           | Same worker/goroutine                   | ✅ Same     | ✅ Yes          | Looping workflows, avoiding event history growth. |
+| **Sub-workflow**            | Same worker/goroutine                   | ✅ Same     | ✅ Yes          | Modular workflow logic, breaking down large workflows. |
+| **Cross-Queue Workflow**    | Different worker (same machine)         | ✅ Same     | ✅ Yes          | Concurrency control (e.g., limiting API key usage). |
+| **New Workflow (Detached)** | New worker pool (same machine)          | ❌ New      | ❌ No           | Fire-and-forget tasks, batch processing, lifecycle workflows, external system orchestration, independent retries. |
+
+This table keeps it **clear and structured** for your engine’s design. 🚀
 
 ---
 
@@ -177,11 +191,10 @@ func Workflow(ctx tempolite.WorkflowContext) error {
     return nil
 }
 
-func Activty(ctx tempolite.ActivityContext) error {
+func Activity(ctx tempolite.ActivityContext) error {
     return nil
 }
 
 ```
 
 The goal is to simplify the API and making it easier to use.
-

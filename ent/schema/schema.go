@@ -116,7 +116,7 @@ type RetryState struct {
 	Timeout  int64  `json:"timeout,omitempty"`
 }
 
-// Run schema definition
+// A Run represent a runtime tree of a workflow
 type Run struct {
 	ent.Schema
 }
@@ -126,7 +126,8 @@ func (Run) Fields() []ent.Field {
 		field.Int("id").
 			GoType(RunID(0)),
 		field.String("status").
-			GoType(RunStatus("")),
+			GoType(RunStatus("")).
+			Default(string(RunStatusPending)),
 		field.Time("created_at").
 			Default(time.Now),
 		field.Time("updated_at").
