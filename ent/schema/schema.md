@@ -1,4 +1,31 @@
 
+This document represent all the final design of my workflow engine.
+
+
+
+Having an ID as a stepID for my system fits, since my pocket workflow engine will run on a single machine, I don’t need strict deterministic replay like Temporal. I should focus on state persistence and resumability.
+
+- Step Execution Tracking via SQLite
+
+Store each stepID and its execution status/result in SQLite.
+When a workflow runs, check SQLite first to see if a step needs to execute.
+
+- Local Execution Per Worker
+
+Even if you later introduce distributed job queues, each worker will execute entire workflows locally.
+No need for event-driven replay across multiple nodes.
+
+- Resumable & Modifiable Workflows
+
+If a workflow fails, you retry from the failed step, not from the beginning.
+Developers can reorder steps without breaking existing workflow state.
+
+- No Event Replay or Temporal-Like History
+
+No deterministic replay needed—SQLite stores the last known good state.
+No need to replay past events; just fetch completed steps from SQLite.
+
+
 ```
 RunID (Execution Tree)
 ├── WorkflowEntity (Parent)
@@ -31,7 +58,6 @@ RunID (Execution Tree)
 │   │   ├── WorkflowExecution #1
 │   │   └── WorkflowExecution #2 (Retry)
 ```
-
 
 | **Scenario**                | **WorkflowEntityID** | **RunID**       | **Execution Tree**  |
 |-----------------------------|----------------------|-----------------|---------------------|
@@ -115,4 +141,47 @@ RunID-1
    - No parent-child relationship is maintained.
 
 This structure fully models **workflow executions, retries, child workflows, cross-queue executions, and independent workflow trees.** 🚀 Let me know if you need any refinements!
+
+---
+
+### Context changes 
+
+We need to change the old API of options and context with a context builder as follow:
+
+```go
+
+type WorkflowContext struct {
+    id uint // unique ID at runtime
+}
+
+func (ctx *WorkflowContext) WithRetries(policy RetryPolicy) *WorkflowOptionBuilder {
+    return WorkflowOptionBuilder{}
+}
+
+type WorkflowOptionBuilder struct {}
+
+func (b *WorkflowOptionBuilder) WithID(id string) *WorkflowOptionBuilder {}
+func (b *WorkflowOptionBuilder) WithRetries(policy RetryPolicy) *WorkflowOptionBuilder {}
+
+func Workflow(ctx tempolite.WorkflowContext) error {
+
+    if err := ctx.Activity(ctx.WithRetries(RetryPolicy{}).WithID("something")).Get(); err != nil {
+        return err
+    }
+
+    //  with nothing, you can pass the same context
+    if err := ctx.Workflow(ctx, Workflow).Get(); err != nil {
+        return err
+    }
+
+    return nil
+}
+
+func Activty(ctx tempolite.ActivityContext) error {
+    return nil
+}
+
+```
+
+The goal is to simplify the API and making it easier to use.
 
