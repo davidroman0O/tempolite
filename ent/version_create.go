@@ -29,14 +29,22 @@ func (vc *VersionCreate) SetEntityID(sei schema.WorkflowEntityID) *VersionCreate
 }
 
 // SetChangeID sets the "change_id" field.
-func (vc *VersionCreate) SetChangeID(s string) *VersionCreate {
-	vc.mutation.SetChangeID(s)
+func (vc *VersionCreate) SetChangeID(sc schema.VersionChange) *VersionCreate {
+	vc.mutation.SetChangeID(sc)
 	return vc
 }
 
 // SetVersion sets the "version" field.
-func (vc *VersionCreate) SetVersion(i int) *VersionCreate {
-	vc.mutation.SetVersion(i)
+func (vc *VersionCreate) SetVersion(sn schema.VersionNumber) *VersionCreate {
+	vc.mutation.SetVersion(sn)
+	return vc
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (vc *VersionCreate) SetNillableVersion(sn *schema.VersionNumber) *VersionCreate {
+	if sn != nil {
+		vc.SetVersion(*sn)
+	}
 	return vc
 }
 
@@ -126,6 +134,10 @@ func (vc *VersionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (vc *VersionCreate) defaults() {
+	if _, ok := vc.mutation.Version(); !ok {
+		v := version.DefaultVersion
+		vc.mutation.SetVersion(v)
+	}
 	if _, ok := vc.mutation.CreatedAt(); !ok {
 		v := version.DefaultCreatedAt()
 		vc.mutation.SetCreatedAt(v)
@@ -196,7 +208,7 @@ func (vc *VersionCreate) createSpec() (*Version, *sqlgraph.CreateSpec) {
 		_node.ChangeID = value
 	}
 	if value, ok := vc.mutation.Version(); ok {
-		_spec.SetField(version.FieldVersion, field.TypeInt, value)
+		_spec.SetField(version.FieldVersion, field.TypeUint, value)
 		_node.Version = value
 	}
 	if value, ok := vc.mutation.Data(); ok {

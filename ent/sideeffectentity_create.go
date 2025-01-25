@@ -59,8 +59,8 @@ func (seec *SideEffectEntityCreate) SetNillableStatus(ss *schema.EntityStatus) *
 }
 
 // SetStepID sets the "step_id" field.
-func (seec *SideEffectEntityCreate) SetStepID(s string) *SideEffectEntityCreate {
-	seec.mutation.SetStepID(s)
+func (seec *SideEffectEntityCreate) SetStepID(sesi schema.SideEffectStepID) *SideEffectEntityCreate {
+	seec.mutation.SetStepID(sesi)
 	return seec
 }
 

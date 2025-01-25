@@ -26,7 +26,7 @@ type RunQuery struct {
 	order           []run.OrderOption
 	inters          []Interceptor
 	predicates      []predicate.Run
-	withEntities    *WorkflowEntityQuery
+	withWorkflows   *WorkflowEntityQuery
 	withHierarchies *HierarchyQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -64,8 +64,8 @@ func (rq *RunQuery) Order(o ...run.OrderOption) *RunQuery {
 	return rq
 }
 
-// QueryEntities chains the current query on the "entities" edge.
-func (rq *RunQuery) QueryEntities() *WorkflowEntityQuery {
+// QueryWorkflows chains the current query on the "workflows" edge.
+func (rq *RunQuery) QueryWorkflows() *WorkflowEntityQuery {
 	query := (&WorkflowEntityClient{config: rq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := rq.prepareQuery(ctx); err != nil {
@@ -78,7 +78,7 @@ func (rq *RunQuery) QueryEntities() *WorkflowEntityQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, selector),
 			sqlgraph.To(workflowentity.Table, workflowentity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.EntitiesTable, run.EntitiesColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.WorkflowsTable, run.WorkflowsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -300,7 +300,7 @@ func (rq *RunQuery) Clone() *RunQuery {
 		order:           append([]run.OrderOption{}, rq.order...),
 		inters:          append([]Interceptor{}, rq.inters...),
 		predicates:      append([]predicate.Run{}, rq.predicates...),
-		withEntities:    rq.withEntities.Clone(),
+		withWorkflows:   rq.withWorkflows.Clone(),
 		withHierarchies: rq.withHierarchies.Clone(),
 		// clone intermediate query.
 		sql:  rq.sql.Clone(),
@@ -308,14 +308,14 @@ func (rq *RunQuery) Clone() *RunQuery {
 	}
 }
 
-// WithEntities tells the query-builder to eager-load the nodes that are connected to
-// the "entities" edge. The optional arguments are used to configure the query builder of the edge.
-func (rq *RunQuery) WithEntities(opts ...func(*WorkflowEntityQuery)) *RunQuery {
+// WithWorkflows tells the query-builder to eager-load the nodes that are connected to
+// the "workflows" edge. The optional arguments are used to configure the query builder of the edge.
+func (rq *RunQuery) WithWorkflows(opts ...func(*WorkflowEntityQuery)) *RunQuery {
 	query := (&WorkflowEntityClient{config: rq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	rq.withEntities = query
+	rq.withWorkflows = query
 	return rq
 }
 
@@ -409,7 +409,7 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 		nodes       = []*Run{}
 		_spec       = rq.querySpec()
 		loadedTypes = [2]bool{
-			rq.withEntities != nil,
+			rq.withWorkflows != nil,
 			rq.withHierarchies != nil,
 		}
 	)
@@ -431,10 +431,10 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := rq.withEntities; query != nil {
-		if err := rq.loadEntities(ctx, query, nodes,
-			func(n *Run) { n.Edges.Entities = []*WorkflowEntity{} },
-			func(n *Run, e *WorkflowEntity) { n.Edges.Entities = append(n.Edges.Entities, e) }); err != nil {
+	if query := rq.withWorkflows; query != nil {
+		if err := rq.loadWorkflows(ctx, query, nodes,
+			func(n *Run) { n.Edges.Workflows = []*WorkflowEntity{} },
+			func(n *Run, e *WorkflowEntity) { n.Edges.Workflows = append(n.Edges.Workflows, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -448,7 +448,7 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 	return nodes, nil
 }
 
-func (rq *RunQuery) loadEntities(ctx context.Context, query *WorkflowEntityQuery, nodes []*Run, init func(*Run), assign func(*Run, *WorkflowEntity)) error {
+func (rq *RunQuery) loadWorkflows(ctx context.Context, query *WorkflowEntityQuery, nodes []*Run, init func(*Run), assign func(*Run, *WorkflowEntity)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[schema.RunID]*Run)
 	for i := range nodes {
@@ -463,7 +463,7 @@ func (rq *RunQuery) loadEntities(ctx context.Context, query *WorkflowEntityQuery
 		query.ctx.AppendFieldOnce(workflowentity.FieldRunID)
 	}
 	query.Where(predicate.WorkflowEntity(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(run.EntitiesColumn), fks...))
+		s.Where(sql.InValues(s.C(run.WorkflowsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

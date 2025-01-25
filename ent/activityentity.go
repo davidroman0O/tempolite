@@ -28,7 +28,7 @@ type ActivityEntity struct {
 	// Status holds the value of the "status" field.
 	Status schema.EntityStatus `json:"status,omitempty"`
 	// StepID holds the value of the "step_id" field.
-	StepID string `json:"step_id,omitempty"`
+	StepID schema.ActivityStepID `json:"step_id,omitempty"`
 	// RunID holds the value of the "run_id" field.
 	RunID schema.RunID `json:"run_id,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
@@ -148,7 +148,7 @@ func (ae *ActivityEntity) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field step_id", values[i])
 			} else if value.Valid {
-				ae.StepID = value.String
+				ae.StepID = schema.ActivityStepID(value.String)
 			}
 		case activityentity.FieldRunID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -252,7 +252,7 @@ func (ae *ActivityEntity) String() string {
 	builder.WriteString(fmt.Sprintf("%v", ae.Status))
 	builder.WriteString(", ")
 	builder.WriteString("step_id=")
-	builder.WriteString(ae.StepID)
+	builder.WriteString(fmt.Sprintf("%v", ae.StepID))
 	builder.WriteString(", ")
 	builder.WriteString("run_id=")
 	builder.WriteString(fmt.Sprintf("%v", ae.RunID))

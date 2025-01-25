@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ type ActivityData struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID schema.ActivityEntityID `json:"entity_id,omitempty"`
 	// Inputs holds the value of the "inputs" field.
-	Inputs []byte `json:"inputs,omitempty"`
+	Inputs [][]uint8 `json:"inputs,omitempty"`
 	// Output holds the value of the "output" field.
 	Output []byte `json:"output,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -96,8 +97,10 @@ func (ad *ActivityData) assignValues(columns []string, values []any) error {
 		case activitydata.FieldInputs:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field inputs", values[i])
-			} else if value != nil {
-				ad.Inputs = *value
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &ad.Inputs); err != nil {
+					return fmt.Errorf("unmarshal field inputs: %w", err)
+				}
 			}
 		case activitydata.FieldOutput:
 			if value, ok := values[i].(*[]byte); !ok {

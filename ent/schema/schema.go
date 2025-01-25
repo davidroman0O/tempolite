@@ -53,6 +53,13 @@ type ExecutionType string
 type VersionChange string
 type VersionNumber uint
 
+// Workflow types
+type WorkflowStepID string
+type ActivityStepID string
+type SideEffectStepID string
+type SagaStepID string
+type SignalStepID string
+
 // Run status constants
 const (
 	RunStatusPending   RunStatus = "Pending"
@@ -115,6 +122,8 @@ type RetryState struct {
 	Attempts uint64 `json:"attempts"`
 	Timeout  int64  `json:"timeout,omitempty"`
 }
+
+var DefaultQueue string = "default"
 
 // A Run represent a runtime tree of a workflow
 type Run struct {
@@ -181,7 +190,7 @@ func (Version) Fields() []ent.Field {
 			GoType(WorkflowEntityID(0)),
 		field.String("change_id").
 			GoType(VersionChange("")),
-		field.Int("version").
+		field.Uint("version").
 			GoType(VersionNumber(0)).
 			Default(0),
 		field.JSON("data", map[string]interface{}{}), // TODO: not used yet, might just be map[string]string
@@ -219,7 +228,11 @@ func (WorkflowEntity) Fields() []ent.Field {
 		field.String("status").
 			GoType(EntityStatus("")).
 			Default(string(StatusPending)),
-		field.String("step_id"),
+		// After COUNTLESS debates, I will enforced the step id because we don't need strict deterministic replay like Temporal
+		field.String("step_id").
+			GoType(WorkflowStepID("")).
+			NotEmpty().
+			Unique(),
 		field.Int("run_id").
 			GoType(RunID(0)),
 		field.JSON("retry_policy", RetryPolicy{}),
@@ -238,7 +251,7 @@ func (WorkflowEntity) Edges() []ent.Edge {
 			Ref("entities").
 			Unique(),
 		edge.From("run", Run.Type).
-			Ref("entities").
+			Ref("workflows").
 			Unique().
 			Required(). // Add this
 			Field("run_id"),
@@ -265,10 +278,10 @@ func (WorkflowData) Fields() []ent.Field {
 			GoType(WorkflowEntityID(0)),
 		field.String("duration").
 			Optional(),
-		field.Bool("paused"),
-		field.Bool("resumable"),
-		field.Bool("is_root"),
-		field.Bytes("inputs").
+		field.Bool("paused").Default(false),
+		field.Bool("resumable").Default(false),
+		field.Bool("is_root").Default(false),
+		field.JSON("inputs", [][]byte{}).
 			Optional(),
 		field.Int("continued_from").
 			Optional().
@@ -289,7 +302,7 @@ func (WorkflowData) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			GoType(WorkflowExecutionID(0)),
-		field.JSON("versions", map[string]int{}),
+		// field.JSON("versions", map[string]int{}), // TODO: i don't think we need it anymore, we can just track the relationships
 		field.Time("created_at").
 			Default(time.Now),
 		field.Time("updated_at").
@@ -400,7 +413,8 @@ func (ActivityEntity) Fields() []ent.Field {
 		field.String("status").
 			GoType(EntityStatus("")).
 			Default(string(StatusPending)),
-		field.String("step_id"),
+		field.String("step_id").
+			GoType(ActivityStepID("")),
 		field.Int("run_id").
 			GoType(RunID(0)),
 		field.JSON("retry_policy", RetryPolicy{}),
@@ -437,7 +451,7 @@ func (ActivityData) Fields() []ent.Field {
 			GoType(ActivityDataID(0)),
 		field.Int("entity_id").
 			GoType(ActivityEntityID(0)),
-		field.Bytes("inputs").
+		field.JSON("inputs", [][]byte{}).
 			Optional(),
 		field.Bytes("output").
 			Optional(),
@@ -736,7 +750,7 @@ func (SideEffectEntity) Fields() []ent.Field {
 		field.String("status").
 			GoType(EntityStatus("")).
 			Default(string(StatusPending)),
-		field.String("step_id"),
+		field.String("step_id").GoType(SideEffectStepID("")),
 		field.Int("run_id").
 			GoType(RunID(0)),
 		field.JSON("retry_policy", RetryPolicy{}),
@@ -875,7 +889,7 @@ func (SignalEntity) Fields() []ent.Field {
 		field.String("status").
 			GoType(EntityStatus("")).
 			Default(string(StatusPending)),
-		field.String("step_id"),
+		field.String("step_id").GoType(SignalStepID("")),
 		field.Int("run_id").
 			GoType(RunID(0)),
 		field.JSON("retry_policy", RetryPolicy{}),

@@ -28,7 +28,7 @@ type SideEffectEntity struct {
 	// Status holds the value of the "status" field.
 	Status schema.EntityStatus `json:"status,omitempty"`
 	// StepID holds the value of the "step_id" field.
-	StepID string `json:"step_id,omitempty"`
+	StepID schema.SideEffectStepID `json:"step_id,omitempty"`
 	// RunID holds the value of the "run_id" field.
 	RunID schema.RunID `json:"run_id,omitempty"`
 	// RetryPolicy holds the value of the "retry_policy" field.
@@ -148,7 +148,7 @@ func (see *SideEffectEntity) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field step_id", values[i])
 			} else if value.Valid {
-				see.StepID = value.String
+				see.StepID = schema.SideEffectStepID(value.String)
 			}
 		case sideeffectentity.FieldRunID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -252,7 +252,7 @@ func (see *SideEffectEntity) String() string {
 	builder.WriteString(fmt.Sprintf("%v", see.Status))
 	builder.WriteString(", ")
 	builder.WriteString("step_id=")
-	builder.WriteString(see.StepID)
+	builder.WriteString(fmt.Sprintf("%v", see.StepID))
 	builder.WriteString(", ")
 	builder.WriteString("run_id=")
 	builder.WriteString(fmt.Sprintf("%v", see.RunID))

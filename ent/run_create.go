@@ -29,6 +29,14 @@ func (rc *RunCreate) SetStatus(ss schema.RunStatus) *RunCreate {
 	return rc
 }
 
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (rc *RunCreate) SetNillableStatus(ss *schema.RunStatus) *RunCreate {
+	if ss != nil {
+		rc.SetStatus(*ss)
+	}
+	return rc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (rc *RunCreate) SetCreatedAt(t time.Time) *RunCreate {
 	rc.mutation.SetCreatedAt(t)
@@ -63,19 +71,19 @@ func (rc *RunCreate) SetID(si schema.RunID) *RunCreate {
 	return rc
 }
 
-// AddEntityIDs adds the "entities" edge to the WorkflowEntity entity by IDs.
-func (rc *RunCreate) AddEntityIDs(ids ...schema.WorkflowEntityID) *RunCreate {
-	rc.mutation.AddEntityIDs(ids...)
+// AddWorkflowIDs adds the "workflows" edge to the WorkflowEntity entity by IDs.
+func (rc *RunCreate) AddWorkflowIDs(ids ...schema.WorkflowEntityID) *RunCreate {
+	rc.mutation.AddWorkflowIDs(ids...)
 	return rc
 }
 
-// AddEntities adds the "entities" edges to the WorkflowEntity entity.
-func (rc *RunCreate) AddEntities(w ...*WorkflowEntity) *RunCreate {
+// AddWorkflows adds the "workflows" edges to the WorkflowEntity entity.
+func (rc *RunCreate) AddWorkflows(w ...*WorkflowEntity) *RunCreate {
 	ids := make([]schema.WorkflowEntityID, len(w))
 	for i := range w {
 		ids[i] = w[i].ID
 	}
-	return rc.AddEntityIDs(ids...)
+	return rc.AddWorkflowIDs(ids...)
 }
 
 // AddHierarchyIDs adds the "hierarchies" edge to the Hierarchy entity by IDs.
@@ -128,6 +136,10 @@ func (rc *RunCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (rc *RunCreate) defaults() {
+	if _, ok := rc.mutation.Status(); !ok {
+		v := run.DefaultStatus
+		rc.mutation.SetStatus(v)
+	}
 	if _, ok := rc.mutation.CreatedAt(); !ok {
 		v := run.DefaultCreatedAt()
 		rc.mutation.SetCreatedAt(v)
@@ -193,12 +205,12 @@ func (rc *RunCreate) createSpec() (*Run, *sqlgraph.CreateSpec) {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if nodes := rc.mutation.EntitiesIDs(); len(nodes) > 0 {
+	if nodes := rc.mutation.WorkflowsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),

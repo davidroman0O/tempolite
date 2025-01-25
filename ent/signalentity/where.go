@@ -74,8 +74,9 @@ func Status(v schema.EntityStatus) predicate.SignalEntity {
 }
 
 // StepID applies equality check predicate on the "step_id" field. It's identical to StepIDEQ.
-func StepID(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldEQ(FieldStepID, v))
+func StepID(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldEQ(FieldStepID, vc))
 }
 
 // RunID applies equality check predicate on the "run_id" field. It's identical to RunIDEQ.
@@ -328,68 +329,87 @@ func StatusContainsFold(v schema.EntityStatus) predicate.SignalEntity {
 }
 
 // StepIDEQ applies the EQ predicate on the "step_id" field.
-func StepIDEQ(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldEQ(FieldStepID, v))
+func StepIDEQ(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldEQ(FieldStepID, vc))
 }
 
 // StepIDNEQ applies the NEQ predicate on the "step_id" field.
-func StepIDNEQ(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldNEQ(FieldStepID, v))
+func StepIDNEQ(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldNEQ(FieldStepID, vc))
 }
 
 // StepIDIn applies the In predicate on the "step_id" field.
-func StepIDIn(vs ...string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldIn(FieldStepID, vs...))
+func StepIDIn(vs ...schema.SignalStepID) predicate.SignalEntity {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.SignalEntity(sql.FieldIn(FieldStepID, v...))
 }
 
 // StepIDNotIn applies the NotIn predicate on the "step_id" field.
-func StepIDNotIn(vs ...string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldNotIn(FieldStepID, vs...))
+func StepIDNotIn(vs ...schema.SignalStepID) predicate.SignalEntity {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.SignalEntity(sql.FieldNotIn(FieldStepID, v...))
 }
 
 // StepIDGT applies the GT predicate on the "step_id" field.
-func StepIDGT(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldGT(FieldStepID, v))
+func StepIDGT(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldGT(FieldStepID, vc))
 }
 
 // StepIDGTE applies the GTE predicate on the "step_id" field.
-func StepIDGTE(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldGTE(FieldStepID, v))
+func StepIDGTE(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldGTE(FieldStepID, vc))
 }
 
 // StepIDLT applies the LT predicate on the "step_id" field.
-func StepIDLT(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldLT(FieldStepID, v))
+func StepIDLT(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldLT(FieldStepID, vc))
 }
 
 // StepIDLTE applies the LTE predicate on the "step_id" field.
-func StepIDLTE(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldLTE(FieldStepID, v))
+func StepIDLTE(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldLTE(FieldStepID, vc))
 }
 
 // StepIDContains applies the Contains predicate on the "step_id" field.
-func StepIDContains(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldContains(FieldStepID, v))
+func StepIDContains(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldContains(FieldStepID, vc))
 }
 
 // StepIDHasPrefix applies the HasPrefix predicate on the "step_id" field.
-func StepIDHasPrefix(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldHasPrefix(FieldStepID, v))
+func StepIDHasPrefix(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldHasPrefix(FieldStepID, vc))
 }
 
 // StepIDHasSuffix applies the HasSuffix predicate on the "step_id" field.
-func StepIDHasSuffix(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldHasSuffix(FieldStepID, v))
+func StepIDHasSuffix(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldHasSuffix(FieldStepID, vc))
 }
 
 // StepIDEqualFold applies the EqualFold predicate on the "step_id" field.
-func StepIDEqualFold(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldEqualFold(FieldStepID, v))
+func StepIDEqualFold(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldEqualFold(FieldStepID, vc))
 }
 
 // StepIDContainsFold applies the ContainsFold predicate on the "step_id" field.
-func StepIDContainsFold(v string) predicate.SignalEntity {
-	return predicate.SignalEntity(sql.FieldContainsFold(FieldStepID, v))
+func StepIDContainsFold(v schema.SignalStepID) predicate.SignalEntity {
+	vc := string(v)
+	return predicate.SignalEntity(sql.FieldContainsFold(FieldStepID, vc))
 }
 
 // RunIDEQ applies the EQ predicate on the "run_id" field.

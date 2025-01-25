@@ -36,8 +36,6 @@ const (
 	FieldWorkflowFrom = "workflow_from"
 	// FieldWorkflowExecutionFrom holds the string denoting the workflow_execution_from field in the database.
 	FieldWorkflowExecutionFrom = "workflow_execution_from"
-	// FieldVersions holds the string denoting the versions field in the database.
-	FieldVersions = "versions"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -69,7 +67,6 @@ var Columns = []string{
 	FieldWorkflowStepID,
 	FieldWorkflowFrom,
 	FieldWorkflowExecutionFrom,
-	FieldVersions,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -85,6 +82,12 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultPaused holds the default value on creation for the "paused" field.
+	DefaultPaused bool
+	// DefaultResumable holds the default value on creation for the "resumable" field.
+	DefaultResumable bool
+	// DefaultIsRoot holds the default value on creation for the "is_root" field.
+	DefaultIsRoot bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.

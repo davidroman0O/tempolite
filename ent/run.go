@@ -32,8 +32,8 @@ type Run struct {
 
 // RunEdges holds the relations/edges for other nodes in the graph.
 type RunEdges struct {
-	// Entities holds the value of the entities edge.
-	Entities []*WorkflowEntity `json:"entities,omitempty"`
+	// Workflows holds the value of the workflows edge.
+	Workflows []*WorkflowEntity `json:"workflows,omitempty"`
 	// Hierarchies holds the value of the hierarchies edge.
 	Hierarchies []*Hierarchy `json:"hierarchies,omitempty"`
 	// loadedTypes holds the information for reporting if a
@@ -41,13 +41,13 @@ type RunEdges struct {
 	loadedTypes [2]bool
 }
 
-// EntitiesOrErr returns the Entities value or an error if the edge
+// WorkflowsOrErr returns the Workflows value or an error if the edge
 // was not loaded in eager-loading.
-func (e RunEdges) EntitiesOrErr() ([]*WorkflowEntity, error) {
+func (e RunEdges) WorkflowsOrErr() ([]*WorkflowEntity, error) {
 	if e.loadedTypes[0] {
-		return e.Entities, nil
+		return e.Workflows, nil
 	}
-	return nil, &NotLoadedError{edge: "entities"}
+	return nil, &NotLoadedError{edge: "workflows"}
 }
 
 // HierarchiesOrErr returns the Hierarchies value or an error if the edge
@@ -122,9 +122,9 @@ func (r *Run) Value(name string) (ent.Value, error) {
 	return r.selectValues.Get(name)
 }
 
-// QueryEntities queries the "entities" edge of the Run entity.
-func (r *Run) QueryEntities() *WorkflowEntityQuery {
-	return NewRunClient(r.config).QueryEntities(r)
+// QueryWorkflows queries the "workflows" edge of the Run entity.
+func (r *Run) QueryWorkflows() *WorkflowEntityQuery {
+	return NewRunClient(r.config).QueryWorkflows(r)
 }
 
 // QueryHierarchies queries the "hierarchies" edge of the Run entity.

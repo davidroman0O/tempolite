@@ -74,15 +74,15 @@ func (seu *SignalEntityUpdate) SetNillableStatus(ss *schema.EntityStatus) *Signa
 }
 
 // SetStepID sets the "step_id" field.
-func (seu *SignalEntityUpdate) SetStepID(s string) *SignalEntityUpdate {
-	seu.mutation.SetStepID(s)
+func (seu *SignalEntityUpdate) SetStepID(ssi schema.SignalStepID) *SignalEntityUpdate {
+	seu.mutation.SetStepID(ssi)
 	return seu
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (seu *SignalEntityUpdate) SetNillableStepID(s *string) *SignalEntityUpdate {
-	if s != nil {
-		seu.SetStepID(*s)
+func (seu *SignalEntityUpdate) SetNillableStepID(ssi *schema.SignalStepID) *SignalEntityUpdate {
+	if ssi != nil {
+		seu.SetStepID(*ssi)
 	}
 	return seu
 }
@@ -434,15 +434,15 @@ func (seuo *SignalEntityUpdateOne) SetNillableStatus(ss *schema.EntityStatus) *S
 }
 
 // SetStepID sets the "step_id" field.
-func (seuo *SignalEntityUpdateOne) SetStepID(s string) *SignalEntityUpdateOne {
-	seuo.mutation.SetStepID(s)
+func (seuo *SignalEntityUpdateOne) SetStepID(ssi schema.SignalStepID) *SignalEntityUpdateOne {
+	seuo.mutation.SetStepID(ssi)
 	return seuo
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (seuo *SignalEntityUpdateOne) SetNillableStepID(s *string) *SignalEntityUpdateOne {
-	if s != nil {
-		seuo.SetStepID(*s)
+func (seuo *SignalEntityUpdateOne) SetNillableStepID(ssi *schema.SignalStepID) *SignalEntityUpdateOne {
+	if ssi != nil {
+		seuo.SetStepID(*ssi)
 	}
 	return seuo
 }

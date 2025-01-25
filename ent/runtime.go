@@ -123,6 +123,10 @@ func init() {
 	queue.UpdateDefaultUpdatedAt = queueDescUpdatedAt.UpdateDefault.(func() time.Time)
 	runFields := schema.Run{}.Fields()
 	_ = runFields
+	// runDescStatus is the schema descriptor for status field.
+	runDescStatus := runFields[1].Descriptor()
+	// run.DefaultStatus holds the default value on creation for the status field.
+	run.DefaultStatus = schema.RunStatus(runDescStatus.Default.(string))
 	// runDescCreatedAt is the schema descriptor for created_at field.
 	runDescCreatedAt := runFields[2].Descriptor()
 	// run.DefaultCreatedAt holds the default value on creation for the created_at field.
@@ -331,6 +335,10 @@ func init() {
 	signalexecutiondata.UpdateDefaultUpdatedAt = signalexecutiondataDescUpdatedAt.UpdateDefault.(func() time.Time)
 	versionFields := schema.Version{}.Fields()
 	_ = versionFields
+	// versionDescVersion is the schema descriptor for version field.
+	versionDescVersion := versionFields[3].Descriptor()
+	// version.DefaultVersion holds the default value on creation for the version field.
+	version.DefaultVersion = schema.VersionNumber(versionDescVersion.Default.(uint))
 	// versionDescCreatedAt is the schema descriptor for created_at field.
 	versionDescCreatedAt := versionFields[5].Descriptor()
 	// version.DefaultCreatedAt holds the default value on creation for the created_at field.
@@ -343,12 +351,24 @@ func init() {
 	version.UpdateDefaultUpdatedAt = versionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	workflowdataFields := schema.WorkflowData{}.Fields()
 	_ = workflowdataFields
+	// workflowdataDescPaused is the schema descriptor for paused field.
+	workflowdataDescPaused := workflowdataFields[3].Descriptor()
+	// workflowdata.DefaultPaused holds the default value on creation for the paused field.
+	workflowdata.DefaultPaused = workflowdataDescPaused.Default.(bool)
+	// workflowdataDescResumable is the schema descriptor for resumable field.
+	workflowdataDescResumable := workflowdataFields[4].Descriptor()
+	// workflowdata.DefaultResumable holds the default value on creation for the resumable field.
+	workflowdata.DefaultResumable = workflowdataDescResumable.Default.(bool)
+	// workflowdataDescIsRoot is the schema descriptor for is_root field.
+	workflowdataDescIsRoot := workflowdataFields[5].Descriptor()
+	// workflowdata.DefaultIsRoot holds the default value on creation for the is_root field.
+	workflowdata.DefaultIsRoot = workflowdataDescIsRoot.Default.(bool)
 	// workflowdataDescCreatedAt is the schema descriptor for created_at field.
-	workflowdataDescCreatedAt := workflowdataFields[13].Descriptor()
+	workflowdataDescCreatedAt := workflowdataFields[12].Descriptor()
 	// workflowdata.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workflowdata.DefaultCreatedAt = workflowdataDescCreatedAt.Default.(func() time.Time)
 	// workflowdataDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowdataDescUpdatedAt := workflowdataFields[14].Descriptor()
+	workflowdataDescUpdatedAt := workflowdataFields[13].Descriptor()
 	// workflowdata.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	workflowdata.DefaultUpdatedAt = workflowdataDescUpdatedAt.Default.(func() time.Time)
 	// workflowdata.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -363,6 +383,10 @@ func init() {
 	workflowentityDescStatus := workflowentityFields[3].Descriptor()
 	// workflowentity.DefaultStatus holds the default value on creation for the status field.
 	workflowentity.DefaultStatus = schema.EntityStatus(workflowentityDescStatus.Default.(string))
+	// workflowentityDescStepID is the schema descriptor for step_id field.
+	workflowentityDescStepID := workflowentityFields[4].Descriptor()
+	// workflowentity.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	workflowentity.StepIDValidator = workflowentityDescStepID.Validators[0].(func(string) error)
 	// workflowentityDescCreatedAt is the schema descriptor for created_at field.
 	workflowentityDescCreatedAt := workflowentityFields[8].Descriptor()
 	// workflowentity.DefaultCreatedAt holds the default value on creation for the created_at field.

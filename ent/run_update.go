@@ -65,19 +65,19 @@ func (ru *RunUpdate) SetUpdatedAt(t time.Time) *RunUpdate {
 	return ru
 }
 
-// AddEntityIDs adds the "entities" edge to the WorkflowEntity entity by IDs.
-func (ru *RunUpdate) AddEntityIDs(ids ...schema.WorkflowEntityID) *RunUpdate {
-	ru.mutation.AddEntityIDs(ids...)
+// AddWorkflowIDs adds the "workflows" edge to the WorkflowEntity entity by IDs.
+func (ru *RunUpdate) AddWorkflowIDs(ids ...schema.WorkflowEntityID) *RunUpdate {
+	ru.mutation.AddWorkflowIDs(ids...)
 	return ru
 }
 
-// AddEntities adds the "entities" edges to the WorkflowEntity entity.
-func (ru *RunUpdate) AddEntities(w ...*WorkflowEntity) *RunUpdate {
+// AddWorkflows adds the "workflows" edges to the WorkflowEntity entity.
+func (ru *RunUpdate) AddWorkflows(w ...*WorkflowEntity) *RunUpdate {
 	ids := make([]schema.WorkflowEntityID, len(w))
 	for i := range w {
 		ids[i] = w[i].ID
 	}
-	return ru.AddEntityIDs(ids...)
+	return ru.AddWorkflowIDs(ids...)
 }
 
 // AddHierarchyIDs adds the "hierarchies" edge to the Hierarchy entity by IDs.
@@ -100,25 +100,25 @@ func (ru *RunUpdate) Mutation() *RunMutation {
 	return ru.mutation
 }
 
-// ClearEntities clears all "entities" edges to the WorkflowEntity entity.
-func (ru *RunUpdate) ClearEntities() *RunUpdate {
-	ru.mutation.ClearEntities()
+// ClearWorkflows clears all "workflows" edges to the WorkflowEntity entity.
+func (ru *RunUpdate) ClearWorkflows() *RunUpdate {
+	ru.mutation.ClearWorkflows()
 	return ru
 }
 
-// RemoveEntityIDs removes the "entities" edge to WorkflowEntity entities by IDs.
-func (ru *RunUpdate) RemoveEntityIDs(ids ...schema.WorkflowEntityID) *RunUpdate {
-	ru.mutation.RemoveEntityIDs(ids...)
+// RemoveWorkflowIDs removes the "workflows" edge to WorkflowEntity entities by IDs.
+func (ru *RunUpdate) RemoveWorkflowIDs(ids ...schema.WorkflowEntityID) *RunUpdate {
+	ru.mutation.RemoveWorkflowIDs(ids...)
 	return ru
 }
 
-// RemoveEntities removes "entities" edges to WorkflowEntity entities.
-func (ru *RunUpdate) RemoveEntities(w ...*WorkflowEntity) *RunUpdate {
+// RemoveWorkflows removes "workflows" edges to WorkflowEntity entities.
+func (ru *RunUpdate) RemoveWorkflows(w ...*WorkflowEntity) *RunUpdate {
 	ids := make([]schema.WorkflowEntityID, len(w))
 	for i := range w {
 		ids[i] = w[i].ID
 	}
-	return ru.RemoveEntityIDs(ids...)
+	return ru.RemoveWorkflowIDs(ids...)
 }
 
 // ClearHierarchies clears all "hierarchies" edges to the Hierarchy entity.
@@ -196,12 +196,12 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := ru.mutation.UpdatedAt(); ok {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ru.mutation.EntitiesCleared() {
+	if ru.mutation.WorkflowsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),
@@ -209,12 +209,12 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ru.mutation.RemovedEntitiesIDs(); len(nodes) > 0 && !ru.mutation.EntitiesCleared() {
+	if nodes := ru.mutation.RemovedWorkflowsIDs(); len(nodes) > 0 && !ru.mutation.WorkflowsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),
@@ -225,12 +225,12 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ru.mutation.EntitiesIDs(); len(nodes) > 0 {
+	if nodes := ru.mutation.WorkflowsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),
@@ -340,19 +340,19 @@ func (ruo *RunUpdateOne) SetUpdatedAt(t time.Time) *RunUpdateOne {
 	return ruo
 }
 
-// AddEntityIDs adds the "entities" edge to the WorkflowEntity entity by IDs.
-func (ruo *RunUpdateOne) AddEntityIDs(ids ...schema.WorkflowEntityID) *RunUpdateOne {
-	ruo.mutation.AddEntityIDs(ids...)
+// AddWorkflowIDs adds the "workflows" edge to the WorkflowEntity entity by IDs.
+func (ruo *RunUpdateOne) AddWorkflowIDs(ids ...schema.WorkflowEntityID) *RunUpdateOne {
+	ruo.mutation.AddWorkflowIDs(ids...)
 	return ruo
 }
 
-// AddEntities adds the "entities" edges to the WorkflowEntity entity.
-func (ruo *RunUpdateOne) AddEntities(w ...*WorkflowEntity) *RunUpdateOne {
+// AddWorkflows adds the "workflows" edges to the WorkflowEntity entity.
+func (ruo *RunUpdateOne) AddWorkflows(w ...*WorkflowEntity) *RunUpdateOne {
 	ids := make([]schema.WorkflowEntityID, len(w))
 	for i := range w {
 		ids[i] = w[i].ID
 	}
-	return ruo.AddEntityIDs(ids...)
+	return ruo.AddWorkflowIDs(ids...)
 }
 
 // AddHierarchyIDs adds the "hierarchies" edge to the Hierarchy entity by IDs.
@@ -375,25 +375,25 @@ func (ruo *RunUpdateOne) Mutation() *RunMutation {
 	return ruo.mutation
 }
 
-// ClearEntities clears all "entities" edges to the WorkflowEntity entity.
-func (ruo *RunUpdateOne) ClearEntities() *RunUpdateOne {
-	ruo.mutation.ClearEntities()
+// ClearWorkflows clears all "workflows" edges to the WorkflowEntity entity.
+func (ruo *RunUpdateOne) ClearWorkflows() *RunUpdateOne {
+	ruo.mutation.ClearWorkflows()
 	return ruo
 }
 
-// RemoveEntityIDs removes the "entities" edge to WorkflowEntity entities by IDs.
-func (ruo *RunUpdateOne) RemoveEntityIDs(ids ...schema.WorkflowEntityID) *RunUpdateOne {
-	ruo.mutation.RemoveEntityIDs(ids...)
+// RemoveWorkflowIDs removes the "workflows" edge to WorkflowEntity entities by IDs.
+func (ruo *RunUpdateOne) RemoveWorkflowIDs(ids ...schema.WorkflowEntityID) *RunUpdateOne {
+	ruo.mutation.RemoveWorkflowIDs(ids...)
 	return ruo
 }
 
-// RemoveEntities removes "entities" edges to WorkflowEntity entities.
-func (ruo *RunUpdateOne) RemoveEntities(w ...*WorkflowEntity) *RunUpdateOne {
+// RemoveWorkflows removes "workflows" edges to WorkflowEntity entities.
+func (ruo *RunUpdateOne) RemoveWorkflows(w ...*WorkflowEntity) *RunUpdateOne {
 	ids := make([]schema.WorkflowEntityID, len(w))
 	for i := range w {
 		ids[i] = w[i].ID
 	}
-	return ruo.RemoveEntityIDs(ids...)
+	return ruo.RemoveWorkflowIDs(ids...)
 }
 
 // ClearHierarchies clears all "hierarchies" edges to the Hierarchy entity.
@@ -501,12 +501,12 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 	if value, ok := ruo.mutation.UpdatedAt(); ok {
 		_spec.SetField(run.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ruo.mutation.EntitiesCleared() {
+	if ruo.mutation.WorkflowsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),
@@ -514,12 +514,12 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ruo.mutation.RemovedEntitiesIDs(); len(nodes) > 0 && !ruo.mutation.EntitiesCleared() {
+	if nodes := ruo.mutation.RemovedWorkflowsIDs(); len(nodes) > 0 && !ruo.mutation.WorkflowsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),
@@ -530,12 +530,12 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ruo.mutation.EntitiesIDs(); len(nodes) > 0 {
+	if nodes := ruo.mutation.WorkflowsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   run.EntitiesTable,
-			Columns: []string{run.EntitiesColumn},
+			Table:   run.WorkflowsTable,
+			Columns: []string{run.WorkflowsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowentity.FieldID, field.TypeInt),

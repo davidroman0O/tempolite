@@ -179,7 +179,9 @@ func (b *WorkflowOptionBuilder) WithRetries(policy RetryPolicy) *WorkflowOptionB
 
 func Workflow(ctx tempolite.WorkflowContext) error {
 
-    if err := ctx.Activity(ctx.WithRetries(RetryPolicy{}).WithID("something")).Get(); err != nil {
+    // question is what is the real params?
+    
+    if err := ctx.Activity(ctx.WithRetries(RetryPolicy{})).Get(); err != nil {
         return err
     }
 

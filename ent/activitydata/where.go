@@ -62,11 +62,6 @@ func EntityID(v schema.ActivityEntityID) predicate.ActivityData {
 	return predicate.ActivityData(sql.FieldEQ(FieldEntityID, vc))
 }
 
-// Inputs applies equality check predicate on the "inputs" field. It's identical to InputsEQ.
-func Inputs(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldEQ(FieldInputs, v))
-}
-
 // Output applies equality check predicate on the "output" field. It's identical to OutputEQ.
 func Output(v []byte) predicate.ActivityData {
 	return predicate.ActivityData(sql.FieldEQ(FieldOutput, v))
@@ -110,46 +105,6 @@ func EntityIDNotIn(vs ...schema.ActivityEntityID) predicate.ActivityData {
 		v[i] = int(vs[i])
 	}
 	return predicate.ActivityData(sql.FieldNotIn(FieldEntityID, v...))
-}
-
-// InputsEQ applies the EQ predicate on the "inputs" field.
-func InputsEQ(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldEQ(FieldInputs, v))
-}
-
-// InputsNEQ applies the NEQ predicate on the "inputs" field.
-func InputsNEQ(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldNEQ(FieldInputs, v))
-}
-
-// InputsIn applies the In predicate on the "inputs" field.
-func InputsIn(vs ...[]byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldIn(FieldInputs, vs...))
-}
-
-// InputsNotIn applies the NotIn predicate on the "inputs" field.
-func InputsNotIn(vs ...[]byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldNotIn(FieldInputs, vs...))
-}
-
-// InputsGT applies the GT predicate on the "inputs" field.
-func InputsGT(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldGT(FieldInputs, v))
-}
-
-// InputsGTE applies the GTE predicate on the "inputs" field.
-func InputsGTE(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldGTE(FieldInputs, v))
-}
-
-// InputsLT applies the LT predicate on the "inputs" field.
-func InputsLT(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldLT(FieldInputs, v))
-}
-
-// InputsLTE applies the LTE predicate on the "inputs" field.
-func InputsLTE(v []byte) predicate.ActivityData {
-	return predicate.ActivityData(sql.FieldLTE(FieldInputs, v))
 }
 
 // InputsIsNil applies the IsNil predicate on the "inputs" field.

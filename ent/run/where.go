@@ -236,21 +236,21 @@ func UpdatedAtLTE(v time.Time) predicate.Run {
 	return predicate.Run(sql.FieldLTE(FieldUpdatedAt, v))
 }
 
-// HasEntities applies the HasEdge predicate on the "entities" edge.
-func HasEntities() predicate.Run {
+// HasWorkflows applies the HasEdge predicate on the "workflows" edge.
+func HasWorkflows() predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, EntitiesTable, EntitiesColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, WorkflowsTable, WorkflowsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasEntitiesWith applies the HasEdge predicate on the "entities" edge with a given conditions (other predicates).
-func HasEntitiesWith(preds ...predicate.WorkflowEntity) predicate.Run {
+// HasWorkflowsWith applies the HasEdge predicate on the "workflows" edge with a given conditions (other predicates).
+func HasWorkflowsWith(preds ...predicate.WorkflowEntity) predicate.Run {
 	return predicate.Run(func(s *sql.Selector) {
-		step := newEntitiesStep()
+		step := newWorkflowsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

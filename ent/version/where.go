@@ -63,13 +63,15 @@ func EntityID(v schema.WorkflowEntityID) predicate.Version {
 }
 
 // ChangeID applies equality check predicate on the "change_id" field. It's identical to ChangeIDEQ.
-func ChangeID(v string) predicate.Version {
-	return predicate.Version(sql.FieldEQ(FieldChangeID, v))
+func ChangeID(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldEQ(FieldChangeID, vc))
 }
 
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
-func Version(v int) predicate.Version {
-	return predicate.Version(sql.FieldEQ(FieldVersion, v))
+func Version(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldEQ(FieldVersion, vc))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -113,108 +115,141 @@ func EntityIDNotIn(vs ...schema.WorkflowEntityID) predicate.Version {
 }
 
 // ChangeIDEQ applies the EQ predicate on the "change_id" field.
-func ChangeIDEQ(v string) predicate.Version {
-	return predicate.Version(sql.FieldEQ(FieldChangeID, v))
+func ChangeIDEQ(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldEQ(FieldChangeID, vc))
 }
 
 // ChangeIDNEQ applies the NEQ predicate on the "change_id" field.
-func ChangeIDNEQ(v string) predicate.Version {
-	return predicate.Version(sql.FieldNEQ(FieldChangeID, v))
+func ChangeIDNEQ(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldNEQ(FieldChangeID, vc))
 }
 
 // ChangeIDIn applies the In predicate on the "change_id" field.
-func ChangeIDIn(vs ...string) predicate.Version {
-	return predicate.Version(sql.FieldIn(FieldChangeID, vs...))
+func ChangeIDIn(vs ...schema.VersionChange) predicate.Version {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Version(sql.FieldIn(FieldChangeID, v...))
 }
 
 // ChangeIDNotIn applies the NotIn predicate on the "change_id" field.
-func ChangeIDNotIn(vs ...string) predicate.Version {
-	return predicate.Version(sql.FieldNotIn(FieldChangeID, vs...))
+func ChangeIDNotIn(vs ...schema.VersionChange) predicate.Version {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Version(sql.FieldNotIn(FieldChangeID, v...))
 }
 
 // ChangeIDGT applies the GT predicate on the "change_id" field.
-func ChangeIDGT(v string) predicate.Version {
-	return predicate.Version(sql.FieldGT(FieldChangeID, v))
+func ChangeIDGT(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldGT(FieldChangeID, vc))
 }
 
 // ChangeIDGTE applies the GTE predicate on the "change_id" field.
-func ChangeIDGTE(v string) predicate.Version {
-	return predicate.Version(sql.FieldGTE(FieldChangeID, v))
+func ChangeIDGTE(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldGTE(FieldChangeID, vc))
 }
 
 // ChangeIDLT applies the LT predicate on the "change_id" field.
-func ChangeIDLT(v string) predicate.Version {
-	return predicate.Version(sql.FieldLT(FieldChangeID, v))
+func ChangeIDLT(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldLT(FieldChangeID, vc))
 }
 
 // ChangeIDLTE applies the LTE predicate on the "change_id" field.
-func ChangeIDLTE(v string) predicate.Version {
-	return predicate.Version(sql.FieldLTE(FieldChangeID, v))
+func ChangeIDLTE(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldLTE(FieldChangeID, vc))
 }
 
 // ChangeIDContains applies the Contains predicate on the "change_id" field.
-func ChangeIDContains(v string) predicate.Version {
-	return predicate.Version(sql.FieldContains(FieldChangeID, v))
+func ChangeIDContains(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldContains(FieldChangeID, vc))
 }
 
 // ChangeIDHasPrefix applies the HasPrefix predicate on the "change_id" field.
-func ChangeIDHasPrefix(v string) predicate.Version {
-	return predicate.Version(sql.FieldHasPrefix(FieldChangeID, v))
+func ChangeIDHasPrefix(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldHasPrefix(FieldChangeID, vc))
 }
 
 // ChangeIDHasSuffix applies the HasSuffix predicate on the "change_id" field.
-func ChangeIDHasSuffix(v string) predicate.Version {
-	return predicate.Version(sql.FieldHasSuffix(FieldChangeID, v))
+func ChangeIDHasSuffix(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldHasSuffix(FieldChangeID, vc))
 }
 
 // ChangeIDEqualFold applies the EqualFold predicate on the "change_id" field.
-func ChangeIDEqualFold(v string) predicate.Version {
-	return predicate.Version(sql.FieldEqualFold(FieldChangeID, v))
+func ChangeIDEqualFold(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldEqualFold(FieldChangeID, vc))
 }
 
 // ChangeIDContainsFold applies the ContainsFold predicate on the "change_id" field.
-func ChangeIDContainsFold(v string) predicate.Version {
-	return predicate.Version(sql.FieldContainsFold(FieldChangeID, v))
+func ChangeIDContainsFold(v schema.VersionChange) predicate.Version {
+	vc := string(v)
+	return predicate.Version(sql.FieldContainsFold(FieldChangeID, vc))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.
-func VersionEQ(v int) predicate.Version {
-	return predicate.Version(sql.FieldEQ(FieldVersion, v))
+func VersionEQ(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldEQ(FieldVersion, vc))
 }
 
 // VersionNEQ applies the NEQ predicate on the "version" field.
-func VersionNEQ(v int) predicate.Version {
-	return predicate.Version(sql.FieldNEQ(FieldVersion, v))
+func VersionNEQ(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldNEQ(FieldVersion, vc))
 }
 
 // VersionIn applies the In predicate on the "version" field.
-func VersionIn(vs ...int) predicate.Version {
-	return predicate.Version(sql.FieldIn(FieldVersion, vs...))
+func VersionIn(vs ...schema.VersionNumber) predicate.Version {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = uint(vs[i])
+	}
+	return predicate.Version(sql.FieldIn(FieldVersion, v...))
 }
 
 // VersionNotIn applies the NotIn predicate on the "version" field.
-func VersionNotIn(vs ...int) predicate.Version {
-	return predicate.Version(sql.FieldNotIn(FieldVersion, vs...))
+func VersionNotIn(vs ...schema.VersionNumber) predicate.Version {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = uint(vs[i])
+	}
+	return predicate.Version(sql.FieldNotIn(FieldVersion, v...))
 }
 
 // VersionGT applies the GT predicate on the "version" field.
-func VersionGT(v int) predicate.Version {
-	return predicate.Version(sql.FieldGT(FieldVersion, v))
+func VersionGT(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldGT(FieldVersion, vc))
 }
 
 // VersionGTE applies the GTE predicate on the "version" field.
-func VersionGTE(v int) predicate.Version {
-	return predicate.Version(sql.FieldGTE(FieldVersion, v))
+func VersionGTE(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldGTE(FieldVersion, vc))
 }
 
 // VersionLT applies the LT predicate on the "version" field.
-func VersionLT(v int) predicate.Version {
-	return predicate.Version(sql.FieldLT(FieldVersion, v))
+func VersionLT(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldLT(FieldVersion, vc))
 }
 
 // VersionLTE applies the LTE predicate on the "version" field.
-func VersionLTE(v int) predicate.Version {
-	return predicate.Version(sql.FieldLTE(FieldVersion, v))
+func VersionLTE(v schema.VersionNumber) predicate.Version {
+	vc := uint(v)
+	return predicate.Version(sql.FieldLTE(FieldVersion, vc))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

@@ -82,7 +82,8 @@ type ActivityDataMutation struct {
 	op              Op
 	typ             string
 	id              *schema.ActivityDataID
-	inputs          *[]byte
+	inputs          *[][]uint8
+	appendinputs    [][]uint8
 	output          *[]byte
 	created_at      *time.Time
 	updated_at      *time.Time
@@ -235,12 +236,13 @@ func (m *ActivityDataMutation) ResetEntityID() {
 }
 
 // SetInputs sets the "inputs" field.
-func (m *ActivityDataMutation) SetInputs(b []byte) {
-	m.inputs = &b
+func (m *ActivityDataMutation) SetInputs(u [][]uint8) {
+	m.inputs = &u
+	m.appendinputs = nil
 }
 
 // Inputs returns the value of the "inputs" field in the mutation.
-func (m *ActivityDataMutation) Inputs() (r []byte, exists bool) {
+func (m *ActivityDataMutation) Inputs() (r [][]uint8, exists bool) {
 	v := m.inputs
 	if v == nil {
 		return
@@ -251,7 +253,7 @@ func (m *ActivityDataMutation) Inputs() (r []byte, exists bool) {
 // OldInputs returns the old "inputs" field's value of the ActivityData entity.
 // If the ActivityData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityDataMutation) OldInputs(ctx context.Context) (v []byte, err error) {
+func (m *ActivityDataMutation) OldInputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInputs is only allowed on UpdateOne operations")
 	}
@@ -265,9 +267,23 @@ func (m *ActivityDataMutation) OldInputs(ctx context.Context) (v []byte, err err
 	return oldValue.Inputs, nil
 }
 
+// AppendInputs adds u to the "inputs" field.
+func (m *ActivityDataMutation) AppendInputs(u [][]uint8) {
+	m.appendinputs = append(m.appendinputs, u...)
+}
+
+// AppendedInputs returns the list of values that were appended to the "inputs" field in this mutation.
+func (m *ActivityDataMutation) AppendedInputs() ([][]uint8, bool) {
+	if len(m.appendinputs) == 0 {
+		return nil, false
+	}
+	return m.appendinputs, true
+}
+
 // ClearInputs clears the value of the "inputs" field.
 func (m *ActivityDataMutation) ClearInputs() {
 	m.inputs = nil
+	m.appendinputs = nil
 	m.clearedFields[activitydata.FieldInputs] = struct{}{}
 }
 
@@ -280,6 +296,7 @@ func (m *ActivityDataMutation) InputsCleared() bool {
 // ResetInputs resets all changes to the "inputs" field.
 func (m *ActivityDataMutation) ResetInputs() {
 	m.inputs = nil
+	m.appendinputs = nil
 	delete(m.clearedFields, activitydata.FieldInputs)
 }
 
@@ -548,7 +565,7 @@ func (m *ActivityDataMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case activitydata.FieldInputs:
-		v, ok := value.([]byte)
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -744,7 +761,7 @@ type ActivityEntityMutation struct {
 	handler_name         *string
 	_type                *schema.EntityType
 	status               *schema.EntityStatus
-	step_id              *string
+	step_id              *schema.ActivityStepID
 	run_id               *schema.RunID
 	addrun_id            *schema.RunID
 	retry_policy         *schema.RetryPolicy
@@ -977,12 +994,12 @@ func (m *ActivityEntityMutation) ResetStatus() {
 }
 
 // SetStepID sets the "step_id" field.
-func (m *ActivityEntityMutation) SetStepID(s string) {
-	m.step_id = &s
+func (m *ActivityEntityMutation) SetStepID(ssi schema.ActivityStepID) {
+	m.step_id = &ssi
 }
 
 // StepID returns the value of the "step_id" field in the mutation.
-func (m *ActivityEntityMutation) StepID() (r string, exists bool) {
+func (m *ActivityEntityMutation) StepID() (r schema.ActivityStepID, exists bool) {
 	v := m.step_id
 	if v == nil {
 		return
@@ -993,7 +1010,7 @@ func (m *ActivityEntityMutation) StepID() (r string, exists bool) {
 // OldStepID returns the old "step_id" field's value of the ActivityEntity entity.
 // If the ActivityEntity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityEntityMutation) OldStepID(ctx context.Context) (v string, err error) {
+func (m *ActivityEntityMutation) OldStepID(ctx context.Context) (v schema.ActivityStepID, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
 	}
@@ -1490,7 +1507,7 @@ func (m *ActivityEntityMutation) SetField(name string, value ent.Value) error {
 		m.SetStatus(v)
 		return nil
 	case activityentity.FieldStepID:
-		v, ok := value.(string)
+		v, ok := value.(schema.ActivityStepID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4895,9 +4912,9 @@ type RunMutation struct {
 	created_at         *time.Time
 	updated_at         *time.Time
 	clearedFields      map[string]struct{}
-	entities           map[schema.WorkflowEntityID]struct{}
-	removedentities    map[schema.WorkflowEntityID]struct{}
-	clearedentities    bool
+	workflows          map[schema.WorkflowEntityID]struct{}
+	removedworkflows   map[schema.WorkflowEntityID]struct{}
+	clearedworkflows   bool
 	hierarchies        map[schema.HierarchyID]struct{}
 	removedhierarchies map[schema.HierarchyID]struct{}
 	clearedhierarchies bool
@@ -5118,58 +5135,58 @@ func (m *RunMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// AddEntityIDs adds the "entities" edge to the WorkflowEntity entity by ids.
-func (m *RunMutation) AddEntityIDs(ids ...schema.WorkflowEntityID) {
-	if m.entities == nil {
-		m.entities = make(map[schema.WorkflowEntityID]struct{})
+// AddWorkflowIDs adds the "workflows" edge to the WorkflowEntity entity by ids.
+func (m *RunMutation) AddWorkflowIDs(ids ...schema.WorkflowEntityID) {
+	if m.workflows == nil {
+		m.workflows = make(map[schema.WorkflowEntityID]struct{})
 	}
 	for i := range ids {
-		m.entities[ids[i]] = struct{}{}
+		m.workflows[ids[i]] = struct{}{}
 	}
 }
 
-// ClearEntities clears the "entities" edge to the WorkflowEntity entity.
-func (m *RunMutation) ClearEntities() {
-	m.clearedentities = true
+// ClearWorkflows clears the "workflows" edge to the WorkflowEntity entity.
+func (m *RunMutation) ClearWorkflows() {
+	m.clearedworkflows = true
 }
 
-// EntitiesCleared reports if the "entities" edge to the WorkflowEntity entity was cleared.
-func (m *RunMutation) EntitiesCleared() bool {
-	return m.clearedentities
+// WorkflowsCleared reports if the "workflows" edge to the WorkflowEntity entity was cleared.
+func (m *RunMutation) WorkflowsCleared() bool {
+	return m.clearedworkflows
 }
 
-// RemoveEntityIDs removes the "entities" edge to the WorkflowEntity entity by IDs.
-func (m *RunMutation) RemoveEntityIDs(ids ...schema.WorkflowEntityID) {
-	if m.removedentities == nil {
-		m.removedentities = make(map[schema.WorkflowEntityID]struct{})
+// RemoveWorkflowIDs removes the "workflows" edge to the WorkflowEntity entity by IDs.
+func (m *RunMutation) RemoveWorkflowIDs(ids ...schema.WorkflowEntityID) {
+	if m.removedworkflows == nil {
+		m.removedworkflows = make(map[schema.WorkflowEntityID]struct{})
 	}
 	for i := range ids {
-		delete(m.entities, ids[i])
-		m.removedentities[ids[i]] = struct{}{}
+		delete(m.workflows, ids[i])
+		m.removedworkflows[ids[i]] = struct{}{}
 	}
 }
 
-// RemovedEntities returns the removed IDs of the "entities" edge to the WorkflowEntity entity.
-func (m *RunMutation) RemovedEntitiesIDs() (ids []schema.WorkflowEntityID) {
-	for id := range m.removedentities {
+// RemovedWorkflows returns the removed IDs of the "workflows" edge to the WorkflowEntity entity.
+func (m *RunMutation) RemovedWorkflowsIDs() (ids []schema.WorkflowEntityID) {
+	for id := range m.removedworkflows {
 		ids = append(ids, id)
 	}
 	return
 }
 
-// EntitiesIDs returns the "entities" edge IDs in the mutation.
-func (m *RunMutation) EntitiesIDs() (ids []schema.WorkflowEntityID) {
-	for id := range m.entities {
+// WorkflowsIDs returns the "workflows" edge IDs in the mutation.
+func (m *RunMutation) WorkflowsIDs() (ids []schema.WorkflowEntityID) {
+	for id := range m.workflows {
 		ids = append(ids, id)
 	}
 	return
 }
 
-// ResetEntities resets all changes to the "entities" edge.
-func (m *RunMutation) ResetEntities() {
-	m.entities = nil
-	m.clearedentities = false
-	m.removedentities = nil
+// ResetWorkflows resets all changes to the "workflows" edge.
+func (m *RunMutation) ResetWorkflows() {
+	m.workflows = nil
+	m.clearedworkflows = false
+	m.removedworkflows = nil
 }
 
 // AddHierarchyIDs adds the "hierarchies" edge to the Hierarchy entity by ids.
@@ -5394,8 +5411,8 @@ func (m *RunMutation) ResetField(name string) error {
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *RunMutation) AddedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.entities != nil {
-		edges = append(edges, run.EdgeEntities)
+	if m.workflows != nil {
+		edges = append(edges, run.EdgeWorkflows)
 	}
 	if m.hierarchies != nil {
 		edges = append(edges, run.EdgeHierarchies)
@@ -5407,9 +5424,9 @@ func (m *RunMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *RunMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case run.EdgeEntities:
-		ids := make([]ent.Value, 0, len(m.entities))
-		for id := range m.entities {
+	case run.EdgeWorkflows:
+		ids := make([]ent.Value, 0, len(m.workflows))
+		for id := range m.workflows {
 			ids = append(ids, id)
 		}
 		return ids
@@ -5426,8 +5443,8 @@ func (m *RunMutation) AddedIDs(name string) []ent.Value {
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RunMutation) RemovedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.removedentities != nil {
-		edges = append(edges, run.EdgeEntities)
+	if m.removedworkflows != nil {
+		edges = append(edges, run.EdgeWorkflows)
 	}
 	if m.removedhierarchies != nil {
 		edges = append(edges, run.EdgeHierarchies)
@@ -5439,9 +5456,9 @@ func (m *RunMutation) RemovedEdges() []string {
 // the given name in this mutation.
 func (m *RunMutation) RemovedIDs(name string) []ent.Value {
 	switch name {
-	case run.EdgeEntities:
-		ids := make([]ent.Value, 0, len(m.removedentities))
-		for id := range m.removedentities {
+	case run.EdgeWorkflows:
+		ids := make([]ent.Value, 0, len(m.removedworkflows))
+		for id := range m.removedworkflows {
 			ids = append(ids, id)
 		}
 		return ids
@@ -5458,8 +5475,8 @@ func (m *RunMutation) RemovedIDs(name string) []ent.Value {
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *RunMutation) ClearedEdges() []string {
 	edges := make([]string, 0, 2)
-	if m.clearedentities {
-		edges = append(edges, run.EdgeEntities)
+	if m.clearedworkflows {
+		edges = append(edges, run.EdgeWorkflows)
 	}
 	if m.clearedhierarchies {
 		edges = append(edges, run.EdgeHierarchies)
@@ -5471,8 +5488,8 @@ func (m *RunMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *RunMutation) EdgeCleared(name string) bool {
 	switch name {
-	case run.EdgeEntities:
-		return m.clearedentities
+	case run.EdgeWorkflows:
+		return m.clearedworkflows
 	case run.EdgeHierarchies:
 		return m.clearedhierarchies
 	}
@@ -5491,8 +5508,8 @@ func (m *RunMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *RunMutation) ResetEdge(name string) error {
 	switch name {
-	case run.EdgeEntities:
-		m.ResetEntities()
+	case run.EdgeWorkflows:
+		m.ResetWorkflows()
 		return nil
 	case run.EdgeHierarchies:
 		m.ResetHierarchies()
@@ -10315,7 +10332,7 @@ type SideEffectEntityMutation struct {
 	handler_name            *string
 	_type                   *schema.EntityType
 	status                  *schema.EntityStatus
-	step_id                 *string
+	step_id                 *schema.SideEffectStepID
 	run_id                  *schema.RunID
 	addrun_id               *schema.RunID
 	retry_policy            *schema.RetryPolicy
@@ -10548,12 +10565,12 @@ func (m *SideEffectEntityMutation) ResetStatus() {
 }
 
 // SetStepID sets the "step_id" field.
-func (m *SideEffectEntityMutation) SetStepID(s string) {
-	m.step_id = &s
+func (m *SideEffectEntityMutation) SetStepID(sesi schema.SideEffectStepID) {
+	m.step_id = &sesi
 }
 
 // StepID returns the value of the "step_id" field in the mutation.
-func (m *SideEffectEntityMutation) StepID() (r string, exists bool) {
+func (m *SideEffectEntityMutation) StepID() (r schema.SideEffectStepID, exists bool) {
 	v := m.step_id
 	if v == nil {
 		return
@@ -10564,7 +10581,7 @@ func (m *SideEffectEntityMutation) StepID() (r string, exists bool) {
 // OldStepID returns the old "step_id" field's value of the SideEffectEntity entity.
 // If the SideEffectEntity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SideEffectEntityMutation) OldStepID(ctx context.Context) (v string, err error) {
+func (m *SideEffectEntityMutation) OldStepID(ctx context.Context) (v schema.SideEffectStepID, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
 	}
@@ -11061,7 +11078,7 @@ func (m *SideEffectEntityMutation) SetField(name string, value ent.Value) error 
 		m.SetStatus(v)
 		return nil
 	case sideeffectentity.FieldStepID:
-		v, ok := value.(string)
+		v, ok := value.(schema.SideEffectStepID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -13362,7 +13379,7 @@ type SignalEntityMutation struct {
 	handler_name       *string
 	_type              *schema.EntityType
 	status             *schema.EntityStatus
-	step_id            *string
+	step_id            *schema.SignalStepID
 	run_id             *schema.RunID
 	addrun_id          *schema.RunID
 	retry_policy       *schema.RetryPolicy
@@ -13593,12 +13610,12 @@ func (m *SignalEntityMutation) ResetStatus() {
 }
 
 // SetStepID sets the "step_id" field.
-func (m *SignalEntityMutation) SetStepID(s string) {
-	m.step_id = &s
+func (m *SignalEntityMutation) SetStepID(ssi schema.SignalStepID) {
+	m.step_id = &ssi
 }
 
 // StepID returns the value of the "step_id" field in the mutation.
-func (m *SignalEntityMutation) StepID() (r string, exists bool) {
+func (m *SignalEntityMutation) StepID() (r schema.SignalStepID, exists bool) {
 	v := m.step_id
 	if v == nil {
 		return
@@ -13609,7 +13626,7 @@ func (m *SignalEntityMutation) StepID() (r string, exists bool) {
 // OldStepID returns the old "step_id" field's value of the SignalEntity entity.
 // If the SignalEntity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SignalEntityMutation) OldStepID(ctx context.Context) (v string, err error) {
+func (m *SignalEntityMutation) OldStepID(ctx context.Context) (v schema.SignalStepID, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
 	}
@@ -14067,7 +14084,7 @@ func (m *SignalEntityMutation) SetField(name string, value ent.Value) error {
 		m.SetStatus(v)
 		return nil
 	case signalentity.FieldStepID:
-		v, ok := value.(string)
+		v, ok := value.(schema.SignalStepID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -15870,9 +15887,9 @@ type VersionMutation struct {
 	op              Op
 	typ             string
 	id              *schema.VersionID
-	change_id       *string
-	version         *int
-	addversion      *int
+	change_id       *schema.VersionChange
+	version         *schema.VersionNumber
+	addversion      *schema.VersionNumber
 	data            *map[string]interface{}
 	created_at      *time.Time
 	updated_at      *time.Time
@@ -16025,12 +16042,12 @@ func (m *VersionMutation) ResetEntityID() {
 }
 
 // SetChangeID sets the "change_id" field.
-func (m *VersionMutation) SetChangeID(s string) {
-	m.change_id = &s
+func (m *VersionMutation) SetChangeID(sc schema.VersionChange) {
+	m.change_id = &sc
 }
 
 // ChangeID returns the value of the "change_id" field in the mutation.
-func (m *VersionMutation) ChangeID() (r string, exists bool) {
+func (m *VersionMutation) ChangeID() (r schema.VersionChange, exists bool) {
 	v := m.change_id
 	if v == nil {
 		return
@@ -16041,7 +16058,7 @@ func (m *VersionMutation) ChangeID() (r string, exists bool) {
 // OldChangeID returns the old "change_id" field's value of the Version entity.
 // If the Version object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *VersionMutation) OldChangeID(ctx context.Context) (v string, err error) {
+func (m *VersionMutation) OldChangeID(ctx context.Context) (v schema.VersionChange, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldChangeID is only allowed on UpdateOne operations")
 	}
@@ -16061,13 +16078,13 @@ func (m *VersionMutation) ResetChangeID() {
 }
 
 // SetVersion sets the "version" field.
-func (m *VersionMutation) SetVersion(i int) {
-	m.version = &i
+func (m *VersionMutation) SetVersion(sn schema.VersionNumber) {
+	m.version = &sn
 	m.addversion = nil
 }
 
 // Version returns the value of the "version" field in the mutation.
-func (m *VersionMutation) Version() (r int, exists bool) {
+func (m *VersionMutation) Version() (r schema.VersionNumber, exists bool) {
 	v := m.version
 	if v == nil {
 		return
@@ -16078,7 +16095,7 @@ func (m *VersionMutation) Version() (r int, exists bool) {
 // OldVersion returns the old "version" field's value of the Version entity.
 // If the Version object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *VersionMutation) OldVersion(ctx context.Context) (v int, err error) {
+func (m *VersionMutation) OldVersion(ctx context.Context) (v schema.VersionNumber, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
 	}
@@ -16092,17 +16109,17 @@ func (m *VersionMutation) OldVersion(ctx context.Context) (v int, err error) {
 	return oldValue.Version, nil
 }
 
-// AddVersion adds i to the "version" field.
-func (m *VersionMutation) AddVersion(i int) {
+// AddVersion adds sn to the "version" field.
+func (m *VersionMutation) AddVersion(sn schema.VersionNumber) {
 	if m.addversion != nil {
-		*m.addversion += i
+		*m.addversion += sn
 	} else {
-		m.addversion = &i
+		m.addversion = &sn
 	}
 }
 
 // AddedVersion returns the value that was added to the "version" field in this mutation.
-func (m *VersionMutation) AddedVersion() (r int, exists bool) {
+func (m *VersionMutation) AddedVersion() (r schema.VersionNumber, exists bool) {
 	v := m.addversion
 	if v == nil {
 		return
@@ -16375,14 +16392,14 @@ func (m *VersionMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case version.FieldChangeID:
-		v, ok := value.(string)
+		v, ok := value.(schema.VersionChange)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetChangeID(v)
 		return nil
 	case version.FieldVersion:
-		v, ok := value.(int)
+		v, ok := value.(schema.VersionNumber)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -16440,7 +16457,7 @@ func (m *VersionMutation) AddedField(name string) (ent.Value, bool) {
 func (m *VersionMutation) AddField(name string, value ent.Value) error {
 	switch name {
 	case version.FieldVersion:
-		v, ok := value.(int)
+		v, ok := value.(schema.VersionNumber)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -16579,7 +16596,8 @@ type WorkflowDataMutation struct {
 	paused                      *bool
 	resumable                   *bool
 	is_root                     *bool
-	inputs                      *[]byte
+	inputs                      *[][]uint8
+	appendinputs                [][]uint8
 	continued_from              *schema.WorkflowEntityID
 	addcontinued_from           *schema.WorkflowEntityID
 	continued_execution_from    *schema.WorkflowExecutionID
@@ -16589,7 +16607,6 @@ type WorkflowDataMutation struct {
 	addworkflow_from            *schema.WorkflowEntityID
 	workflow_execution_from     *schema.WorkflowExecutionID
 	addworkflow_execution_from  *schema.WorkflowExecutionID
-	versions                    *map[string]int
 	created_at                  *time.Time
 	updated_at                  *time.Time
 	clearedFields               map[string]struct{}
@@ -16898,12 +16915,13 @@ func (m *WorkflowDataMutation) ResetIsRoot() {
 }
 
 // SetInputs sets the "inputs" field.
-func (m *WorkflowDataMutation) SetInputs(b []byte) {
-	m.inputs = &b
+func (m *WorkflowDataMutation) SetInputs(u [][]uint8) {
+	m.inputs = &u
+	m.appendinputs = nil
 }
 
 // Inputs returns the value of the "inputs" field in the mutation.
-func (m *WorkflowDataMutation) Inputs() (r []byte, exists bool) {
+func (m *WorkflowDataMutation) Inputs() (r [][]uint8, exists bool) {
 	v := m.inputs
 	if v == nil {
 		return
@@ -16914,7 +16932,7 @@ func (m *WorkflowDataMutation) Inputs() (r []byte, exists bool) {
 // OldInputs returns the old "inputs" field's value of the WorkflowData entity.
 // If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowDataMutation) OldInputs(ctx context.Context) (v []byte, err error) {
+func (m *WorkflowDataMutation) OldInputs(ctx context.Context) (v [][]uint8, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInputs is only allowed on UpdateOne operations")
 	}
@@ -16928,9 +16946,23 @@ func (m *WorkflowDataMutation) OldInputs(ctx context.Context) (v []byte, err err
 	return oldValue.Inputs, nil
 }
 
+// AppendInputs adds u to the "inputs" field.
+func (m *WorkflowDataMutation) AppendInputs(u [][]uint8) {
+	m.appendinputs = append(m.appendinputs, u...)
+}
+
+// AppendedInputs returns the list of values that were appended to the "inputs" field in this mutation.
+func (m *WorkflowDataMutation) AppendedInputs() ([][]uint8, bool) {
+	if len(m.appendinputs) == 0 {
+		return nil, false
+	}
+	return m.appendinputs, true
+}
+
 // ClearInputs clears the value of the "inputs" field.
 func (m *WorkflowDataMutation) ClearInputs() {
 	m.inputs = nil
+	m.appendinputs = nil
 	m.clearedFields[workflowdata.FieldInputs] = struct{}{}
 }
 
@@ -16943,6 +16975,7 @@ func (m *WorkflowDataMutation) InputsCleared() bool {
 // ResetInputs resets all changes to the "inputs" field.
 func (m *WorkflowDataMutation) ResetInputs() {
 	m.inputs = nil
+	m.appendinputs = nil
 	delete(m.clearedFields, workflowdata.FieldInputs)
 }
 
@@ -17275,42 +17308,6 @@ func (m *WorkflowDataMutation) ResetWorkflowExecutionFrom() {
 	delete(m.clearedFields, workflowdata.FieldWorkflowExecutionFrom)
 }
 
-// SetVersions sets the "versions" field.
-func (m *WorkflowDataMutation) SetVersions(value map[string]int) {
-	m.versions = &value
-}
-
-// Versions returns the value of the "versions" field in the mutation.
-func (m *WorkflowDataMutation) Versions() (r map[string]int, exists bool) {
-	v := m.versions
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldVersions returns the old "versions" field's value of the WorkflowData entity.
-// If the WorkflowData object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowDataMutation) OldVersions(ctx context.Context) (v map[string]int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVersions is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVersions requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVersions: %w", err)
-	}
-	return oldValue.Versions, nil
-}
-
-// ResetVersions resets all changes to the "versions" field.
-func (m *WorkflowDataMutation) ResetVersions() {
-	m.versions = nil
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (m *WorkflowDataMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -17457,7 +17454,7 @@ func (m *WorkflowDataMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowDataMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.workflow != nil {
 		fields = append(fields, workflowdata.FieldEntityID)
 	}
@@ -17490,9 +17487,6 @@ func (m *WorkflowDataMutation) Fields() []string {
 	}
 	if m.workflow_execution_from != nil {
 		fields = append(fields, workflowdata.FieldWorkflowExecutionFrom)
-	}
-	if m.versions != nil {
-		fields = append(fields, workflowdata.FieldVersions)
 	}
 	if m.created_at != nil {
 		fields = append(fields, workflowdata.FieldCreatedAt)
@@ -17530,8 +17524,6 @@ func (m *WorkflowDataMutation) Field(name string) (ent.Value, bool) {
 		return m.WorkflowFrom()
 	case workflowdata.FieldWorkflowExecutionFrom:
 		return m.WorkflowExecutionFrom()
-	case workflowdata.FieldVersions:
-		return m.Versions()
 	case workflowdata.FieldCreatedAt:
 		return m.CreatedAt()
 	case workflowdata.FieldUpdatedAt:
@@ -17567,8 +17559,6 @@ func (m *WorkflowDataMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldWorkflowFrom(ctx)
 	case workflowdata.FieldWorkflowExecutionFrom:
 		return m.OldWorkflowExecutionFrom(ctx)
-	case workflowdata.FieldVersions:
-		return m.OldVersions(ctx)
 	case workflowdata.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case workflowdata.FieldUpdatedAt:
@@ -17618,7 +17608,7 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 		m.SetIsRoot(v)
 		return nil
 	case workflowdata.FieldInputs:
-		v, ok := value.([]byte)
+		v, ok := value.([][]uint8)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -17658,13 +17648,6 @@ func (m *WorkflowDataMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWorkflowExecutionFrom(v)
-		return nil
-	case workflowdata.FieldVersions:
-		v, ok := value.(map[string]int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVersions(v)
 		return nil
 	case workflowdata.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -17858,9 +17841,6 @@ func (m *WorkflowDataMutation) ResetField(name string) error {
 	case workflowdata.FieldWorkflowExecutionFrom:
 		m.ResetWorkflowExecutionFrom()
 		return nil
-	case workflowdata.FieldVersions:
-		m.ResetVersions()
-		return nil
 	case workflowdata.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -17954,7 +17934,7 @@ type WorkflowEntityMutation struct {
 	handler_name                *string
 	_type                       *schema.EntityType
 	status                      *schema.EntityStatus
-	step_id                     *string
+	step_id                     *schema.WorkflowStepID
 	retry_policy                *schema.RetryPolicy
 	retry_state                 *schema.RetryState
 	created_at                  *time.Time
@@ -18199,12 +18179,12 @@ func (m *WorkflowEntityMutation) ResetStatus() {
 }
 
 // SetStepID sets the "step_id" field.
-func (m *WorkflowEntityMutation) SetStepID(s string) {
-	m.step_id = &s
+func (m *WorkflowEntityMutation) SetStepID(ssi schema.WorkflowStepID) {
+	m.step_id = &ssi
 }
 
 // StepID returns the value of the "step_id" field in the mutation.
-func (m *WorkflowEntityMutation) StepID() (r string, exists bool) {
+func (m *WorkflowEntityMutation) StepID() (r schema.WorkflowStepID, exists bool) {
 	v := m.step_id
 	if v == nil {
 		return
@@ -18215,7 +18195,7 @@ func (m *WorkflowEntityMutation) StepID() (r string, exists bool) {
 // OldStepID returns the old "step_id" field's value of the WorkflowEntity entity.
 // If the WorkflowEntity object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowEntityMutation) OldStepID(ctx context.Context) (v string, err error) {
+func (m *WorkflowEntityMutation) OldStepID(ctx context.Context) (v schema.WorkflowStepID, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
 	}
@@ -18935,7 +18915,7 @@ func (m *WorkflowEntityMutation) SetField(name string, value ent.Value) error {
 		m.SetStatus(v)
 		return nil
 	case workflowentity.FieldStepID:
-		v, ok := value.(string)
+		v, ok := value.(schema.WorkflowStepID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

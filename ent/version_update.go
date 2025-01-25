@@ -45,37 +45,37 @@ func (vu *VersionUpdate) SetNillableEntityID(sei *schema.WorkflowEntityID) *Vers
 }
 
 // SetChangeID sets the "change_id" field.
-func (vu *VersionUpdate) SetChangeID(s string) *VersionUpdate {
-	vu.mutation.SetChangeID(s)
+func (vu *VersionUpdate) SetChangeID(sc schema.VersionChange) *VersionUpdate {
+	vu.mutation.SetChangeID(sc)
 	return vu
 }
 
 // SetNillableChangeID sets the "change_id" field if the given value is not nil.
-func (vu *VersionUpdate) SetNillableChangeID(s *string) *VersionUpdate {
-	if s != nil {
-		vu.SetChangeID(*s)
+func (vu *VersionUpdate) SetNillableChangeID(sc *schema.VersionChange) *VersionUpdate {
+	if sc != nil {
+		vu.SetChangeID(*sc)
 	}
 	return vu
 }
 
 // SetVersion sets the "version" field.
-func (vu *VersionUpdate) SetVersion(i int) *VersionUpdate {
+func (vu *VersionUpdate) SetVersion(sn schema.VersionNumber) *VersionUpdate {
 	vu.mutation.ResetVersion()
-	vu.mutation.SetVersion(i)
+	vu.mutation.SetVersion(sn)
 	return vu
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (vu *VersionUpdate) SetNillableVersion(i *int) *VersionUpdate {
-	if i != nil {
-		vu.SetVersion(*i)
+func (vu *VersionUpdate) SetNillableVersion(sn *schema.VersionNumber) *VersionUpdate {
+	if sn != nil {
+		vu.SetVersion(*sn)
 	}
 	return vu
 }
 
-// AddVersion adds i to the "version" field.
-func (vu *VersionUpdate) AddVersion(i int) *VersionUpdate {
-	vu.mutation.AddVersion(i)
+// AddVersion adds sn to the "version" field.
+func (vu *VersionUpdate) AddVersion(sn schema.VersionNumber) *VersionUpdate {
+	vu.mutation.AddVersion(sn)
 	return vu
 }
 
@@ -187,10 +187,10 @@ func (vu *VersionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.SetField(version.FieldChangeID, field.TypeString, value)
 	}
 	if value, ok := vu.mutation.Version(); ok {
-		_spec.SetField(version.FieldVersion, field.TypeInt, value)
+		_spec.SetField(version.FieldVersion, field.TypeUint, value)
 	}
 	if value, ok := vu.mutation.AddedVersion(); ok {
-		_spec.AddField(version.FieldVersion, field.TypeInt, value)
+		_spec.AddField(version.FieldVersion, field.TypeUint, value)
 	}
 	if value, ok := vu.mutation.Data(); ok {
 		_spec.SetField(version.FieldData, field.TypeJSON, value)
@@ -265,37 +265,37 @@ func (vuo *VersionUpdateOne) SetNillableEntityID(sei *schema.WorkflowEntityID) *
 }
 
 // SetChangeID sets the "change_id" field.
-func (vuo *VersionUpdateOne) SetChangeID(s string) *VersionUpdateOne {
-	vuo.mutation.SetChangeID(s)
+func (vuo *VersionUpdateOne) SetChangeID(sc schema.VersionChange) *VersionUpdateOne {
+	vuo.mutation.SetChangeID(sc)
 	return vuo
 }
 
 // SetNillableChangeID sets the "change_id" field if the given value is not nil.
-func (vuo *VersionUpdateOne) SetNillableChangeID(s *string) *VersionUpdateOne {
-	if s != nil {
-		vuo.SetChangeID(*s)
+func (vuo *VersionUpdateOne) SetNillableChangeID(sc *schema.VersionChange) *VersionUpdateOne {
+	if sc != nil {
+		vuo.SetChangeID(*sc)
 	}
 	return vuo
 }
 
 // SetVersion sets the "version" field.
-func (vuo *VersionUpdateOne) SetVersion(i int) *VersionUpdateOne {
+func (vuo *VersionUpdateOne) SetVersion(sn schema.VersionNumber) *VersionUpdateOne {
 	vuo.mutation.ResetVersion()
-	vuo.mutation.SetVersion(i)
+	vuo.mutation.SetVersion(sn)
 	return vuo
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (vuo *VersionUpdateOne) SetNillableVersion(i *int) *VersionUpdateOne {
-	if i != nil {
-		vuo.SetVersion(*i)
+func (vuo *VersionUpdateOne) SetNillableVersion(sn *schema.VersionNumber) *VersionUpdateOne {
+	if sn != nil {
+		vuo.SetVersion(*sn)
 	}
 	return vuo
 }
 
-// AddVersion adds i to the "version" field.
-func (vuo *VersionUpdateOne) AddVersion(i int) *VersionUpdateOne {
-	vuo.mutation.AddVersion(i)
+// AddVersion adds sn to the "version" field.
+func (vuo *VersionUpdateOne) AddVersion(sn schema.VersionNumber) *VersionUpdateOne {
+	vuo.mutation.AddVersion(sn)
 	return vuo
 }
 
@@ -437,10 +437,10 @@ func (vuo *VersionUpdateOne) sqlSave(ctx context.Context) (_node *Version, err e
 		_spec.SetField(version.FieldChangeID, field.TypeString, value)
 	}
 	if value, ok := vuo.mutation.Version(); ok {
-		_spec.SetField(version.FieldVersion, field.TypeInt, value)
+		_spec.SetField(version.FieldVersion, field.TypeUint, value)
 	}
 	if value, ok := vuo.mutation.AddedVersion(); ok {
-		_spec.AddField(version.FieldVersion, field.TypeInt, value)
+		_spec.AddField(version.FieldVersion, field.TypeUint, value)
 	}
 	if value, ok := vuo.mutation.Data(); ok {
 		_spec.SetField(version.FieldData, field.TypeJSON, value)

@@ -1458,15 +1458,15 @@ func (c *RunClient) GetX(ctx context.Context, id schema.RunID) *Run {
 	return obj
 }
 
-// QueryEntities queries the entities edge of a Run.
-func (c *RunClient) QueryEntities(r *Run) *WorkflowEntityQuery {
+// QueryWorkflows queries the workflows edge of a Run.
+func (c *RunClient) QueryWorkflows(r *Run) *WorkflowEntityQuery {
 	query := (&WorkflowEntityClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := r.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(run.Table, run.FieldID, id),
 			sqlgraph.To(workflowentity.Table, workflowentity.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, run.EntitiesTable, run.EntitiesColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.WorkflowsTable, run.WorkflowsColumn),
 		)
 		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
 		return fromV, nil

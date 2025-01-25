@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/ent/predicate"
 	"github.com/davidroman0O/tempolite/ent/schema"
@@ -107,8 +108,14 @@ func (wdu *WorkflowDataUpdate) SetNillableIsRoot(b *bool) *WorkflowDataUpdate {
 }
 
 // SetInputs sets the "inputs" field.
-func (wdu *WorkflowDataUpdate) SetInputs(b []byte) *WorkflowDataUpdate {
-	wdu.mutation.SetInputs(b)
+func (wdu *WorkflowDataUpdate) SetInputs(u [][]uint8) *WorkflowDataUpdate {
+	wdu.mutation.SetInputs(u)
+	return wdu
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (wdu *WorkflowDataUpdate) AppendInputs(u [][]uint8) *WorkflowDataUpdate {
+	wdu.mutation.AppendInputs(u)
 	return wdu
 }
 
@@ -246,12 +253,6 @@ func (wdu *WorkflowDataUpdate) ClearWorkflowExecutionFrom() *WorkflowDataUpdate 
 	return wdu
 }
 
-// SetVersions sets the "versions" field.
-func (wdu *WorkflowDataUpdate) SetVersions(m map[string]int) *WorkflowDataUpdate {
-	wdu.mutation.SetVersions(m)
-	return wdu
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (wdu *WorkflowDataUpdate) SetCreatedAt(t time.Time) *WorkflowDataUpdate {
 	wdu.mutation.SetCreatedAt(t)
@@ -366,10 +367,15 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.SetField(workflowdata.FieldIsRoot, field.TypeBool, value)
 	}
 	if value, ok := wdu.mutation.Inputs(); ok {
-		_spec.SetField(workflowdata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(workflowdata.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := wdu.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, workflowdata.FieldInputs, value)
+		})
 	}
 	if wdu.mutation.InputsCleared() {
-		_spec.ClearField(workflowdata.FieldInputs, field.TypeBytes)
+		_spec.ClearField(workflowdata.FieldInputs, field.TypeJSON)
 	}
 	if value, ok := wdu.mutation.ContinuedFrom(); ok {
 		_spec.SetField(workflowdata.FieldContinuedFrom, field.TypeInt, value)
@@ -412,9 +418,6 @@ func (wdu *WorkflowDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if wdu.mutation.WorkflowExecutionFromCleared() {
 		_spec.ClearField(workflowdata.FieldWorkflowExecutionFrom, field.TypeInt)
-	}
-	if value, ok := wdu.mutation.Versions(); ok {
-		_spec.SetField(workflowdata.FieldVersions, field.TypeJSON, value)
 	}
 	if value, ok := wdu.mutation.CreatedAt(); ok {
 		_spec.SetField(workflowdata.FieldCreatedAt, field.TypeTime, value)
@@ -548,8 +551,14 @@ func (wduo *WorkflowDataUpdateOne) SetNillableIsRoot(b *bool) *WorkflowDataUpdat
 }
 
 // SetInputs sets the "inputs" field.
-func (wduo *WorkflowDataUpdateOne) SetInputs(b []byte) *WorkflowDataUpdateOne {
-	wduo.mutation.SetInputs(b)
+func (wduo *WorkflowDataUpdateOne) SetInputs(u [][]uint8) *WorkflowDataUpdateOne {
+	wduo.mutation.SetInputs(u)
+	return wduo
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (wduo *WorkflowDataUpdateOne) AppendInputs(u [][]uint8) *WorkflowDataUpdateOne {
+	wduo.mutation.AppendInputs(u)
 	return wduo
 }
 
@@ -684,12 +693,6 @@ func (wduo *WorkflowDataUpdateOne) AddWorkflowExecutionFrom(sei schema.WorkflowE
 // ClearWorkflowExecutionFrom clears the value of the "workflow_execution_from" field.
 func (wduo *WorkflowDataUpdateOne) ClearWorkflowExecutionFrom() *WorkflowDataUpdateOne {
 	wduo.mutation.ClearWorkflowExecutionFrom()
-	return wduo
-}
-
-// SetVersions sets the "versions" field.
-func (wduo *WorkflowDataUpdateOne) SetVersions(m map[string]int) *WorkflowDataUpdateOne {
-	wduo.mutation.SetVersions(m)
 	return wduo
 }
 
@@ -837,10 +840,15 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 		_spec.SetField(workflowdata.FieldIsRoot, field.TypeBool, value)
 	}
 	if value, ok := wduo.mutation.Inputs(); ok {
-		_spec.SetField(workflowdata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(workflowdata.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := wduo.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, workflowdata.FieldInputs, value)
+		})
 	}
 	if wduo.mutation.InputsCleared() {
-		_spec.ClearField(workflowdata.FieldInputs, field.TypeBytes)
+		_spec.ClearField(workflowdata.FieldInputs, field.TypeJSON)
 	}
 	if value, ok := wduo.mutation.ContinuedFrom(); ok {
 		_spec.SetField(workflowdata.FieldContinuedFrom, field.TypeInt, value)
@@ -883,9 +891,6 @@ func (wduo *WorkflowDataUpdateOne) sqlSave(ctx context.Context) (_node *Workflow
 	}
 	if wduo.mutation.WorkflowExecutionFromCleared() {
 		_spec.ClearField(workflowdata.FieldWorkflowExecutionFrom, field.TypeInt)
-	}
-	if value, ok := wduo.mutation.Versions(); ok {
-		_spec.SetField(workflowdata.FieldVersions, field.TypeJSON, value)
 	}
 	if value, ok := wduo.mutation.CreatedAt(); ok {
 		_spec.SetField(workflowdata.FieldCreatedAt, field.TypeTime, value)

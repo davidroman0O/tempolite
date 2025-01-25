@@ -58,8 +58,8 @@ func (sec *SignalEntityCreate) SetNillableStatus(ss *schema.EntityStatus) *Signa
 }
 
 // SetStepID sets the "step_id" field.
-func (sec *SignalEntityCreate) SetStepID(s string) *SignalEntityCreate {
-	sec.mutation.SetStepID(s)
+func (sec *SignalEntityCreate) SetStepID(ssi schema.SignalStepID) *SignalEntityCreate {
+	sec.mutation.SetStepID(ssi)
 	return sec
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/davidroman0O/tempolite/ent/schema"
 )
 
 const (
@@ -20,19 +21,19 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeEntities holds the string denoting the entities edge name in mutations.
-	EdgeEntities = "entities"
+	// EdgeWorkflows holds the string denoting the workflows edge name in mutations.
+	EdgeWorkflows = "workflows"
 	// EdgeHierarchies holds the string denoting the hierarchies edge name in mutations.
 	EdgeHierarchies = "hierarchies"
 	// Table holds the table name of the run in the database.
 	Table = "runs"
-	// EntitiesTable is the table that holds the entities relation/edge.
-	EntitiesTable = "workflow_entities"
-	// EntitiesInverseTable is the table name for the WorkflowEntity entity.
+	// WorkflowsTable is the table that holds the workflows relation/edge.
+	WorkflowsTable = "workflow_entities"
+	// WorkflowsInverseTable is the table name for the WorkflowEntity entity.
 	// It exists in this package in order to avoid circular dependency with the "workflowentity" package.
-	EntitiesInverseTable = "workflow_entities"
-	// EntitiesColumn is the table column denoting the entities relation/edge.
-	EntitiesColumn = "run_id"
+	WorkflowsInverseTable = "workflow_entities"
+	// WorkflowsColumn is the table column denoting the workflows relation/edge.
+	WorkflowsColumn = "run_id"
 	// HierarchiesTable is the table that holds the hierarchies relation/edge.
 	HierarchiesTable = "hierarchies"
 	// HierarchiesInverseTable is the table name for the Hierarchy entity.
@@ -61,6 +62,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultStatus holds the default value on creation for the "status" field.
+	DefaultStatus schema.RunStatus
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -92,17 +95,17 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
-// ByEntitiesCount orders the results by entities count.
-func ByEntitiesCount(opts ...sql.OrderTermOption) OrderOption {
+// ByWorkflowsCount orders the results by workflows count.
+func ByWorkflowsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newEntitiesStep(), opts...)
+		sqlgraph.OrderByNeighborsCount(s, newWorkflowsStep(), opts...)
 	}
 }
 
-// ByEntities orders the results by entities terms.
-func ByEntities(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByWorkflows orders the results by workflows terms.
+func ByWorkflows(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newEntitiesStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -119,11 +122,11 @@ func ByHierarchies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newHierarchiesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-func newEntitiesStep() *sqlgraph.Step {
+func newWorkflowsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(EntitiesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, EntitiesTable, EntitiesColumn),
+		sqlgraph.To(WorkflowsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, WorkflowsTable, WorkflowsColumn),
 	)
 }
 func newHierarchiesStep() *sqlgraph.Step {

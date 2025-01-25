@@ -75,15 +75,15 @@ func (seeu *SideEffectEntityUpdate) SetNillableStatus(ss *schema.EntityStatus) *
 }
 
 // SetStepID sets the "step_id" field.
-func (seeu *SideEffectEntityUpdate) SetStepID(s string) *SideEffectEntityUpdate {
-	seeu.mutation.SetStepID(s)
+func (seeu *SideEffectEntityUpdate) SetStepID(sesi schema.SideEffectStepID) *SideEffectEntityUpdate {
+	seeu.mutation.SetStepID(sesi)
 	return seeu
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (seeu *SideEffectEntityUpdate) SetNillableStepID(s *string) *SideEffectEntityUpdate {
-	if s != nil {
-		seeu.SetStepID(*s)
+func (seeu *SideEffectEntityUpdate) SetNillableStepID(sesi *schema.SideEffectStepID) *SideEffectEntityUpdate {
+	if sesi != nil {
+		seeu.SetStepID(*sesi)
 	}
 	return seeu
 }
@@ -492,15 +492,15 @@ func (seeuo *SideEffectEntityUpdateOne) SetNillableStatus(ss *schema.EntityStatu
 }
 
 // SetStepID sets the "step_id" field.
-func (seeuo *SideEffectEntityUpdateOne) SetStepID(s string) *SideEffectEntityUpdateOne {
-	seeuo.mutation.SetStepID(s)
+func (seeuo *SideEffectEntityUpdateOne) SetStepID(sesi schema.SideEffectStepID) *SideEffectEntityUpdateOne {
+	seeuo.mutation.SetStepID(sesi)
 	return seeuo
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (seeuo *SideEffectEntityUpdateOne) SetNillableStepID(s *string) *SideEffectEntityUpdateOne {
-	if s != nil {
-		seeuo.SetStepID(*s)
+func (seeuo *SideEffectEntityUpdateOne) SetNillableStepID(sesi *schema.SideEffectStepID) *SideEffectEntityUpdateOne {
+	if sesi != nil {
+		seeuo.SetStepID(*sesi)
 	}
 	return seeuo
 }

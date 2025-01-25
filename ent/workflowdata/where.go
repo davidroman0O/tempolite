@@ -82,11 +82,6 @@ func IsRoot(v bool) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldEQ(FieldIsRoot, v))
 }
 
-// Inputs applies equality check predicate on the "inputs" field. It's identical to InputsEQ.
-func Inputs(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldEQ(FieldInputs, v))
-}
-
 // ContinuedFrom applies equality check predicate on the "continued_from" field. It's identical to ContinuedFromEQ.
 func ContinuedFrom(v schema.WorkflowEntityID) predicate.WorkflowData {
 	vc := int(v)
@@ -259,46 +254,6 @@ func IsRootEQ(v bool) predicate.WorkflowData {
 // IsRootNEQ applies the NEQ predicate on the "is_root" field.
 func IsRootNEQ(v bool) predicate.WorkflowData {
 	return predicate.WorkflowData(sql.FieldNEQ(FieldIsRoot, v))
-}
-
-// InputsEQ applies the EQ predicate on the "inputs" field.
-func InputsEQ(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldEQ(FieldInputs, v))
-}
-
-// InputsNEQ applies the NEQ predicate on the "inputs" field.
-func InputsNEQ(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldNEQ(FieldInputs, v))
-}
-
-// InputsIn applies the In predicate on the "inputs" field.
-func InputsIn(vs ...[]byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldIn(FieldInputs, vs...))
-}
-
-// InputsNotIn applies the NotIn predicate on the "inputs" field.
-func InputsNotIn(vs ...[]byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldNotIn(FieldInputs, vs...))
-}
-
-// InputsGT applies the GT predicate on the "inputs" field.
-func InputsGT(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldGT(FieldInputs, v))
-}
-
-// InputsGTE applies the GTE predicate on the "inputs" field.
-func InputsGTE(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldGTE(FieldInputs, v))
-}
-
-// InputsLT applies the LT predicate on the "inputs" field.
-func InputsLT(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldLT(FieldInputs, v))
-}
-
-// InputsLTE applies the LTE predicate on the "inputs" field.
-func InputsLTE(v []byte) predicate.WorkflowData {
-	return predicate.WorkflowData(sql.FieldLTE(FieldInputs, v))
 }
 
 // InputsIsNil applies the IsNil predicate on the "inputs" field.

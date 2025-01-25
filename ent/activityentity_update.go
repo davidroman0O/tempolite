@@ -75,15 +75,15 @@ func (aeu *ActivityEntityUpdate) SetNillableStatus(ss *schema.EntityStatus) *Act
 }
 
 // SetStepID sets the "step_id" field.
-func (aeu *ActivityEntityUpdate) SetStepID(s string) *ActivityEntityUpdate {
-	aeu.mutation.SetStepID(s)
+func (aeu *ActivityEntityUpdate) SetStepID(ssi schema.ActivityStepID) *ActivityEntityUpdate {
+	aeu.mutation.SetStepID(ssi)
 	return aeu
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (aeu *ActivityEntityUpdate) SetNillableStepID(s *string) *ActivityEntityUpdate {
-	if s != nil {
-		aeu.SetStepID(*s)
+func (aeu *ActivityEntityUpdate) SetNillableStepID(ssi *schema.ActivityStepID) *ActivityEntityUpdate {
+	if ssi != nil {
+		aeu.SetStepID(*ssi)
 	}
 	return aeu
 }
@@ -492,15 +492,15 @@ func (aeuo *ActivityEntityUpdateOne) SetNillableStatus(ss *schema.EntityStatus) 
 }
 
 // SetStepID sets the "step_id" field.
-func (aeuo *ActivityEntityUpdateOne) SetStepID(s string) *ActivityEntityUpdateOne {
-	aeuo.mutation.SetStepID(s)
+func (aeuo *ActivityEntityUpdateOne) SetStepID(ssi schema.ActivityStepID) *ActivityEntityUpdateOne {
+	aeuo.mutation.SetStepID(ssi)
 	return aeuo
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (aeuo *ActivityEntityUpdateOne) SetNillableStepID(s *string) *ActivityEntityUpdateOne {
-	if s != nil {
-		aeuo.SetStepID(*s)
+func (aeuo *ActivityEntityUpdateOne) SetNillableStepID(ssi *schema.ActivityStepID) *ActivityEntityUpdateOne {
+	if ssi != nil {
+		aeuo.SetStepID(*ssi)
 	}
 	return aeuo
 }

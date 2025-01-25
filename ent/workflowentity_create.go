@@ -64,8 +64,8 @@ func (wec *WorkflowEntityCreate) SetNillableStatus(ss *schema.EntityStatus) *Wor
 }
 
 // SetStepID sets the "step_id" field.
-func (wec *WorkflowEntityCreate) SetStepID(s string) *WorkflowEntityCreate {
-	wec.mutation.SetStepID(s)
+func (wec *WorkflowEntityCreate) SetStepID(ssi schema.WorkflowStepID) *WorkflowEntityCreate {
+	wec.mutation.SetStepID(ssi)
 	return wec
 }
 
@@ -305,6 +305,11 @@ func (wec *WorkflowEntityCreate) check() error {
 	}
 	if _, ok := wec.mutation.StepID(); !ok {
 		return &ValidationError{Name: "step_id", err: errors.New(`ent: missing required field "WorkflowEntity.step_id"`)}
+	}
+	if v, ok := wec.mutation.StepID(); ok {
+		if err := workflowentity.StepIDValidator(string(v)); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowEntity.step_id": %w`, err)}
+		}
 	}
 	if _, ok := wec.mutation.RunID(); !ok {
 		return &ValidationError{Name: "run_id", err: errors.New(`ent: missing required field "WorkflowEntity.run_id"`)}

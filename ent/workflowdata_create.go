@@ -48,9 +48,25 @@ func (wdc *WorkflowDataCreate) SetPaused(b bool) *WorkflowDataCreate {
 	return wdc
 }
 
+// SetNillablePaused sets the "paused" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillablePaused(b *bool) *WorkflowDataCreate {
+	if b != nil {
+		wdc.SetPaused(*b)
+	}
+	return wdc
+}
+
 // SetResumable sets the "resumable" field.
 func (wdc *WorkflowDataCreate) SetResumable(b bool) *WorkflowDataCreate {
 	wdc.mutation.SetResumable(b)
+	return wdc
+}
+
+// SetNillableResumable sets the "resumable" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillableResumable(b *bool) *WorkflowDataCreate {
+	if b != nil {
+		wdc.SetResumable(*b)
+	}
 	return wdc
 }
 
@@ -60,9 +76,17 @@ func (wdc *WorkflowDataCreate) SetIsRoot(b bool) *WorkflowDataCreate {
 	return wdc
 }
 
+// SetNillableIsRoot sets the "is_root" field if the given value is not nil.
+func (wdc *WorkflowDataCreate) SetNillableIsRoot(b *bool) *WorkflowDataCreate {
+	if b != nil {
+		wdc.SetIsRoot(*b)
+	}
+	return wdc
+}
+
 // SetInputs sets the "inputs" field.
-func (wdc *WorkflowDataCreate) SetInputs(b []byte) *WorkflowDataCreate {
-	wdc.mutation.SetInputs(b)
+func (wdc *WorkflowDataCreate) SetInputs(u [][]uint8) *WorkflowDataCreate {
+	wdc.mutation.SetInputs(u)
 	return wdc
 }
 
@@ -133,12 +157,6 @@ func (wdc *WorkflowDataCreate) SetNillableWorkflowExecutionFrom(sei *schema.Work
 	if sei != nil {
 		wdc.SetWorkflowExecutionFrom(*sei)
 	}
-	return wdc
-}
-
-// SetVersions sets the "versions" field.
-func (wdc *WorkflowDataCreate) SetVersions(m map[string]int) *WorkflowDataCreate {
-	wdc.mutation.SetVersions(m)
 	return wdc
 }
 
@@ -222,6 +240,18 @@ func (wdc *WorkflowDataCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (wdc *WorkflowDataCreate) defaults() {
+	if _, ok := wdc.mutation.Paused(); !ok {
+		v := workflowdata.DefaultPaused
+		wdc.mutation.SetPaused(v)
+	}
+	if _, ok := wdc.mutation.Resumable(); !ok {
+		v := workflowdata.DefaultResumable
+		wdc.mutation.SetResumable(v)
+	}
+	if _, ok := wdc.mutation.IsRoot(); !ok {
+		v := workflowdata.DefaultIsRoot
+		wdc.mutation.SetIsRoot(v)
+	}
 	if _, ok := wdc.mutation.CreatedAt(); !ok {
 		v := workflowdata.DefaultCreatedAt()
 		wdc.mutation.SetCreatedAt(v)
@@ -245,9 +275,6 @@ func (wdc *WorkflowDataCreate) check() error {
 	}
 	if _, ok := wdc.mutation.IsRoot(); !ok {
 		return &ValidationError{Name: "is_root", err: errors.New(`ent: missing required field "WorkflowData.is_root"`)}
-	}
-	if _, ok := wdc.mutation.Versions(); !ok {
-		return &ValidationError{Name: "versions", err: errors.New(`ent: missing required field "WorkflowData.versions"`)}
 	}
 	if _, ok := wdc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "WorkflowData.created_at"`)}
@@ -307,7 +334,7 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 		_node.IsRoot = value
 	}
 	if value, ok := wdc.mutation.Inputs(); ok {
-		_spec.SetField(workflowdata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(workflowdata.FieldInputs, field.TypeJSON, value)
 		_node.Inputs = value
 	}
 	if value, ok := wdc.mutation.ContinuedFrom(); ok {
@@ -329,10 +356,6 @@ func (wdc *WorkflowDataCreate) createSpec() (*WorkflowData, *sqlgraph.CreateSpec
 	if value, ok := wdc.mutation.WorkflowExecutionFrom(); ok {
 		_spec.SetField(workflowdata.FieldWorkflowExecutionFrom, field.TypeInt, value)
 		_node.WorkflowExecutionFrom = &value
-	}
-	if value, ok := wdc.mutation.Versions(); ok {
-		_spec.SetField(workflowdata.FieldVersions, field.TypeJSON, value)
-		_node.Versions = value
 	}
 	if value, ok := wdc.mutation.CreatedAt(); ok {
 		_spec.SetField(workflowdata.FieldCreatedAt, field.TypeTime, value)

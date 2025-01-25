@@ -29,8 +29,8 @@ func (adc *ActivityDataCreate) SetEntityID(sei schema.ActivityEntityID) *Activit
 }
 
 // SetInputs sets the "inputs" field.
-func (adc *ActivityDataCreate) SetInputs(b []byte) *ActivityDataCreate {
-	adc.mutation.SetInputs(b)
+func (adc *ActivityDataCreate) SetInputs(u [][]uint8) *ActivityDataCreate {
+	adc.mutation.SetInputs(u)
 	return adc
 }
 
@@ -177,7 +177,7 @@ func (adc *ActivityDataCreate) createSpec() (*ActivityData, *sqlgraph.CreateSpec
 		_spec.ID.Value = id
 	}
 	if value, ok := adc.mutation.Inputs(); ok {
-		_spec.SetField(activitydata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(activitydata.FieldInputs, field.TypeJSON, value)
 		_node.Inputs = value
 	}
 	if value, ok := adc.mutation.Output(); ok {

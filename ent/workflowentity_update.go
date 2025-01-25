@@ -80,15 +80,15 @@ func (weu *WorkflowEntityUpdate) SetNillableStatus(ss *schema.EntityStatus) *Wor
 }
 
 // SetStepID sets the "step_id" field.
-func (weu *WorkflowEntityUpdate) SetStepID(s string) *WorkflowEntityUpdate {
-	weu.mutation.SetStepID(s)
+func (weu *WorkflowEntityUpdate) SetStepID(ssi schema.WorkflowStepID) *WorkflowEntityUpdate {
+	weu.mutation.SetStepID(ssi)
 	return weu
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (weu *WorkflowEntityUpdate) SetNillableStepID(s *string) *WorkflowEntityUpdate {
-	if s != nil {
-		weu.SetStepID(*s)
+func (weu *WorkflowEntityUpdate) SetNillableStepID(ssi *schema.WorkflowStepID) *WorkflowEntityUpdate {
+	if ssi != nil {
+		weu.SetStepID(*ssi)
 	}
 	return weu
 }
@@ -439,6 +439,11 @@ func (weu *WorkflowEntityUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (weu *WorkflowEntityUpdate) check() error {
+	if v, ok := weu.mutation.StepID(); ok {
+		if err := workflowentity.StepIDValidator(string(v)); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowEntity.step_id": %w`, err)}
+		}
+	}
 	if weu.mutation.RunCleared() && len(weu.mutation.RunIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "WorkflowEntity.run"`)
 	}
@@ -856,15 +861,15 @@ func (weuo *WorkflowEntityUpdateOne) SetNillableStatus(ss *schema.EntityStatus) 
 }
 
 // SetStepID sets the "step_id" field.
-func (weuo *WorkflowEntityUpdateOne) SetStepID(s string) *WorkflowEntityUpdateOne {
-	weuo.mutation.SetStepID(s)
+func (weuo *WorkflowEntityUpdateOne) SetStepID(ssi schema.WorkflowStepID) *WorkflowEntityUpdateOne {
+	weuo.mutation.SetStepID(ssi)
 	return weuo
 }
 
 // SetNillableStepID sets the "step_id" field if the given value is not nil.
-func (weuo *WorkflowEntityUpdateOne) SetNillableStepID(s *string) *WorkflowEntityUpdateOne {
-	if s != nil {
-		weuo.SetStepID(*s)
+func (weuo *WorkflowEntityUpdateOne) SetNillableStepID(ssi *schema.WorkflowStepID) *WorkflowEntityUpdateOne {
+	if ssi != nil {
+		weuo.SetStepID(*ssi)
 	}
 	return weuo
 }
@@ -1228,6 +1233,11 @@ func (weuo *WorkflowEntityUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (weuo *WorkflowEntityUpdateOne) check() error {
+	if v, ok := weuo.mutation.StepID(); ok {
+		if err := workflowentity.StepIDValidator(string(v)); err != nil {
+			return &ValidationError{Name: "step_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowEntity.step_id": %w`, err)}
+		}
+	}
 	if weuo.mutation.RunCleared() && len(weuo.mutation.RunIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "WorkflowEntity.run"`)
 	}

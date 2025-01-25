@@ -23,9 +23,9 @@ type Version struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID schema.WorkflowEntityID `json:"entity_id,omitempty"`
 	// ChangeID holds the value of the "change_id" field.
-	ChangeID string `json:"change_id,omitempty"`
+	ChangeID schema.VersionChange `json:"change_id,omitempty"`
 	// Version holds the value of the "version" field.
-	Version int `json:"version,omitempty"`
+	Version schema.VersionNumber `json:"version,omitempty"`
 	// Data holds the value of the "data" field.
 	Data map[string]interface{} `json:"data,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -102,13 +102,13 @@ func (v *Version) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field change_id", values[i])
 			} else if value.Valid {
-				v.ChangeID = value.String
+				v.ChangeID = schema.VersionChange(value.String)
 			}
 		case version.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field version", values[i])
 			} else if value.Valid {
-				v.Version = int(value.Int64)
+				v.Version = schema.VersionNumber(value.Int64)
 			}
 		case version.FieldData:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -175,7 +175,7 @@ func (v *Version) String() string {
 	builder.WriteString(fmt.Sprintf("%v", v.EntityID))
 	builder.WriteString(", ")
 	builder.WriteString("change_id=")
-	builder.WriteString(v.ChangeID)
+	builder.WriteString(fmt.Sprintf("%v", v.ChangeID))
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", v.Version))

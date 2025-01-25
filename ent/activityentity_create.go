@@ -59,8 +59,8 @@ func (aec *ActivityEntityCreate) SetNillableStatus(ss *schema.EntityStatus) *Act
 }
 
 // SetStepID sets the "step_id" field.
-func (aec *ActivityEntityCreate) SetStepID(s string) *ActivityEntityCreate {
-	aec.mutation.SetStepID(s)
+func (aec *ActivityEntityCreate) SetStepID(ssi schema.ActivityStepID) *ActivityEntityCreate {
+	aec.mutation.SetStepID(ssi)
 	return aec
 }
 

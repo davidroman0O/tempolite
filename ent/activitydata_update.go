@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/ent/activitydata"
 	"github.com/davidroman0O/tempolite/ent/activityentity"
@@ -45,8 +46,14 @@ func (adu *ActivityDataUpdate) SetNillableEntityID(sei *schema.ActivityEntityID)
 }
 
 // SetInputs sets the "inputs" field.
-func (adu *ActivityDataUpdate) SetInputs(b []byte) *ActivityDataUpdate {
-	adu.mutation.SetInputs(b)
+func (adu *ActivityDataUpdate) SetInputs(u [][]uint8) *ActivityDataUpdate {
+	adu.mutation.SetInputs(u)
+	return adu
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (adu *ActivityDataUpdate) AppendInputs(u [][]uint8) *ActivityDataUpdate {
+	adu.mutation.AppendInputs(u)
 	return adu
 }
 
@@ -167,10 +174,15 @@ func (adu *ActivityDataUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := adu.mutation.Inputs(); ok {
-		_spec.SetField(activitydata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(activitydata.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := adu.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, activitydata.FieldInputs, value)
+		})
 	}
 	if adu.mutation.InputsCleared() {
-		_spec.ClearField(activitydata.FieldInputs, field.TypeBytes)
+		_spec.ClearField(activitydata.FieldInputs, field.TypeJSON)
 	}
 	if value, ok := adu.mutation.Output(); ok {
 		_spec.SetField(activitydata.FieldOutput, field.TypeBytes, value)
@@ -248,8 +260,14 @@ func (aduo *ActivityDataUpdateOne) SetNillableEntityID(sei *schema.ActivityEntit
 }
 
 // SetInputs sets the "inputs" field.
-func (aduo *ActivityDataUpdateOne) SetInputs(b []byte) *ActivityDataUpdateOne {
-	aduo.mutation.SetInputs(b)
+func (aduo *ActivityDataUpdateOne) SetInputs(u [][]uint8) *ActivityDataUpdateOne {
+	aduo.mutation.SetInputs(u)
+	return aduo
+}
+
+// AppendInputs appends u to the "inputs" field.
+func (aduo *ActivityDataUpdateOne) AppendInputs(u [][]uint8) *ActivityDataUpdateOne {
+	aduo.mutation.AppendInputs(u)
 	return aduo
 }
 
@@ -400,10 +418,15 @@ func (aduo *ActivityDataUpdateOne) sqlSave(ctx context.Context) (_node *Activity
 		}
 	}
 	if value, ok := aduo.mutation.Inputs(); ok {
-		_spec.SetField(activitydata.FieldInputs, field.TypeBytes, value)
+		_spec.SetField(activitydata.FieldInputs, field.TypeJSON, value)
+	}
+	if value, ok := aduo.mutation.AppendedInputs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, activitydata.FieldInputs, value)
+		})
 	}
 	if aduo.mutation.InputsCleared() {
-		_spec.ClearField(activitydata.FieldInputs, field.TypeBytes)
+		_spec.ClearField(activitydata.FieldInputs, field.TypeJSON)
 	}
 	if value, ok := aduo.mutation.Output(); ok {
 		_spec.SetField(activitydata.FieldOutput, field.TypeBytes, value)

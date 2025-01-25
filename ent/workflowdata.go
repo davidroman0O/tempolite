@@ -31,7 +31,7 @@ type WorkflowData struct {
 	// IsRoot holds the value of the "is_root" field.
 	IsRoot bool `json:"is_root,omitempty"`
 	// Inputs holds the value of the "inputs" field.
-	Inputs []byte `json:"inputs,omitempty"`
+	Inputs [][]uint8 `json:"inputs,omitempty"`
 	// ContinuedFrom holds the value of the "continued_from" field.
 	ContinuedFrom *schema.WorkflowEntityID `json:"continued_from,omitempty"`
 	// ContinuedExecutionFrom holds the value of the "continued_execution_from" field.
@@ -42,8 +42,6 @@ type WorkflowData struct {
 	WorkflowFrom *schema.WorkflowEntityID `json:"workflow_from,omitempty"`
 	// WorkflowExecutionFrom holds the value of the "workflow_execution_from" field.
 	WorkflowExecutionFrom *schema.WorkflowExecutionID `json:"workflow_execution_from,omitempty"`
-	// Versions holds the value of the "versions" field.
-	Versions map[string]int `json:"versions,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -79,7 +77,7 @@ func (*WorkflowData) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case workflowdata.FieldInputs, workflowdata.FieldVersions:
+		case workflowdata.FieldInputs:
 			values[i] = new([]byte)
 		case workflowdata.FieldPaused, workflowdata.FieldResumable, workflowdata.FieldIsRoot:
 			values[i] = new(sql.NullBool)
@@ -143,8 +141,10 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 		case workflowdata.FieldInputs:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field inputs", values[i])
-			} else if value != nil {
-				wd.Inputs = *value
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &wd.Inputs); err != nil {
+					return fmt.Errorf("unmarshal field inputs: %w", err)
+				}
 			}
 		case workflowdata.FieldContinuedFrom:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -180,14 +180,6 @@ func (wd *WorkflowData) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				wd.WorkflowExecutionFrom = new(schema.WorkflowExecutionID)
 				*wd.WorkflowExecutionFrom = schema.WorkflowExecutionID(value.Int64)
-			}
-		case workflowdata.FieldVersions:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field versions", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wd.Versions); err != nil {
-					return fmt.Errorf("unmarshal field versions: %w", err)
-				}
 			}
 		case workflowdata.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -284,9 +276,6 @@ func (wd *WorkflowData) String() string {
 		builder.WriteString("workflow_execution_from=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
-	builder.WriteString(", ")
-	builder.WriteString("versions=")
-	builder.WriteString(fmt.Sprintf("%v", wd.Versions))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(wd.CreatedAt.Format(time.ANSIC))

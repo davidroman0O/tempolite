@@ -149,6 +149,8 @@ var (
 	DefaultType schema.EntityType
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus schema.EntityStatus
+	// StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	StepIDValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.

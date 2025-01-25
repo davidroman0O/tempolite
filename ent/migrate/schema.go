@@ -11,7 +11,7 @@ var (
 	// ActivityDataColumns holds the columns for the "activity_data" table.
 	ActivityDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "inputs", Type: field.TypeBytes, Nullable: true},
+		{Name: "inputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "output", Type: field.TypeBytes, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -153,7 +153,7 @@ var (
 	// RunsColumns holds the columns for the "runs" table.
 	RunsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "status", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "Pending"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -498,7 +498,7 @@ var (
 	VersionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "change_id", Type: field.TypeString},
-		{Name: "version", Type: field.TypeInt},
+		{Name: "version", Type: field.TypeUint, Default: 0},
 		{Name: "data", Type: field.TypeJSON},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -522,16 +522,15 @@ var (
 	WorkflowDataColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "duration", Type: field.TypeString, Nullable: true},
-		{Name: "paused", Type: field.TypeBool},
-		{Name: "resumable", Type: field.TypeBool},
-		{Name: "is_root", Type: field.TypeBool},
-		{Name: "inputs", Type: field.TypeBytes, Nullable: true},
+		{Name: "paused", Type: field.TypeBool, Default: false},
+		{Name: "resumable", Type: field.TypeBool, Default: false},
+		{Name: "is_root", Type: field.TypeBool, Default: false},
+		{Name: "inputs", Type: field.TypeJSON, Nullable: true},
 		{Name: "continued_from", Type: field.TypeInt, Nullable: true},
 		{Name: "continued_execution_from", Type: field.TypeInt, Nullable: true},
 		{Name: "workflow_step_id", Type: field.TypeString, Nullable: true},
 		{Name: "workflow_from", Type: field.TypeInt, Nullable: true},
 		{Name: "workflow_execution_from", Type: field.TypeInt, Nullable: true},
-		{Name: "versions", Type: field.TypeJSON},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "entity_id", Type: field.TypeInt, Unique: true},
@@ -544,7 +543,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "workflow_data_workflow_entities_workflow_data",
-				Columns:    []*schema.Column{WorkflowDataColumns[14]},
+				Columns:    []*schema.Column{WorkflowDataColumns[13]},
 				RefColumns: []*schema.Column{WorkflowEntitiesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -556,7 +555,7 @@ var (
 		{Name: "handler_name", Type: field.TypeString},
 		{Name: "type", Type: field.TypeString, Default: "workflow"},
 		{Name: "status", Type: field.TypeString, Default: "Pending"},
-		{Name: "step_id", Type: field.TypeString},
+		{Name: "step_id", Type: field.TypeString, Unique: true},
 		{Name: "retry_policy", Type: field.TypeJSON},
 		{Name: "retry_state", Type: field.TypeJSON},
 		{Name: "created_at", Type: field.TypeTime},
@@ -577,7 +576,7 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "workflow_entities_runs_entities",
+				Symbol:     "workflow_entities_runs_workflows",
 				Columns:    []*schema.Column{WorkflowEntitiesColumns[10]},
 				RefColumns: []*schema.Column{RunsColumns[0]},
 				OnDelete:   schema.NoAction,
