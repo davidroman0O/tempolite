@@ -18,6 +18,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/schema"
 	"github.com/davidroman0O/tempolite/ent/version"
+	"github.com/davidroman0O/tempolite/ent/workflowdata"
 	"github.com/davidroman0O/tempolite/ent/workflowentity"
 	"github.com/davidroman0O/tempolite/logger"
 	"github.com/sasha-s/go-deadlock"
@@ -356,6 +357,11 @@ func NewWorkflowOptions(opts ...CreateWorkflowOption) CreateWorkflowOptions {
 	return options
 }
 
+// Principal utility function to create a new workflow:
+// - New workflow entity
+// - Sub-workflow entity
+// - Continue as new workflow entity
+// - Detached workflow entity
 func (d *Data) NewWorkflow(
 	workflowFunc interface{},
 	workflowOptions WorkflowOptions,
@@ -495,13 +501,90 @@ func (d *Data) GetVersionsByWorkflowEntityID(workflowEntityID schema.WorkflowEnt
 	return versions, nil
 }
 
-func (d *Data) GetWorkflowEntityByID(workflowEntityID schema.WorkflowEntityID) (*ent.WorkflowEntity, error) {
-	workflowEntity, err := d.client.WorkflowEntity.
-		Query().
-		Where(workflowentity.ID(workflowEntityID)).WithActivityChildren(func(aeq *ent.ActivityEntityQuery) {}).WithExecutions(func(weq *ent.WorkflowExecutionQuery) {}).WithRun(func(rq *ent.RunQuery) {}).WithVersions(func(vq *ent.VersionQuery) {}).WithWorkflowData(func(q *ent.WorkflowDataQuery) {}).WithQueue(func(q *ent.QueueQuery) {}).
-		First(d.Context)
-	if err != nil {
+type getterWorkflowEntityByID struct {
+	withActivityChildren bool
+	withExecutions       bool
+	withRun              bool
+	withVersions         bool
+	withWorkflowData     bool
+	withQueue            bool
+}
+
+type GetterWorkflowEntityByIDOption func(*getterWorkflowEntityByID)
+
+func GetterWorkflowEntityWithActivityChildren() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withActivityChildren = true
+	}
+}
+
+func GetterWorkflowEntityWithExecutions() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withExecutions = true
+	}
+}
+
+func GetterWorkflowEntityWithRun() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withRun = true
+	}
+}
+
+func GetterWorkflowEntityWithVersions() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withVersions = true
+	}
+}
+
+func GetterWorkflowEntityWithWorkflowData() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withWorkflowData = true
+	}
+}
+
+func GetterWorkflowEntityWithQueue() GetterWorkflowEntityByIDOption {
+	return func(o *getterWorkflowEntityByID) {
+		o.withQueue = true
+	}
+}
+
+func (d *Data) GetWorkflowEntityByID(workflowEntityID schema.WorkflowEntityID, opts ...GetterWorkflowEntityByIDOption) (*ent.WorkflowEntity, error) {
+	options := getterWorkflowEntityByID{}
+	for _, o := range opts {
+		o(&options)
+	}
+	var workflowEntity *ent.WorkflowEntity
+	var err error
+	builder := d.client.WorkflowEntity.Query().Where(workflowentity.ID(workflowEntityID))
+	if options.withActivityChildren {
+		builder.WithActivityChildren(func(aeq *ent.ActivityEntityQuery) {})
+	}
+	if options.withExecutions {
+		builder.WithExecutions(func(weq *ent.WorkflowExecutionQuery) {})
+	}
+	if options.withRun {
+		builder.WithRun(func(rq *ent.RunQuery) {})
+	}
+	if options.withVersions {
+		builder.WithVersions(func(vq *ent.VersionQuery) {})
+	}
+	if options.withWorkflowData {
+		builder.WithWorkflowData(func(q *ent.WorkflowDataQuery) {})
+	}
+	if options.withQueue {
+		builder.WithQueue(func(q *ent.QueueQuery) {})
+	}
+	if workflowEntity, err = builder.
+		First(d.Context); err != nil {
 		return nil, err
 	}
 	return workflowEntity, nil
+}
+
+func (d *Data) GetWorkflowData(id schema.WorkflowDataID) (*ent.WorkflowData, error) {
+	workflowData, err := d.client.WorkflowData.Query().Where(workflowdata.ID(id)).First(d.Context)
+	if err != nil {
+		return nil, err
+	}
+	return workflowData, nil
 }
