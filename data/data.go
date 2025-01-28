@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/davidroman0O/comfylite3"
 	"github.com/davidroman0O/tempolite/ent"
+	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/schema"
 	"github.com/davidroman0O/tempolite/ent/version"
@@ -587,4 +588,81 @@ func (d *Data) GetWorkflowData(id schema.WorkflowDataID) (*ent.WorkflowData, err
 		return nil, err
 	}
 	return workflowData, nil
+}
+
+type WorkflowRuntime struct {
+	Entity  *ent.WorkflowEntity
+	Queue   *ent.Queue
+	Data    *ent.WorkflowData
+	Inputs  []interface{}
+	Handler HandlerInfo
+	Parent  *ent.WorkflowEntity
+}
+
+// Return a ready to use WorkflowRuntime for given workflow entity ID
+func (d *Data) GetWorkflowRuntime(workflowEntityID schema.WorkflowEntityID) (*WorkflowRuntime, error) {
+	var err error
+	var entity *ent.WorkflowEntity
+	if entity, err = d.GetWorkflowEntityByID(workflowEntityID); err != nil {
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get workflow entity: %w", err))
+		d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+		return nil, err
+	}
+	var queueEntity *ent.Queue
+	if queueEntity, err = d.client.Queue.Query().Where(queue.ID(entity.Edges.Queue.ID)).Only(d.Context); err != nil {
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get queue: %w", err))
+		d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+		return nil, err
+	}
+	var dataEntity *ent.WorkflowData
+	if dataEntity, err = d.GetWorkflowData(entity.Edges.WorkflowData.ID); err != nil {
+		err := errors.Join(ErrPreparation, fmt.Errorf("failed to get workflow data: %w", err))
+		d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+		return nil, err
+	}
+	var ok bool
+	var handlerInfo HandlerInfo
+	if handlerInfo, ok = d.workflows[entity.HandlerName]; !ok {
+		err := errors.Join(ErrPreparation, fmt.Errorf("workflow handler not found"))
+		d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+		return nil, err
+	}
+	var inputs []interface{}
+	if inputs, err = convertInputsFromSerialization(handlerInfo, dataEntity.Inputs); err != nil {
+		err := errors.Join(ErrPreparation, ErrSerialization, fmt.Errorf("failed to deserialize inputs: %w", err))
+		d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+		return nil, err
+	}
+	var parentEntity *ent.WorkflowEntity
+	// if this is a sub-workflow, find the parent IDs
+	{
+		// Get hierarchies by child entity ID
+		var hierarchies []*ent.Hierarchy
+		if hierarchies, err = d.client.Hierarchy.Query().Where(hierarchy.ChildEntityID(int(entity.ID))).All(d.Context); err != nil {
+			err := errors.Join(ErrPreparation, fmt.Errorf("failed to get hierarchies: %w", err))
+			d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+			return nil, err
+		}
+		if len(hierarchies) > 0 {
+			// Get the parent entity
+			if parentEntity, err = d.GetWorkflowEntityByID(schema.WorkflowEntityID(hierarchies[0].ParentEntityID)); err != nil {
+				err := errors.Join(ErrPreparation, fmt.Errorf("failed to get parent entity: %w", err))
+				d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+				return nil, err
+			}
+		}
+	}
+	// In the case of continued as new, in theory we can either have sub-worklow or continue as new or detached
+	{
+
+	}
+
+	return &WorkflowRuntime{
+		Entity:  entity,
+		Queue:   queueEntity,
+		Data:    dataEntity,
+		Inputs:  inputs,
+		Handler: handlerInfo,
+		Parent:  parentEntity,
+	}, nil
 }
