@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/predicate"
 	"github.com/davidroman0O/tempolite/ent/schema"
 	"github.com/davidroman0O/tempolite/ent/workflowentity"
@@ -183,6 +184,21 @@ func (weu *WorkflowExecutionUpdate) SetExecutionData(w *WorkflowExecutionData) *
 	return weu.SetExecutionDataID(w.ID)
 }
 
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (weu *WorkflowExecutionUpdate) AddEventIDs(ids ...schema.EventLogID) *WorkflowExecutionUpdate {
+	weu.mutation.AddEventIDs(ids...)
+	return weu
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (weu *WorkflowExecutionUpdate) AddEvents(e ...*EventLog) *WorkflowExecutionUpdate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return weu.AddEventIDs(ids...)
+}
+
 // Mutation returns the WorkflowExecutionMutation object of the builder.
 func (weu *WorkflowExecutionUpdate) Mutation() *WorkflowExecutionMutation {
 	return weu.mutation
@@ -198,6 +214,27 @@ func (weu *WorkflowExecutionUpdate) ClearWorkflow() *WorkflowExecutionUpdate {
 func (weu *WorkflowExecutionUpdate) ClearExecutionData() *WorkflowExecutionUpdate {
 	weu.mutation.ClearExecutionData()
 	return weu
+}
+
+// ClearEvents clears all "events" edges to the EventLog entity.
+func (weu *WorkflowExecutionUpdate) ClearEvents() *WorkflowExecutionUpdate {
+	weu.mutation.ClearEvents()
+	return weu
+}
+
+// RemoveEventIDs removes the "events" edge to EventLog entities by IDs.
+func (weu *WorkflowExecutionUpdate) RemoveEventIDs(ids ...schema.EventLogID) *WorkflowExecutionUpdate {
+	weu.mutation.RemoveEventIDs(ids...)
+	return weu
+}
+
+// RemoveEvents removes "events" edges to EventLog entities.
+func (weu *WorkflowExecutionUpdate) RemoveEvents(e ...*EventLog) *WorkflowExecutionUpdate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return weu.RemoveEventIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -337,6 +374,51 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecutiondata.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if weu.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := weu.mutation.RemovedEventsIDs(); len(nodes) > 0 && !weu.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := weu.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -516,6 +598,21 @@ func (weuo *WorkflowExecutionUpdateOne) SetExecutionData(w *WorkflowExecutionDat
 	return weuo.SetExecutionDataID(w.ID)
 }
 
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (weuo *WorkflowExecutionUpdateOne) AddEventIDs(ids ...schema.EventLogID) *WorkflowExecutionUpdateOne {
+	weuo.mutation.AddEventIDs(ids...)
+	return weuo
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (weuo *WorkflowExecutionUpdateOne) AddEvents(e ...*EventLog) *WorkflowExecutionUpdateOne {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return weuo.AddEventIDs(ids...)
+}
+
 // Mutation returns the WorkflowExecutionMutation object of the builder.
 func (weuo *WorkflowExecutionUpdateOne) Mutation() *WorkflowExecutionMutation {
 	return weuo.mutation
@@ -531,6 +628,27 @@ func (weuo *WorkflowExecutionUpdateOne) ClearWorkflow() *WorkflowExecutionUpdate
 func (weuo *WorkflowExecutionUpdateOne) ClearExecutionData() *WorkflowExecutionUpdateOne {
 	weuo.mutation.ClearExecutionData()
 	return weuo
+}
+
+// ClearEvents clears all "events" edges to the EventLog entity.
+func (weuo *WorkflowExecutionUpdateOne) ClearEvents() *WorkflowExecutionUpdateOne {
+	weuo.mutation.ClearEvents()
+	return weuo
+}
+
+// RemoveEventIDs removes the "events" edge to EventLog entities by IDs.
+func (weuo *WorkflowExecutionUpdateOne) RemoveEventIDs(ids ...schema.EventLogID) *WorkflowExecutionUpdateOne {
+	weuo.mutation.RemoveEventIDs(ids...)
+	return weuo
+}
+
+// RemoveEvents removes "events" edges to EventLog entities.
+func (weuo *WorkflowExecutionUpdateOne) RemoveEvents(e ...*EventLog) *WorkflowExecutionUpdateOne {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return weuo.RemoveEventIDs(ids...)
 }
 
 // Where appends a list predicates to the WorkflowExecutionUpdate builder.
@@ -700,6 +818,51 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecutiondata.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if weuo.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := weuo.mutation.RemovedEventsIDs(); len(nodes) > 0 && !weuo.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := weuo.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowexecution.EventsTable,
+			Columns: []string{workflowexecution.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

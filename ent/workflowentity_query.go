@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/ent/activityentity"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/predicate"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -40,6 +41,7 @@ type WorkflowEntityQuery struct {
 	withSagaChildren       *SagaEntityQuery
 	withSideEffectChildren *SideEffectEntityQuery
 	withExecutions         *WorkflowExecutionQuery
+	withEvents             *EventLogQuery
 	withFKs                bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -253,6 +255,28 @@ func (weq *WorkflowEntityQuery) QueryExecutions() *WorkflowExecutionQuery {
 	return query
 }
 
+// QueryEvents chains the current query on the "events" edge.
+func (weq *WorkflowEntityQuery) QueryEvents() *EventLogQuery {
+	query := (&EventLogClient{config: weq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := weq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := weq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowentity.Table, workflowentity.FieldID, selector),
+			sqlgraph.To(eventlog.Table, eventlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflowentity.EventsTable, workflowentity.EventsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(weq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first WorkflowEntity entity from the query.
 // Returns a *NotFoundError when no WorkflowEntity was found.
 func (weq *WorkflowEntityQuery) First(ctx context.Context) (*WorkflowEntity, error) {
@@ -453,6 +477,7 @@ func (weq *WorkflowEntityQuery) Clone() *WorkflowEntityQuery {
 		withSagaChildren:       weq.withSagaChildren.Clone(),
 		withSideEffectChildren: weq.withSideEffectChildren.Clone(),
 		withExecutions:         weq.withExecutions.Clone(),
+		withEvents:             weq.withEvents.Clone(),
 		// clone intermediate query.
 		sql:  weq.sql.Clone(),
 		path: weq.path,
@@ -547,6 +572,17 @@ func (weq *WorkflowEntityQuery) WithExecutions(opts ...func(*WorkflowExecutionQu
 	return weq
 }
 
+// WithEvents tells the query-builder to eager-load the nodes that are connected to
+// the "events" edge. The optional arguments are used to configure the query builder of the edge.
+func (weq *WorkflowEntityQuery) WithEvents(opts ...func(*EventLogQuery)) *WorkflowEntityQuery {
+	query := (&EventLogClient{config: weq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	weq.withEvents = query
+	return weq
+}
+
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
 //
@@ -626,7 +662,7 @@ func (weq *WorkflowEntityQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 		nodes       = []*WorkflowEntity{}
 		withFKs     = weq.withFKs
 		_spec       = weq.querySpec()
-		loadedTypes = [8]bool{
+		loadedTypes = [9]bool{
 			weq.withQueue != nil,
 			weq.withRun != nil,
 			weq.withVersions != nil,
@@ -635,6 +671,7 @@ func (weq *WorkflowEntityQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 			weq.withSagaChildren != nil,
 			weq.withSideEffectChildren != nil,
 			weq.withExecutions != nil,
+			weq.withEvents != nil,
 		}
 	)
 	if weq.withQueue != nil {
@@ -715,6 +752,13 @@ func (weq *WorkflowEntityQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 		if err := weq.loadExecutions(ctx, query, nodes,
 			func(n *WorkflowEntity) { n.Edges.Executions = []*WorkflowExecution{} },
 			func(n *WorkflowEntity, e *WorkflowExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := weq.withEvents; query != nil {
+		if err := weq.loadEvents(ctx, query, nodes,
+			func(n *WorkflowEntity) { n.Edges.Events = []*EventLog{} },
+			func(n *WorkflowEntity, e *EventLog) { n.Edges.Events = append(n.Edges.Events, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -957,6 +1001,36 @@ func (weq *WorkflowEntityQuery) loadExecutions(ctx context.Context, query *Workf
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "workflow_entity_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (weq *WorkflowEntityQuery) loadEvents(ctx context.Context, query *EventLogQuery, nodes []*WorkflowEntity, init func(*WorkflowEntity), assign func(*WorkflowEntity, *EventLog)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[schema.WorkflowEntityID]*WorkflowEntity)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(eventlog.FieldWorkflowID)
+	}
+	query.Where(predicate.EventLog(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(workflowentity.EventsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.WorkflowID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "workflow_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -21,6 +21,7 @@ type SagaEntityID ID
 type SideEffectEntityID ID
 type SignalEntityID ID
 type HierarchyID ID
+type EventLogID ID
 
 // Execution IDs
 type WorkflowExecutionID ID
@@ -149,6 +150,7 @@ func (Run) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("workflows", WorkflowEntity.Type),
 		edge.To("hierarchies", Hierarchy.Type),
+		edge.To("events", EventLog.Type),
 	}
 }
 
@@ -262,6 +264,7 @@ func (WorkflowEntity) Edges() []ent.Edge {
 		edge.To("saga_children", SagaEntity.Type),
 		edge.To("side_effect_children", SideEffectEntity.Type),
 		edge.To("executions", WorkflowExecution.Type),
+		edge.To("events", EventLog.Type),
 	}
 }
 
@@ -360,6 +363,7 @@ func (WorkflowExecution) Edges() []ent.Edge {
 			Field("workflow_entity_id"),
 		edge.To("execution_data", WorkflowExecutionData.Type).
 			Unique(),
+		edge.To("events", EventLog.Type),
 	}
 }
 
@@ -1046,5 +1050,117 @@ func (Hierarchy) Edges() []ent.Edge {
 			Unique().
 			Required().
 			Field("run_id"),
+	}
+}
+
+// Event types
+type EventType string
+
+const (
+	// Workflow lifecycle events
+	EventWorkflowCreated   EventType = "workflow_created"
+	EventWorkflowStarted   EventType = "workflow_started"
+	EventWorkflowCompleted EventType = "workflow_completed"
+	EventWorkflowFailed    EventType = "workflow_failed"
+	EventWorkflowPaused    EventType = "workflow_paused"
+	EventWorkflowResumed   EventType = "workflow_resumed"
+	EventWorkflowCancelled EventType = "workflow_cancelled"
+
+	// Activity events
+	EventActivityCreated   EventType = "activity_created"
+	EventActivityStarted   EventType = "activity_started"
+	EventActivityCompleted EventType = "activity_completed"
+	EventActivityFailed    EventType = "activity_failed"
+
+	// Saga events
+	EventSagaCreated      EventType = "saga_created"
+	EventSagaStarted      EventType = "saga_started"
+	EventSagaCompleted    EventType = "saga_completed"
+	EventSagaFailed       EventType = "saga_failed"
+	EventSagaCompensating EventType = "saga_compensating"
+	EventSagaCompensated  EventType = "saga_compensated"
+
+	// Side effect events
+	EventSideEffectCreated   EventType = "side_effect_created"
+	EventSideEffectStarted   EventType = "side_effect_started"
+	EventSideEffectCompleted EventType = "side_effect_completed"
+	EventSideEffectFailed    EventType = "side_effect_failed"
+
+	// Signal events
+	EventSignalCreated   EventType = "signal_created"
+	EventSignalReceived  EventType = "signal_received"
+	EventSignalProcessed EventType = "signal_processed"
+	EventSignalFailed    EventType = "signal_failed"
+
+	// Version events
+	EventVersionCreated EventType = "version_created"
+	EventVersionChanged EventType = "version_changed"
+
+	// Run events
+	EventRunCreated   EventType = "run_created"
+	EventRunCompleted EventType = "run_completed"
+	EventRunFailed    EventType = "run_failed"
+)
+
+// EventLog schema definition
+type EventLog struct {
+	ent.Schema
+}
+
+func (EventLog) Fields() []ent.Field {
+	return []ent.Field{
+		field.Int("id").
+			GoType(EventLogID(0)),
+		field.Time("timestamp").
+			Default(time.Now),
+		field.String("event_type").
+			GoType(EventType("")),
+		field.Int("run_id").
+			Optional().
+			GoType(RunID(0)),
+		field.Int("workflow_id").
+			Optional().
+			GoType(WorkflowEntityID(0)),
+		field.Int("workflow_execution_id").
+			Optional().
+			GoType(WorkflowExecutionID(0)),
+		field.Int("entity_id").
+			Optional(),
+		field.Int("execution_id").
+			Optional(),
+		field.String("entity_type").
+			Optional().
+			GoType(EntityType("")),
+		field.String("step_id").
+			Optional(),
+		field.String("handler_name").
+			Optional(),
+		field.String("queue_name").
+			Optional(),
+		field.JSON("previous_state", map[string]interface{}{}).
+			Optional(),
+		field.JSON("new_state", map[string]interface{}{}).
+			Optional(),
+		field.String("error").
+			Optional(),
+		field.Time("created_at").
+			Default(time.Now),
+	}
+}
+
+func (EventLog) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.From("run", Run.Type).
+			Ref("events").
+			Field("run_id").
+			Unique(),
+		edge.From("workflow", WorkflowEntity.Type).
+			Ref("events").
+			Field("workflow_id").
+			Unique(),
+		edge.From("workflow_execution", WorkflowExecution.Type).
+			Ref("events").
+			Field("workflow_execution_id").
+			Unique(),
 	}
 }

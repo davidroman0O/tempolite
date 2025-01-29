@@ -282,6 +282,29 @@ func HasHierarchiesWith(preds ...predicate.Hierarchy) predicate.Run {
 	})
 }
 
+// HasEvents applies the HasEdge predicate on the "events" edge.
+func HasEvents() predicate.Run {
+	return predicate.Run(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, EventsTable, EventsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasEventsWith applies the HasEdge predicate on the "events" edge with a given conditions (other predicates).
+func HasEventsWith(preds ...predicate.EventLog) predicate.Run {
+	return predicate.Run(func(s *sql.Selector) {
+		step := newEventsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Run) predicate.Run {
 	return predicate.Run(sql.AndPredicates(predicates...))

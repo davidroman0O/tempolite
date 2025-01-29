@@ -20,6 +20,8 @@ type Tx struct {
 	ActivityExecution *ActivityExecutionClient
 	// ActivityExecutionData is the client for interacting with the ActivityExecutionData builders.
 	ActivityExecutionData *ActivityExecutionDataClient
+	// EventLog is the client for interacting with the EventLog builders.
+	EventLog *EventLogClient
 	// Hierarchy is the client for interacting with the Hierarchy builders.
 	Hierarchy *HierarchyClient
 	// Queue is the client for interacting with the Queue builders.
@@ -197,6 +199,7 @@ func (tx *Tx) init() {
 	tx.ActivityEntity = NewActivityEntityClient(tx.config)
 	tx.ActivityExecution = NewActivityExecutionClient(tx.config)
 	tx.ActivityExecutionData = NewActivityExecutionDataClient(tx.config)
+	tx.EventLog = NewEventLogClient(tx.config)
 	tx.Hierarchy = NewHierarchyClient(tx.config)
 	tx.Queue = NewQueueClient(tx.config)
 	tx.Run = NewRunClient(tx.config)

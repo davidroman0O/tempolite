@@ -16,6 +16,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/activityentity"
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
 	"github.com/davidroman0O/tempolite/ent/activityexecutiondata"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -101,6 +102,7 @@ func checkColumn(table, column string) error {
 			activityentity.Table:          activityentity.ValidColumn,
 			activityexecution.Table:       activityexecution.ValidColumn,
 			activityexecutiondata.Table:   activityexecutiondata.ValidColumn,
+			eventlog.Table:                eventlog.ValidColumn,
 			hierarchy.Table:               hierarchy.ValidColumn,
 			queue.Table:                   queue.ValidColumn,
 			run.Table:                     run.ValidColumn,

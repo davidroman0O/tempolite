@@ -108,6 +108,51 @@ var (
 			},
 		},
 	}
+	// EventLogsColumns holds the columns for the "event_logs" table.
+	EventLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "timestamp", Type: field.TypeTime},
+		{Name: "event_type", Type: field.TypeString},
+		{Name: "entity_id", Type: field.TypeInt, Nullable: true},
+		{Name: "execution_id", Type: field.TypeInt, Nullable: true},
+		{Name: "entity_type", Type: field.TypeString, Nullable: true},
+		{Name: "step_id", Type: field.TypeString, Nullable: true},
+		{Name: "handler_name", Type: field.TypeString, Nullable: true},
+		{Name: "queue_name", Type: field.TypeString, Nullable: true},
+		{Name: "previous_state", Type: field.TypeJSON, Nullable: true},
+		{Name: "new_state", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "run_id", Type: field.TypeInt, Nullable: true},
+		{Name: "workflow_id", Type: field.TypeInt, Nullable: true},
+		{Name: "workflow_execution_id", Type: field.TypeInt, Nullable: true},
+	}
+	// EventLogsTable holds the schema information for the "event_logs" table.
+	EventLogsTable = &schema.Table{
+		Name:       "event_logs",
+		Columns:    EventLogsColumns,
+		PrimaryKey: []*schema.Column{EventLogsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "event_logs_runs_events",
+				Columns:    []*schema.Column{EventLogsColumns[13]},
+				RefColumns: []*schema.Column{RunsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "event_logs_workflow_entities_events",
+				Columns:    []*schema.Column{EventLogsColumns[14]},
+				RefColumns: []*schema.Column{WorkflowEntitiesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "event_logs_workflow_executions_events",
+				Columns:    []*schema.Column{EventLogsColumns[15]},
+				RefColumns: []*schema.Column{WorkflowExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// HierarchiesColumns holds the columns for the "hierarchies" table.
 	HierarchiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -638,6 +683,7 @@ var (
 		ActivityEntitiesTable,
 		ActivityExecutionsTable,
 		ActivityExecutionDataTable,
+		EventLogsTable,
 		HierarchiesTable,
 		QueuesTable,
 		RunsTable,
@@ -667,6 +713,9 @@ func init() {
 	ActivityEntitiesTable.ForeignKeys[0].RefTable = WorkflowEntitiesTable
 	ActivityExecutionsTable.ForeignKeys[0].RefTable = ActivityEntitiesTable
 	ActivityExecutionDataTable.ForeignKeys[0].RefTable = ActivityExecutionsTable
+	EventLogsTable.ForeignKeys[0].RefTable = RunsTable
+	EventLogsTable.ForeignKeys[1].RefTable = WorkflowEntitiesTable
+	EventLogsTable.ForeignKeys[2].RefTable = WorkflowExecutionsTable
 	HierarchiesTable.ForeignKeys[0].RefTable = RunsTable
 	SagaDataTable.ForeignKeys[0].RefTable = SagaEntitiesTable
 	SagaEntitiesTable.ForeignKeys[0].RefTable = WorkflowEntitiesTable

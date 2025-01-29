@@ -49,6 +49,8 @@ const (
 	EdgeSideEffectChildren = "side_effect_children"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
+	// EdgeEvents holds the string denoting the events edge name in mutations.
+	EdgeEvents = "events"
 	// Table holds the table name of the workflowentity in the database.
 	Table = "workflow_entities"
 	// QueueTable is the table that holds the queue relation/edge.
@@ -107,6 +109,13 @@ const (
 	ExecutionsInverseTable = "workflow_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "workflow_entity_id"
+	// EventsTable is the table that holds the events relation/edge.
+	EventsTable = "event_logs"
+	// EventsInverseTable is the table name for the EventLog entity.
+	// It exists in this package in order to avoid circular dependency with the "eventlog" package.
+	EventsInverseTable = "event_logs"
+	// EventsColumn is the table column denoting the events relation/edge.
+	EventsColumn = "workflow_id"
 )
 
 // Columns holds all SQL columns for workflowentity fields.
@@ -292,6 +301,20 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByEventsCount orders the results by events count.
+func ByEventsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEventsStep(), opts...)
+	}
+}
+
+// ByEvents orders the results by events terms.
+func ByEvents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEventsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newQueueStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -346,5 +369,12 @@ func newExecutionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+	)
+}
+func newEventsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EventsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, EventsTable, EventsColumn),
 	)
 }

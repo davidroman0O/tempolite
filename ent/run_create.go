@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/run"
 	"github.com/davidroman0O/tempolite/ent/schema"
@@ -99,6 +100,21 @@ func (rc *RunCreate) AddHierarchies(h ...*Hierarchy) *RunCreate {
 		ids[i] = h[i].ID
 	}
 	return rc.AddHierarchyIDs(ids...)
+}
+
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (rc *RunCreate) AddEventIDs(ids ...schema.EventLogID) *RunCreate {
+	rc.mutation.AddEventIDs(ids...)
+	return rc
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (rc *RunCreate) AddEvents(e ...*EventLog) *RunCreate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return rc.AddEventIDs(ids...)
 }
 
 // Mutation returns the RunMutation object of the builder.
@@ -230,6 +246,22 @@ func (rc *RunCreate) createSpec() (*Run, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(hierarchy.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := rc.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

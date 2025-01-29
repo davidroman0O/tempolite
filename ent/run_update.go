@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/predicate"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -95,6 +96,21 @@ func (ru *RunUpdate) AddHierarchies(h ...*Hierarchy) *RunUpdate {
 	return ru.AddHierarchyIDs(ids...)
 }
 
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (ru *RunUpdate) AddEventIDs(ids ...schema.EventLogID) *RunUpdate {
+	ru.mutation.AddEventIDs(ids...)
+	return ru
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (ru *RunUpdate) AddEvents(e ...*EventLog) *RunUpdate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return ru.AddEventIDs(ids...)
+}
+
 // Mutation returns the RunMutation object of the builder.
 func (ru *RunUpdate) Mutation() *RunMutation {
 	return ru.mutation
@@ -140,6 +156,27 @@ func (ru *RunUpdate) RemoveHierarchies(h ...*Hierarchy) *RunUpdate {
 		ids[i] = h[i].ID
 	}
 	return ru.RemoveHierarchyIDs(ids...)
+}
+
+// ClearEvents clears all "events" edges to the EventLog entity.
+func (ru *RunUpdate) ClearEvents() *RunUpdate {
+	ru.mutation.ClearEvents()
+	return ru
+}
+
+// RemoveEventIDs removes the "events" edge to EventLog entities by IDs.
+func (ru *RunUpdate) RemoveEventIDs(ids ...schema.EventLogID) *RunUpdate {
+	ru.mutation.RemoveEventIDs(ids...)
+	return ru
+}
+
+// RemoveEvents removes "events" edges to EventLog entities.
+func (ru *RunUpdate) RemoveEvents(e ...*EventLog) *RunUpdate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return ru.RemoveEventIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -286,6 +323,51 @@ func (ru *RunUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if ru.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ru.mutation.RemovedEventsIDs(); len(nodes) > 0 && !ru.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ru.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, ru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{run.Label}
@@ -370,6 +452,21 @@ func (ruo *RunUpdateOne) AddHierarchies(h ...*Hierarchy) *RunUpdateOne {
 	return ruo.AddHierarchyIDs(ids...)
 }
 
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (ruo *RunUpdateOne) AddEventIDs(ids ...schema.EventLogID) *RunUpdateOne {
+	ruo.mutation.AddEventIDs(ids...)
+	return ruo
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (ruo *RunUpdateOne) AddEvents(e ...*EventLog) *RunUpdateOne {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return ruo.AddEventIDs(ids...)
+}
+
 // Mutation returns the RunMutation object of the builder.
 func (ruo *RunUpdateOne) Mutation() *RunMutation {
 	return ruo.mutation
@@ -415,6 +512,27 @@ func (ruo *RunUpdateOne) RemoveHierarchies(h ...*Hierarchy) *RunUpdateOne {
 		ids[i] = h[i].ID
 	}
 	return ruo.RemoveHierarchyIDs(ids...)
+}
+
+// ClearEvents clears all "events" edges to the EventLog entity.
+func (ruo *RunUpdateOne) ClearEvents() *RunUpdateOne {
+	ruo.mutation.ClearEvents()
+	return ruo
+}
+
+// RemoveEventIDs removes the "events" edge to EventLog entities by IDs.
+func (ruo *RunUpdateOne) RemoveEventIDs(ids ...schema.EventLogID) *RunUpdateOne {
+	ruo.mutation.RemoveEventIDs(ids...)
+	return ruo
+}
+
+// RemoveEvents removes "events" edges to EventLog entities.
+func (ruo *RunUpdateOne) RemoveEvents(e ...*EventLog) *RunUpdateOne {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return ruo.RemoveEventIDs(ids...)
 }
 
 // Where appends a list predicates to the RunUpdate builder.
@@ -584,6 +702,51 @@ func (ruo *RunUpdateOne) sqlSave(ctx context.Context) (_node *Run, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(hierarchy.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ruo.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ruo.mutation.RemovedEventsIDs(); len(nodes) > 0 && !ruo.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ruo.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   run.EventsTable,
+			Columns: []string{run.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

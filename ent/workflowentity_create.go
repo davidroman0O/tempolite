@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/davidroman0O/tempolite/ent/activityentity"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/run"
 	"github.com/davidroman0O/tempolite/ent/sagaentity"
@@ -237,6 +238,21 @@ func (wec *WorkflowEntityCreate) AddExecutions(w ...*WorkflowExecution) *Workflo
 		ids[i] = w[i].ID
 	}
 	return wec.AddExecutionIDs(ids...)
+}
+
+// AddEventIDs adds the "events" edge to the EventLog entity by IDs.
+func (wec *WorkflowEntityCreate) AddEventIDs(ids ...schema.EventLogID) *WorkflowEntityCreate {
+	wec.mutation.AddEventIDs(ids...)
+	return wec
+}
+
+// AddEvents adds the "events" edges to the EventLog entity.
+func (wec *WorkflowEntityCreate) AddEvents(e ...*EventLog) *WorkflowEntityCreate {
+	ids := make([]schema.EventLogID, len(e))
+	for i := range e {
+		ids[i] = e[i].ID
+	}
+	return wec.AddEventIDs(ids...)
 }
 
 // Mutation returns the WorkflowEntityMutation object of the builder.
@@ -516,6 +532,22 @@ func (wec *WorkflowEntityCreate) createSpec() (*WorkflowEntity, *sqlgraph.Create
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := wec.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   workflowentity.EventsTable,
+			Columns: []string{workflowentity.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(eventlog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

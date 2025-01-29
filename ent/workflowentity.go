@@ -65,9 +65,11 @@ type WorkflowEntityEdges struct {
 	SideEffectChildren []*SideEffectEntity `json:"side_effect_children,omitempty"`
 	// Executions holds the value of the executions edge.
 	Executions []*WorkflowExecution `json:"executions,omitempty"`
+	// Events holds the value of the events edge.
+	Events []*EventLog `json:"events,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [8]bool
+	loadedTypes [9]bool
 }
 
 // QueueOrErr returns the Queue value or an error if the edge
@@ -146,6 +148,15 @@ func (e WorkflowEntityEdges) ExecutionsOrErr() ([]*WorkflowExecution, error) {
 		return e.Executions, nil
 	}
 	return nil, &NotLoadedError{edge: "executions"}
+}
+
+// EventsOrErr returns the Events value or an error if the edge
+// was not loaded in eager-loading.
+func (e WorkflowEntityEdges) EventsOrErr() ([]*EventLog, error) {
+	if e.loadedTypes[8] {
+		return e.Events, nil
+	}
+	return nil, &NotLoadedError{edge: "events"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -300,6 +311,11 @@ func (we *WorkflowEntity) QuerySideEffectChildren() *SideEffectEntityQuery {
 // QueryExecutions queries the "executions" edge of the WorkflowEntity entity.
 func (we *WorkflowEntity) QueryExecutions() *WorkflowExecutionQuery {
 	return NewWorkflowEntityClient(we.config).QueryExecutions(we)
+}
+
+// QueryEvents queries the "events" edge of the WorkflowEntity entity.
+func (we *WorkflowEntity) QueryEvents() *EventLogQuery {
+	return NewWorkflowEntityClient(we.config).QueryEvents(we)
 }
 
 // Update returns a builder for updating this WorkflowEntity.

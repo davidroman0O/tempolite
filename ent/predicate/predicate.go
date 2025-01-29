@@ -18,6 +18,9 @@ type ActivityExecution func(*sql.Selector)
 // ActivityExecutionData is the predicate function for activityexecutiondata builders.
 type ActivityExecutionData func(*sql.Selector)
 
+// EventLog is the predicate function for eventlog builders.
+type EventLog func(*sql.Selector)
+
 // Hierarchy is the predicate function for hierarchy builders.
 type Hierarchy func(*sql.Selector)
 

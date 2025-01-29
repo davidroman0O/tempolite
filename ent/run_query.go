@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/predicate"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -28,6 +29,7 @@ type RunQuery struct {
 	predicates      []predicate.Run
 	withWorkflows   *WorkflowEntityQuery
 	withHierarchies *HierarchyQuery
+	withEvents      *EventLogQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -101,6 +103,28 @@ func (rq *RunQuery) QueryHierarchies() *HierarchyQuery {
 			sqlgraph.From(run.Table, run.FieldID, selector),
 			sqlgraph.To(hierarchy.Table, hierarchy.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, run.HierarchiesTable, run.HierarchiesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryEvents chains the current query on the "events" edge.
+func (rq *RunQuery) QueryEvents() *EventLogQuery {
+	query := (&EventLogClient{config: rq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := rq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := rq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(run.Table, run.FieldID, selector),
+			sqlgraph.To(eventlog.Table, eventlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.EventsTable, run.EventsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -302,6 +326,7 @@ func (rq *RunQuery) Clone() *RunQuery {
 		predicates:      append([]predicate.Run{}, rq.predicates...),
 		withWorkflows:   rq.withWorkflows.Clone(),
 		withHierarchies: rq.withHierarchies.Clone(),
+		withEvents:      rq.withEvents.Clone(),
 		// clone intermediate query.
 		sql:  rq.sql.Clone(),
 		path: rq.path,
@@ -327,6 +352,17 @@ func (rq *RunQuery) WithHierarchies(opts ...func(*HierarchyQuery)) *RunQuery {
 		opt(query)
 	}
 	rq.withHierarchies = query
+	return rq
+}
+
+// WithEvents tells the query-builder to eager-load the nodes that are connected to
+// the "events" edge. The optional arguments are used to configure the query builder of the edge.
+func (rq *RunQuery) WithEvents(opts ...func(*EventLogQuery)) *RunQuery {
+	query := (&EventLogClient{config: rq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	rq.withEvents = query
 	return rq
 }
 
@@ -408,9 +444,10 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 	var (
 		nodes       = []*Run{}
 		_spec       = rq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			rq.withWorkflows != nil,
 			rq.withHierarchies != nil,
+			rq.withEvents != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -442,6 +479,13 @@ func (rq *RunQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Run, err
 		if err := rq.loadHierarchies(ctx, query, nodes,
 			func(n *Run) { n.Edges.Hierarchies = []*Hierarchy{} },
 			func(n *Run, e *Hierarchy) { n.Edges.Hierarchies = append(n.Edges.Hierarchies, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := rq.withEvents; query != nil {
+		if err := rq.loadEvents(ctx, query, nodes,
+			func(n *Run) { n.Edges.Events = []*EventLog{} },
+			func(n *Run, e *EventLog) { n.Edges.Events = append(n.Edges.Events, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -494,6 +538,36 @@ func (rq *RunQuery) loadHierarchies(ctx context.Context, query *HierarchyQuery, 
 	}
 	query.Where(predicate.Hierarchy(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(run.HierarchiesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.RunID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "run_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (rq *RunQuery) loadEvents(ctx context.Context, query *EventLogQuery, nodes []*Run, init func(*Run), assign func(*Run, *EventLog)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[schema.RunID]*Run)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(eventlog.FieldRunID)
+	}
+	query.Where(predicate.EventLog(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(run.EventsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

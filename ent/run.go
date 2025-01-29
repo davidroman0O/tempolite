@@ -36,9 +36,11 @@ type RunEdges struct {
 	Workflows []*WorkflowEntity `json:"workflows,omitempty"`
 	// Hierarchies holds the value of the hierarchies edge.
 	Hierarchies []*Hierarchy `json:"hierarchies,omitempty"`
+	// Events holds the value of the events edge.
+	Events []*EventLog `json:"events,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // WorkflowsOrErr returns the Workflows value or an error if the edge
@@ -57,6 +59,15 @@ func (e RunEdges) HierarchiesOrErr() ([]*Hierarchy, error) {
 		return e.Hierarchies, nil
 	}
 	return nil, &NotLoadedError{edge: "hierarchies"}
+}
+
+// EventsOrErr returns the Events value or an error if the edge
+// was not loaded in eager-loading.
+func (e RunEdges) EventsOrErr() ([]*EventLog, error) {
+	if e.loadedTypes[2] {
+		return e.Events, nil
+	}
+	return nil, &NotLoadedError{edge: "events"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -130,6 +141,11 @@ func (r *Run) QueryWorkflows() *WorkflowEntityQuery {
 // QueryHierarchies queries the "hierarchies" edge of the Run entity.
 func (r *Run) QueryHierarchies() *HierarchyQuery {
 	return NewRunClient(r.config).QueryHierarchies(r)
+}
+
+// QueryEvents queries the "events" edge of the Run entity.
+func (r *Run) QueryEvents() *EventLogQuery {
+	return NewRunClient(r.config).QueryEvents(r)
 }
 
 // Update returns a builder for updating this Run.

@@ -20,6 +20,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/activityentity"
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
 	"github.com/davidroman0O/tempolite/ent/activityexecutiondata"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -56,6 +57,8 @@ type Client struct {
 	ActivityExecution *ActivityExecutionClient
 	// ActivityExecutionData is the client for interacting with the ActivityExecutionData builders.
 	ActivityExecutionData *ActivityExecutionDataClient
+	// EventLog is the client for interacting with the EventLog builders.
+	EventLog *EventLogClient
 	// Hierarchy is the client for interacting with the Hierarchy builders.
 	Hierarchy *HierarchyClient
 	// Queue is the client for interacting with the Queue builders.
@@ -113,6 +116,7 @@ func (c *Client) init() {
 	c.ActivityEntity = NewActivityEntityClient(c.config)
 	c.ActivityExecution = NewActivityExecutionClient(c.config)
 	c.ActivityExecutionData = NewActivityExecutionDataClient(c.config)
+	c.EventLog = NewEventLogClient(c.config)
 	c.Hierarchy = NewHierarchyClient(c.config)
 	c.Queue = NewQueueClient(c.config)
 	c.Run = NewRunClient(c.config)
@@ -230,6 +234,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ActivityEntity:          NewActivityEntityClient(cfg),
 		ActivityExecution:       NewActivityExecutionClient(cfg),
 		ActivityExecutionData:   NewActivityExecutionDataClient(cfg),
+		EventLog:                NewEventLogClient(cfg),
 		Hierarchy:               NewHierarchyClient(cfg),
 		Queue:                   NewQueueClient(cfg),
 		Run:                     NewRunClient(cfg),
@@ -274,6 +279,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ActivityEntity:          NewActivityEntityClient(cfg),
 		ActivityExecution:       NewActivityExecutionClient(cfg),
 		ActivityExecutionData:   NewActivityExecutionDataClient(cfg),
+		EventLog:                NewEventLogClient(cfg),
 		Hierarchy:               NewHierarchyClient(cfg),
 		Queue:                   NewQueueClient(cfg),
 		Run:                     NewRunClient(cfg),
@@ -325,11 +331,12 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.ActivityData, c.ActivityEntity, c.ActivityExecution, c.ActivityExecutionData,
-		c.Hierarchy, c.Queue, c.Run, c.SagaData, c.SagaEntity, c.SagaExecution,
-		c.SagaExecutionData, c.SagaValue, c.SideEffectData, c.SideEffectEntity,
-		c.SideEffectExecution, c.SideEffectExecutionData, c.SignalData, c.SignalEntity,
-		c.SignalExecution, c.SignalExecutionData, c.Version, c.WorkflowData,
-		c.WorkflowEntity, c.WorkflowExecution, c.WorkflowExecutionData,
+		c.EventLog, c.Hierarchy, c.Queue, c.Run, c.SagaData, c.SagaEntity,
+		c.SagaExecution, c.SagaExecutionData, c.SagaValue, c.SideEffectData,
+		c.SideEffectEntity, c.SideEffectExecution, c.SideEffectExecutionData,
+		c.SignalData, c.SignalEntity, c.SignalExecution, c.SignalExecutionData,
+		c.Version, c.WorkflowData, c.WorkflowEntity, c.WorkflowExecution,
+		c.WorkflowExecutionData,
 	} {
 		n.Use(hooks...)
 	}
@@ -340,11 +347,12 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.ActivityData, c.ActivityEntity, c.ActivityExecution, c.ActivityExecutionData,
-		c.Hierarchy, c.Queue, c.Run, c.SagaData, c.SagaEntity, c.SagaExecution,
-		c.SagaExecutionData, c.SagaValue, c.SideEffectData, c.SideEffectEntity,
-		c.SideEffectExecution, c.SideEffectExecutionData, c.SignalData, c.SignalEntity,
-		c.SignalExecution, c.SignalExecutionData, c.Version, c.WorkflowData,
-		c.WorkflowEntity, c.WorkflowExecution, c.WorkflowExecutionData,
+		c.EventLog, c.Hierarchy, c.Queue, c.Run, c.SagaData, c.SagaEntity,
+		c.SagaExecution, c.SagaExecutionData, c.SagaValue, c.SideEffectData,
+		c.SideEffectEntity, c.SideEffectExecution, c.SideEffectExecutionData,
+		c.SignalData, c.SignalEntity, c.SignalExecution, c.SignalExecutionData,
+		c.Version, c.WorkflowData, c.WorkflowEntity, c.WorkflowExecution,
+		c.WorkflowExecutionData,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -361,6 +369,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ActivityExecution.mutate(ctx, m)
 	case *ActivityExecutionDataMutation:
 		return c.ActivityExecutionData.mutate(ctx, m)
+	case *EventLogMutation:
+		return c.EventLog.mutate(ctx, m)
 	case *HierarchyMutation:
 		return c.Hierarchy.mutate(ctx, m)
 	case *QueueMutation:
@@ -1052,6 +1062,187 @@ func (c *ActivityExecutionDataClient) mutate(ctx context.Context, m *ActivityExe
 	}
 }
 
+// EventLogClient is a client for the EventLog schema.
+type EventLogClient struct {
+	config
+}
+
+// NewEventLogClient returns a client for the EventLog from the given config.
+func NewEventLogClient(c config) *EventLogClient {
+	return &EventLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `eventlog.Hooks(f(g(h())))`.
+func (c *EventLogClient) Use(hooks ...Hook) {
+	c.hooks.EventLog = append(c.hooks.EventLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `eventlog.Intercept(f(g(h())))`.
+func (c *EventLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EventLog = append(c.inters.EventLog, interceptors...)
+}
+
+// Create returns a builder for creating a EventLog entity.
+func (c *EventLogClient) Create() *EventLogCreate {
+	mutation := newEventLogMutation(c.config, OpCreate)
+	return &EventLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EventLog entities.
+func (c *EventLogClient) CreateBulk(builders ...*EventLogCreate) *EventLogCreateBulk {
+	return &EventLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EventLogClient) MapCreateBulk(slice any, setFunc func(*EventLogCreate, int)) *EventLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EventLogCreateBulk{err: fmt.Errorf("calling to EventLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EventLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EventLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EventLog.
+func (c *EventLogClient) Update() *EventLogUpdate {
+	mutation := newEventLogMutation(c.config, OpUpdate)
+	return &EventLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EventLogClient) UpdateOne(el *EventLog) *EventLogUpdateOne {
+	mutation := newEventLogMutation(c.config, OpUpdateOne, withEventLog(el))
+	return &EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EventLogClient) UpdateOneID(id schema.EventLogID) *EventLogUpdateOne {
+	mutation := newEventLogMutation(c.config, OpUpdateOne, withEventLogID(id))
+	return &EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EventLog.
+func (c *EventLogClient) Delete() *EventLogDelete {
+	mutation := newEventLogMutation(c.config, OpDelete)
+	return &EventLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EventLogClient) DeleteOne(el *EventLog) *EventLogDeleteOne {
+	return c.DeleteOneID(el.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EventLogClient) DeleteOneID(id schema.EventLogID) *EventLogDeleteOne {
+	builder := c.Delete().Where(eventlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EventLogDeleteOne{builder}
+}
+
+// Query returns a query builder for EventLog.
+func (c *EventLogClient) Query() *EventLogQuery {
+	return &EventLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEventLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EventLog entity by its id.
+func (c *EventLogClient) Get(ctx context.Context, id schema.EventLogID) (*EventLog, error) {
+	return c.Query().Where(eventlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EventLogClient) GetX(ctx context.Context, id schema.EventLogID) *EventLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRun queries the run edge of a EventLog.
+func (c *EventLogClient) QueryRun(el *EventLog) *RunQuery {
+	query := (&RunClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := el.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(eventlog.Table, eventlog.FieldID, id),
+			sqlgraph.To(run.Table, run.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, eventlog.RunTable, eventlog.RunColumn),
+		)
+		fromV = sqlgraph.Neighbors(el.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflow queries the workflow edge of a EventLog.
+func (c *EventLogClient) QueryWorkflow(el *EventLog) *WorkflowEntityQuery {
+	query := (&WorkflowEntityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := el.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(eventlog.Table, eventlog.FieldID, id),
+			sqlgraph.To(workflowentity.Table, workflowentity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, eventlog.WorkflowTable, eventlog.WorkflowColumn),
+		)
+		fromV = sqlgraph.Neighbors(el.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflowExecution queries the workflow_execution edge of a EventLog.
+func (c *EventLogClient) QueryWorkflowExecution(el *EventLog) *WorkflowExecutionQuery {
+	query := (&WorkflowExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := el.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(eventlog.Table, eventlog.FieldID, id),
+			sqlgraph.To(workflowexecution.Table, workflowexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, eventlog.WorkflowExecutionTable, eventlog.WorkflowExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(el.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *EventLogClient) Hooks() []Hook {
+	return c.hooks.EventLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *EventLogClient) Interceptors() []Interceptor {
+	return c.inters.EventLog
+}
+
+func (c *EventLogClient) mutate(ctx context.Context, m *EventLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EventLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EventLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EventLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EventLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EventLog mutation op: %q", m.Op())
+	}
+}
+
 // HierarchyClient is a client for the Hierarchy schema.
 type HierarchyClient struct {
 	config
@@ -1483,6 +1674,22 @@ func (c *RunClient) QueryHierarchies(r *Run) *HierarchyQuery {
 			sqlgraph.From(run.Table, run.FieldID, id),
 			sqlgraph.To(hierarchy.Table, hierarchy.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, run.HierarchiesTable, run.HierarchiesColumn),
+		)
+		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEvents queries the events edge of a Run.
+func (c *RunClient) QueryEvents(r *Run) *EventLogQuery {
+	query := (&EventLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := r.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(run.Table, run.FieldID, id),
+			sqlgraph.To(eventlog.Table, eventlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, run.EventsTable, run.EventsColumn),
 		)
 		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
 		return fromV, nil
@@ -4210,6 +4417,22 @@ func (c *WorkflowEntityClient) QueryExecutions(we *WorkflowEntity) *WorkflowExec
 	return query
 }
 
+// QueryEvents queries the events edge of a WorkflowEntity.
+func (c *WorkflowEntityClient) QueryEvents(we *WorkflowEntity) *EventLogQuery {
+	query := (&EventLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := we.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowentity.Table, workflowentity.FieldID, id),
+			sqlgraph.To(eventlog.Table, eventlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflowentity.EventsTable, workflowentity.EventsColumn),
+		)
+		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *WorkflowEntityClient) Hooks() []Hook {
 	return c.hooks.WorkflowEntity
@@ -4368,6 +4591,22 @@ func (c *WorkflowExecutionClient) QueryExecutionData(we *WorkflowExecution) *Wor
 			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
 			sqlgraph.To(workflowexecutiondata.Table, workflowexecutiondata.FieldID),
 			sqlgraph.Edge(sqlgraph.O2O, false, workflowexecution.ExecutionDataTable, workflowexecution.ExecutionDataColumn),
+		)
+		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEvents queries the events edge of a WorkflowExecution.
+func (c *WorkflowExecutionClient) QueryEvents(we *WorkflowExecution) *EventLogQuery {
+	query := (&EventLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := we.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowexecution.Table, workflowexecution.FieldID, id),
+			sqlgraph.To(eventlog.Table, eventlog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, workflowexecution.EventsTable, workflowexecution.EventsColumn),
 		)
 		fromV = sqlgraph.Neighbors(we.driver.Dialect(), step)
 		return fromV, nil
@@ -4553,18 +4792,18 @@ func (c *WorkflowExecutionDataClient) mutate(ctx context.Context, m *WorkflowExe
 type (
 	hooks struct {
 		ActivityData, ActivityEntity, ActivityExecution, ActivityExecutionData,
-		Hierarchy, Queue, Run, SagaData, SagaEntity, SagaExecution, SagaExecutionData,
-		SagaValue, SideEffectData, SideEffectEntity, SideEffectExecution,
-		SideEffectExecutionData, SignalData, SignalEntity, SignalExecution,
-		SignalExecutionData, Version, WorkflowData, WorkflowEntity, WorkflowExecution,
-		WorkflowExecutionData []ent.Hook
+		EventLog, Hierarchy, Queue, Run, SagaData, SagaEntity, SagaExecution,
+		SagaExecutionData, SagaValue, SideEffectData, SideEffectEntity,
+		SideEffectExecution, SideEffectExecutionData, SignalData, SignalEntity,
+		SignalExecution, SignalExecutionData, Version, WorkflowData, WorkflowEntity,
+		WorkflowExecution, WorkflowExecutionData []ent.Hook
 	}
 	inters struct {
 		ActivityData, ActivityEntity, ActivityExecution, ActivityExecutionData,
-		Hierarchy, Queue, Run, SagaData, SagaEntity, SagaExecution, SagaExecutionData,
-		SagaValue, SideEffectData, SideEffectEntity, SideEffectExecution,
-		SideEffectExecutionData, SignalData, SignalEntity, SignalExecution,
-		SignalExecutionData, Version, WorkflowData, WorkflowEntity, WorkflowExecution,
-		WorkflowExecutionData []ent.Interceptor
+		EventLog, Hierarchy, Queue, Run, SagaData, SagaEntity, SagaExecution,
+		SagaExecutionData, SagaValue, SideEffectData, SideEffectEntity,
+		SideEffectExecution, SideEffectExecutionData, SignalData, SignalEntity,
+		SignalExecution, SignalExecutionData, Version, WorkflowData, WorkflowEntity,
+		WorkflowExecution, WorkflowExecutionData []ent.Interceptor
 	}
 )

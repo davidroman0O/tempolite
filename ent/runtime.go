@@ -9,6 +9,7 @@ import (
 	"github.com/davidroman0O/tempolite/ent/activityentity"
 	"github.com/davidroman0O/tempolite/ent/activityexecution"
 	"github.com/davidroman0O/tempolite/ent/activityexecutiondata"
+	"github.com/davidroman0O/tempolite/ent/eventlog"
 	"github.com/davidroman0O/tempolite/ent/hierarchy"
 	"github.com/davidroman0O/tempolite/ent/queue"
 	"github.com/davidroman0O/tempolite/ent/run"
@@ -97,6 +98,16 @@ func init() {
 	activityexecutiondata.DefaultUpdatedAt = activityexecutiondataDescUpdatedAt.Default.(func() time.Time)
 	// activityexecutiondata.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	activityexecutiondata.UpdateDefaultUpdatedAt = activityexecutiondataDescUpdatedAt.UpdateDefault.(func() time.Time)
+	eventlogFields := schema.EventLog{}.Fields()
+	_ = eventlogFields
+	// eventlogDescTimestamp is the schema descriptor for timestamp field.
+	eventlogDescTimestamp := eventlogFields[1].Descriptor()
+	// eventlog.DefaultTimestamp holds the default value on creation for the timestamp field.
+	eventlog.DefaultTimestamp = eventlogDescTimestamp.Default.(func() time.Time)
+	// eventlogDescCreatedAt is the schema descriptor for created_at field.
+	eventlogDescCreatedAt := eventlogFields[15].Descriptor()
+	// eventlog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	eventlog.DefaultCreatedAt = eventlogDescCreatedAt.Default.(func() time.Time)
 	hierarchyFields := schema.Hierarchy{}.Fields()
 	_ = hierarchyFields
 	// hierarchyDescCreatedAt is the schema descriptor for created_at field.

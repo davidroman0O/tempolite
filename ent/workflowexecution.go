@@ -48,9 +48,11 @@ type WorkflowExecutionEdges struct {
 	Workflow *WorkflowEntity `json:"workflow,omitempty"`
 	// ExecutionData holds the value of the execution_data edge.
 	ExecutionData *WorkflowExecutionData `json:"execution_data,omitempty"`
+	// Events holds the value of the events edge.
+	Events []*EventLog `json:"events,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // WorkflowOrErr returns the Workflow value or an error if the edge
@@ -73,6 +75,15 @@ func (e WorkflowExecutionEdges) ExecutionDataOrErr() (*WorkflowExecutionData, er
 		return nil, &NotFoundError{label: workflowexecutiondata.Label}
 	}
 	return nil, &NotLoadedError{edge: "execution_data"}
+}
+
+// EventsOrErr returns the Events value or an error if the edge
+// was not loaded in eager-loading.
+func (e WorkflowExecutionEdges) EventsOrErr() ([]*EventLog, error) {
+	if e.loadedTypes[2] {
+		return e.Events, nil
+	}
+	return nil, &NotLoadedError{edge: "events"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -177,6 +188,11 @@ func (we *WorkflowExecution) QueryWorkflow() *WorkflowEntityQuery {
 // QueryExecutionData queries the "execution_data" edge of the WorkflowExecution entity.
 func (we *WorkflowExecution) QueryExecutionData() *WorkflowExecutionDataQuery {
 	return NewWorkflowExecutionClient(we.config).QueryExecutionData(we)
+}
+
+// QueryEvents queries the "events" edge of the WorkflowExecution entity.
+func (we *WorkflowExecution) QueryEvents() *EventLogQuery {
+	return NewWorkflowExecutionClient(we.config).QueryEvents(we)
 }
 
 // Update returns a builder for updating this WorkflowExecution.
