@@ -597,6 +597,15 @@ type WorkflowRuntime struct {
 	Inputs  []interface{}
 	Handler HandlerInfo
 	Parent  *ent.WorkflowEntity
+
+	// Add new fields for parent/continuation info
+	ParentEntityID    schema.WorkflowEntityID
+	ParentExecutionID schema.WorkflowExecutionID
+	ParentStepID      string
+	ContinuedFrom     schema.WorkflowEntityID
+	ContinuedExecFrom schema.WorkflowExecutionID
+	WorkflowFrom      schema.WorkflowEntityID
+	WorkflowExecFrom  schema.WorkflowExecutionID
 }
 
 // Return a ready to use WorkflowRuntime for given workflow entity ID
@@ -652,17 +661,62 @@ func (d *Data) GetWorkflowRuntime(workflowEntityID schema.WorkflowEntityID) (*Wo
 			}
 		}
 	}
-	// In the case of continued as new, in theory we can either have sub-worklow or continue as new or detached
-	{
 
-	}
-
-	return &WorkflowRuntime{
+	workflowRuntime := &WorkflowRuntime{
 		Entity:  entity,
 		Queue:   queueEntity,
 		Data:    dataEntity,
 		Inputs:  inputs,
 		Handler: handlerInfo,
 		Parent:  parentEntity,
-	}, nil
+	}
+
+	// In the case of continued as new, in theory we can either have sub-workflow or continue as new or detached
+	{
+		// Handle continued as new case
+		if dataEntity.ContinuedFrom != nil && dataEntity.ContinuedExecutionFrom != nil {
+			workflowRuntime.ContinuedFrom = *dataEntity.ContinuedFrom
+			workflowRuntime.ContinuedExecFrom = *dataEntity.ContinuedExecutionFrom
+			// Set parent info from continuation
+			workflowRuntime.ParentEntityID = *dataEntity.ContinuedFrom
+			workflowRuntime.ParentExecutionID = *dataEntity.ContinuedExecutionFrom
+		}
+
+		// Handle sub-workflow case
+		if dataEntity.WorkflowFrom != nil && dataEntity.WorkflowExecutionFrom != nil {
+			workflowRuntime.WorkflowFrom = *dataEntity.WorkflowFrom
+			workflowRuntime.WorkflowExecFrom = *dataEntity.WorkflowExecutionFrom
+			// Set parent info from workflow reference
+			workflowRuntime.ParentEntityID = *dataEntity.WorkflowFrom
+			workflowRuntime.ParentExecutionID = *dataEntity.WorkflowExecutionFrom
+		}
+
+		// Get parent step ID if it exists
+		if dataEntity.WorkflowStepID != nil {
+			workflowRuntime.ParentStepID = *dataEntity.WorkflowStepID
+		}
+
+		// If we found parent entity earlier from hierarchies, update the entity ID and execution ID
+		if parentEntity != nil {
+			// Get hierarchies by child entity ID to get execution info
+			hierarchies, err := d.client.Hierarchy.Query().
+				Where(
+					hierarchy.ChildEntityID(int(entity.ID)),
+				).All(d.Context)
+			if err != nil {
+				err := errors.Join(ErrPreparation, fmt.Errorf("failed to get hierarchies: %w", err))
+				d.config.logger.Error(context.Background(), err.Error(), "workflow_entity_id", workflowEntityID)
+				return nil, err
+			}
+
+			if len(hierarchies) > 0 {
+				h := hierarchies[0]
+				workflowRuntime.ParentEntityID = schema.WorkflowEntityID(h.ParentEntityID)
+				workflowRuntime.ParentExecutionID = schema.WorkflowExecutionID(h.ParentExecutionID)
+				workflowRuntime.ParentStepID = h.ParentStepID
+			}
+		}
+	}
+
+	return workflowRuntime, nil
 }
