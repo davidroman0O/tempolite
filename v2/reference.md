@@ -1432,529 +1432,230 @@ func (db *SQLiteDatabase) AddWorkflowEntity(runID RunID, entity *WorkflowEntity)
 }
 ```
 
-### Serialization
+### Serialization System
 
-All data is serialized to JSON for storage:
+**What is the Serialization System?**
+The serialization system is responsible for converting Go objects to and from binary representations for storage and replay. It uses the `github.com/stephenfire/go-rtl` library for efficient, type-safe serialization.
 
+**Architectural Role:**
+- **Type Preservation**: Maintains Go type information across serialization boundaries
+- **State Persistence**: Enables workflow state to be stored and retrieved
+- **Replay Support**: Makes deterministic replay possible through exact state reproduction
+- **Data Conversion**: Handles conversions between Go objects and binary formats
+
+**Key Properties:**
+- **Type Safety**: Preserves type information during serialization/deserialization
+- **Binary Efficiency**: More compact and faster than JSON or other text formats
+- **Reflection-Based**: Works with arbitrary Go types without custom serialization code
+- **Value/Pointer Handling**: Correctly processes both value and pointer types
+
+**Core Implementation:**
 ```go
-func serializeInputs(args []interface{}) ([]byte, error) {
-    // Serialize each argument
-    serialized := make([]interface{}, len(args))
-    for i, arg := range args {
-        // Get the type name
-        t := reflect.TypeOf(arg)
-        typeName := ""
-        if t != nil {
-            typeName = t.String()
+// Serialize workflow/activity inputs to binary
+func serializeInputs(inputs []interface{}) ([][]byte, error) {
+    result := make([][]byte, len(inputs))
+    
+    for i, input := range inputs {
+        // Dereference pointers to get the actual value
+        if reflect.TypeOf(input).Kind() == reflect.Ptr {
+            input = reflect.ValueOf(input).Elem().Interface()
         }
         
-        // Convert to JSON
-        data, err := json.Marshal(arg)
-        if err != nil {
-            return nil, fmt.Errorf("failed to serialize argument %d: %w", i, err)
+        // Encode using rtl
+        buf := new(bytes.Buffer)
+        if err := rtl.Encode(input, buf); err != nil {
+            return nil, fmt.Errorf("failed to serialize input %d: %w", i, err)
         }
         
-        // Store with type information
-        serialized[i] = map[string]interface{}{
-            "type": typeName,
-            "data": string(data),
-        }
+        result[i] = buf.Bytes()
     }
     
-    // Serialize the entire array
-    return json.Marshal(serialized)
+    return result, nil
 }
 
-func deserializeOutputs(data []byte, results []interface{}) error {
-    // Parse the JSON
-    var serialized []map[string]interface{}
-    if err := json.Unmarshal(data, &serialized); err != nil {
+// Deserialize workflow/activity outputs with correct types
+func deserializeOutputs(typeInfo []reflect.Type, serializedOutputs [][]byte) ([]interface{}, error) {
+    if len(typeInfo) != len(serializedOutputs) {
+        return nil, fmt.Errorf("type count mismatch: expected %d, got %d", 
+                               len(typeInfo), len(serializedOutputs))
+    }
+    
+    results := make([]interface{}, len(typeInfo))
+    
+    for i, outputType := range typeInfo {
+        // Create a new instance of the expected type
+        decodedObj := reflect.New(outputType).Interface()
+        
+        // Decode using rtl
+        buf := bytes.NewBuffer(serializedOutputs[i])
+        if err := rtl.Decode(buf, decodedObj); err != nil {
+            return nil, fmt.Errorf("failed to deserialize output %d: %w", i, err)
+        }
+        
+        // Extract the value from the pointer
+        results[i] = reflect.ValueOf(decodedObj).Elem().Interface()
+    }
+    
+    return results, nil
+}
+
+// Helper for single value serialization
+func serializeValue(value interface{}) ([]byte, error) {
+    // Dereference pointer if needed
+    if reflect.TypeOf(value).Kind() == reflect.Ptr {
+        value = reflect.ValueOf(value).Elem().Interface()
+    }
+    
+    buf := new(bytes.Buffer)
+    if err := rtl.Encode(value, buf); err != nil {
+        return nil, err
+    }
+    
+    return buf.Bytes(), nil
+}
+
+// Helper for single value deserialization into a pointer
+func deserializeValue(data []byte, outputPtr interface{}) error {
+    if reflect.TypeOf(outputPtr).Kind() != reflect.Ptr {
+        return fmt.Errorf("output must be a pointer")
+    }
+    
+    buf := bytes.NewBuffer(data)
+    if err := rtl.Decode(buf, outputPtr); err != nil {
         return err
-    }
-    
-    // Check length match
-    if len(serialized) != len(results) {
-        return fmt.Errorf("result count mismatch: expected %d, got %d", 
-                         len(results), len(serialized))
-    }
-    
-    // Deserialize each result
-    for i, result := range results {
-        resultValue := reflect.ValueOf(result)
-        if resultValue.Kind() != reflect.Ptr || resultValue.IsNil() {
-            return fmt.Errorf("result %d must be a non-nil pointer", i)
-        }
-        
-        // Get the JSON data
-        jsonData := serialized[i]["data"].(string)
-        
-        // Unmarshal into the pointer
-        if err := json.Unmarshal([]byte(jsonData), result); err != nil {
-            return fmt.Errorf("failed to deserialize result %d: %w", i, err)
-        }
     }
     
     return nil
 }
 ```
+
+**Function References Serialization:**
+For workflows and activities, we need to serialize function references:
+
+```go
+// Represents a serializable reference to a function
+type FunctionReference struct {
+    // Package path (e.g., "github.com/user/project/package")
+    PackagePath string
+    
+    // Function name within the package
+    FunctionName string
+    
+    // Parameter type information
+    ParamTypes []reflect.Type
+    
+    // Return type information
+    ReturnTypes []reflect.Type
+}
+
+// Convert a function to its reference
+func getFunctionReference(fn interface{}) (FunctionReference, error) {
+    fnType := reflect.TypeOf(fn)
+    
+    if fnType.Kind() != reflect.Func {
+        return FunctionReference{}, fmt.Errorf("not a function")
+    }
+    
+    // Get full function name with package path
+    fnVal := reflect.ValueOf(fn)
+    fnPtr := fnVal.Pointer()
+    fullName := runtime.FuncForPC(fnPtr).Name()
+    
+    // Split into package path and function name
+    lastDot := strings.LastIndex(fullName, ".")
+    if lastDot == -1 {
+        return FunctionReference{}, fmt.Errorf("cannot determine package path")
+    }
+    
+    packagePath := fullName[:lastDot]
+    functionName := fullName[lastDot+1:]
+    
+    // Collect parameter types
+    paramTypes := make([]reflect.Type, fnType.NumIn())
+    for i := 0; i < fnType.NumIn(); i++ {
+        paramTypes[i] = fnType.In(i)
+    }
+    
+    // Collect return types
+    returnTypes := make([]reflect.Type, fnType.NumOut())
+    for i := 0; i < fnType.NumOut(); i++ {
+        returnTypes[i] = fnType.Out(i)
+    }
+    
+    return FunctionReference{
+        PackagePath: packagePath,
+        FunctionName: functionName,
+        ParamTypes: paramTypes,
+        ReturnTypes: returnTypes,
+    }, nil
+}
+```
+
+**Usage in Workflow Context:**
+The serialization system is used throughout the workflow engine:
+
+1. **Workflow Inputs/Outputs**: When starting or completing a workflow
+```go
+// Store workflow input data
+serializedInputs, err := serializeInputs(args)
+if err != nil {
+    return nil, err
+}
+
+// Store in database
+db.SaveWorkflowInputs(workflowID, serializedInputs)
+```
+
+2. **Activity Inputs/Outputs**: For activity invocation and result handling
+```go
+// During replay, deserialize activity results
+var result string
+err := ctx.Activity("process-order").Run(ProcessOrder, orderID).Get(&result)
+```
+
+3. **Side Effect Values**: For deterministic replay
+```go
+// Side effect values are serialized and stored
+var uuid string
+if err := ctx.SideEffect("generate-uuid").Run(GenerateUUID).Get(&uuid); err != nil {
+    return err
+}
+```
+
+4. **Signal Payloads**: For external communication
+```go
+// Signal data is serialized for storage
+signalData, err := serializeValue(approvalData)
+if err != nil {
+    return err
+}
+db.SaveSignalData(signalID, signalData)
+```
+
+**Database Schema Integration:**
+The serialized data is stored in the database:
+
+```sql
+-- Workflow data with serialized inputs
+CREATE TABLE workflow_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_id INTEGER NOT NULL,
+    input_data BLOB, -- Binary serialized inputs
+    FOREIGN KEY (entity_id) REFERENCES workflow_entities(id)
+);
+
+-- Workflow execution results
+CREATE TABLE workflow_execution_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id INTEGER NOT NULL,
+    output_data BLOB, -- Binary serialized outputs
+    error TEXT,
+    FOREIGN KEY (execution_id) REFERENCES workflow_executions(id)
+);
+```
+
+This serialization approach provides efficient, type-safe persistence for all workflow components, ensuring that workflow state can be accurately restored during replay or recovery scenarios.
 
 ## Activity Implementation
 
 Activities execute outside the workflow's deterministic environment:
-
-```go
-// ActivityContext provides the API for activities
-type ActivityContext interface {
-    // Context operations
-    WithTimeout(timeout time.Duration) ActivityContext
-    WithHeartbeat(interval time.Duration) ActivityContext
-    
-    // Heartbeat operations
-    RecordHeartbeat(details ...interface{}) error
-    
-    // Information access
-    Info() ActivityInfo
-    Logger() Logger
-}
-
-type ActivityInfo struct {
-    ID          ActivityEntityID
-    ExecutionID ActivityExecutionID
-    Attempt     int
-    WorkflowID  WorkflowEntityID
-    Deadline    *time.Time
-}
-```
-
-Example activity implementation:
-```go
-func ProcessPayment(ctx tempolite.ActivityContext, orderID string, amount float64) error {
-    logger := ctx.Logger()
-    logger.Info("Processing payment", "order", orderID, "amount", amount)
-    
-    // Long-running operation with heartbeats
-    for i := 0; i < 10; i++ {
-        // Do work
-        if err := processStep(i, orderID, amount); err != nil {
-            return err
-        }
-        
-        // Record heartbeat
-        if err := ctx.RecordHeartbeat(i, "Processing"); err != nil {
-            return err
-        }
-        
-        time.Sleep(time.Second)
-    }
-    
-    return nil
-}
-```
-
-## Side Effect Implementation
-
-Side effects handle non-deterministic operations:
-
-```go
-// SideEffectContext provides API for side effects
-type SideEffectContext interface {
-    // Information access
-    Info() SideEffectInfo
-    Logger() Logger
-}
-
-type SideEffectInfo struct {
-    ID          SideEffectEntityID
-    ExecutionID SideEffectExecutionID
-    WorkflowID  WorkflowEntityID
-}
-```
-
-Example side effect implementation:
-```go
-func GenerateOrderID(ctx tempolite.SideEffectContext) string {
-    // This non-deterministic operation will be recorded
-    // and replayed with the same result during workflow replay
-    return uuid.New().String()
-}
-
-// In workflow
-var orderID string
-if err := ctx.SideEffect("generate-order-id")
-    .Run(GenerateOrderID)
-    .Get(&orderID); err != nil {
-    return err
-}
-```
-
-## Signal Implementation
-
-Signals enable external communication with running workflows:
-
-```go
-// SideEffectContext provides API for side effects
-type SideEffectContext interface {
-    // Information access
-    Info() SideEffectInfo
-    Logger() Logger
-}
-
-type SideEffectInfo struct {
-    ID          SideEffectEntityID
-    ExecutionID SideEffectExecutionID
-    WorkflowID  WorkflowEntityID
-}
-```
-
-Example signal handling in a workflow:
-```go
-func OrderApprovalWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
-    // Process order
-    if err := ctx.Activity("process")
-        .Run(ProcessOrder, orderID)
-        .Get(); err != nil {
-        return err
-    }
-    
-    // Wait for approval signal with rich handling
-    ctx.Logger().Info("Waiting for approval signal")
-    
-    // Option 1: Simple signal waiting with timeout
-    var approval bool
-    if err := ctx.WaitForSignal("approval")
-        .WithTimeout(24 * time.Hour)
-        .Get(&approval); err != nil {
-        if errors.Is(err, tempolite.ErrSignalTimeout) {
-            return ctx.Activity("timeout-handler")
-                .Run(HandleApprovalTimeout, orderID)
-                .Get()
-        }
-        return err
-    }
-    
-    if !approval {
-        return ctx.Activity("rejection-handler")
-            .Run(HandleRejection, orderID)
-            .Get()
-    }
-    
-    // Option 2: Wait for any of multiple possible signals
-    signalChan := ctx.WaitForAnySignal([]string{"expedite", "cancel", "discount"})
-    
-    // Set up a timer for reminder
-    timerChan := ctx.NewTimer(12 * time.Hour).Chan()
-    
-    select {
-    case signal := <-signalChan:
-        switch signal.Name() {
-        case "expedite":
-            var expediteLevel int
-            signal.Get(&expediteLevel)
-            return ctx.Activity("expedite")
-                .Run(ExpediteOrder, orderID, expediteLevel)
-                .Get()
-        case "cancel":
-            return ctx.Activity("cancel")
-                .Run(CancelOrder, orderID)
-                .Get()
-        case "discount":
-            var discountPercent float64
-            signal.Get(&discountPercent)
-            return ctx.Activity("apply-discount")
-                .Run(ApplyDiscount, orderID, discountPercent)
-                .Get()
-        }
-    case <-timerChan:
-        // Send reminder but keep waiting
-        _ = ctx.Activity("send-reminder")
-            .Run(SendApprovalReminder, orderID)
-            .Get()
-        
-        // Continue waiting for signals
-        signal := <-signalChan
-        // Handle signal...
-    }
-    
-    return nil
-}
-```
-
-## Saga Pattern Implementation
-
-Sagas coordinate transactions with compensation:
-
-```go
-// Transaction function
-func ReserveFunds(ctx tempolite.SagaTransactionContext, orderID string, amount float64) (string, error) {
-    reservationID, err := paymentService.Reserve(orderID, amount)
-    if err != nil {
-        return "", err
-    }
-    return reservationID, nil
-}
-
-// Compensation function
-func CancelReservation(ctx tempolite.SagaCompensationContext, orderID string) error {
-    // Get the reservation ID from the transaction result
-    var reservationID string
-    if err := ctx.GetTransactionResult(&reservationID); err != nil {
-        return err
-    }
-    
-    return paymentService.CancelReservation(reservationID)
-}
-
-// In workflow
-saga := ctx.Saga("payment")
-
-// Add steps with transaction and compensation
-saga.AddStep("reserve", ReserveFunds, CancelReservation, orderID, amount)
-saga.AddStep("charge", ChargeCard, RefundCharge, paymentID)
-
-// Execute
-if err := saga.Execute(); err != nil {
-    // All completed steps were compensated
-    return err
-}
-```
-
-## ContinueAsNew Implementation
-
-ContinueAsNew restarts workflows with new parameters:
-
-```go
-func LongRunningWorkflow(ctx tempolite.WorkflowContext, counter int) error {
-    // Check termination condition
-    if counter >= 100 {
-        return nil
-    }
-    
-    // Do some work
-    if err := ctx.Activity("process-batch")
-        .Run(ProcessBatch, counter)
-        .Get(); err != nil {
-        return err
-    }
-    
-    // Continue as new with incremented counter
-    return ctx.ContinueAsNew(counter + 1)
-}
-```
-
-Internally, ContinueAsNew:
-1. Completes the current workflow execution
-2. Creates a new workflow execution with the same entity ID
-3. Preserves signals and workflow identity
-4. Starts the workflow from the beginning with new arguments
-
-## Child Workflow Implementation
-
-Child workflows enable modular composition:
-
-```go
-func ParentWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
-    // Start child workflow
-    var result string
-    if err := ctx.Workflow("process-payment")
-        .WithRetries(RetryPolicy{MaxAttempts: 3})
-        .Run(PaymentWorkflow, orderID)
-        .Get(&result); err != nil {
-        return err
-    }
-    
-    logger.Info("Payment processed", "result", result)
-    return nil
-}
-
-func PaymentWorkflow(ctx tempolite.WorkflowContext, orderID string) (string, error) {
-    // Child workflow implementation
-    return "Payment processed successfully", nil
-}
-```
-
-Internally, child workflows:
-1. Create a new workflow entity with its own ID
-2. Establish parent-child relationship in the database
-3. Execute independently but track hierarchy
-4. Return results to parent workflow
-
-## Advanced Patterns
-
-### Workflow Versioning
-
-Handle workflow evolution with version checks:
-
-```go
-func MyWorkflow(ctx tempolite.WorkflowContext, input string) error {
-    // Handle different versions
-    return ctx.WithVersion(1, func(ctx tempolite.WorkflowContext) error {
-        // Original v1 implementation
-        return ctx.Activity("v1-activity").Run(ActivityV1, input).Get()
-    }).WithVersion(2, func(ctx tempolite.WorkflowContext) error {
-        // New v2 implementation with additional steps
-        if err := ctx.Activity("v2-activity").Run(ActivityV2, input).Get(); err != nil {
-            return err
-        }
-        return ctx.Activity("v2-extra").Run(ExtraActivity, input).Get()
-    }).Execute()
-}
-```
-
-### Parallel Activity Execution
-
-Execute activities in parallel:
-
-```go
-func OrderProcessWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
-    // Create parallel group
-    group := ctx.ParallelGroup()
-    
-    // Add activities to run in parallel
-    validateFuture := group.Activity("validate").Run(ValidateOrder, orderID)
-    paymentFuture := group.Activity("payment").Run(ProcessPayment, orderID)
-    shippingFuture := group.Activity("shipping").Run(ArrangeShipping, orderID)
-    
-    // Wait for all to complete
-    if err := group.Wait(); err != nil {
-        return err
-    }
-    
-    // Process results
-    var validationResult bool
-    if err := validateFuture.Get(&validationResult); err != nil {
-        return err
-    }
-    
-    if !validationResult {
-        return errors.New("order validation failed")
-    }
-    
-    // Process other results
-    // ...
-    
-    return nil
-}
-```
-
-### Conditional Workflow Execution
-
-Execute workflow logic conditionally:
-
-```go
-func ProcessOrderWorkflow(ctx tempolite.WorkflowContext, order Order) error {
-    // Validate first
-    var isValid bool
-    if err := ctx.Activity("validate").Run(ValidateOrder, order).Get(&isValid); err != nil {
-        return err
-    }
-    
-    if !isValid {
-        return errors.New("invalid order")
-    }
-    
-    // Process based on order type
-    if order.Value > 1000 {
-        // High-value order process
-        return ctx.Workflow("high-value-process")
-            .Run(HighValueProcess, order)
-            .Get()
-    } else {
-        // Standard order process
-        return ctx.Workflow("standard-process")
-            .Run(StandardProcess, order)
-            .Get()
-    }
-}
-```
-
-### Query Handlers
-
-Implement query handlers for workflow state inspection:
-
-```go
-func OrderProcessWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
-    // Workflow state
-    currentStatus := "initializing"
-    
-    // Register query handlers
-    ctx.RegisterQuery("status", func() string {
-        return currentStatus
-    })
-    
-    ctx.RegisterQuery("details", func() map[string]interface{} {
-        return map[string]interface{}{
-            "order_id": orderID,
-            "status":   currentStatus,
-            "started":  ctx.Info().StartTime,
-        }
-    })
-    
-    // Update status as workflow progresses
-    currentStatus = "validating"
-    // ...
-    
-    return nil
-}
-
-// External query using workflow ID
-wfID := tempolite.NewWorkflow(OrderProcessWorkflow)
-    .Execute("order-123")
-
-status, err := tempolite.QueryWorkflow(wfID, "status")
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Println("Workflow status:", status)
-```
-
-### Replay Mechanics
-
-**What is Replay?**
-Replay is the process by which Tempolite re-executes workflow code with the same inputs to rebuild its state after failures or during recovery. It's a fundamental mechanism that enables workflows to be resilient and deterministic.
-
-**Architectural Role:**
-- **State Recovery Engine**: Rebuilds workflow state after failures
-- **Determinism Enforcer**: Ensures consistent execution across attempts
-- **Resumption Mechanism**: Allows workflows to continue from checkpoints
-
-**Key Properties:**
-- **Event-Based Reconstruction**: Uses recorded events to reconstruct workflow state
-- **Deterministic Execution**: Same inputs and events produce same outputs
-- **Checkpoint-Based**: Continues from the last persisted checkpoint
-- **Operation Recording**: Records all operations (activities, side effects, etc.)
-
-**How Replay Works:**
-1. When a workflow executes the first time, each operation (activity call, side effect, signal, etc.) is recorded in the database
-2. During replay, the workflow code is re-executed from the beginning
-3. When it encounters previously executed operations:
-   - For activities: Returns the original result without re-execution
-   - For side effects: Returns the recorded value
-   - For signals: Returns the received signal payload
-4. This continues until the workflow reaches the point where it previously stopped
-5. From that point, new operations are executed normally
-
-**Implementation Impact:**
-```go
-func OrderProcessWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
-    // During replay, this will return the recorded result 
-    // without actually calling the ValidateOrder function
-    var isValid bool
-    if err := ctx.Activity("validate").Run(ValidateOrder, orderID).Get(&isValid); err != nil {
-        return err
-    }
-    
-    // Side effects always return the same value during replay
-    var orderNumber string
-    if err := ctx.SideEffect("generate-number").Run(GenerateOrderNumber).Get(&orderNumber); err != nil {
-        return err
-    }
-    
-    // Non-deterministic calls outside activities/side effects will break replay!
-    // WRONG: uuid.New().String() directly in workflow code
-    // RIGHT: Use side effect to wrap non-deterministic operations
-    
-    return nil
-}
-```
-
-This comprehensive Tempolite Technical Bible provides the detailed documentation needed for implementing all aspects of the workflow engine, from the core architecture to advanced patterns and specific component behavior. Each section includes concrete implementation details, API patterns, and examples to ensure a complete understanding of how the system works.
