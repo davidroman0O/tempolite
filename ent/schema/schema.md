@@ -181,7 +181,7 @@ func Workflow(ctx tempolite.WorkflowContext) error {
 
     // question is what is the real params?
     
-    if err := ctx.Activity(ctx.WithRetries(RetryPolicy{})).Get(); err != nil {
+    if err := ctx.Activity(ctx.WithRetries(RetryPolicy{}), UserActivity).Get(ctx); err != nil {
         return err
     }
 
@@ -193,8 +193,14 @@ func Workflow(ctx tempolite.WorkflowContext) error {
     return nil
 }
 
-func Activity(ctx tempolite.ActivityContext) error {
+func UserActivity(ctx tempolite.ActivityContext) error {
     return nil
+}
+
+
+// The new Activity function will just require a context, we will fit whatever we want
+func (w *WorkflowContext) Activity(ctx context.Context) Future {
+    // ...
 }
 
 ```

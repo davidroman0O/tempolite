@@ -720,3 +720,80 @@ func (d *Data) GetWorkflowRuntime(workflowEntityID schema.WorkflowEntityID) (*Wo
 
 	return workflowRuntime, nil
 }
+
+////// Follow code should replace the stateEntry code
+
+type EventLogOption func(*ent.EventLogCreate)
+
+func WithRunID(runID schema.RunID) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetRunID(runID)
+	}
+}
+
+func WithWorkflowID(workflowID schema.WorkflowEntityID) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetWorkflowID(workflowID)
+	}
+}
+
+func WithWorkflowExecutionID(execID schema.WorkflowExecutionID) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetWorkflowExecutionID(execID)
+	}
+}
+
+func WithEntityInfo(entityID int, entityType schema.EntityType) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetEntityID(entityID).SetEntityType(entityType)
+	}
+}
+
+func WithStepID(stepID string) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetStepID(stepID)
+	}
+}
+
+func WithHandlerName(name string) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetHandlerName(name)
+	}
+}
+
+func WithQueueName(queue string) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetQueueName(queue)
+	}
+}
+
+func WithError(err error) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetError(err.Error())
+	}
+}
+
+func WithState(previous, new map[string]interface{}) EventLogOption {
+	return func(c *ent.EventLogCreate) {
+		c.SetPreviousState(previous).SetNewState(new)
+	}
+}
+
+func (d *Data) CreateEventLog(
+	workflowID schema.WorkflowEntityID, // I don't know, shouldn't I use the RunID instead?
+	event schema.EventType,
+	opts ...EventLogOption,
+) (*ent.EventLog, error) {
+	builder := d.client.EventLog.Create().
+		SetEventType(event).
+		SetWorkflowID(workflowID).
+		SetTimestamp(time.Now())
+
+	for _, opt := range opts {
+		opt(builder)
+	}
+
+	return builder.Save(d.Context)
+}
+
+///////
