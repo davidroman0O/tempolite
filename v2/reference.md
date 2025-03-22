@@ -1148,8 +1148,8 @@ if err != nil {
 // Handle based on which signal arrived
 switch signal.Name() {
 case "approval":
-    var approval bool
-    signal.Get(&approval)
+    var approved bool
+    signal.Get(&approved)
     // Handle approval
 }
 ```
@@ -1234,74 +1234,111 @@ ctx.WithVersion(1, func(ctx tempolite.WorkflowContext) error {
 
 ### Worker System
 
-The worker system uses a pool of goroutines to execute workflow tasks:
+**What is the Worker System?**
+The worker system is the execution infrastructure that processes tasks from queues and executes workflow and activity functions. It manages resources, concurrency, and execution scheduling without requiring explicit registration of workflows or activities.
+
+**Architectural Role:**
+- **Task Processor**: Manages and executes workflow and activity tasks
+- **Resource Controller**: Limits concurrent executions to protect system resources
+- **Queue Manager**: Handles tasks across multiple named queues
+- **Runtime Environment**: Provides execution context for workflows and activities
+
+**Key Properties:**
+- **No Registration Required**: Workflows and activities are executed directly from queues
+- **Runtime Resolution**: Functions are invoked directly through their references
+- **Queue-Based Execution**: Tasks are organized into named queues for resource isolation
+- **Dynamic Scaling**: Worker pools adjust based on system load and configuration
+
+**Key Components:**
+1. **Task Queues**: Named queues that organize and prioritize work
+2. **Worker Pool**: Set of goroutines that execute workflow and activity tasks
+3. **Resource Limiters**: Controls for managing concurrency and throughput
+4. **Runtime Resolver**: Mechanism for executing functions without registration
+
+**Implementation Pattern:**
+```go
+// Configure the tempolite runtime with queue settings
+tempolite, err := tempolite.New(
+    context.Background(),
+    tempolite.WithSQLite("tempolite.db"),
+    tempolite.WithQueueConfig("default", QueueConfig{
+        MaxConcurrentWorkflows: 10,
+        MaxConcurrentActivities: 50,
+    }),
+    tempolite.WithQueueConfig("high-priority", QueueConfig{
+        MaxConcurrentWorkflows: 5,
+        MaxConcurrentActivities: 20,
+    }),
+    tempolite.WithQueueConfig("background", QueueConfig{
+        MaxConcurrentWorkflows: 20,
+        MaxConcurrentActivities: 100,
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// No need to register workflows or activities anywhere
+// They're executed directly when referenced in code
+
+// Start all workers (non-blocking)
+tempolite.Start()
+
+// Graceful shutdown when needed
+tempolite.Shutdown(tempolite.WithShutdownTimeout(time.Minute))
+```
+
+**Task Routing:**
+Tasks are routed to specific queues based on configuration:
 
 ```go
-type WorkerPool struct {
-    mu         sync.RWMutex
-    workers    int
-    tasks      chan Task
-    wg         sync.WaitGroup
-    isShutdown bool
-}
+// Start a workflow on the default queue
+workflowID := tempolite.NewWorkflow(OrderProcessWorkflow)
+    // Default queue is used if not specified
+    .Execute("order-123")
 
-func NewWorkerPool(workers int) *WorkerPool {
-    pool := &WorkerPool{
-        workers: workers,
-        tasks:   make(chan Task, workers*10), // Buffer for tasks
-    }
-    pool.Start()
-    return pool
-}
-
-func (p *WorkerPool) Start() {
-    p.mu.Lock()
-    defer p.mu.Unlock()
+// Start a workflow on a specific queue
+workflowID := tempolite.NewWorkflow(ExpressOrderWorkflow)
+    .WithQueue("high-priority")  // Route to specific queue
+    .Execute("express-order-456")
     
-    for i := 0; i < p.workers; i++ {
-        p.wg.Add(1)
-        go func() {
-            defer p.wg.Done()
-            for task := range p.tasks {
-                task.Execute()
-            }
-        }()
-    }
-}
-
-func (p *WorkerPool) Submit(task Task) error {
-    p.mu.RLock()
-    defer p.mu.RUnlock()
-    
-    if p.isShutdown {
-        return errors.New("worker pool is shutdown")
-    }
-    
-    p.tasks <- task
-    return nil
-}
-
-func (p *WorkerPool) Shutdown(gracePeriod time.Duration) {
-    p.mu.Lock()
-    p.isShutdown = true
-    close(p.tasks)
-    p.mu.Unlock()
-    
-    // Wait with timeout
-    c := make(chan struct{})
-    go func() {
-        p.wg.Wait()
-        close(c)
-    }()
-    
-    select {
-    case <-c:
-        // Normal shutdown
-    case <-time.After(gracePeriod):
-        // Timeout
-    }
+// Within a workflow, route activities to specific queues
+if err := ctx.Activity("ship")
+    .WithQueue("shipping-queue")  // Route to specialized queue
+    .Run(ShipOrder, orderID)
+    .Get(); err != nil {
+    return err
 }
 ```
+
+**Runtime Execution:**
+The worker system executes workflow and activity functions directly:
+
+1. When a workflow is submitted, its function reference is stored in the database
+2. When a worker picks up the task, it dynamically invokes the function
+3. No pre-registration step is necessary
+4. Functions are invoked with the appropriate context and arguments
+
+**Queue Configuration:**
+Queues can be configured with different resource constraints:
+
+```go
+tempolite.WithQueueConfig("api-operations", QueueConfig{
+    MaxConcurrentWorkflows: 5,  // Limit concurrent workflows in this queue
+    MaxConcurrentActivities: 20, // Limit concurrent activities
+    TaskPriority: High,  // Process tasks in this queue with higher priority
+})
+```
+
+**Worker Pool Scaling:**
+The number of worker goroutines scales automatically based on:
+- Current system load
+- Queue configuration
+- Resource availability
+
+This ensures efficient resource usage without overloading the system.
+
+This approach maintains the benefits of queue-based execution (resource isolation, prioritization) while eliminating the need for explicit workflow and activity registration.
 
 ### State Machine
 
@@ -1642,39 +1679,6 @@ func OrderApprovalWorkflow(ctx tempolite.WorkflowContext, orderID string) error 
 }
 ```
 
-External signal sending with the enhanced API:
-```go
-// Get workflow ID
-wfID := tempolite.NewWorkflow(OrderApprovalWorkflow)
-    .Execute("order-123")
-
-// Send simple approval
-signalFuture := tempolite.Signal("approval")
-    .WithPayload(true)
-    .ToWorkflow(wfID)
-    .Send()
-
-// Wait for delivery confirmation
-if err := signalFuture.Wait(); err != nil {
-    log.Printf("Failed to deliver signal: %v", err)
-}
-
-// Send structured data
-type DiscountSignal struct {
-    Percent     float64
-    Reason      string
-    ApprovedBy  string
-    ExpiresAt   time.Time
-}
-
-tempolite.SignalTyped(wfID, "discount", DiscountSignal{
-    Percent:    15.0,
-    Reason:     "Loyalty customer",
-    ApprovedBy: "Sales Manager",
-    ExpiresAt:  time.Now().Add(48 * time.Hour),
-})
-```
-
 ## Saga Pattern Implementation
 
 Sagas coordinate transactions with compensation:
@@ -1784,10 +1788,10 @@ Handle workflow evolution with version checks:
 func MyWorkflow(ctx tempolite.WorkflowContext, input string) error {
     // Handle different versions
     return ctx.WithVersion(1, func(ctx tempolite.WorkflowContext) error {
-        // Original implementation
+        // Original v1 implementation
         return ctx.Activity("v1-activity").Run(ActivityV1, input).Get()
     }).WithVersion(2, func(ctx tempolite.WorkflowContext) error {
-        // New implementation with additional steps
+        // New v2 implementation with additional steps
         if err := ctx.Activity("v2-activity").Run(ActivityV2, input).Get(); err != nil {
             return err
         }
@@ -1901,6 +1905,56 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println("Workflow status:", status)
+```
+
+### Replay Mechanics
+
+**What is Replay?**
+Replay is the process by which Tempolite re-executes workflow code with the same inputs to rebuild its state after failures or during recovery. It's a fundamental mechanism that enables workflows to be resilient and deterministic.
+
+**Architectural Role:**
+- **State Recovery Engine**: Rebuilds workflow state after failures
+- **Determinism Enforcer**: Ensures consistent execution across attempts
+- **Resumption Mechanism**: Allows workflows to continue from checkpoints
+
+**Key Properties:**
+- **Event-Based Reconstruction**: Uses recorded events to reconstruct workflow state
+- **Deterministic Execution**: Same inputs and events produce same outputs
+- **Checkpoint-Based**: Continues from the last persisted checkpoint
+- **Operation Recording**: Records all operations (activities, side effects, etc.)
+
+**How Replay Works:**
+1. When a workflow executes the first time, each operation (activity call, side effect, signal, etc.) is recorded in the database
+2. During replay, the workflow code is re-executed from the beginning
+3. When it encounters previously executed operations:
+   - For activities: Returns the original result without re-execution
+   - For side effects: Returns the recorded value
+   - For signals: Returns the received signal payload
+4. This continues until the workflow reaches the point where it previously stopped
+5. From that point, new operations are executed normally
+
+**Implementation Impact:**
+```go
+func OrderProcessWorkflow(ctx tempolite.WorkflowContext, orderID string) error {
+    // During replay, this will return the recorded result 
+    // without actually calling the ValidateOrder function
+    var isValid bool
+    if err := ctx.Activity("validate").Run(ValidateOrder, orderID).Get(&isValid); err != nil {
+        return err
+    }
+    
+    // Side effects always return the same value during replay
+    var orderNumber string
+    if err := ctx.SideEffect("generate-number").Run(GenerateOrderNumber).Get(&orderNumber); err != nil {
+        return err
+    }
+    
+    // Non-deterministic calls outside activities/side effects will break replay!
+    // WRONG: uuid.New().String() directly in workflow code
+    // RIGHT: Use side effect to wrap non-deterministic operations
+    
+    return nil
+}
 ```
 
 This comprehensive Tempolite Technical Bible provides the detailed documentation needed for implementing all aspects of the workflow engine, from the core architecture to advanced patterns and specific component behavior. Each section includes concrete implementation details, API patterns, and examples to ensure a complete understanding of how the system works.
